@@ -2,11 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import MapView from "react-native-maps";
 import * as Location from "expo-location";
 import { Farmer, getFarmer, getFarmerVisits } from "../../api/farmers";
 import { ErrorState } from "../../components/ErrorState";
 import { FieldMapView, type MapCoordinate } from "../../components/map/FieldMapView";
+import { MapErrorBoundary } from "../../components/map/MapErrorBoundary";
 import { AppHeader, PrimaryButton } from "../../components/ui";
 import { useMapAreaHeight } from "../../hooks/useMapAreaHeight";
 import { useMapTabBarBottomPadding } from "../../hooks/useTabBarBottomInset";
@@ -30,7 +30,7 @@ export function FarmerMapScreen({ navigation, route }: Props) {
   const { width } = useWindowDimensions();
   const mapBottomPad = useMapTabBarBottomPadding();
   const mapHeight = useMapAreaHeight(100);
-  const mapRef = useRef<MapView>(null);
+  const mountedRef = useRef(true);
   const { farmerId, farmerName, village } = route.params;
 
   const [loading, setLoading] = useState(true);
@@ -38,27 +38,39 @@ export function FarmerMapScreen({ navigation, route }: Props) {
   const [farmer, setFarmer] = useState<Farmer | null>(null);
   const [you, setYou] = useState<{ lat: number; lng: number } | null>(null);
   const [locLabel, setLocLabel] = useState("Getting your location…");
+  const [permissionResolved, setPermissionResolved] = useState(false);
+  const [locationGranted, setLocationGranted] = useState(false);
 
   const load = useCallback(async () => {
     try {
       setError("");
       const [farmerData, visits] = await Promise.all([getFarmer(farmerId), getFarmerVisits(farmerId)]);
+      if (!mountedRef.current) return;
       setFarmer(farmerData);
 
       const perm = await Location.requestForegroundPermissionsAsync();
       if (perm.status === "granted") {
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        const lat = loc.coords.latitude;
-        const lng = loc.coords.longitude;
-        if (hasValidMapCoords(lat, lng)) {
-          setYou({ lat, lng });
-          setLocLabel("Your location ready");
-        } else {
+        try {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          const lat = loc.coords.latitude;
+          const lng = loc.coords.longitude;
+          if (hasValidMapCoords(lat, lng)) {
+            setYou({ lat, lng });
+            setLocationGranted(true);
+            setLocLabel("Your location ready");
+          } else {
+            setYou(null);
+            setLocationGranted(false);
+            setLocLabel("Location not available. Please enable GPS and try again.");
+          }
+        } catch {
           setYou(null);
+          setLocationGranted(false);
           setLocLabel("Location not available. Please enable GPS and try again.");
         }
       } else {
         setYou(null);
+        setLocationGranted(false);
         setLocLabel("Allow location to see route to farmer");
       }
 
@@ -74,14 +86,23 @@ export function FarmerMapScreen({ navigation, route }: Props) {
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load farmer map.");
+      if (mountedRef.current) {
+        setError(err instanceof Error ? err.message : "Unable to load farmer map.");
+      }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+        setPermissionResolved(true);
+      }
     }
   }, [farmerId]);
 
   useEffect(() => {
+    mountedRef.current = true;
     void load();
+    return () => {
+      mountedRef.current = false;
+    };
   }, [load]);
 
   const paramPin = useMemo(() => {
@@ -102,7 +123,7 @@ export function FarmerMapScreen({ navigation, route }: Props) {
   }, [farmer, paramPin]);
 
   const userCoord = useMemo<MapCoordinate | null>(
-    () => (you ? { latitude: you.lat, longitude: you.lng } : null),
+    () => (you && hasValidMapCoords(you.lat, you.lng) ? { latitude: you.lat, longitude: you.lng } : null),
     [you]
   );
 
@@ -123,20 +144,12 @@ export function FarmerMapScreen({ navigation, route }: Props) {
     return undefined;
   }, [userCoord, farmerCoord]);
 
-  useEffect(() => {
-    if (loading || !mapRef.current || !userCoord || !farmerCoord) return;
-    const timer = setTimeout(() => {
-      mapRef.current?.fitToCoordinates([userCoord, farmerCoord], {
-        edgePadding: FIT_PADDING,
-        animated: true
-      });
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [loading, userCoord, farmerCoord]);
-
   const region = useMemo(() => {
     const points = [you, farmerPin].filter(Boolean) as { lat: number; lng: number }[];
-    return fitMapRegion(points, you ? { latitude: you.lat, longitude: you.lng, latitudeDelta: 0.06, longitudeDelta: 0.06 } : undefined);
+    return fitMapRegion(
+      points,
+      you ? { latitude: you.lat, longitude: you.lng, latitudeDelta: 0.06, longitudeDelta: 0.06 } : undefined
+    );
   }, [you, farmerPin]);
 
   const distanceLabel = useMemo(() => {
@@ -147,6 +160,7 @@ export function FarmerMapScreen({ navigation, route }: Props) {
 
   const displayName = farmer?.name || farmerName || "Farmer";
   const place = String(village || farmer?.village_name || farmer?.village || "");
+  const canShowMap = !loading && permissionResolved && (farmerPin != null || you != null);
 
   async function handleDirections() {
     if (!farmerPin) return;
@@ -171,46 +185,64 @@ export function FarmerMapScreen({ navigation, route }: Props) {
         </View>
 
         <View style={styles.mapShell}>
-          <FieldMapView
-            mapRef={mapRef}
-            height={mapHeight}
-            width={width - 32}
-            region={region}
-            route={routeLine}
-            fitCoordinates={fitCoordinates}
-            fitEdgePadding={FIT_PADDING}
-            showsUserLocation={false}
-            loading={loading}
-            markers={[
-              ...(you
-                ? [
-                    {
-                      id: "you",
-                      lat: you.lat,
-                      lng: you.lng,
-                      title: "You",
-                      description: "Your location",
-                      pinColor: "#2196F3"
-                    }
-                  ]
-                : []),
-              ...(farmerPin
-                ? [
-                    {
-                      id: "farmer",
-                      lat: farmerPin.lat,
-                      lng: farmerPin.lng,
-                      title: displayName,
-                      description: place,
-                      pinColor: c.mapMarker
-                    }
-                  ]
-                : [])
-            ]}
-          />
+          {canShowMap ? (
+            <MapErrorBoundary height={mapHeight} screenName="FarmerMapScreen">
+              <FieldMapView
+                screenName="FarmerMapScreen"
+                height={mapHeight}
+                width={Math.max(width - 32, 280)}
+                region={region}
+                route={routeLine}
+                fitCoordinates={fitCoordinates}
+                fitEdgePadding={FIT_PADDING}
+                permissionResolved={permissionResolved}
+                locationGranted={locationGranted}
+                locationDenied={permissionResolved && !locationGranted && !farmerPin}
+                loading={loading}
+                showsUserLocation={false}
+                markers={[
+                  ...(you
+                    ? [
+                        {
+                          id: "you",
+                          lat: you.lat,
+                          lng: you.lng,
+                          title: "You",
+                          description: "Your location"
+                        }
+                      ]
+                    : []),
+                  ...(farmerPin
+                    ? [
+                        {
+                          id: "farmer",
+                          lat: farmerPin.lat,
+                          lng: farmerPin.lng,
+                          title: displayName,
+                          description: place
+                        }
+                      ]
+                    : [])
+                ]}
+              />
+            </MapErrorBoundary>
+          ) : (
+            <View style={[styles.mapPlaceholder, { backgroundColor: c.cardMuted, borderColor: c.border }]}>
+              <Ionicons name="map-outline" size={28} color={c.muted} />
+              <Text style={[styles.placeholderText, { color: c.muted }]}>
+                Map could not load. Please enable GPS and try again.
+              </Text>
+            </View>
+          )}
 
           {farmerPin ? (
-            <View style={[styles.overlay, { backgroundColor: c.card }, Platform.OS === "android" ? styles.overlayShadowAndroid : styles.overlayShadowIos]}>
+            <View
+              style={[
+                styles.overlay,
+                { backgroundColor: c.card },
+                Platform.OS === "android" ? styles.overlayShadowAndroid : styles.overlayShadowIos
+              ]}
+            >
               {distanceLabel ? (
                 <View style={styles.distanceRow}>
                   <Ionicons name="navigate-outline" size={18} color={c.primaryDark} />
@@ -267,9 +299,19 @@ const styles = StyleSheet.create({
   locHint: { flex: 1, fontSize: 12, minWidth: 120, textAlign: "right" },
   mapShell: {
     alignSelf: "center",
+    minHeight: 220,
     position: "relative",
     width: "100%"
   },
+  mapPlaceholder: {
+    alignItems: "center",
+    borderRadius: 18,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 220,
+    padding: 20
+  },
+  placeholderText: { fontSize: 14, lineHeight: 20, textAlign: "center" },
   overlay: {
     borderRadius: 16,
     bottom: 12,

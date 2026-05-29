@@ -1,6 +1,9 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Alert } from "react-native";
 import { loginRequest, logoutRequest } from "../api/auth";
 import { getCurrentEmployee, isFieldEmployee } from "../api/employees";
+import { DEVICE_SESSION_CONFLICT_MESSAGE } from "../constants/deviceSession";
+import { registerSessionTeardown } from "./sessionConflict";
 import { getAccessToken, saveTokens, clearTokens } from "./tokenStorage";
 
 const FIELD_EMPLOYEE_ONLY_MESSAGE = "This app is only for field employees.";
@@ -17,6 +20,24 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isReady, setIsReady] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const conflictAlertShownRef = useRef(false);
+
+  const forceSessionConflictLogout = useCallback(async () => {
+    try {
+      await logoutRequest().catch(() => undefined);
+    } finally {
+      await clearTokens();
+      setIsAuthenticated(false);
+      if (!conflictAlertShownRef.current) {
+        conflictAlertShownRef.current = true;
+        Alert.alert("Signed out", DEVICE_SESSION_CONFLICT_MESSAGE);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    return registerSessionTeardown(forceSessionConflictLogout);
+  }, [forceSessionConflictLogout]);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,6 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = useCallback(async (username: string, password: string) => {
+    conflictAlertShownRef.current = false;
     const tokens = await loginRequest(username, password);
     await saveTokens(tokens);
     const employee = await getCurrentEmployee();

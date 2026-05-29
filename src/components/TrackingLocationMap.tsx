@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { Region } from "react-native-maps";
 import { FieldMapView } from "./map/FieldMapView";
+import { MapErrorBoundary } from "./map/MapErrorBoundary";
 import { colors } from "../theme/colors";
 import { space } from "../theme/layout";
 import { getForegroundLocation } from "../utils/location";
@@ -22,10 +23,13 @@ type Props = {
 
 export function TrackingLocationMap({ isActive, serverLatitude, serverLongitude, accuracyMeters }: Props) {
   const { width: screenWidth } = useWindowDimensions();
+  const mountedRef = useRef(true);
+  const permissionLoadedRef = useRef(false);
   const [liveLat, setLiveLat] = useState<number | null>(null);
   const [liveLng, setLiveLng] = useState<number | null>(null);
   const [permissionResolved, setPermissionResolved] = useState(false);
   const [locDenied, setLocDenied] = useState(false);
+  const [locationGranted, setLocationGranted] = useState(false);
 
   const slat = hasValidMapCoords(serverLatitude, serverLongitude) ? parseMapCoord(serverLatitude) : null;
   const slng = hasValidMapCoords(serverLatitude, serverLongitude) ? parseMapCoord(serverLongitude) : null;
@@ -34,16 +38,22 @@ export function TrackingLocationMap({ isActive, serverLatitude, serverLongitude,
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      setPermissionResolved(false);
-      setLocDenied(false);
+      mountedRef.current = true;
+
+      if (!permissionLoadedRef.current && !hasServerPin) {
+        setPermissionResolved(false);
+      }
 
       void (async () => {
         try {
           const r = await getForegroundLocation();
-          if (cancelled) return;
+          if (cancelled || !mountedRef.current) return;
+
+          permissionLoadedRef.current = true;
 
           if (!r.granted) {
             setLocDenied(true);
+            setLocationGranted(false);
             setLiveLat(null);
             setLiveLng(null);
           } else {
@@ -53,20 +63,23 @@ export function TrackingLocationMap({ isActive, serverLatitude, serverLongitude,
               setLiveLat(lat);
               setLiveLng(lng);
               setLocDenied(false);
+              setLocationGranted(true);
             } else {
               setLocDenied(true);
+              setLocationGranted(false);
               setLiveLat(null);
               setLiveLng(null);
             }
           }
         } catch {
-          if (!cancelled) {
+          if (!cancelled && mountedRef.current) {
             setLocDenied(true);
+            setLocationGranted(false);
             setLiveLat(null);
             setLiveLng(null);
           }
         } finally {
-          if (!cancelled) {
+          if (!cancelled && mountedRef.current) {
             setPermissionResolved(true);
           }
         }
@@ -74,8 +87,9 @@ export function TrackingLocationMap({ isActive, serverLatitude, serverLongitude,
 
       return () => {
         cancelled = true;
+        mountedRef.current = false;
       };
-    }, [])
+    }, [hasServerPin])
   );
 
   const region: Region = useMemo(() => {
@@ -95,6 +109,7 @@ export function TrackingLocationMap({ isActive, serverLatitude, serverLongitude,
       : 55;
 
   const mapWidth = Math.max(screenWidth - space.lg * 2, 280);
+  const canShowMap = (permissionResolved || hasServerPin) && (hasServerPin || (locationGranted && liveLat != null && liveLng != null));
 
   if (Platform.OS === "web") {
     return (
@@ -108,43 +123,59 @@ export function TrackingLocationMap({ isActive, serverLatitude, serverLongitude,
 
   return (
     <View style={styles.mapShell}>
-      <FieldMapView
-        height={MAP_HEIGHT}
-        width={mapWidth}
-        region={region}
-        loading={!permissionResolved && !hasServerPin}
-        permissionResolved={permissionResolved || hasServerPin}
-        locationDenied={locDenied && !hasServerPin}
-        showsUserLocation={!locDenied && (liveLat != null || isActive)}
-        followsUserLocation={isActive && !locDenied && liveLat != null}
-        emptyMessage="Location not available. Please enable GPS and try again."
-        accuracyCircle={
-          hasServerPin
-            ? {
-                center: { latitude: slat!, longitude: slng! },
-                radiusMeters: acc
-              }
-            : undefined
-        }
-        markers={
-          hasServerPin
-            ? [
-                {
-                  id: "last-checkin",
-                  lat: slat!,
-                  lng: slng!,
-                  title: "Last check-in",
-                  description: "Saved for your team",
-                  pinColor: colors.primaryDark
-                }
-              ]
-            : []
-        }
-      />
+      {canShowMap ? (
+        <MapErrorBoundary height={MAP_HEIGHT} screenName="TrackingLocationMap">
+          <FieldMapView
+            screenName="TrackingLocationMap"
+            height={MAP_HEIGHT}
+            width={mapWidth}
+            region={region}
+            loading={!permissionResolved && !hasServerPin}
+            permissionResolved={permissionResolved || hasServerPin}
+            locationDenied={locDenied && !hasServerPin}
+            locationGranted={locationGranted || hasServerPin}
+            showsUserLocation={locationGranted && liveLat != null}
+            followsUserLocation={false}
+            emptyMessage="Map could not load. Please enable GPS and try again."
+            accuracyCircle={
+              hasServerPin
+                ? {
+                    center: { latitude: slat!, longitude: slng! },
+                    radiusMeters: acc
+                  }
+                : undefined
+            }
+            markers={
+              hasServerPin
+                ? [
+                    {
+                      id: "last-checkin",
+                      lat: slat!,
+                      lng: slng!,
+                      title: "Last check-in",
+                      description: "Saved for your team"
+                    }
+                  ]
+                : []
+            }
+          />
+        </MapErrorBoundary>
+      ) : (
+        <View style={styles.inlineFallback}>
+          {!permissionResolved ? (
+            <Text style={styles.inlineFallbackText}>Loading map…</Text>
+          ) : (
+            <>
+              <Ionicons name="location-outline" size={28} color={colors.muted} />
+              <Text style={styles.inlineFallbackText}>Map could not load. Please enable GPS and try again.</Text>
+            </>
+          )}
+        </View>
+      )}
       <View style={styles.mapBadge}>
         <Ionicons name="navigate" size={14} color={colors.primaryDark} />
         <Text style={styles.mapBadgeText}>
-          {isActive && !locDenied && liveLat != null ? "Live · following you" : "Your map"}
+          {isActive && locationGranted && liveLat != null ? "Live · following you" : "Your map"}
         </Text>
       </View>
     </View>
@@ -157,8 +188,23 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     height: MAP_HEIGHT,
+    minHeight: 220,
     overflow: "hidden",
     backgroundColor: colors.card
+  },
+  inlineFallback: {
+    alignItems: "center",
+    flex: 1,
+    gap: 8,
+    justifyContent: "center",
+    minHeight: 220,
+    padding: 20
+  },
+  inlineFallbackText: {
+    color: colors.muted,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: "center"
   },
   mapBadge: {
     position: "absolute",

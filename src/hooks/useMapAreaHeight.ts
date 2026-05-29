@@ -6,5 +6,5 @@ export function useMapAreaHeight(headerBodyHeight = 118) {
   const { height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsetsCompat();
   const headerTotal = insets.top + headerBodyHeight;
-  return Math.max(windowHeight - headerTotal, 240);
+  return Math.max(windowHeight - headerTotal, 220);
 }

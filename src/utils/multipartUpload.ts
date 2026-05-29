@@ -1,6 +1,9 @@
 import { API_BASE_URL } from "../api/config";
+import { getDeviceSessionHeaderEntries } from "../api/deviceSessionHeaders";
+import { DEVICE_SESSION_CONFLICT_CODE, DEVICE_SESSION_CONFLICT_MESSAGE } from "../constants/deviceSession";
 import { getAccessToken, getRefreshToken, updateAccessToken, clearTokens } from "../storage/tokenStorage";
-import { formatApiErrorMessage } from "../utils/apiError";
+import { handleDeviceSessionConflict } from "../storage/sessionConflict";
+import { extractApiErrorCode, formatApiErrorMessage, isDeviceSessionConflictPayload } from "../utils/apiError";
 import { unwrapSuccessEnvelope } from "../utils/apiUnwrap";
 
 export type MultipartFilePayload = {
@@ -50,12 +53,16 @@ export function uploadMultipart(
         type: file.mimeType
       } as unknown as Blob);
 
-      const attempt = (accessToken: string | null) => {
+      const attempt = async (accessToken: string | null) => {
         const xhr = new XMLHttpRequest();
         xhr.open(httpMethod, url);
         xhr.setRequestHeader("Accept", "application/json");
         if (accessToken) {
           xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
+          const sessionHeaders = await getDeviceSessionHeaderEntries();
+          for (const [name, value] of Object.entries(sessionHeaders)) {
+            xhr.setRequestHeader(name, value);
+          }
         }
 
         xhr.upload.onprogress = (event) => {
@@ -94,13 +101,18 @@ export function uploadMultipart(
                 return;
               }
               await updateAccessToken(newAccess);
-              attempt(newAccess);
+              void attempt(newAccess);
               return;
             }
 
             const data = await parseJsonResponse(xhr);
             if (xhr.status < 200 || xhr.status >= 300) {
-              reject(new Error(formatApiErrorMessage(data, "Upload failed")));
+              if (isDeviceSessionConflictPayload(data, xhr.status)) {
+                void handleDeviceSessionConflict();
+                reject(new Error(DEVICE_SESSION_CONFLICT_MESSAGE));
+                return;
+              }
+              reject(new Error(formatApiErrorMessage(data, "Upload failed", xhr.status)));
               return;
             }
             resolve(unwrapSuccessEnvelope(data) ?? data);
@@ -115,7 +127,7 @@ export function uploadMultipart(
         xhr.send(formData);
       };
 
-      attempt(token);
+      void attempt(token);
     } catch (err) {
       reject(err instanceof Error ? err : new Error("Upload failed"));
     }

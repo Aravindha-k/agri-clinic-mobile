@@ -1,4 +1,5 @@
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
+import { AppErrorBoundary } from "../components/AppErrorBoundary";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { View } from "react-native";
@@ -118,6 +119,7 @@ export function RootNavigator() {
 
   return (
     <NavigationContainer theme={navTheme}>
+      <AppErrorBoundary>
       <RootStack.Navigator screenOptions={{ headerShown: false }}>
         {!isReady ? (
           <RootStack.Screen name="Splash" component={BootstrapScreen} />
@@ -142,6 +144,7 @@ export function RootNavigator() {
           <RootStack.Screen name="Auth" component={AuthNavigator} />
         )}
       </RootStack.Navigator>
+      </AppErrorBoundary>
     </NavigationContainer>
   );
 }

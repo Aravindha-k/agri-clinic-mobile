@@ -1,10 +1,12 @@
+import { Ionicons } from "@expo/vector-icons";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { getAllWorkdayLocations, getTodayWorkday, LocationLogPoint } from "../../api/tracking";
 import { ErrorState } from "../../components/ErrorState";
 import { EmptyState } from "../../components/EmptyState";
 import { FieldMapView } from "../../components/map/FieldMapView";
+import { MapErrorBoundary } from "../../components/map/MapErrorBoundary";
 import { AppHeader, PrimaryButton } from "../../components/ui";
 import { useMapAreaHeight } from "../../hooks/useMapAreaHeight";
 import { RootStackParamList } from "../../navigation/types";
@@ -12,7 +14,7 @@ import { useTheme } from "../../theme";
 import { fontWeights } from "../../theme/fontWeights";
 import { formatShortDateTime } from "../../utils/format";
 import { hasValidMapCoords, parseMapCoord } from "../../utils/mapCoords";
-import { fitMapRegion } from "../../utils/mapRegion";
+import { DEFAULT_MAP_REGION, fitMapRegion } from "../../utils/mapRegion";
 
 type Props = NativeStackScreenProps<RootStackParamList, "TravelHistory">;
 
@@ -21,6 +23,7 @@ export function TravelHistoryScreen({ navigation }: Props) {
   const c = theme.colors;
   const { width } = useWindowDimensions();
   const mapHeight = useMapAreaHeight(112);
+  const mountedRef = useRef(true);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -31,6 +34,8 @@ export function TravelHistoryScreen({ navigation }: Props) {
     try {
       setError("");
       const workday = await getTodayWorkday();
+      if (!mountedRef.current) return;
+
       if (!workday?.workday_id) {
         setPoints([]);
         setWorkdayLabel("No workday today");
@@ -38,16 +43,25 @@ export function TravelHistoryScreen({ navigation }: Props) {
       }
       setWorkdayLabel(workday.is_active ? "Active workday" : "Today's workday");
       const logs = await getAllWorkdayLocations(workday.workday_id);
+      if (!mountedRef.current) return;
       setPoints(logs.filter((p) => hasValidMapCoords(p.latitude, p.longitude)));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load travel history.");
+      if (mountedRef.current) {
+        setError(err instanceof Error ? err.message : "Unable to load travel history.");
+      }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     void load();
+    return () => {
+      mountedRef.current = false;
+    };
   }, [load]);
 
   const route = useMemo(
@@ -56,16 +70,43 @@ export function TravelHistoryScreen({ navigation }: Props) {
         .map((p) => {
           const lat = parseMapCoord(p.latitude);
           const lng = parseMapCoord(p.longitude);
-          if (lat == null || lng == null) return null;
+          if (lat == null || lng == null || !hasValidMapCoords(lat, lng)) return null;
           return { latitude: lat, longitude: lng };
         })
         .filter(Boolean) as { latitude: number; longitude: number }[],
     [points]
   );
 
-  const region = useMemo(() => fitMapRegion(route.map((p) => ({ lat: p.latitude, lng: p.longitude }))), [route]);
+  const region = useMemo(
+    () => (route.length ? fitMapRegion(route.map((p) => ({ lat: p.latitude, lng: p.longitude }))) : DEFAULT_MAP_REGION),
+    [route]
+  );
+
+  const markers = useMemo(() => {
+    if (route.length < 1) return [];
+    const start = route[0];
+    const latest = route[route.length - 1];
+    const items = [
+      {
+        id: "start",
+        lat: start.latitude,
+        lng: start.longitude,
+        title: "Start"
+      }
+    ];
+    if (route.length > 1) {
+      items.push({
+        id: "latest",
+        lat: latest.latitude,
+        lng: latest.longitude,
+        title: "Latest"
+      });
+    }
+    return items;
+  }, [route]);
 
   const listData = useMemo(() => [...points].reverse().slice(0, 50), [points]);
+  const canShowMap = !loading && route.length > 0;
 
   if (error) return <ErrorState message={error} onRetry={load} />;
 
@@ -77,34 +118,31 @@ export function TravelHistoryScreen({ navigation }: Props) {
         onBack={() => navigation.goBack()}
       />
       <View style={styles.body}>
-        <FieldMapView
-          height={mapHeight}
-          width={width - 32}
-          region={region}
-          route={route}
-          showsUserLocation
-          loading={loading}
-          markers={
-            route.length
-              ? [
-                  {
-                    id: "start",
-                    lat: route[0].latitude,
-                    lng: route[0].longitude,
-                    title: "Start",
-                    pinColor: c.primaryDark
-                  },
-                  {
-                    id: "latest",
-                    lat: route[route.length - 1].latitude,
-                    lng: route[route.length - 1].longitude,
-                    title: "Latest",
-                    pinColor: "#2196F3"
-                  }
-                ]
-              : []
-          }
-        />
+        {canShowMap ? (
+          <MapErrorBoundary height={mapHeight} screenName="TravelHistoryScreen">
+            <FieldMapView
+              screenName="TravelHistoryScreen"
+              height={mapHeight}
+              width={Math.max(width - 32, 280)}
+              region={region}
+              route={route}
+              permissionResolved
+              locationGranted={false}
+              showsUserLocation={false}
+              loading={loading}
+              markers={markers}
+            />
+          </MapErrorBoundary>
+        ) : (
+          <View style={[styles.mapPlaceholder, { backgroundColor: c.cardMuted, borderColor: c.border }]}>
+            <Ionicons name="map-outline" size={28} color={c.muted} />
+            <Text style={[styles.placeholderText, { color: c.muted }]}>
+              {loading
+                ? "Loading route…"
+                : "Map could not load. Start work today and allow GPS to record your travel route."}
+            </Text>
+          </View>
+        )}
 
         {!loading && points.length === 0 ? (
           <EmptyState
@@ -144,6 +182,15 @@ export function TravelHistoryScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   body: { flex: 1, gap: 10, paddingHorizontal: 16, paddingTop: 12 },
+  mapPlaceholder: {
+    alignItems: "center",
+    borderRadius: 18,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 220,
+    padding: 20
+  },
+  placeholderText: { fontSize: 14, lineHeight: 20, textAlign: "center" },
   section: { fontSize: 12, fontWeight: fontWeights.bold, letterSpacing: 0.5, textTransform: "uppercase" },
   list: { flex: 1, maxHeight: 220 },
   listContent: { gap: 8, paddingBottom: 8 },

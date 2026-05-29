@@ -23,6 +23,7 @@ import { hasValidMapCoords } from "../utils/mapCoords";
 import { getForegroundLocation, toTrackingPayload } from "../utils/location";
 import { useAuth } from "./AuthContext";
 import { useGpsCompliance } from "./GpsComplianceContext";
+import { registerSessionTeardown } from "./sessionConflict";
 
 const TRACKING_INTERVAL_MS = FIELD_TRACKING_INTERVAL_MS;
 const MAX_WORKDAY_DURATION_MS = FIELD_MAX_WORKDAY_MS;
@@ -149,6 +150,20 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     },
     [applyWorkday, stopAllTrackingLoops]
   );
+
+  useEffect(() => {
+    return registerSessionTeardown(() => {
+      stopAllTrackingLoops();
+      applyWorkday(null);
+      setCurrentLocation(null);
+      setLastSyncTime(null);
+      setPendingSyncCount(0);
+      setGpsState("unknown");
+      setError("");
+      syncInFlightRef.current = false;
+      void clearLocationPushQueue();
+    });
+  }, [applyWorkday, stopAllTrackingLoops]);
 
   const autoEndWorkday = useCallback(async () => {
     if (autoEndInFlightRef.current) {

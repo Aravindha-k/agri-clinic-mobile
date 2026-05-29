@@ -1,6 +1,9 @@
 import { API_BASE_URL } from "./config";
+import { applyDeviceSessionHeader } from "./deviceSessionHeaders";
+import { DEVICE_SESSION_CONFLICT_CODE, DEVICE_SESSION_CONFLICT_MESSAGE } from "../constants/deviceSession";
 import { clearTokens, getAccessToken, getRefreshToken, updateAccessToken } from "../storage/tokenStorage";
-import { formatApiErrorMessage } from "../utils/apiError";
+import { handleDeviceSessionConflict, isDeviceSessionConflict } from "../storage/sessionConflict";
+import { ApiRequestError, extractApiErrorCode, formatApiErrorMessage, isDeviceSessionConflictPayload } from "../utils/apiError";
 import { unwrapSuccessEnvelope } from "../utils/apiUnwrap";
 
 type ApiOptions = RequestInit & {
@@ -18,7 +21,18 @@ async function parseResponse(response: Response) {
     }
   }
   if (!response.ok) {
-    throw new Error(formatApiErrorMessage(data, "Request failed"));
+    const code = extractApiErrorCode(data) ?? (response.status === 409 ? DEVICE_SESSION_CONFLICT_CODE : undefined);
+    if (isDeviceSessionConflictPayload(data, response.status)) {
+      void handleDeviceSessionConflict();
+      throw new ApiRequestError(DEVICE_SESSION_CONFLICT_MESSAGE, {
+        code: DEVICE_SESSION_CONFLICT_CODE,
+        status: response.status
+      });
+    }
+    throw new ApiRequestError(formatApiErrorMessage(data, "Request failed", response.status), {
+      code: code ?? undefined,
+      status: response.status
+    });
   }
   const unwrapped = unwrapSuccessEnvelope(data);
   return unwrapped !== null ? unwrapped : data;
@@ -62,6 +76,7 @@ export async function apiClient<T>(path: string, options: ApiOptions = {}): Prom
     if (token) {
       requestHeaders.set("Authorization", `Bearer ${token}`);
     }
+    await applyDeviceSessionHeader(requestHeaders);
   }
 
   const request = () =>
@@ -79,13 +94,18 @@ export async function apiClient<T>(path: string, options: ApiOptions = {}): Prom
         requestHeaders.set("Authorization", `Bearer ${newAccess}`);
         response = await request();
       } catch (error) {
-        await clearTokens();
+        if (!isDeviceSessionConflict(error)) {
+          await clearTokens();
+        }
         throw error;
       }
     }
 
     return (await parseResponse(response)) as T;
   } catch (err) {
+    if (err instanceof ApiRequestError && err.code === DEVICE_SESSION_CONFLICT_CODE) {
+      throw err;
+    }
     if (err instanceof TypeError) {
       throw new Error("No internet connection. Check your network and try again.");
     }

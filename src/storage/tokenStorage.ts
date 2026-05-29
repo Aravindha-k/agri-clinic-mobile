@@ -1,4 +1,5 @@
 import * as SecureStore from "expo-secure-store";
+import { clearDeviceSessionId } from "./deviceSessionStorage";
 
 const ACCESS_TOKEN_KEY = "agri_clinic_access_token";
 const REFRESH_TOKEN_KEY = "agri_clinic_refresh_token";
@@ -28,4 +29,5 @@ export async function updateAccessToken(access: string) {
 export async function clearTokens() {
   await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
   await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+  await clearDeviceSessionId();
 }

@@ -1,14 +1,17 @@
+import { Ionicons } from "@expo/vector-icons";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 
 type Props = {
   children: ReactNode;
   height: number;
+  screenName?: string;
   fallbackMessage?: string;
 };
 
 type State = { hasError: boolean };
+
+const DEFAULT_MESSAGE = "Map could not load. Please enable GPS and try again.";
 
 export class MapErrorBoundary extends Component<Props, State> {
   state: State = { hasError: false };
@@ -18,21 +21,16 @@ export class MapErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    if (__DEV__) {
-      console.warn("[MapErrorBoundary]", error.message, info.componentStack);
-    }
+    console.warn(`[MapErrorBoundary:${this.props.screenName ?? "unknown"}]`, error.message, info.componentStack);
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <View style={[styles.fallback, { height: this.props.height }]}>
+        <View style={[styles.fallback, { minHeight: Math.max(this.props.height, 220) }]}>
           <Ionicons name="map-outline" size={32} color="#6B7F74" />
           <Text style={styles.title}>Map unavailable</Text>
-          <Text style={styles.body}>
-            {this.props.fallbackMessage ??
-              "Location not available. Please enable GPS and try again."}
-          </Text>
+          <Text style={styles.body}>{this.props.fallbackMessage ?? DEFAULT_MESSAGE}</Text>
         </View>
       );
     }

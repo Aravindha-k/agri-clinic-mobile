@@ -1,6 +1,9 @@
 import { API_BASE_URL } from "./config";
+import { getDeviceSessionHeaderEntries } from "./deviceSessionHeaders";
+import { DEVICE_SESSION_CONFLICT_MESSAGE } from "../constants/deviceSession";
 import { getAccessToken, getRefreshToken, updateAccessToken, clearTokens } from "../storage/tokenStorage";
-import { formatApiErrorMessage } from "../utils/apiError";
+import { handleDeviceSessionConflict } from "../storage/sessionConflict";
+import { formatApiErrorMessage, isDeviceSessionConflictPayload } from "../utils/apiError";
 import { resolveList, unwrapSuccessEnvelope } from "../utils/apiUnwrap";
 import { apiClient } from "./client";
 
@@ -58,7 +61,11 @@ async function parseUploadResponse(xhr: XMLHttpRequest): Promise<VisitAttachment
     }
   }
   if (xhr.status < 200 || xhr.status >= 300) {
-    throw new Error(formatApiErrorMessage(data, "Upload failed"));
+    if (isDeviceSessionConflictPayload(data, xhr.status)) {
+      void handleDeviceSessionConflict();
+      throw new Error(DEVICE_SESSION_CONFLICT_MESSAGE);
+    }
+    throw new Error(formatApiErrorMessage(data, "Upload failed", xhr.status));
   }
   const unwrapped = unwrapSuccessEnvelope<VisitAttachment>(data);
   if (!unwrapped || typeof unwrapped !== "object") {
@@ -84,12 +91,16 @@ export function uploadVisitAttachmentFile(
         type: file.mimeType
       } as unknown as Blob);
 
-      const attempt = (accessToken: string | null) => {
+      const attempt = async (accessToken: string | null) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", url);
         xhr.setRequestHeader("Accept", "application/json");
         if (accessToken) {
           xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
+          const sessionHeaders = await getDeviceSessionHeaderEntries();
+          for (const [name, value] of Object.entries(sessionHeaders)) {
+            xhr.setRequestHeader(name, value);
+          }
         }
 
         xhr.upload.onprogress = (event) => {
@@ -126,7 +137,7 @@ export function uploadVisitAttachmentFile(
                 return;
               }
               await updateAccessToken(newAccess);
-              attempt(newAccess);
+              void attempt(newAccess);
               return;
             }
             const attachment = await parseUploadResponse(xhr);
@@ -148,7 +159,7 @@ export function uploadVisitAttachmentFile(
         xhr.send(formData);
       };
 
-      attempt(token);
+      void attempt(token);
     } catch (err) {
       reject(err instanceof Error ? err : new Error("Upload failed"));
     }

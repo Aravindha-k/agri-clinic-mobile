@@ -1,0 +1,123 @@
+import { API_BASE_URL } from "../api/config";
+import { getAccessToken, getRefreshToken, updateAccessToken, clearTokens } from "../storage/tokenStorage";
+import { formatApiErrorMessage } from "../utils/apiError";
+import { unwrapSuccessEnvelope } from "../utils/apiUnwrap";
+
+export type MultipartFilePayload = {
+  uri: string;
+  name: string;
+  mimeType: string;
+};
+
+async function parseJsonResponse(xhr: XMLHttpRequest): Promise<unknown> {
+  const text = xhr.responseText || "";
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("Server returned an unexpected response.");
+  }
+}
+
+type MultipartOptions = {
+  method?: "POST" | "PATCH" | "PUT";
+};
+
+/**
+ * Upload multipart/form-data with auth refresh (PATCH for profile photos).
+ */
+export function uploadMultipart(
+  path: string,
+  fields: Record<string, string>,
+  file: MultipartFilePayload,
+  fileFieldName = "profile_photo",
+  onProgress?: (progress: number) => void,
+  options: MultipartOptions = {}
+): Promise<unknown> {
+  const httpMethod = options.method ?? "POST";
+
+  return new Promise(async (resolve, reject) => {
+    try {
+      const token = await getAccessToken();
+      const url = path.startsWith("http") ? path : `${API_BASE_URL}${path}`;
+      const formData = new FormData();
+      for (const [key, value] of Object.entries(fields)) {
+        formData.append(key, value);
+      }
+      formData.append(fileFieldName, {
+        uri: file.uri,
+        name: file.name,
+        type: file.mimeType
+      } as unknown as Blob);
+
+      const attempt = (accessToken: string | null) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open(httpMethod, url);
+        xhr.setRequestHeader("Accept", "application/json");
+        if (accessToken) {
+          xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
+        }
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable && onProgress) {
+            onProgress(Math.min(1, event.loaded / event.total));
+          }
+        };
+
+        xhr.onload = async () => {
+          try {
+            if (xhr.status === 401 && accessToken) {
+              const refresh = await getRefreshToken();
+              if (!refresh) {
+                await clearTokens();
+                reject(new Error("Session expired. Please sign in again."));
+                return;
+              }
+              const res = await fetch(`${API_BASE_URL}auth/refresh/`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ refresh })
+              });
+              const body = (await res.json()) as Record<string, unknown>;
+              let newAccess: string | null = null;
+              if (typeof body.access === "string") {
+                newAccess = body.access;
+              } else if (typeof body.data === "object" && body.data) {
+                const nested = (body.data as Record<string, unknown>).access;
+                if (typeof nested === "string") {
+                  newAccess = nested;
+                }
+              }
+              if (!newAccess) {
+                await clearTokens();
+                reject(new Error("Session expired. Please sign in again."));
+                return;
+              }
+              await updateAccessToken(newAccess);
+              attempt(newAccess);
+              return;
+            }
+
+            const data = await parseJsonResponse(xhr);
+            if (xhr.status < 200 || xhr.status >= 300) {
+              reject(new Error(formatApiErrorMessage(data, "Upload failed")));
+              return;
+            }
+            resolve(unwrapSuccessEnvelope(data) ?? data);
+          } catch (err) {
+            reject(err instanceof Error ? err : new Error("Upload failed"));
+          }
+        };
+
+        xhr.onerror = () => reject(new Error("Upload needs an internet connection."));
+        xhr.ontimeout = () => reject(new Error("Upload timed out. Please try again."));
+        xhr.timeout = 120000;
+        xhr.send(formData);
+      };
+
+      attempt(token);
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error("Upload failed"));
+    }
+  });
+}

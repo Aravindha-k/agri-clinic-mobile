@@ -1,9 +1,10 @@
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
 import { Employee, getCurrentEmployee, mergeEmployeePhoto } from "../api/employees";
+import { useEmployee } from "../storage/EmployeeContext";
 import { uploadEmployeePhoto } from "../api/profilePhotos";
 import { getVisits, Visit } from "../api/visits";
 import { ProfileAvatar } from "../components/ProfileAvatar";
@@ -31,8 +32,8 @@ export function ProfileScreen() {
   const c = theme.colors;
   const { pendingCount } = useOfflineSync();
   const { bumpAfterEmployeePhotoChange, employeePhotoVersion } = useFieldDataRefresh();
+  const { employee, refreshEmployee, loading: employeeLoading, error: employeeError } = useEmployee();
   const tabInset = useTabBarBottomInset();
-  const [employee, setEmployee] = useState<Employee | null>(null);
   const [visits, setVisits] = useState<Visit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -43,8 +44,7 @@ export function ProfileScreen() {
   const load = useCallback(async () => {
     try {
       setError("");
-      const [emp, visitData] = await Promise.all([getCurrentEmployee(), getVisits()]);
-      setEmployee(emp);
+      const [emp, visitData] = await Promise.all([refreshEmployee(), getVisits()]);
       setPhotoVersion(photoCacheVersion(emp) ?? Date.now());
       setVisits(asArray<Visit>(visitData).map(normalizeVisitFromApi));
     } catch (err) {
@@ -52,11 +52,17 @@ export function ProfileScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [refreshEmployee]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshEmployee().catch(() => undefined);
+    }, [refreshEmployee])
+  );
 
   useEffect(() => {
     if (employeePhotoVersion > 0) {
@@ -95,7 +101,7 @@ export function ProfileScreen() {
       if (!refreshed) {
         throw new Error("Photo uploaded but profile could not be refreshed.");
       }
-      setEmployee(refreshed);
+      await refreshEmployee();
       setPhotoVersion(
         result.profile_photo_updated_at ??
           photoCacheVersion(refreshed) ??
@@ -117,7 +123,8 @@ export function ProfileScreen() {
     }
   }
 
-  if (error) return <ErrorState message={error} onRetry={load} />;
+  const displayError = error || employeeError;
+  if (displayError && !employee) return <ErrorState message={displayError} onRetry={load} />;
 
   const displayName = employee?.full_name || employee?.name || employee?.username || "Field employee";
   const photoUrl = extractPhotoUrl(employee);
@@ -126,7 +133,7 @@ export function ProfileScreen() {
     <View style={[styles.screen, { backgroundColor: c.background }]}>
       <AppHeader title="Profile" subtitle="Your field account" right={<SyncStatusBadge onPress={() => rootNav?.navigate("OfflineSync")} />} />
       <ScrollView contentContainerStyle={[styles.body, { paddingBottom: tabInset }]} showsVerticalScrollIndicator={false}>
-        {loading ? (
+        {loading || employeeLoading ? (
           <>
             <SkeletonCard />
             <SkeletonCard />
@@ -148,6 +155,9 @@ export function ProfileScreen() {
                 <View style={styles.employeeCopy}>
                   <Text style={[styles.empName, { color: c.primaryDark }]}>{displayName}</Text>
                   <Text style={{ color: c.muted, fontSize: 13 }}>{employee?.role?.trim() || "Field staff"}</Text>
+                  {employee?.phone?.trim() ? (
+                    <Text style={{ color: c.muted, fontSize: 12, marginTop: 4 }}>{employee.phone.trim()}</Text>
+                  ) : null}
                   <Text style={{ color: c.muted, fontSize: 12, marginTop: 4 }}>
                     ID {employee?.employee_id?.toString().trim() || "—"}
                   </Text>

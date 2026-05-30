@@ -1,4 +1,5 @@
 import { apiClient } from "./client";
+import { getDeviceInfo } from "../utils/deviceInfo";
 import { asArray } from "../utils/format";
 import { resolveList } from "../utils/apiUnwrap";
 import {
@@ -149,4 +150,38 @@ export function pushLocation(location: LocationPushPayload) {
     method: "POST",
     body: JSON.stringify(location)
   });
+}
+
+function toBulkPoint(location: LocationPushPayload) {
+  return {
+    latitude: location.latitude,
+    longitude: location.longitude,
+    accuracy: location.accuracy ?? undefined,
+    speed: location.speed ?? undefined,
+    heading: location.heading ?? undefined,
+    captured_at: location.captured_at,
+    recorded_at: location.recorded_at ?? location.captured_at
+  };
+}
+
+/** Flush offline route points (up to 500 per request). */
+export function pushLocationsBulk(locations: LocationPushPayload[]) {
+  const device = getDeviceInfo();
+  return apiClient("tracking/location/bulk/", {
+    method: "POST",
+    body: JSON.stringify({
+      locations: locations.map(toBulkPoint),
+      device_model: device.device_model,
+      app_version: device.app_version
+    })
+  });
+}
+
+export async function syncLocationQueue(queue: LocationPushPayload[]) {
+  if (!queue.length) return;
+  if (queue.length === 1) {
+    await pushLocation(queue[0]);
+    return;
+  }
+  await pushLocationsBulk(queue);
 }

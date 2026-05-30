@@ -1,5 +1,6 @@
 import { apiClient } from "./client";
 import { saveDeviceSessionId } from "../storage/deviceSessionStorage";
+import { getOrCreateDeviceId } from "../storage/deviceIdStorage";
 import { getRefreshToken, StoredTokens } from "../storage/tokenStorage";
 import { getDeviceInfo } from "../utils/deviceInfo";
 import { unwrapSuccessEnvelope } from "../utils/apiUnwrap";
@@ -15,9 +16,11 @@ function extractDeviceSessionId(data: unknown): string | null {
 export async function loginRequest(identifier: string, password: string): Promise<StoredTokens> {
   const trimmed = identifier.trim();
   const deviceInfo = getDeviceInfo();
+  const deviceId = await getOrCreateDeviceId();
+
   const loginBody = /^[A-Za-z]+-\d+$/i.test(trimmed)
-    ? { employee_id: trimmed, password, ...deviceInfo }
-    : { username: trimmed, password, ...deviceInfo };
+    ? { employee_id: trimmed, password, device_id: deviceId, ...deviceInfo }
+    : { username: trimmed, password, device_id: deviceId, ...deviceInfo };
 
   const data = await apiClient<Record<string, string>>("auth/login/", {
     method: "POST",

@@ -1,4 +1,6 @@
-import { DEVICE_SESSION_CONFLICT_CODE } from "../constants/deviceSession";
+import { SESSION_REPLACED_CODES, SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
+import { ApiRequestError } from "../utils/apiError";
+
 type TeardownHandler = () => void | Promise<void>;
 
 const teardownHandlers = new Set<TeardownHandler>();
@@ -14,14 +16,16 @@ export function registerSessionTeardown(handler: TeardownHandler) {
 export function isDeviceSessionConflict(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const code = (error as { code?: string }).code;
-  if (code === DEVICE_SESSION_CONFLICT_CODE) return true;
+  if (code && SESSION_REPLACED_CODES.has(code)) return true;
+  if (error instanceof ApiRequestError && error.code && SESSION_REPLACED_CODES.has(error.code)) {
+    return true;
+  }
   if (error instanceof Error) {
-    return error.message.includes("active on another device");
+    return error.message.includes("used on another device");
   }
   return false;
 }
 
-/** Stop tracking, clear queues, and sign out when another device takes the session. */
 export async function handleDeviceSessionConflict(): Promise<void> {
   if (handlingConflict) return;
   handlingConflict = true;
@@ -37,3 +41,5 @@ export async function handleDeviceSessionConflict(): Promise<void> {
     handlingConflict = false;
   }
 }
+
+export { SESSION_REPLACED_MESSAGE };

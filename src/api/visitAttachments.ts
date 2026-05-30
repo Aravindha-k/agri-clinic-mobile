@@ -1,6 +1,6 @@
 import { API_BASE_URL } from "./config";
 import { getDeviceSessionHeaderEntries } from "./deviceSessionHeaders";
-import { DEVICE_SESSION_CONFLICT_MESSAGE } from "../constants/deviceSession";
+import { SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
 import { getAccessToken, getRefreshToken, updateAccessToken, clearTokens } from "../storage/tokenStorage";
 import { handleDeviceSessionConflict } from "../storage/sessionConflict";
 import { formatApiErrorMessage, isDeviceSessionConflictPayload } from "../utils/apiError";
@@ -63,7 +63,7 @@ async function parseUploadResponse(xhr: XMLHttpRequest): Promise<VisitAttachment
   if (xhr.status < 200 || xhr.status >= 300) {
     if (isDeviceSessionConflictPayload(data, xhr.status)) {
       void handleDeviceSessionConflict();
-      throw new Error(DEVICE_SESSION_CONFLICT_MESSAGE);
+      throw new Error(SESSION_REPLACED_MESSAGE);
     }
     throw new Error(formatApiErrorMessage(data, "Upload failed", xhr.status));
   }

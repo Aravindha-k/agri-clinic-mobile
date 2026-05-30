@@ -2,8 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
-import { getCurrentEmployee, Employee } from "../api/employees";
-import { getVisits, Visit } from "../api/visits";
+import { Visit } from "../api/visits";
+import { getVisits } from "../api/visits";
 import { GpsFieldStatusChip } from "../components/GpsFieldStatusChip";
 import { HomeHeroCard } from "../components/home/HomeHeroCard";
 import { WorkdayStatusCard } from "../components/home/WorkdayStatusCard";
@@ -13,6 +13,7 @@ import { DashboardSkeleton } from "../components/DashboardSkeleton";
 import { ErrorState } from "../components/ErrorState";
 import { FadeInView } from "../components/FadeInView";
 import { PremiumCard, StatWidget, SyncStatusBadge, VisitCard } from "../components/ui";
+import { useEmployee } from "../storage/EmployeeContext";
 import { useFieldDataRefresh } from "../storage/FieldDataRefreshContext";
 import { useTracking } from "../storage/TrackingContext";
 import { useTheme } from "../theme";
@@ -43,7 +44,7 @@ export function HomeScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const { theme } = useTheme();
   const c = theme.colors;
-  const [employee, setEmployee] = useState<Employee | null>(null);
+  const { employee, refreshEmployee } = useEmployee();
   const [visits, setVisits] = useState<Visit[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -74,8 +75,7 @@ export function HomeScreen() {
   const load = useCallback(async (isRefresh = false) => {
     try {
       setError("");
-      const [employeeData, visitData] = await Promise.all([getCurrentEmployee(), getVisits()]);
-      setEmployee(employeeData);
+      const [, visitData] = await Promise.all([refreshEmployee(), getVisits()]);
       setVisits(asArray<Visit>(visitData).map(normalizeVisitFromApi));
       await refreshTracking().catch(() => undefined);
       await refreshWeather().catch(() => undefined);
@@ -87,7 +87,7 @@ export function HomeScreen() {
       }
       setRefreshing(false);
     }
-  }, [refreshTracking, refreshWeather]);
+  }, [refreshEmployee, refreshTracking, refreshWeather]);
 
   useEffect(() => {
     load(false);
@@ -96,7 +96,8 @@ export function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       scrollRef.current?.scrollTo({ y: 0, animated: false });
-    }, [])
+      void refreshEmployee().catch(() => undefined);
+    }, [refreshEmployee])
   );
 
   useEffect(() => {

@@ -2,8 +2,9 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { Alert } from "react-native";
 import { loginRequest, logoutRequest } from "../api/auth";
 import { getCurrentEmployee, isFieldEmployee } from "../api/employees";
-import { DEVICE_SESSION_CONFLICT_MESSAGE } from "../constants/deviceSession";
+import { SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
 import { registerSessionTeardown } from "./sessionConflict";
+import { clearDeviceSessionId } from "./deviceSessionStorage";
 import { getAccessToken, saveTokens, clearTokens } from "./tokenStorage";
 
 const FIELD_EMPLOYEE_ONLY_MESSAGE = "This app is only for field employees.";
@@ -27,10 +28,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await logoutRequest().catch(() => undefined);
     } finally {
       await clearTokens();
+      await clearDeviceSessionId();
       setIsAuthenticated(false);
       if (!conflictAlertShownRef.current) {
         conflictAlertShownRef.current = true;
-        Alert.alert("Signed out", DEVICE_SESSION_CONFLICT_MESSAGE);
+        Alert.alert("Signed out", SESSION_REPLACED_MESSAGE);
       }
     }
   }, []);
@@ -52,7 +54,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // Show UI quickly when a token exists; validate employee in background.
       if (!cancelled) {
         setIsAuthenticated(true);
         setIsReady(true);
@@ -63,11 +64,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (cancelled) return;
         if (!isFieldEmployee(employee)) {
           await clearTokens();
+          await clearDeviceSessionId();
           setIsAuthenticated(false);
         }
       } catch {
         if (!cancelled) {
           await clearTokens();
+          await clearDeviceSessionId();
           setIsAuthenticated(false);
         }
       }
@@ -89,6 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await logoutRequest();
       } finally {
         await clearTokens();
+        await clearDeviceSessionId();
       }
       throw new Error(FIELD_EMPLOYEE_ONLY_MESSAGE);
     }
@@ -100,6 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await logoutRequest();
     } finally {
       await clearTokens();
+      await clearDeviceSessionId();
       setIsAuthenticated(false);
     }
   }, []);

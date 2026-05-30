@@ -1,4 +1,4 @@
-import { DEVICE_SESSION_CONFLICT_CODE } from "../constants/deviceSession";
+import { SESSION_REPLACED_CODES, SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
 
 const GENERIC_SUBMIT_MESSAGE = "Farmer, crop, and GPS location are required to submit a visit.";
 
@@ -25,8 +25,8 @@ export function extractApiErrorCode(data: unknown): string | null {
 
 export function isDeviceSessionConflictPayload(data: unknown, status: number): boolean {
   const code = extractApiErrorCode(data);
-  if (code === DEVICE_SESSION_CONFLICT_CODE) return true;
-  return status === 409 && code === DEVICE_SESSION_CONFLICT_CODE;
+  if (code && SESSION_REPLACED_CODES.has(code)) return true;
+  return status === 409 && code != null && SESSION_REPLACED_CODES.has(code);
 }
 
 function humanizeField(key: string) {
@@ -66,8 +66,8 @@ function formatFieldErrors(errors: unknown): string | null {
 /** Turn DRF / Agri API error bodies into a readable message. */
 export function formatApiErrorMessage(data: unknown, fallback = "Request failed", httpStatus?: number): string {
   const code = extractApiErrorCode(data);
-  if (code === DEVICE_SESSION_CONFLICT_CODE || httpStatus === 409 && code === DEVICE_SESSION_CONFLICT_CODE) {
-    return "Your account is active on another device. Please login again.";
+  if ((code && SESSION_REPLACED_CODES.has(code)) || (httpStatus === 409 && code && SESSION_REPLACED_CODES.has(code))) {
+    return SESSION_REPLACED_MESSAGE;
   }
   if (!data || typeof data !== "object") {
     return fallback;

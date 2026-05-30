@@ -1,6 +1,6 @@
 import { API_BASE_URL } from "../api/config";
 import { getDeviceSessionHeaderEntries } from "../api/deviceSessionHeaders";
-import { DEVICE_SESSION_CONFLICT_CODE, DEVICE_SESSION_CONFLICT_MESSAGE } from "../constants/deviceSession";
+import { SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
 import { getAccessToken, getRefreshToken, updateAccessToken, clearTokens } from "../storage/tokenStorage";
 import { handleDeviceSessionConflict } from "../storage/sessionConflict";
 import { extractApiErrorCode, formatApiErrorMessage, isDeviceSessionConflictPayload } from "../utils/apiError";
@@ -109,7 +109,7 @@ export function uploadMultipart(
             if (xhr.status < 200 || xhr.status >= 300) {
               if (isDeviceSessionConflictPayload(data, xhr.status)) {
                 void handleDeviceSessionConflict();
-                reject(new Error(DEVICE_SESSION_CONFLICT_MESSAGE));
+                reject(new Error(SESSION_REPLACED_MESSAGE));
                 return;
               }
               reject(new Error(formatApiErrorMessage(data, "Upload failed", xhr.status)));

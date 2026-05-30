@@ -7,15 +7,15 @@ import {
   endWorkday,
   fetchCurrentWorkday,
   isWorkdayActive,
-  pushLocation,
+  syncLocationQueue,
   sendHeartbeat,
   startWorkday,
   type LocationPushPayload,
   WorkdayStatus
 } from "../api/tracking";
 import {
+  appendLocationPush,
   clearLocationPushQueue,
-  enqueueLocationPush,
   readLocationPushQueue
 } from "./locationPushQueue";
 import { isWorkdayInactiveMessage } from "../utils/workdayStatus";
@@ -242,65 +242,81 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     [clearWorkdayState, isAuthenticated, syncWorkdayFromServer]
   );
 
+  const applyLastQueuedLocation = useCallback((payload: LocationPushPayload) => {
+    if (!mountedRef.current) return;
+    setGpsState("granted");
+    setCurrentLocation({
+      latitude: String(payload.latitude),
+      longitude: String(payload.longitude),
+      accuracy: payload.accuracy ?? null
+    });
+    setLastSyncTime(payload.captured_at || payload.recorded_at || null);
+    setError("");
+  }, []);
+
   const flushPendingLocationQueue = useCallback(async () => {
     if (!isWorkdayActive(workday)) {
       return;
     }
-    const queue = await readLocationPushQueue();
-    if (!queue.length) {
-      if (mountedRef.current) {
-        setPendingSyncCount(0);
-      }
-      return;
-    }
-    const payload = queue[queue.length - 1];
-    await pushLocation(payload);
-    await clearLocationPushQueue();
-    if (mountedRef.current) {
-      setPendingSyncCount(0);
-      setGpsState("granted");
-      setCurrentLocation({
-        latitude: String(payload.latitude),
-        longitude: String(payload.longitude),
-        accuracy: payload.accuracy ?? null
-      });
-      setLastSyncTime(payload.captured_at || payload.recorded_at || null);
-      setError("");
-    }
-  }, [workday]);
-
-  const pushPayload = useCallback(async (payload: LocationPushPayload) => {
     try {
-      await pushLocation(payload);
+      const queue = await readLocationPushQueue();
+      if (!queue.length) {
+        if (mountedRef.current) {
+          setPendingSyncCount(0);
+        }
+        return;
+      }
+      await syncLocationQueue(queue);
       await clearLocationPushQueue();
+      const last = queue[queue.length - 1];
       if (mountedRef.current) {
         setPendingSyncCount(0);
-        setGpsState("granted");
-        setCurrentLocation({
-          latitude: String(payload.latitude),
-          longitude: String(payload.longitude),
-          accuracy: payload.accuracy ?? null
-        });
-        setLastSyncTime(payload.captured_at || payload.recorded_at || null);
+        applyLastQueuedLocation(last);
       }
-      await sendHeartbeat(true).catch(() => undefined);
-    } catch (err) {
-      await enqueueLocationPush(payload);
+    } catch {
+      const remaining = await readLocationPushQueue();
       if (mountedRef.current) {
-        setPendingSyncCount(1);
+        setPendingSyncCount(remaining.length);
       }
-      throw err;
     }
-  }, []);
+  }, [applyLastQueuedLocation, workday]);
+
+  const pushPayload = useCallback(
+    async (payload: LocationPushPayload) => {
+      try {
+        await appendLocationPush(payload);
+        const queue = await readLocationPushQueue();
+        if (mountedRef.current) {
+          setPendingSyncCount(queue.length);
+        }
+        await syncLocationQueue(queue);
+        await clearLocationPushQueue();
+        if (mountedRef.current) {
+          setPendingSyncCount(0);
+          applyLastQueuedLocation(payload);
+        }
+        await sendHeartbeat(true).catch(() => undefined);
+      } catch {
+        const queue = await readLocationPushQueue();
+        if (mountedRef.current) {
+          setPendingSyncCount(queue.length);
+        }
+        throw new Error(TRACKING_SYNC_ERROR);
+      }
+    },
+    [applyLastQueuedLocation]
+  );
 
   const pushCapturedLocation = useCallback(async (location: Parameters<typeof toTrackingPayload>[0]) => {
-    let payload: LocationPushPayload;
     try {
-      payload = toTrackingPayload(location);
-    } catch {
+      const payload = toTrackingPayload(location);
+      await pushPayload(payload);
+    } catch (err) {
+      if (err instanceof Error && err.message === TRACKING_SYNC_ERROR) {
+        throw err;
+      }
       throw new Error("Invalid GPS coordinates");
     }
-    await pushPayload(payload);
   }, [pushPayload]);
 
   const syncForegroundLocation = useCallback(async () => {
@@ -317,10 +333,17 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       try {
         await flushPendingLocationQueue();
       } catch {
-        /* keep queued point for next attempt */
+        /* queued points remain for next attempt */
       }
 
-      const result = await getForegroundLocation();
+      let result: Awaited<ReturnType<typeof getForegroundLocation>>;
+      try {
+        result = await getForegroundLocation();
+      } catch {
+        setError(TRACKING_SYNC_ERROR);
+        return;
+      }
+
       if (!result.granted) {
         setGpsState("denied");
         await sendHeartbeat(false).catch(() => undefined);
@@ -328,8 +351,17 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      await pushCapturedLocation(result.location);
-      setError("");
+      try {
+        await pushCapturedLocation(result.location);
+        setError("");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "";
+        if (isWorkdayInactiveMessage(message)) {
+          clearWorkdayState({ showExpiredAlert: /auto-ended|9 hours/i.test(message) });
+          return;
+        }
+        setError(TRACKING_SYNC_ERROR);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
       if (isWorkdayInactiveMessage(message)) {

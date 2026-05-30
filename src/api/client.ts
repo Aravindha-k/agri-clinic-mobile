@@ -1,6 +1,6 @@
 import { API_BASE_URL } from "./config";
 import { applyDeviceSessionHeader } from "./deviceSessionHeaders";
-import { DEVICE_SESSION_CONFLICT_CODE, DEVICE_SESSION_CONFLICT_MESSAGE } from "../constants/deviceSession";
+import { SESSION_REPLACED_CODES, SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
 import { clearTokens, getAccessToken, getRefreshToken, updateAccessToken } from "../storage/tokenStorage";
 import { handleDeviceSessionConflict, isDeviceSessionConflict } from "../storage/sessionConflict";
 import { ApiRequestError, extractApiErrorCode, formatApiErrorMessage, isDeviceSessionConflictPayload } from "../utils/apiError";
@@ -21,11 +21,11 @@ async function parseResponse(response: Response) {
     }
   }
   if (!response.ok) {
-    const code = extractApiErrorCode(data) ?? (response.status === 409 ? DEVICE_SESSION_CONFLICT_CODE : undefined);
+    const code = extractApiErrorCode(data);
     if (isDeviceSessionConflictPayload(data, response.status)) {
       void handleDeviceSessionConflict();
-      throw new ApiRequestError(DEVICE_SESSION_CONFLICT_MESSAGE, {
-        code: DEVICE_SESSION_CONFLICT_CODE,
+      throw new ApiRequestError(SESSION_REPLACED_MESSAGE, {
+        code: code && SESSION_REPLACED_CODES.has(code) ? code : "SESSION_REPLACED",
         status: response.status
       });
     }
@@ -103,7 +103,7 @@ export async function apiClient<T>(path: string, options: ApiOptions = {}): Prom
 
     return (await parseResponse(response)) as T;
   } catch (err) {
-    if (err instanceof ApiRequestError && err.code === DEVICE_SESSION_CONFLICT_CODE) {
+    if (isDeviceSessionConflict(err)) {
       throw err;
     }
     if (err instanceof TypeError) {

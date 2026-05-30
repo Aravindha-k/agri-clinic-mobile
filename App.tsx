@@ -3,6 +3,7 @@ import { Dimensions } from "react-native";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import type { Metrics } from "react-native-safe-area-context";
 import { AuthProvider } from "./src/storage/AuthContext";
+import { EmployeeProvider } from "./src/storage/EmployeeContext";
 import { FieldDataRefreshProvider } from "./src/storage/FieldDataRefreshContext";
 import { OfflineSyncProvider } from "./src/storage/OfflineSyncContext";
 import { RootNavigator } from "./src/navigation/RootNavigator";
@@ -36,6 +37,7 @@ export default function App() {
       <ThemeProvider>
         <AuthProvider>
           <FieldDataRefreshProvider>
+            <EmployeeProvider>
             <OfflineSyncProvider>
               <GpsComplianceProvider>
                 <TrackingProvider>
@@ -47,6 +49,7 @@ export default function App() {
                 </TrackingProvider>
               </GpsComplianceProvider>
             </OfflineSyncProvider>
+            </EmployeeProvider>
           </FieldDataRefreshProvider>
         </AuthProvider>
       </ThemeProvider>

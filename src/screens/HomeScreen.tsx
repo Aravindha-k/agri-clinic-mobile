@@ -2,19 +2,22 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Visit } from "../api/visits";
-import { getVisits } from "../api/visits";
-import { GpsFieldStatusChip } from "../components/GpsFieldStatusChip";
+import { getFarmersForFieldWorker } from "../api/farmers";
+import { Visit, getVisits } from "../api/visits";
+import { HomeDashboardCards } from "../components/home/HomeDashboardCards";
 import { HomeHeroCard } from "../components/home/HomeHeroCard";
 import { WorkdayStatusCard } from "../components/home/WorkdayStatusCard";
+import { OfflineConnectivityBanner } from "../components/OfflineConnectivityBanner";
 import { useTabBarBottomInset } from "../hooks/useTabBarBottomInset";
 import { useFieldWeather } from "../hooks/useFieldWeather";
+import { useGpsCompliance } from "../storage/GpsComplianceContext";
 import { DashboardSkeleton } from "../components/DashboardSkeleton";
 import { ErrorState } from "../components/ErrorState";
 import { FadeInView } from "../components/FadeInView";
-import { PremiumCard, StatWidget, SyncStatusBadge, VisitCard } from "../components/ui";
+import { PremiumCard, SyncStatusBadge, VisitCard } from "../components/ui";
 import { useEmployee } from "../storage/EmployeeContext";
 import { useFieldDataRefresh } from "../storage/FieldDataRefreshContext";
+import { useOfflineSync } from "../storage/OfflineSyncContext";
 import { useTracking } from "../storage/TrackingContext";
 import { useTheme } from "../theme";
 import { listCardType } from "../theme/listCard";
@@ -33,10 +36,11 @@ function greetingForNow() {
 }
 
 const QUICK_ACTIONS = [
+  { icon: "add-circle-outline" as const, label: "New visit", action: "visit" as const },
   { icon: "clipboard-outline" as const, label: "Visits", route: "Visits" as const, screen: "VisitsList" as const },
   { icon: "people-outline" as const, label: "Farmers", route: "Farmers" as const, screen: "FarmersList" as const },
   { icon: "navigate" as const, label: "Live map", route: "LiveMap" as const },
-  { icon: "trail-sign-outline" as const, label: "Travel", route: "TravelHistory" as const }
+  { icon: "notifications-outline" as const, label: "Alerts", route: "Notifications" as const }
 ];
 
 export function HomeScreen() {
@@ -46,11 +50,14 @@ export function HomeScreen() {
   const c = theme.colors;
   const { employee, refreshEmployee } = useEmployee();
   const [visits, setVisits] = useState<Visit[]>([]);
+  const [farmerCount, setFarmerCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [weatherLat, setWeatherLat] = useState<string | number | null>(null);
   const [weatherLng, setWeatherLng] = useState<string | number | null>(null);
+  const { status: gpsComplianceStatus } = useGpsCompliance();
+  const { pendingCount } = useOfflineSync();
   const {
     busy: trackingBusy,
     isActive,
@@ -58,6 +65,8 @@ export function HomeScreen() {
     lastSyncTime,
     nextSyncAt,
     currentLocation,
+    pendingSyncCount,
+    elapsedDuration,
     refreshTracking,
     startDay
   } = useTracking();
@@ -72,11 +81,21 @@ export function HomeScreen() {
     iconName: weatherIcon
   } = useFieldWeather(weatherLat, weatherLng);
 
+  const gpsLabel =
+    gpsComplianceStatus === "active" ? "Active" : gpsComplianceStatus === "blocked" ? "Blocked" : "Required";
+  const gpsTint =
+    gpsComplianceStatus === "active" ? "success" : gpsComplianceStatus === "blocked" ? "warning" : ("primary" as const);
+
   const load = useCallback(async (isRefresh = false) => {
     try {
       setError("");
-      const [, visitData] = await Promise.all([refreshEmployee(), getVisits()]);
+      const [, visitData, farmers] = await Promise.all([
+        refreshEmployee(),
+        getVisits(),
+        getFarmersForFieldWorker().catch(() => [])
+      ]);
       setVisits(asArray<Visit>(visitData).map(normalizeVisitFromApi));
+      setFarmerCount(farmers.length);
       await refreshTracking().catch(() => undefined);
       await refreshWeather().catch(() => undefined);
     } catch (err) {
@@ -131,20 +150,13 @@ export function HomeScreen() {
     try {
       await startDay();
       await refreshTracking();
-    } catch (err) {
-      Alert.alert("Unable to start work", err instanceof Error ? err.message : "Please try again.");
+    } catch {
+      Alert.alert("Unable to start work", "Please check GPS and try again.");
     }
   }
 
   const today = useMemo(() => new Date(), []);
   const todayVisits = useMemo(() => visits.filter((v) => isSameVisitLocalDay(v, today)), [visits, today]);
-  const recentVisitCount = useMemo(() => {
-    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    return visits.filter((v) => {
-      const iso = visitDisplayIso(v);
-      return iso && new Date(iso).getTime() >= cutoff;
-    }).length;
-  }, [visits]);
   const recentVisits = useMemo(() => {
     return [...visits]
       .sort((a, b) => {
@@ -172,21 +184,27 @@ export function HomeScreen() {
   const rootNav = navigation.getParent();
 
   function openQuickAction(item: (typeof QUICK_ACTIONS)[number]) {
-    if (item.route === "LiveMap" || item.route === "TravelHistory") {
-      rootNav?.navigate(item.route);
+    if ("action" in item && item.action === "visit") {
+      rootNav?.navigate("VisitFlow", { screen: "NewVisitFarmer" });
       return;
     }
-    navigation.navigate(item.route, { screen: item.screen });
+    if ("route" in item) {
+      if (item.route === "LiveMap" || item.route === "Notifications") {
+        rootNav?.navigate(item.route);
+        return;
+      }
+      navigation.navigate(item.route, item.screen ? { screen: item.screen } : undefined);
+    }
   }
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
+      <OfflineConnectivityBanner onPressSync={() => rootNav?.navigate("OfflineSync")} />
       <ScrollView
         ref={scrollRef}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlProps} />}
         contentContainerStyle={[styles.screen, { paddingBottom: tabInset }]}
         showsVerticalScrollIndicator={false}
-        style={{ backgroundColor: c.background }}
       >
         <HomeHeroCard
           greeting={greetingForNow()}
@@ -203,32 +221,38 @@ export function HomeScreen() {
         />
 
         <View style={styles.body}>
-          <GpsFieldStatusChip />
-          <FadeInView delay={40}>
+          <FadeInView delay={20}>
             <WorkdayStatusCard
               isActive={isActive}
               startedAt={startedAt}
               lastSyncTime={lastSyncTime}
               nextSyncAt={nextSyncAt}
               busy={trackingBusy}
+              elapsedLabel={isActive ? elapsedDuration : undefined}
               onStart={handleStartDay}
               onLiveMap={() => rootNav?.navigate("LiveMap")}
             />
           </FadeInView>
 
-          <FadeInView delay={80}>
-            <View style={styles.metricsRow}>
-              <StatWidget label="Visits today" value={todayVisits.length} />
-              <StatWidget label="This week" value={recentVisitCount} />
-            </View>
+          <FadeInView delay={50}>
+            <HomeDashboardCards
+              visitsToday={todayVisits.length}
+              farmersCount={farmerCount}
+              pendingVisitSync={pendingCount}
+              pendingLocationPoints={pendingSyncCount}
+              gpsLabel={gpsLabel}
+              gpsTint={gpsTint}
+              onFarmersPress={() => navigation.navigate("Farmers", { screen: "FarmersList" })}
+              onSyncPress={() => rootNav?.navigate("OfflineSync")}
+            />
           </FadeInView>
 
           {recentVisits.length > 0 ? (
-            <FadeInView delay={110}>
+            <FadeInView delay={90}>
               <View style={styles.sectionHead}>
-              <Text style={[listCardType.title, { color: c.text }]}>Recent visits</Text>
-              <Pressable onPress={() => navigation.navigate("Visits", { screen: "VisitsList" })}>
-                <Text style={[listCardType.caption, { color: c.primary }]}>See all</Text>
+                <Text style={[listCardType.title, { color: c.text }]}>Recent activity</Text>
+                <Pressable onPress={() => navigation.navigate("Visits", { screen: "VisitsList" })}>
+                  <Text style={[listCardType.caption, { color: c.primary }]}>See all</Text>
                 </Pressable>
               </View>
               <View style={styles.recentVisits}>
@@ -244,8 +268,8 @@ export function HomeScreen() {
             </FadeInView>
           ) : null}
 
-          <FadeInView delay={140}>
-            <Text style={[listCardType.title, { color: c.text }]}>Quick access</Text>
+          <FadeInView delay={120}>
+            <Text style={[listCardType.title, { color: c.text }]}>Quick actions</Text>
             <View style={styles.quickGrid}>
               {QUICK_ACTIONS.map((item) => (
                 <QuickTile key={item.label} icon={item.icon} label={item.label} onPress={() => openQuickAction(item)} />
@@ -288,51 +312,24 @@ const QuickTile = memo(function QuickTile({
 });
 
 const styles = StyleSheet.create({
-  screen: {
-    flexGrow: 1
-  },
-  body: {
-    gap: space.md + 2,
-    paddingHorizontal: space.lg,
-    paddingTop: space.md
-  },
+  screen: { flexGrow: 1 },
+  body: { gap: space.md + 2, paddingHorizontal: space.lg, paddingTop: space.sm },
   sectionHead: {
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: space.xs
   },
-  recentVisits: {
-    gap: 10,
-    marginTop: 8
-  },
-  metricsRow: {
-    flexDirection: "row",
-    gap: 10
-  },
-  quickGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginTop: 8
-  },
-  quickTile: {
-    width: "48%"
-  },
-  quickTilePressed: {
-    opacity: 0.92
-  },
-  quickTileInner: {
-    alignItems: "center",
-    gap: 8,
-    minHeight: 84,
-    paddingVertical: 12
-  },
+  recentVisits: { gap: 10, marginTop: 8 },
+  quickGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 8 },
+  quickTile: { width: "31%" },
+  quickTilePressed: { opacity: 0.92 },
+  quickTileInner: { alignItems: "center", gap: 8, minHeight: 78, paddingVertical: 10 },
   quickIcon: {
     alignItems: "center",
     borderRadius: 14,
-    height: 44,
+    height: 40,
     justifyContent: "center",
-    width: 44
+    width: 40
   }
 });

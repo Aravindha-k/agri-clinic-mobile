@@ -48,4 +48,5 @@ export type RootStackParamList = {
   TravelHistory: undefined;
   FarmerMap: FarmerMapParams;
   OfflineSync: undefined;
+  Notifications: undefined;
 };

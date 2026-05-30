@@ -16,6 +16,7 @@ import {
   SESSION_EXPIRED_MESSAGE,
   SERVER_MESSAGE
 } from "../utils/apiError";
+import { setConnectivityOnline } from "../utils/connectivityBus";
 import { unwrapSuccessEnvelope } from "../utils/apiUnwrap";
 
 type ApiOptions = RequestInit & {
@@ -156,12 +157,14 @@ export async function apiClient<T>(path: string, options: ApiOptions = {}): Prom
       throw new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
     }
 
+    setConnectivityOnline(true);
     return (await parseResponse(response)) as T;
   } catch (err) {
     if (isDeviceSessionConflict(err) || isAuthExpiredError(err)) {
       throw err;
     }
     if (isNetworkError(err)) {
+      setConnectivityOnline(false);
       throw networkError();
     }
     if (err instanceof ApiRequestError) {

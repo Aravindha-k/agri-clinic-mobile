@@ -12,6 +12,7 @@ type Props = {
   lastSyncTime: string | null;
   nextSyncAt: string | null;
   busy: boolean;
+  elapsedLabel?: string;
   onStart: () => void;
   onLiveMap: () => void;
 };
@@ -23,7 +24,16 @@ function formatSyncTime(iso: string | null) {
   return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
-export function WorkdayStatusCard({ isActive, startedAt, lastSyncTime, nextSyncAt, busy, onStart, onLiveMap }: Props) {
+export function WorkdayStatusCard({
+  isActive,
+  startedAt,
+  lastSyncTime,
+  nextSyncAt,
+  busy,
+  elapsedLabel,
+  onStart,
+  onLiveMap
+}: Props) {
   const { theme } = useTheme();
   const c = theme.colors;
   const timer = useWorkdayTimer(startedAt, isActive);
@@ -68,7 +78,9 @@ export function WorkdayStatusCard({ isActive, startedAt, lastSyncTime, nextSyncA
         <Text style={[styles.timerValue, { color: c.primaryDark }]} adjustsFontSizeToFit numberOfLines={1}>
           {timer.display}
         </Text>
-        <Text style={[styles.timerCaption, { color: c.muted }]}>Today's field time</Text>
+        <Text style={[styles.timerCaption, { color: c.muted }]}>
+          {elapsedLabel ? `Active · ${elapsedLabel}` : "Today's field time"}
+        </Text>
       </View>
 
       <View style={[styles.syncRow, { borderTopColor: c.border }]}>

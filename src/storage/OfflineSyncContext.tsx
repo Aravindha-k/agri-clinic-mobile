@@ -17,6 +17,7 @@ type OfflineSyncContextValue = {
   pendingCount: number;
   syncing: boolean;
   lastSyncAt: string | null;
+  lastSyncFailed: number;
   refreshQueue: () => Promise<void>;
   enqueue: (
     values: import("../api/visits").VisitFormValues,
@@ -33,6 +34,7 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
   const [queue, setQueue] = useState<QueuedVisit[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [lastSyncFailed, setLastSyncFailed] = useState(0);
 
   const refreshQueue = useCallback(async () => {
     setQueue(await getQueuedVisits());
@@ -94,6 +96,7 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
       bumpAfterVisitChange();
     }
     setLastSyncAt(new Date().toISOString());
+    setLastSyncFailed(failed);
     await refreshQueue();
     setSyncing(false);
     return { synced, failed };
@@ -105,11 +108,12 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
       pendingCount: queue.length,
       syncing,
       lastSyncAt,
+      lastSyncFailed,
       refreshQueue,
       enqueue,
       syncAll
     }),
-    [queue, syncing, lastSyncAt, refreshQueue, enqueue, syncAll]
+    [lastSyncFailed, queue, syncing, lastSyncAt, refreshQueue, enqueue, syncAll]
   );
 
   return <OfflineSyncContext.Provider value={value}>{children}</OfflineSyncContext.Provider>;

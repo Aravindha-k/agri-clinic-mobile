@@ -13,6 +13,8 @@ import { GpsComplianceProvider } from "./src/storage/GpsComplianceContext";
 import { GpsComplianceShell } from "./src/components/GpsComplianceShell";
 import { GpsWorkdayGate } from "./src/components/GpsWorkdayGate";
 import { WorkdayInactiveBanner } from "./src/components/WorkdayInactiveBanner";
+import { NotificationBridge } from "./src/components/NotificationBridge";
+import { NotificationsProvider } from "./src/storage/NotificationsContext";
 import { useAppSplash } from "./src/hooks/useAppSplash";
 import { ThemeProvider, useTheme } from "./src/theme";
 
@@ -41,18 +43,21 @@ export default function App() {
           <AuthProvider>
             <FieldDataRefreshProvider>
               <EmployeeProvider>
-                <OfflineSyncProvider>
-                  <GpsComplianceProvider>
-                    <TrackingProvider>
-                      <GpsComplianceShell>
-                        <WorkdayInactiveBanner />
-                        <GpsWorkdayGate>
-                          <AppShell />
-                        </GpsWorkdayGate>
-                      </GpsComplianceShell>
-                    </TrackingProvider>
-                  </GpsComplianceProvider>
-                </OfflineSyncProvider>
+                <NotificationsProvider>
+                  <OfflineSyncProvider>
+                    <GpsComplianceProvider>
+                      <TrackingProvider>
+                        <NotificationBridge />
+                        <GpsComplianceShell>
+                          <WorkdayInactiveBanner />
+                          <GpsWorkdayGate>
+                            <AppShell />
+                          </GpsWorkdayGate>
+                        </GpsComplianceShell>
+                      </TrackingProvider>
+                    </GpsComplianceProvider>
+                  </OfflineSyncProvider>
+                </NotificationsProvider>
               </EmployeeProvider>
             </FieldDataRefreshProvider>
           </AuthProvider>

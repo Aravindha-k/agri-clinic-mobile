@@ -24,13 +24,18 @@ import {
 } from "../utils/profileImagePick";
 import { normalizeVisitFromApi } from "../utils/visitFarmer";
 import { BRAND } from "../brand/constants";
+import { getDeviceInfo } from "../utils/deviceInfo";
+import { useNotifications } from "../storage/NotificationsContext";
+import { useTracking } from "../storage/TrackingContext";
 
 export function ProfileScreen() {
   const navigation = useNavigation<any>();
   const { signOut } = useAuth();
   const { theme, toggleTheme, isDark } = useTheme();
   const c = theme.colors;
-  const { pendingCount } = useOfflineSync();
+  const { pendingCount, lastSyncAt } = useOfflineSync();
+  const { unreadCount } = useNotifications();
+  const { lastSyncTime } = useTracking();
   const { bumpAfterEmployeePhotoChange, employeePhotoVersion } = useFieldDataRefresh();
   const { employee, refreshEmployee, loading: employeeLoading, error: employeeError } = useEmployee();
   const tabInset = useTabBarBottomInset();
@@ -86,7 +91,25 @@ export function ProfileScreen() {
   }, [visits]);
 
   const appVersion = Constants.expoConfig?.version ?? Constants.nativeAppVersion ?? "—";
+  const buildNumber =
+    Constants.expoConfig?.android?.versionCode ?? Constants.nativeBuildVersion ?? "—";
+  const device = getDeviceInfo();
   const rootNav = navigation.getParent();
+
+  function confirmSignOut() {
+    Alert.alert("Sign out?", "You will need to sign in again to continue field work.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Sign out", style: "destructive", onPress: () => void signOut() }
+    ]);
+  }
+
+  function formatSync(iso: string | null) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime())
+      ? "—"
+      : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
 
   async function changePhoto(source: "camera" | "library") {
     try {
@@ -179,6 +202,13 @@ export function ProfileScreen() {
             </View>
 
             <PremiumCard elevated tint="soft">
+              <MenuRow
+                icon="notifications-outline"
+                label="Notifications"
+                hint={unreadCount ? `${unreadCount} unread` : "No new alerts"}
+                onPress={() => rootNav?.navigate("Notifications")}
+              />
+              <View style={[styles.divider, { backgroundColor: c.border }]} />
               <MenuRow icon="navigate" label="Live map" onPress={() => rootNav?.navigate("LiveMap")} />
               <View style={[styles.divider, { backgroundColor: c.border }]} />
               <MenuRow icon="trail-sign-outline" label="Today's travel" onPress={() => rootNav?.navigate("TravelHistory")} />
@@ -193,15 +223,33 @@ export function ProfileScreen() {
               <MenuRow icon={isDark ? "sunny-outline" : "moon-outline"} label={isDark ? "Light mode" : "Dark mode"} onPress={toggleTheme} />
             </PremiumCard>
 
+            <PremiumCard elevated tint="soft">
+              <Text style={[styles.sectionLabel, { color: c.text }]}>Device & sync</Text>
+              <InfoLine label="Last visit sync" value={formatSync(lastSyncAt)} />
+              <InfoLine label="Last GPS sync" value={formatSync(lastSyncTime)} />
+              <InfoLine label="Device" value={device.device_model || "—"} />
+              <InfoLine label="App version" value={`${appVersion} (${buildNumber})`} />
+            </PremiumCard>
+
             <PremiumCard elevated tint="soft" style={styles.aboutCard}>
               <Text style={[styles.aboutName, { color: c.text }]}>{BRAND.appName}</Text>
               <Text style={[styles.aboutTag, { color: c.muted }]}>{BRAND.tagline}</Text>
-              <Text style={[styles.version, { color: c.muted }]}>Version {appVersion}</Text>
             </PremiumCard>
-            <PrimaryButton title="Sign out" onPress={signOut} variant="outline" />
+            <PrimaryButton title="Sign out" onPress={confirmSignOut} variant="outline" />
           </>
         )}
       </ScrollView>
+    </View>
+  );
+}
+
+function InfoLine({ label, value }: { label: string; value: string }) {
+  const { theme } = useTheme();
+  const c = theme.colors;
+  return (
+    <View style={styles.infoRow}>
+      <Text style={{ color: c.muted, fontSize: 12 }}>{label}</Text>
+      <Text style={{ color: c.text, fontSize: 14, fontWeight: "700", marginTop: 2 }}>{value}</Text>
     </View>
   );
 }
@@ -247,6 +295,8 @@ const styles = StyleSheet.create({
   menuText: { flex: 1 },
   menuLabel: { fontSize: 15, fontWeight: "800" },
   divider: { height: 1, marginVertical: 10 },
+  sectionLabel: { fontSize: 15, fontWeight: "800", marginBottom: 8 },
+  infoRow: { marginTop: 10 },
   aboutCard: { alignItems: "center", gap: 4, paddingVertical: 16 },
   aboutName: { fontSize: 16, fontWeight: "900", textAlign: "center" },
   aboutTag: { fontSize: 12, fontWeight: "600", textAlign: "center" },

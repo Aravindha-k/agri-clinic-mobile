@@ -77,5 +77,7 @@ export function logVisitFarmerBlock(visit: Partial<Visit> | null | undefined, la
       farmer_village: visit.farmer_village,
       crop_name: visit.crop_name
     } as const);
-  console.log(label, block);
+  if (__DEV__) {
+    console.warn(`[visitFarmer] ${label}`, block);
+  }
 }

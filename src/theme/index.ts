@@ -10,3 +10,4 @@ export { layout, createTypography, createDesignSystem } from "./designSystem";
 export type { DesignSystem, TypographyScale } from "./designSystem";
 export { listCardType, listCardLayout, listCardStyles } from "./listCard";
 export { refreshControlProps } from "./refresh";
+export { premium } from "./premiumTokens";

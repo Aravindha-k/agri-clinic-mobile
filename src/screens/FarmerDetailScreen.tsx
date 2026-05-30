@@ -170,6 +170,16 @@ export function FarmerDetailScreen({ route, navigation }: Props) {
 
         {activeTab === "Overview" ? (
           <>
+            <PremiumCard elevated tint="primary">
+              <View style={styles.locationRow}>
+                <Ionicons name="location-outline" size={22} color={c.primaryDark} />
+                <View style={styles.locationCopy}>
+                  <Text style={[styles.sectionTitle, { color: c.text }]}>Village & location</Text>
+                  <Text style={[styles.meta, { color: c.muted, marginTop: 4 }]}>{place}</Text>
+                </View>
+              </View>
+              <PrimaryButton title="View on map" onPress={openFarmerMap} variant="secondary" style={{ marginTop: 12 }} />
+            </PremiumCard>
             <PremiumCard elevated tint="soft">
               <Text style={[styles.sectionTitle, { color: c.text }]}>At a glance</Text>
               <InfoRow label="Last visited" value={lastVisitedLabel} />
@@ -302,6 +312,8 @@ const styles = StyleSheet.create({
   meta: { flex: 1, fontSize: 14, lineHeight: 20 },
   heroActions: { flexDirection: "row", gap: 10, marginTop: space.lg },
   heroBtn: { flex: 1 },
+  locationRow: { alignItems: "flex-start", flexDirection: "row", gap: 12 },
+  locationCopy: { flex: 1 },
   sectionTitle: { fontSize: 16, fontWeight: "900", marginBottom: 12 },
   infoRow: { marginBottom: 14 },
   panel: { gap: 10 },

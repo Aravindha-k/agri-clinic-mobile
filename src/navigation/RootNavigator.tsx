@@ -17,6 +17,7 @@ import { FarmerMapScreen } from "../screens/map/FarmerMapScreen";
 import { LiveMapScreen } from "../screens/map/LiveMapScreen";
 import { TravelHistoryScreen } from "../screens/map/TravelHistoryScreen";
 import { OfflineSyncScreen } from "../screens/OfflineSyncScreen";
+import { NotificationsScreen } from "../screens/NotificationsScreen";
 import { VisitDetailTimelineScreen } from "../screens/visit/VisitDetailTimelineScreen";
 import { BottomNav } from "../components/ui";
 import { VisitFlowNavigator } from "./VisitFlowNavigator";
@@ -129,6 +130,11 @@ function AppRoutes() {
         <RootStack.Screen
           name="OfflineSync"
           component={OfflineSyncScreen}
+          options={{ contentStyle: { flex: 1 }, animation: "slide_from_right" }}
+        />
+        <RootStack.Screen
+          name="Notifications"
+          component={NotificationsScreen}
           options={{ contentStyle: { flex: 1 }, animation: "slide_from_right" }}
         />
       </RootStack.Navigator>

@@ -1,38 +1,44 @@
 import { useEffect, useRef } from "react";
 import { Animated, Easing, Image, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { BRAND, LOGO_IMAGE } from "../../brand/constants";
 import { AUTH_THEME } from "../../theme/authTheme";
+import { AuthScreenLayout } from "./AuthScreenLayout";
 import { CropLineAccent } from "./CropLineAccent";
-import { PremiumIntroBackground } from "./PremiumIntroBackground";
-import { Ionicons } from "@expo/vector-icons";
 
-export const BRAND_INTRO_MS = 1500;
-const FADE_MS = 320;
+export const BRAND_INTRO_MS = 1800;
+const FADE_MS = 350;
 
 type Props = {
   onComplete: () => void;
   durationMs?: number;
 };
 
-/** Step 1 — brand intro with logo, tagline, crop accent (~1.5s). */
 export function BrandIntroStep({ onComplete, durationMs = BRAND_INTRO_MS }: Props) {
   const screenOpacity = useRef(new Animated.Value(1)).current;
-  const logoScale = useRef(new Animated.Value(0.88)).current;
+  const logoScale = useRef(new Animated.Value(0.9)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const textOpacity = useRef(new Animated.Value(0)).current;
-  const textY = useRef(new Animated.Value(10)).current;
+  const textY = useRef(new Animated.Value(12)).current;
   const progress = useRef(new Animated.Value(0)).current;
+  const glow = useRef(new Animated.Value(0.4)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(logoOpacity, { toValue: 1, duration: 420, useNativeDriver: true }),
-      Animated.spring(logoScale, { toValue: 1, friction: 8, tension: 62, useNativeDriver: true }),
+    Animated.loop(
       Animated.sequence([
-        Animated.delay(220),
+        Animated.timing(glow, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(glow, { toValue: 0.4, duration: 900, useNativeDriver: true })
+      ])
+    ).start();
+
+    Animated.parallel([
+      Animated.timing(logoOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.spring(logoScale, { toValue: 1, friction: 7, tension: 55, useNativeDriver: true }),
+      Animated.sequence([
+        Animated.delay(260),
         Animated.parallel([
-          Animated.timing(textOpacity, { toValue: 1, duration: 380, useNativeDriver: true }),
-          Animated.timing(textY, { toValue: 0, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: true })
+          Animated.timing(textOpacity, { toValue: 1, duration: 420, useNativeDriver: true }),
+          Animated.timing(textY, { toValue: 0, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true })
         ])
       ]),
       Animated.timing(progress, {
@@ -54,36 +60,34 @@ export function BrandIntroStep({ onComplete, durationMs = BRAND_INTRO_MS }: Prop
     }, durationMs);
 
     return () => clearTimeout(timer);
-  }, [durationMs, logoOpacity, logoScale, onComplete, progress, screenOpacity, textOpacity, textY]);
+  }, [durationMs, glow, logoOpacity, logoScale, onComplete, progress, screenOpacity, textOpacity, textY]);
 
   const progressW = progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
 
   return (
     <Animated.View style={[styles.overlay, { opacity: screenOpacity }]}>
-      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-        <PremiumIntroBackground variant="brand" />
-        <View style={styles.center}>
-          <Animated.View style={{ opacity: logoOpacity, transform: [{ scale: logoScale }] }}>
-            <View style={styles.logoPlate}>
-              {LOGO_IMAGE ? (
-                <Image source={LOGO_IMAGE} style={styles.logo} resizeMode="contain" accessibilityLabel="Logo" />
-              ) : (
-                <Ionicons name="leaf" size={40} color={AUTH_THEME.neonMid} />
-              )}
-            </View>
-          </Animated.View>
-
-          <Animated.View style={{ opacity: textOpacity, transform: [{ translateY: textY }] }}>
-            <Text style={styles.title}>{BRAND.appName}</Text>
-            <Text style={styles.tag}>{BRAND.tagline}</Text>
-            <CropLineAccent />
-          </Animated.View>
-
-          <View style={styles.progressTrack}>
-            <Animated.View style={[styles.progressFill, { width: progressW }]} />
+      <AuthScreenLayout variant="brand" contentStyle={styles.center}>
+        <Animated.View style={{ opacity: logoOpacity, transform: [{ scale: logoScale }] }}>
+          <Animated.View style={[styles.logoGlow, { opacity: glow }]} />
+          <View style={styles.logoPlate}>
+            {LOGO_IMAGE ? (
+              <Image source={LOGO_IMAGE} style={styles.logo} resizeMode="contain" accessibilityLabel="Logo" />
+            ) : (
+              <Ionicons name="leaf" size={44} color={AUTH_THEME.neonMid} />
+            )}
           </View>
+        </Animated.View>
+
+        <Animated.View style={{ opacity: textOpacity, transform: [{ translateY: textY }] }}>
+          <Text style={styles.title}>{BRAND.appName}</Text>
+          <Text style={styles.tag}>{BRAND.tagline}</Text>
+          <CropLineAccent />
+        </Animated.View>
+
+        <View style={styles.progressTrack}>
+          <Animated.View style={[styles.progressFill, { width: progressW }]} />
         </View>
-      </SafeAreaView>
+      </AuthScreenLayout>
     </Animated.View>
   );
 }
@@ -92,52 +96,61 @@ const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: AUTH_THEME.bg,
-    zIndex: 40
+    zIndex: 50
   },
-  safe: { flex: 1 },
   center: {
     alignItems: "center",
-    flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: 28
+    justifyContent: "center"
+  },
+  logoGlow: {
+    backgroundColor: "rgba(61,255,138,0.22)",
+    borderRadius: 40,
+    height: 120,
+    position: "absolute",
+    width: 120
   },
   logoPlate: {
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    height: 96,
+    borderRadius: 24,
+    elevation: 8,
+    height: 104,
     justifyContent: "center",
-    marginBottom: 22,
-    width: 96
+    marginBottom: 24,
+    shadowColor: "#3DFF8A",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    width: 104
   },
-  logo: { height: 68, width: 68 },
+  logo: { height: 72, width: 72 },
   title: {
     color: AUTH_THEME.text,
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: "800",
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
     textAlign: "center"
   },
   tag: {
     color: AUTH_THEME.textMuted,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "500",
-    letterSpacing: 0.3,
-    lineHeight: 20,
-    marginTop: 8,
+    letterSpacing: 0.4,
+    lineHeight: 22,
+    marginTop: 10,
     textAlign: "center"
   },
   progressTrack: {
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 2,
-    height: 3,
-    marginTop: 36,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderRadius: 3,
+    height: 4,
+    marginTop: 40,
     overflow: "hidden",
-    width: 160
+    width: 200
   },
   progressFill: {
     backgroundColor: AUTH_THEME.neon,
-    borderRadius: 2,
-    height: 3
+    borderRadius: 3,
+    height: 4
   }
 });

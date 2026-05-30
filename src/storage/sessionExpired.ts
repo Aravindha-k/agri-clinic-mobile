@@ -4,6 +4,7 @@ type TeardownHandler = () => void | Promise<void>;
 
 const teardownHandlers = new Set<TeardownHandler>();
 let handlingExpired = false;
+let scheduled = false;
 
 export function registerSessionExpiredTeardown(handler: TeardownHandler) {
   teardownHandlers.add(handler);
@@ -12,7 +13,7 @@ export function registerSessionExpiredTeardown(handler: TeardownHandler) {
   };
 }
 
-export async function handleSessionExpired(): Promise<void> {
+async function runTeardownHandlers() {
   if (handlingExpired) return;
   handlingExpired = true;
   try {
@@ -26,6 +27,16 @@ export async function handleSessionExpired(): Promise<void> {
   } finally {
     handlingExpired = false;
   }
+}
+
+/** Defer logout teardown to the next tick — avoids Android crash during navigation/Alert. */
+export function handleSessionExpired(): void {
+  if (scheduled) return;
+  scheduled = true;
+  setTimeout(() => {
+    scheduled = false;
+    void runTeardownHandlers();
+  }, 0);
 }
 
 export { SESSION_EXPIRED_MESSAGE };

@@ -3,7 +3,7 @@ import { Employee, getCurrentEmployee } from "../api/employees";
 import { useAuth, useAuthSessionReady } from "./AuthContext";
 import { useFieldDataRefresh } from "./FieldDataRefreshContext";
 import { registerSessionTeardown } from "./sessionConflict";
-import { isAuthExpiredError, isNetworkError } from "../utils/apiError";
+import { ApiRequestError, isAuthExpiredError, isNetworkError } from "../utils/apiError";
 import { isDeviceSessionConflict } from "./sessionConflict";
 
 type EmployeeContextValue = {
@@ -38,6 +38,10 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
       return row;
     } catch (err) {
       if (isDeviceSessionConflict(err) || isAuthExpiredError(err)) {
+        return null;
+      }
+      if (err instanceof ApiRequestError && (err.code === "AUTH_UNCERTAIN" || err.code === "DEVICE_SESSION_REQUIRED")) {
+        setError("Profile will load when your connection improves.");
         return null;
       }
       const message = isNetworkError(err)

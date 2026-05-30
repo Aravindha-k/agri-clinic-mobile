@@ -1,15 +1,14 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Alert } from "react-native";
 import { loginRequest, logoutRequest } from "../api/auth";
 import { getCurrentEmployee, isFieldEmployee } from "../api/employees";
 import { SESSION_EXPIRED_MESSAGE } from "../constants/authMessages";
 import { SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
 import { registerGoToLogin } from "./authRecovery";
-import { clearDeviceSessionId, ensureDeviceSessionLoaded } from "./deviceSessionStorage";
+import { clearDeviceSessionId, ensureDeviceSessionLoaded, getDeviceSessionId } from "./deviceSessionStorage";
 import { registerSessionExpiredTeardown } from "./sessionExpired";
 import { registerSessionTeardown } from "./sessionConflict";
 import { getAccessToken, saveTokens, clearTokens } from "./tokenStorage";
-import { isAuthExpiredError, isNetworkError, isServerError } from "../utils/apiError";
+import { ApiRequestError, isAuthExpiredError, isNetworkError, isServerError } from "../utils/apiError";
 import { isDeviceSessionConflict } from "./sessionConflict";
 
 const FIELD_EMPLOYEE_ONLY_MESSAGE = "This app is only for field employees.";
@@ -30,14 +29,20 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+function isRetriableAuthError(err: unknown): boolean {
+  if (isNetworkError(err) || isServerError(err)) return true;
+  if (err instanceof ApiRequestError) {
+    return err.code === "AUTH_UNCERTAIN" || err.code === "DEVICE_SESSION_REQUIRED";
+  }
+  return false;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isReady, setIsReady] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [bootstrapIssue, setBootstrapIssue] = useState<BootstrapIssue>("none");
   const [loginNotice, setLoginNotice] = useState<string | null>(null);
-  const conflictAlertShownRef = useRef(false);
-  const expiredAlertShownRef = useRef(false);
   const bootstrapRunningRef = useRef(false);
 
   const clearLoginNotice = useCallback(() => {
@@ -49,6 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await clearDeviceSessionId();
     setIsAuthenticated(false);
     setBootstrapIssue("none");
+    setIsReady(true);
     if (options?.notice) {
       setLoginNotice(options.notice);
     }
@@ -59,19 +65,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await logoutRequest().catch(() => undefined);
     } finally {
       await performLocalSignOut({ notice: SESSION_REPLACED_MESSAGE });
-      if (!conflictAlertShownRef.current) {
-        conflictAlertShownRef.current = true;
-        Alert.alert("Signed out", SESSION_REPLACED_MESSAGE);
-      }
     }
   }, [performLocalSignOut]);
 
   const forceSessionExpiredLogout = useCallback(async () => {
     await performLocalSignOut({ notice: SESSION_EXPIRED_MESSAGE });
-    if (!expiredAlertShownRef.current) {
-      expiredAlertShownRef.current = true;
-      Alert.alert("Session ended", SESSION_EXPIRED_MESSAGE);
-    }
   }, [performLocalSignOut]);
 
   useEffect(() => {
@@ -84,8 +82,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     return registerGoToLogin(async () => {
-      conflictAlertShownRef.current = false;
-      expiredAlertShownRef.current = false;
       await performLocalSignOut();
     });
   }, [performLocalSignOut]);
@@ -125,14 +121,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await forceSessionExpiredLogout();
           return;
         }
-        if (isNetworkError(err)) {
+        if (isRetriableAuthError(err)) {
           setIsAuthenticated(true);
-          setBootstrapIssue("network");
-          return;
-        }
-        if (isServerError(err)) {
-          setIsAuthenticated(true);
-          setBootstrapIssue("server");
+          setBootstrapIssue(isNetworkError(err) ? "network" : "server");
           return;
         }
         setIsAuthenticated(true);
@@ -150,19 +141,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [bootstrap]);
 
   const retryBootstrap = useCallback(async () => {
-    setIsReady(false);
     setAuthLoading(true);
+    setBootstrapIssue("none");
     await bootstrap();
   }, [bootstrap]);
 
   const signIn = useCallback(
     async (username: string, password: string) => {
-      conflictAlertShownRef.current = false;
-      expiredAlertShownRef.current = false;
       setLoginNotice(null);
       const tokens = await loginRequest(username, password);
       await saveTokens(tokens);
       await ensureDeviceSessionLoaded();
+
+      if (!(await getDeviceSessionId())) {
+        throw new Error("Login succeeded but device session was not saved. Please try again.");
+      }
+
       try {
         const employee = await getCurrentEmployee();
         if (!isFieldEmployee(employee)) {
@@ -177,7 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsAuthenticated(true);
         setIsReady(true);
       } catch (err) {
-        if (isNetworkError(err) || isServerError(err)) {
+        if (isRetriableAuthError(err)) {
           setIsAuthenticated(true);
           setBootstrapIssue(isNetworkError(err) ? "network" : "server");
           setIsReady(true);
@@ -190,8 +184,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
-    conflictAlertShownRef.current = false;
-    expiredAlertShownRef.current = false;
     try {
       await logoutRequest();
     } finally {

@@ -4,32 +4,34 @@ import { BRAND_COLORS } from "../../brand/constants";
 
 type Variant = "brand" | "story";
 
-/** Premium emerald gradient — no decorative circles or floating particles. */
+/** Rich emerald gradient backdrop for splash and login. */
 export function PremiumIntroBackground({ variant = "brand" }: { variant?: Variant }) {
   const isStory = variant === "story";
 
   return (
     <View style={styles.wrap} pointerEvents="none">
-      <View style={[styles.base, { backgroundColor: AUTH_THEME.bg }]} />
+      <View style={[styles.base, { backgroundColor: "#030806" }]} />
       <View
         style={[
-          styles.topGlow,
+          styles.radialTop,
           {
             backgroundColor: isStory ? BRAND_COLORS.gradientMid : BRAND_COLORS.gradientDeep,
-            opacity: isStory ? 0.42 : 0.28
+            opacity: isStory ? 0.55 : 0.45
           }
         ]}
       />
       <View
         style={[
-          styles.bottomGlow,
+          styles.radialBottom,
           {
-            backgroundColor: isStory ? BRAND_COLORS.gradientBottom : AUTH_THEME.bgMid,
-            opacity: isStory ? 0.35 : 0.5
+            backgroundColor: isStory ? BRAND_COLORS.gradientBottom : "#0A1F17",
+            opacity: isStory ? 0.4 : 0.65
           }
         ]}
       />
-      <View style={styles.vignette} />
+      <View style={styles.accentLine} />
+      <View style={styles.vignetteTop} />
+      <View style={styles.vignetteBottom} />
     </View>
   );
 }
@@ -42,22 +44,42 @@ const styles = StyleSheet.create({
   base: {
     ...StyleSheet.absoluteFillObject
   },
-  topGlow: {
-    height: "52%",
-    left: 0,
+  radialTop: {
+    borderBottomLeftRadius: 280,
+    borderBottomRightRadius: 280,
+    height: "58%",
+    left: "-10%",
     position: "absolute",
-    right: 0,
+    right: "-10%",
     top: 0
   },
-  bottomGlow: {
+  radialBottom: {
+    borderTopLeftRadius: 240,
+    borderTopRightRadius: 240,
     bottom: 0,
-    height: "48%",
+    height: "42%",
+    left: "-8%",
+    position: "absolute",
+    right: "-8%"
+  },
+  accentLine: {
+    backgroundColor: "rgba(61,255,138,0.12)",
+    height: 1,
+    left: "12%",
+    position: "absolute",
+    right: "12%",
+    top: "46%"
+  },
+  vignetteTop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(3, 8, 6, 0.25)"
+  },
+  vignetteBottom: {
+    backgroundColor: "rgba(3, 8, 6, 0.55)",
+    bottom: 0,
+    height: "35%",
     left: 0,
     position: "absolute",
     right: 0
-  },
-  vignette: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(5, 13, 10, 0.35)"
   }
 });

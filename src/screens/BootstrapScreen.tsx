@@ -1,6 +1,6 @@
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { AppFallbackScreen } from "../components/AppFallbackScreen";
-import { PremiumIntroBackground } from "../components/auth/PremiumIntroBackground";
+import { AuthScreenLayout } from "../components/auth/AuthScreenLayout";
 import { BRAND } from "../brand/constants";
 import { useAuth, type BootstrapIssue } from "../storage/AuthContext";
 import { NETWORK_MESSAGE, SERVER_MESSAGE } from "../utils/apiError";
@@ -8,15 +8,9 @@ import { AUTH_THEME } from "../theme/authTheme";
 
 function issueCopy(issue: BootstrapIssue) {
   if (issue === "network") {
-    return {
-      title: "Connection problem",
-      message: NETWORK_MESSAGE
-    };
+    return { title: "Connection problem", message: NETWORK_MESSAGE };
   }
-  return {
-    title: "Server unavailable",
-    message: SERVER_MESSAGE
-  };
+  return { title: "Server unavailable", message: SERVER_MESSAGE };
 }
 
 /** Splash / startup retry while session is restored. */
@@ -38,26 +32,23 @@ export function BootstrapScreen() {
   }
 
   return (
-    <View style={styles.screen}>
-      <PremiumIntroBackground variant="brand" />
+    <AuthScreenLayout variant="brand" contentStyle={styles.center}>
       <ActivityIndicator size="small" color={AUTH_THEME.neon} />
       <Text style={styles.label}>{BRAND.appName}</Text>
       <Text style={styles.hint}>Restoring your session…</Text>
-    </View>
+    </AuthScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
+  center: {
     alignItems: "center",
-    backgroundColor: AUTH_THEME.bg,
-    flex: 1,
     gap: 12,
     justifyContent: "center"
   },
   label: {
     color: AUTH_THEME.text,
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "800"
   },
   hint: {

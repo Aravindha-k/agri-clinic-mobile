@@ -18,6 +18,7 @@ import {
   SESSION_EXPIRED_MESSAGE,
   SERVER_MESSAGE
 } from "../utils/apiError";
+import { classify401Response } from "../utils/authFailure";
 import { setConnectivityOnline } from "../utils/connectivityBus";
 import { unwrapSuccessEnvelope } from "../utils/apiUnwrap";
 
@@ -31,7 +32,10 @@ function shouldRethrowWithoutLogout(error: unknown): boolean {
     isNetworkError(error) ||
     isServerError(error) ||
     (error instanceof ApiRequestError &&
-      (error.code === "INVALID_RESPONSE" || error.code === "INVALID_CREDENTIALS"))
+      (error.code === "INVALID_RESPONSE" ||
+        error.code === "INVALID_CREDENTIALS" ||
+        error.code === "AUTH_UNCERTAIN" ||
+        error.code === "DEVICE_SESSION_REQUIRED"))
   );
 }
 
@@ -57,6 +61,31 @@ async function readResponseBody(response: Response) {
   }
 }
 
+function throw401Error(data: unknown, auth: boolean): never {
+  if (!auth) {
+    throw new ApiRequestError(formatApiErrorMessage(data, "Invalid username or password.", 401), {
+      code: "INVALID_CREDENTIALS",
+      status: 401
+    });
+  }
+
+  const kind = classify401Response(data, 401);
+  if (kind === "token_expired") {
+    handleSessionExpired();
+    throw new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
+  }
+  if (kind === "device_session") {
+    throw new ApiRequestError("Device session could not be verified. Please try again.", {
+      code: "DEVICE_SESSION_REQUIRED",
+      status: 401
+    });
+  }
+  throw new ApiRequestError(formatApiErrorMessage(data, "Could not verify your session. Please try again.", 401), {
+    code: "AUTH_UNCERTAIN",
+    status: 401
+  });
+}
+
 async function parseResponse(response: Response, options?: { auth?: boolean }) {
   const data = await readResponseBody(response);
   const auth = options?.auth !== false;
@@ -71,14 +100,7 @@ async function parseResponse(response: Response, options?: { auth?: boolean }) {
       });
     }
     if (response.status === 401) {
-      if (auth) {
-        await handleSessionExpired();
-        throw new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
-      }
-      throw new ApiRequestError(formatApiErrorMessage(data, "Invalid username or password.", 401), {
-        code: "INVALID_CREDENTIALS",
-        status: 401
-      });
+      throw401Error(data, auth);
     }
     if (response.status >= 500) {
       throw serverError(SERVER_MESSAGE, response.status);
@@ -90,6 +112,11 @@ async function parseResponse(response: Response, options?: { auth?: boolean }) {
   }
   const unwrapped = unwrapSuccessEnvelope(data);
   return unwrapped !== null ? unwrapped : data;
+}
+
+async function handleAuth401AfterRefresh(response: Response, auth: boolean): Promise<never> {
+  const data = await readResponseBody(response);
+  throw401Error(data, auth);
 }
 
 export async function apiClient<T>(path: string, options: ApiOptions = {}): Promise<T> {
@@ -136,14 +163,12 @@ export async function apiClient<T>(path: string, options: ApiOptions = {}): Prom
         if (shouldRethrowWithoutLogout(error) || isAuthExpiredError(error)) {
           throw error;
         }
-        await handleSessionExpired();
-        throw new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
+        throw serverError(SERVER_MESSAGE, 502);
       }
     }
 
     if (response.status === 401 && auth) {
-      await handleSessionExpired();
-      throw new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
+      await handleAuth401AfterRefresh(response, auth);
     }
 
     setConnectivityOnline(true);

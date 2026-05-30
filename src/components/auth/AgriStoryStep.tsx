@@ -1,18 +1,16 @@
 import { useEffect, useRef } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { AUTH_THEME } from "../../theme/authTheme";
-import { PremiumIntroBackground } from "./PremiumIntroBackground";
+import { AuthScreenLayout } from "./AuthScreenLayout";
 
-export const STORY_INTRO_MS = 1500;
-const FADE_MS = 320;
+export const STORY_INTRO_MS = 1800;
+const FADE_MS = 350;
 
 type Props = {
   onComplete: () => void;
   durationMs?: number;
 };
 
-/** Step 2 — field mission story with shimmer progress (~1.5s). */
 export function AgriStoryStep({ onComplete, durationMs = STORY_INTRO_MS }: Props) {
   const screenOpacity = useRef(new Animated.Value(1)).current;
   const headlineOpacity = useRef(new Animated.Value(0)).current;
@@ -22,30 +20,31 @@ export function AgriStoryStep({ onComplete, durationMs = STORY_INTRO_MS }: Props
   const shimmer = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0.35, duration: 800, useNativeDriver: true })
+      ])
+    ).start();
+
     Animated.parallel([
       Animated.sequence([
-        Animated.delay(80),
+        Animated.delay(100),
         Animated.parallel([
-          Animated.timing(headlineOpacity, { toValue: 1, duration: 460, useNativeDriver: true }),
-          Animated.timing(headlineY, { toValue: 0, duration: 460, easing: Easing.out(Easing.cubic), useNativeDriver: true })
+          Animated.timing(headlineOpacity, { toValue: 1, duration: 480, useNativeDriver: true }),
+          Animated.timing(headlineY, { toValue: 0, duration: 480, easing: Easing.out(Easing.cubic), useNativeDriver: true })
         ])
       ]),
       Animated.sequence([
-        Animated.delay(360),
-        Animated.timing(wordsOpacity, { toValue: 1, duration: 420, useNativeDriver: true })
+        Animated.delay(380),
+        Animated.timing(wordsOpacity, { toValue: 1, duration: 440, useNativeDriver: true })
       ]),
       Animated.timing(progress, {
         toValue: 1,
         duration: durationMs,
         easing: Easing.inOut(Easing.ease),
         useNativeDriver: false
-      }),
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
-          Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true })
-        ])
-      )
+      })
     ]).start();
 
     const timer = setTimeout(() => {
@@ -62,24 +61,20 @@ export function AgriStoryStep({ onComplete, durationMs = STORY_INTRO_MS }: Props
   }, [durationMs, headlineOpacity, headlineY, onComplete, progress, screenOpacity, shimmer, wordsOpacity]);
 
   const progressW = progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
-  const shimmerOpacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1] });
 
   return (
     <Animated.View style={[styles.overlay, { opacity: screenOpacity }]}>
-      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-        <PremiumIntroBackground variant="story" />
-        <View style={styles.center}>
-          <Animated.View style={{ opacity: headlineOpacity, transform: [{ translateY: headlineY }] }}>
-            <Text style={styles.headline}>Empowering Every Field Visit</Text>
-          </Animated.View>
-          <Animated.Text style={[styles.words, { opacity: wordsOpacity }]}>
-            Track • Diagnose • Recommend • Grow
-          </Animated.Text>
-          <View style={styles.progressTrack}>
-            <Animated.View style={[styles.progressFill, { width: progressW, opacity: shimmerOpacity }]} />
-          </View>
+      <AuthScreenLayout variant="story" contentStyle={styles.center}>
+        <Animated.View style={{ opacity: headlineOpacity, transform: [{ translateY: headlineY }] }}>
+          <Text style={styles.headline}>Empowering Every Field Visit</Text>
+        </Animated.View>
+        <Animated.Text style={[styles.words, { opacity: wordsOpacity }]}>
+          Track • Diagnose • Recommend • Grow
+        </Animated.Text>
+        <View style={styles.progressTrack}>
+          <Animated.View style={[styles.progressFill, { width: progressW, opacity: shimmer }]} />
         </View>
-      </SafeAreaView>
+      </AuthScreenLayout>
     </Animated.View>
   );
 }
@@ -88,43 +83,40 @@ const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: AUTH_THEME.bg,
-    zIndex: 40
+    zIndex: 50
   },
-  safe: { flex: 1 },
   center: {
     alignItems: "center",
-    flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: 28
+    justifyContent: "center"
   },
   headline: {
     color: AUTH_THEME.text,
-    fontSize: 25,
+    fontSize: 26,
     fontWeight: "800",
-    letterSpacing: -0.4,
-    lineHeight: 32,
+    letterSpacing: -0.5,
+    lineHeight: 34,
     textAlign: "center"
   },
   words: {
     color: AUTH_THEME.neon,
     fontSize: 12,
     fontWeight: "700",
-    letterSpacing: 1.2,
-    marginTop: 14,
+    letterSpacing: 1.6,
+    marginTop: 16,
     textAlign: "center",
     textTransform: "uppercase"
   },
   progressTrack: {
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 2,
-    height: 3,
-    marginTop: 32,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderRadius: 3,
+    height: 4,
+    marginTop: 36,
     overflow: "hidden",
-    width: 180
+    width: 220
   },
   progressFill: {
     backgroundColor: AUTH_THEME.neon,
-    borderRadius: 2,
-    height: 3
+    borderRadius: 3,
+    height: 4
   }
 });

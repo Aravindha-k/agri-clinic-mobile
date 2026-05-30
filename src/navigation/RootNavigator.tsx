@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { View } from "react-native";
 import { AppStartupIntro } from "../components/auth/AppStartupIntro";
 import { useAuth } from "../storage/AuthContext";
+import { getAccessToken } from "../storage/tokenStorage";
 import { useTheme } from "../theme";
 import { BootstrapScreen } from "../screens/BootstrapScreen";
 import { AuthStartScreen } from "../screens/AuthStartScreen";
@@ -150,7 +151,32 @@ function AppRoutes() {
 
 export function RootNavigator() {
   const { theme, isDark } = useTheme();
+  const { isReady, isAuthenticated, loginNotice } = useAuth();
   const [introComplete, setIntroComplete] = useState(false);
+  const [hadStoredToken, setHadStoredToken] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    void getAccessToken().then((token) => {
+      setHadStoredToken(Boolean(token));
+      if (token) {
+        setIntroComplete(true);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (loginNotice) {
+      setIntroComplete(true);
+    }
+  }, [loginNotice]);
+
+  useEffect(() => {
+    if (isReady && isAuthenticated) {
+      setIntroComplete(true);
+    }
+  }, [isAuthenticated, isReady]);
+
+  const showIntro = hadStoredToken === false && !introComplete;
 
   const navTheme = {
     ...DefaultTheme,
@@ -168,7 +194,7 @@ export function RootNavigator() {
   return (
     <NavigationContainer theme={navTheme}>
       <AppRoutes />
-      {!introComplete ? <AppStartupIntro onComplete={() => setIntroComplete(true)} /> : null}
+      {showIntro ? <AppStartupIntro onComplete={() => setIntroComplete(true)} /> : null}
     </NavigationContainer>
   );
 }

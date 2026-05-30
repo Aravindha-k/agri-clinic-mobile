@@ -4,19 +4,16 @@ import { StatusBar } from "expo-status-bar";
 import {
   ActivityIndicator,
   Image,
-  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableWithoutFeedback,
   View
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { BRAND, LOGO_IMAGE } from "../brand/constants";
-import { CinematicAuthBackground } from "../components/auth/CinematicAuthBackground";
+import { AuthScreenLayout } from "../components/auth/AuthScreenLayout";
 import { GlassLoginField } from "../components/login/GlassLoginField";
 import { useAuth } from "../storage/AuthContext";
 import { AUTH_THEME } from "../theme/authTheme";
@@ -61,43 +58,34 @@ export function LoginScreen() {
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
-      <CinematicAuthBackground />
-
-      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+      <AuthScreenLayout variant="brand" contentStyle={styles.layout}>
         <KeyboardAvoidingView
-          style={styles.flex}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
+          style={styles.flex}
         >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-            <ScrollView
-              style={styles.flex}
-              contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) }]}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="on-drag"
-              bounces={false}
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={styles.header}>
-                <View style={styles.logoHero}>
-                  {LOGO_IMAGE ? (
-                    <Image source={LOGO_IMAGE} style={styles.logoHeroImg} resizeMode="contain" />
-                  ) : (
-                    <Ionicons name="leaf" size={36} color={AUTH_THEME.neonMid} />
-                  )}
-                </View>
-                <Text style={styles.brandName} numberOfLines={1}>
-                  {BRAND.appName}
-                </Text>
+          <ScrollView
+            contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 16) }]}
+            keyboardShouldPersistTaps="always"
+            keyboardDismissMode="on-drag"
+            bounces={false}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.heroBlock}>
+              <View style={styles.logoPlate}>
+                {LOGO_IMAGE ? (
+                  <Image source={LOGO_IMAGE} style={styles.logo} resizeMode="contain" />
+                ) : (
+                  <Ionicons name="leaf" size={32} color={AUTH_THEME.neonMid} />
+                )}
               </View>
-
-            <View style={styles.hero}>
+              <Text style={styles.brandName}>{BRAND.appName}</Text>
               <Text style={styles.timeGreeting}>{greetingForHour()}</Text>
               <Text style={styles.welcome}>{LOGIN_WELCOME_TITLE}</Text>
               <Text style={styles.subline}>{LOGIN_WELCOME_SUBTITLE}</Text>
             </View>
 
-            <View style={styles.formSection}>
+            <View style={styles.card}>
               {loginError ? (
                 <View style={styles.errorBox}>
                   <Ionicons name="alert-circle" size={18} color={AUTH_THEME.danger} />
@@ -165,89 +153,81 @@ export function LoginScreen() {
                   <Text style={[styles.signInText, !canSubmit && styles.signInTextOff]}>Sign In</Text>
                 )}
               </Pressable>
-
-              <Text style={styles.footer}>Need help? Contact admin</Text>
-              <Text style={styles.footerHint}>{BRAND.employeeHint}</Text>
             </View>
-            </ScrollView>
-          </TouchableWithoutFeedback>
+
+            <Text style={styles.footer}>Need help? Contact admin</Text>
+            <Text style={styles.footerHint}>{BRAND.employeeHint}</Text>
+          </ScrollView>
         </KeyboardAvoidingView>
-      </SafeAreaView>
+      </AuthScreenLayout>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    backgroundColor: AUTH_THEME.bg,
-    flex: 1
-  },
-  safe: {
-    flex: 1,
-    zIndex: 1
-  },
-  flex: {
-    flex: 1
+  root: { flex: 1 },
+  flex: { flex: 1 },
+  layout: {
+    justifyContent: "flex-start",
+    paddingHorizontal: 0
   },
   scroll: {
     flexGrow: 1,
-    justifyContent: "center",
-    minHeight: "100%",
     paddingHorizontal: 22,
+    paddingTop: 12
+  },
+  heroBlock: {
+    alignItems: "center",
+    marginBottom: 20,
     paddingTop: 8
   },
-  header: {
-    alignItems: "center",
-    marginBottom: 8
-  },
-  logoHero: {
+  logoPlate: {
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    height: 72,
+    borderRadius: 20,
+    height: 80,
     justifyContent: "center",
-    marginBottom: 12,
-    width: 72
+    marginBottom: 14,
+    width: 80
   },
-  logoHeroImg: {
-    height: 50,
-    width: 50
-  },
+  logo: { height: 54, width: 54 },
   brandName: {
     color: AUTH_THEME.text,
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "800",
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
     textAlign: "center"
-  },
-  hero: {
-    marginTop: 16,
-    paddingBottom: 2
   },
   timeGreeting: {
     color: AUTH_THEME.neon,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
-    letterSpacing: 0.2
+    letterSpacing: 0.3,
+    marginTop: 10
   },
   welcome: {
     color: AUTH_THEME.text,
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: "800",
-    letterSpacing: -0.7,
-    lineHeight: 36,
-    marginTop: 6
+    letterSpacing: -0.5,
+    lineHeight: 32,
+    marginTop: 4,
+    textAlign: "center"
   },
   subline: {
     color: AUTH_THEME.textMuted,
-    fontSize: 15,
-    fontWeight: "400",
-    lineHeight: 22,
-    marginTop: 8
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 6,
+    textAlign: "center"
   },
-  formSection: {
+  card: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: "rgba(255,255,255,0.12)",
+    borderRadius: 20,
+    borderWidth: 1,
     gap: 14,
-    marginTop: 18
+    padding: 18
   },
   errorBox: {
     alignItems: "center",
@@ -272,7 +252,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     justifyContent: "center",
     marginTop: 4,
-    minHeight: 54
+    minHeight: 52
   },
   signInBtnOff: {
     backgroundColor: "rgba(46,230,106,0.28)",
@@ -295,7 +275,7 @@ const styles = StyleSheet.create({
     color: AUTH_THEME.textMuted,
     fontSize: 13,
     fontWeight: "500",
-    marginTop: 14,
+    marginTop: 18,
     textAlign: "center"
   },
   footerHint: {

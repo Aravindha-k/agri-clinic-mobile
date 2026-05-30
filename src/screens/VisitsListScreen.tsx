@@ -1,7 +1,7 @@
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
-import { getVisits, isVisitHistoryEntry, Visit } from "../api/visits";
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { fetchVisitsPage, isVisitHistoryEntry, Visit } from "../api/visits";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
 import { InlineErrorBanner } from "../components/InlineErrorBanner";
@@ -12,8 +12,8 @@ import { useTabBarBottomInset } from "../hooks/useTabBarBottomInset";
 import { useTheme } from "../theme";
 import { listCardLayout, listCardType } from "../theme/listCard";
 import { useRefreshControlProps } from "../hooks/useRefreshControlProps";
-import { asArray, visitDisplayIso } from "../utils/format";
-import { normalizeVisitFromApi, resolveVisitFarmer } from "../utils/visitFarmer";
+import { visitDisplayIso } from "../utils/format";
+import { resolveVisitFarmer } from "../utils/visitFarmer";
 import { formatVisitCropLine } from "../utils/visitStatus";
 
 type Props = NativeStackScreenProps<VisitsStackParamList, "VisitsList">;
@@ -52,15 +52,20 @@ export function VisitsListScreen({ navigation }: Props) {
   const [visits, setVisits] = useState<Visit[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextUrl, setNextUrl] = useState<string | null>(null);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
 
   const load = useCallback(async (isRefresh = false) => {
     try {
       setError("");
-      const data = await getVisits();
-      const rows = asArray<Visit>(data).map(normalizeVisitFromApi).filter(isVisitHistoryEntry);
+      const page = await fetchVisitsPage({});
+      const rows = page.results.filter(isVisitHistoryEntry);
       setVisits(sortVisitsNewestFirst(rows));
+      setNextUrl(page.next);
+      setTotalCount(page.count);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load visits.");
     } finally {
@@ -68,6 +73,30 @@ export function VisitsListScreen({ navigation }: Props) {
       setRefreshing(false);
     }
   }, []);
+
+  const loadMore = useCallback(async () => {
+    if (!nextUrl || loadingMore || loading) {
+      return;
+    }
+    setLoadingMore(true);
+    try {
+      const page = await fetchVisitsPage({ nextUrl });
+      const rows = page.results.filter(isVisitHistoryEntry);
+      setVisits((prev) => {
+        const seen = new Set(prev.map((v) => v.id));
+        const merged = [...prev, ...rows.filter((v) => !seen.has(v.id))];
+        return sortVisitsNewestFirst(merged);
+      });
+      setNextUrl(page.next);
+      if (page.count != null) {
+        setTotalCount(page.count);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load more visits.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loading, loadingMore, nextUrl]);
 
   useEffect(() => {
     const unsub = navigation.addListener("focus", () => load(false));
@@ -100,7 +129,9 @@ export function VisitsListScreen({ navigation }: Props) {
         {error && visits.length > 0 ? <InlineErrorBanner message={error} onRetry={() => load(true)} /> : null}
         <SearchBar value={query} onChangeText={setQuery} placeholder="Search farmer, village, crop…" />
         <View style={[styles.countBar, { backgroundColor: c.card, borderColor: c.border }]}>
-          <Text style={[listCardType.metric, { color: c.primaryDark }]}>{visible.length}</Text>
+          <Text style={[listCardType.metric, { color: c.primaryDark }]}>
+            {query.trim() ? visible.length : totalCount ?? visible.length}
+          </Text>
           <Text style={[listCardType.meta, { color: c.muted, flex: 1 }]}>
             {query.trim() ? "visits matching search" : "total visits logged"}
           </Text>
@@ -130,6 +161,15 @@ export function VisitsListScreen({ navigation }: Props) {
           }
           contentContainerStyle={[styles.list, { paddingBottom: tabInset }]}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
+          onEndReached={() => void loadMore()}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.footer}>
+                <ActivityIndicator color={c.primary} />
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             <EmptyState
               title="No visits yet"
@@ -157,5 +197,6 @@ const styles = StyleSheet.create({
   },
   list: { paddingHorizontal: 16, paddingTop: 4 },
   separator: { height: listCardLayout.listGap },
+  footer: { alignItems: "center", paddingVertical: 16 },
   pad: { gap: listCardLayout.listGap, padding: 16 }
 });

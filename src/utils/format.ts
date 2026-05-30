@@ -1,5 +1,6 @@
 import { extractMasterPk } from "./masterId";
 import { resolveFarmerPk } from "../visit/resolveFarmerPk";
+import { parsePaginatedList } from "./apiUnwrap";
 
 export function normalizeNullable(value: unknown) {
   if (value === "") {
@@ -142,13 +143,7 @@ export function normalizeMobileVisitSubmitPayload(
 }
 
 export function asArray<T>(value: unknown): T[] {
-  if (Array.isArray(value)) {
-    return value as T[];
-  }
-  if (value && typeof value === "object" && "results" in value && Array.isArray((value as { results: unknown }).results)) {
-    return (value as { results: T[] }).results;
-  }
-  return [];
+  return parsePaginatedList<T>(value).results;
 }
 
 export type VisitDateFields = {

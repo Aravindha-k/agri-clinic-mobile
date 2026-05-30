@@ -1,7 +1,8 @@
 import { API_BASE_URL } from "./config";
 import { applyDeviceSessionHeader } from "./deviceSessionHeaders";
+import { refreshAccessTokenOnce } from "./tokenRefresh";
 import { SESSION_REPLACED_CODES, SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
-import { getAccessToken, getRefreshToken, updateAccessToken } from "../storage/tokenStorage";
+import { getAccessToken } from "../storage/tokenStorage";
 import { handleDeviceSessionConflict, isDeviceSessionConflict } from "../storage/sessionConflict";
 import { handleSessionExpired } from "../storage/sessionExpired";
 import {
@@ -11,6 +12,7 @@ import {
   isAuthExpiredError,
   isDeviceSessionConflictPayload,
   isNetworkError,
+  isServerError,
   networkError,
   serverError,
   SESSION_EXPIRED_MESSAGE,
@@ -22,6 +24,26 @@ import { unwrapSuccessEnvelope } from "../utils/apiUnwrap";
 type ApiOptions = RequestInit & {
   auth?: boolean;
 };
+
+function shouldRethrowWithoutLogout(error: unknown): boolean {
+  return (
+    isDeviceSessionConflict(error) ||
+    isNetworkError(error) ||
+    isServerError(error) ||
+    (error instanceof ApiRequestError &&
+      (error.code === "INVALID_RESPONSE" || error.code === "INVALID_CREDENTIALS"))
+  );
+}
+
+function devLogApi(
+  path: string,
+  meta: { auth: boolean; hasToken: boolean; hasDeviceSession: boolean; status?: number }
+) {
+  if (!__DEV__) return;
+  console.log(
+    `[API] ${path} | auth=${meta.auth ? "yes" : "no"} token=${meta.hasToken ? "yes" : "no"} deviceSession=${meta.hasDeviceSession ? "yes" : "no"}${meta.status != null ? ` status=${meta.status}` : ""}`
+  );
+}
 
 async function readResponseBody(response: Response) {
   const text = await response.text();
@@ -35,8 +57,10 @@ async function readResponseBody(response: Response) {
   }
 }
 
-async function parseResponse(response: Response) {
+async function parseResponse(response: Response, options?: { auth?: boolean }) {
   const data = await readResponseBody(response);
+  const auth = options?.auth !== false;
+
   if (!response.ok) {
     const code = extractApiErrorCode(data);
     if (isDeviceSessionConflictPayload(data, response.status)) {
@@ -47,8 +71,14 @@ async function parseResponse(response: Response) {
       });
     }
     if (response.status === 401) {
-      await handleSessionExpired();
-      throw new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
+      if (auth) {
+        await handleSessionExpired();
+        throw new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
+      }
+      throw new ApiRequestError(formatApiErrorMessage(data, "Invalid username or password.", 401), {
+        code: "INVALID_CREDENTIALS",
+        status: 401
+      });
     }
     if (response.status >= 500) {
       throw serverError(SERVER_MESSAGE, response.status);
@@ -62,55 +92,6 @@ async function parseResponse(response: Response) {
   return unwrapped !== null ? unwrapped : data;
 }
 
-async function refreshAccessToken() {
-  const refresh = await getRefreshToken();
-  if (!refresh) {
-    await handleSessionExpired();
-    throw new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
-  }
-
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE_URL}auth/refresh/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh })
-    });
-  } catch (err) {
-    if (isNetworkError(err)) {
-      throw networkError();
-    }
-    throw err;
-  }
-
-  if (response.status === 401) {
-    await handleSessionExpired();
-    throw new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
-  }
-
-  if (!response.ok) {
-    if (response.status >= 500) {
-      throw serverError(SERVER_MESSAGE, response.status);
-    }
-    const data = await readResponseBody(response);
-    throw new ApiRequestError(formatApiErrorMessage(data, "Could not refresh session.", response.status), {
-      status: response.status
-    });
-  }
-
-  const data = (await parseResponse(response)) as Record<string, unknown> | null;
-  const access =
-    (typeof data?.access === "string" && data.access) ||
-    (typeof data?.access_token === "string" && data.access_token) ||
-    (typeof data?.token === "string" && data.token);
-  if (!access) {
-    await handleSessionExpired();
-    throw new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
-  }
-  await updateAccessToken(access);
-  return access;
-}
-
 export async function apiClient<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const { auth = true, headers, body, ...rest } = options;
   const requestHeaders = new Headers(headers);
@@ -120,12 +101,16 @@ export async function apiClient<T>(path: string, options: ApiOptions = {}): Prom
     requestHeaders.set("Content-Type", "application/json");
   }
 
+  let hasToken = false;
+  let hasDeviceSession = false;
+
   if (auth) {
     const token = await getAccessToken();
     if (token) {
+      hasToken = true;
       requestHeaders.set("Authorization", `Bearer ${token}`);
     }
-    await applyDeviceSessionHeader(requestHeaders);
+    hasDeviceSession = await applyDeviceSessionHeader(requestHeaders);
   }
 
   const request = () =>
@@ -137,14 +122,18 @@ export async function apiClient<T>(path: string, options: ApiOptions = {}): Prom
 
   try {
     let response = await request();
+    devLogApi(path, { auth, hasToken, hasDeviceSession, status: response.status });
 
     if (response.status === 401 && auth) {
       try {
-        const newAccess = await refreshAccessToken();
+        const newAccess = await refreshAccessTokenOnce();
+        hasToken = true;
         requestHeaders.set("Authorization", `Bearer ${newAccess}`);
+        hasDeviceSession = await applyDeviceSessionHeader(requestHeaders);
         response = await request();
+        devLogApi(`${path} (retry)`, { auth, hasToken, hasDeviceSession, status: response.status });
       } catch (error) {
-        if (isDeviceSessionConflict(error) || isNetworkError(error) || isAuthExpiredError(error)) {
+        if (shouldRethrowWithoutLogout(error) || isAuthExpiredError(error)) {
           throw error;
         }
         await handleSessionExpired();
@@ -158,7 +147,7 @@ export async function apiClient<T>(path: string, options: ApiOptions = {}): Prom
     }
 
     setConnectivityOnline(true);
-    return (await parseResponse(response)) as T;
+    return (await parseResponse(response, { auth })) as T;
   } catch (err) {
     if (isDeviceSessionConflict(err) || isAuthExpiredError(err)) {
       throw err;

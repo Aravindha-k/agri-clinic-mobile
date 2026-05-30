@@ -1,6 +1,9 @@
 import { apiClient } from "./client";
 import { asArray } from "../utils/format";
-import { getVisits, Visit } from "./visits";
+import { parsePaginatedList } from "../utils/apiUnwrap";
+import { apiPathFromNextUrl } from "../utils/apiPath";
+import { getAllVisits, getVisits, Visit } from "./visits";
+import { normalizeVisitFromApi } from "../utils/visitFarmer";
 
 export type Farmer = {
   id: number;
@@ -105,7 +108,31 @@ export function getFarmerFields(id: number) {
 }
 
 export function getFarmerVisits(id: number) {
-  return apiClient(`farmers/${id}/visits/`);
+  return getAllFarmerVisits(id);
+}
+
+const MAX_FARMER_VISIT_PAGES = 20;
+
+async function getAllFarmerVisits(id: number): Promise<Visit[]> {
+  const base = `farmers/${id}/visits/`;
+  const all: Visit[] = [];
+  let next: string | null = null;
+
+  for (let page = 0; page < MAX_FARMER_VISIT_PAGES; page += 1) {
+    const path: string = next ? apiPathFromNextUrl(next) : base;
+    if (!path) {
+      break;
+    }
+    const data: unknown = await apiClient<unknown>(path);
+    const batch = parsePaginatedList<Visit>(data);
+    all.push(...batch.results.map((row: Visit) => normalizeVisitFromApi(row)));
+    if (!batch.next || batch.results.length === 0) {
+      break;
+    }
+    next = batch.next;
+  }
+
+  return all;
 }
 
 export function getFarmerActivity(id: number) {
@@ -115,7 +142,7 @@ export function getFarmerActivity(id: number) {
 /** Home quick chips: recently visited farmers, resolved against the full directory. */
 export async function getRecentFarmersForHome(limit = 6): Promise<Farmer[]> {
   const [visitsData, farmers] = await Promise.all([getVisits(), getAllFarmers()]);
-  const visits = asArray<Visit>(visitsData)
+  const visits = visitsData
     .filter((v) => v.created_at)
     .sort((a, b) => new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime());
 

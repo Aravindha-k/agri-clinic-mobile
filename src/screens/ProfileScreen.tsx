@@ -15,14 +15,13 @@ import { useFieldDataRefresh } from "../storage/FieldDataRefreshContext";
 import { useOfflineSync } from "../storage/OfflineSyncContext";
 import { useTabBarBottomInset } from "../hooks/useTabBarBottomInset";
 import { useTheme } from "../theme";
-import { asArray, isSameVisitLocalDay } from "../utils/format";
+import { isSameVisitLocalDay } from "../utils/format";
 import { extractPhotoUrl, photoCacheVersion } from "../utils/profilePhotoUrl";
 import {
   handleProfilePickerError,
   pickProfileImage,
   showProfilePhotoSourcePicker
 } from "../utils/profileImagePick";
-import { normalizeVisitFromApi } from "../utils/visitFarmer";
 import { BRAND } from "../brand/constants";
 import { getDeviceInfo } from "../utils/deviceInfo";
 import { useNotifications } from "../storage/NotificationsContext";
@@ -49,9 +48,9 @@ export function ProfileScreen() {
   const load = useCallback(async () => {
     try {
       setError("");
-      const [emp, visitData] = await Promise.all([refreshEmployee(), getVisits()]);
+      const [emp, visitRows] = await Promise.all([refreshEmployee(), getVisits()]);
       setPhotoVersion(photoCacheVersion(emp) ?? Date.now());
-      setVisits(asArray<Visit>(visitData).map(normalizeVisitFromApi));
+      setVisits(visitRows);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load profile.");
     } finally {

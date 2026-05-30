@@ -1,4 +1,5 @@
 import { apiClient } from "./client";
+import { ApiRequestError } from "../utils/apiError";
 import { extractPhotoUrl } from "../utils/profilePhotoUrl";
 
 export type Employee = {
@@ -18,26 +19,25 @@ export type Employee = {
   photo?: string | null;
 };
 
-/** Prefer mobile auth/me (includes profile_photo_url); fallback to employees/me/. */
+/** Prefer mobile auth/me (includes profile_photo_url); fallback only when mobile route is missing. */
 export async function getCurrentEmployee(): Promise<Employee> {
-  const paths = ["mobile/auth/me/", "employees/me/"] as const;
-  let last: Employee | null = null;
-
-  for (const path of paths) {
-    try {
-      const row = await apiClient<Employee>(path);
-      last = row;
-      if (extractPhotoUrl(row) || path === paths[paths.length - 1]) {
-        return row;
-      }
-    } catch {
-      if (path === paths[paths.length - 1]) {
-        throw new Error("Unable to load employee profile.");
-      }
+  try {
+    const row = await apiClient<Employee>("mobile/auth/me/");
+    if (extractPhotoUrl(row)) {
+      return row;
     }
+    try {
+      const fallback = await apiClient<Employee>("employees/me/");
+      return extractPhotoUrl(fallback) ? fallback : row;
+    } catch {
+      return row;
+    }
+  } catch (mobileErr) {
+    if (mobileErr instanceof ApiRequestError && mobileErr.status === 404) {
+      return apiClient<Employee>("employees/me/");
+    }
+    throw mobileErr;
   }
-
-  return last ?? ({} as Employee);
 }
 
 export function isFieldEmployee(employee: Employee | null | undefined) {

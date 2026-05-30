@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type ReactN
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Farmer, getFarmer, getFarmerActivity, getFarmerFields, getFarmerVisits } from "../api/farmers";
+import { Visit } from "../api/visits";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
 import { FadeInView } from "../components/FadeInView";
@@ -35,7 +36,7 @@ export function FarmerDetailScreen({ route, navigation }: Props) {
   const c = theme.colors;
   const [farmer, setFarmer] = useState<Farmer | null>(null);
   const [fields, setFields] = useState<unknown[]>([]);
-  const [visits, setVisits] = useState<unknown[]>([]);
+  const [visits, setVisits] = useState<Visit[]>([]);
   const [activity, setActivity] = useState<unknown[]>([]);
   const [activeTab, setActiveTab] = useState<TabKey>("Overview");
   const [loading, setLoading] = useState(true);
@@ -60,7 +61,7 @@ export function FarmerDetailScreen({ route, navigation }: Props) {
       ]);
       setFarmer(farmerData);
       setFields(asArray(fieldData));
-      setVisits(asArray(visitData));
+      setVisits(visitData);
       setActivity(asArray(activityData));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load farmer.");

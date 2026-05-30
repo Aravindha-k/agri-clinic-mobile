@@ -1,7 +1,8 @@
 import { API_BASE_URL } from "./config";
+import { refreshAccessTokenOnce } from "./tokenRefresh";
 import { getDeviceSessionHeaderEntries } from "./deviceSessionHeaders";
 import { SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
-import { getAccessToken, getRefreshToken, updateAccessToken, clearTokens } from "../storage/tokenStorage";
+import { getAccessToken } from "../storage/tokenStorage";
 import { handleDeviceSessionConflict } from "../storage/sessionConflict";
 import { formatApiErrorMessage, isDeviceSessionConflictPayload } from "../utils/apiError";
 import { resolveList, unwrapSuccessEnvelope } from "../utils/apiUnwrap";
@@ -112,32 +113,12 @@ export function uploadVisitAttachmentFile(
         xhr.onload = async () => {
           try {
             if (xhr.status === 401 && accessToken) {
-              const refresh = await getRefreshToken();
-              if (!refresh) {
-                await clearTokens();
-                reject(new Error("Session expired. Please sign in again."));
-                return;
+              try {
+                const newAccess = await refreshAccessTokenOnce();
+                void attempt(newAccess);
+              } catch (err) {
+                reject(err instanceof Error ? err : new Error("Upload failed"));
               }
-              const res = await fetch(`${API_BASE_URL}auth/refresh/`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ refresh })
-              });
-              const body = (await res.json()) as Record<string, unknown>;
-              const newAccess =
-                (typeof body.access === "string" && body.access) ||
-                (typeof body.data === "object" &&
-                  body.data &&
-                  typeof (body.data as Record<string, unknown>).access === "string" &&
-                  (body.data as Record<string, unknown>).access) ||
-                null;
-              if (!newAccess || typeof newAccess !== "string") {
-                await clearTokens();
-                reject(new Error("Session expired. Please sign in again."));
-                return;
-              }
-              await updateAccessToken(newAccess);
-              void attempt(newAccess);
               return;
             }
             const attachment = await parseUploadResponse(xhr);

@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import { saveDeviceSessionId } from "../storage/deviceSessionStorage";
+import { saveDeviceSessionId, saveSessionMetadata } from "../storage/deviceSessionStorage";
 import { getOrCreateDeviceId } from "../storage/deviceIdStorage";
 import { getRefreshToken, StoredTokens } from "../storage/tokenStorage";
 import { getDeviceInfo } from "../utils/deviceInfo";
@@ -38,6 +38,16 @@ export async function loginRequest(identifier: string, password: string): Promis
   if (deviceSessionId) {
     await saveDeviceSessionId(deviceSessionId);
   }
+
+  const row = (unwrapSuccessEnvelope<Record<string, unknown>>(data) ?? data) as Record<string, unknown>;
+  await saveSessionMetadata({
+    sessionVersion: (row.session_version ?? row.sessionVersion) as string | number | null | undefined,
+    activeDeviceId: (typeof row.active_device_id === "string"
+      ? row.active_device_id
+      : typeof row.device_id === "string"
+        ? row.device_id
+        : deviceId) as string
+  });
 
   return { access, refresh };
 }

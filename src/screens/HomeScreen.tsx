@@ -24,8 +24,7 @@ import { listCardType } from "../theme/listCard";
 import { space } from "../theme/layout";
 import { useRefreshControlProps } from "../hooks/useRefreshControlProps";
 import { getForegroundLocation } from "../utils/location";
-import { asArray, isSameVisitLocalDay, visitDisplayIso } from "../utils/format";
-import { normalizeVisitFromApi } from "../utils/visitFarmer";
+import { isSameVisitLocalDay, visitDisplayIso } from "../utils/format";
 import { extractPhotoUrl, photoCacheVersion } from "../utils/profilePhotoUrl";
 
 function greetingForNow() {
@@ -89,12 +88,12 @@ export function HomeScreen() {
   const load = useCallback(async (isRefresh = false) => {
     try {
       setError("");
-      const [, visitData, farmers] = await Promise.all([
+      const [, visitRows, farmers] = await Promise.all([
         refreshEmployee(),
         getVisits(),
         getFarmersForFieldWorker().catch(() => [])
       ]);
-      setVisits(asArray<Visit>(visitData).map(normalizeVisitFromApi));
+      setVisits(visitRows);
       setFarmerCount(farmers.length);
       await refreshTracking().catch(() => undefined);
       await refreshWeather().catch(() => undefined);

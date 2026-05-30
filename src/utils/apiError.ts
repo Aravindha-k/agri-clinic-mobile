@@ -42,19 +42,21 @@ export function isNetworkError(error: unknown): boolean {
   return false;
 }
 
+/** True only for confirmed session expiry — not generic 401 or server/network failures. */
 export function isAuthExpiredError(error: unknown): boolean {
   if (error instanceof ApiRequestError) {
-    if (error.code === "SESSION_EXPIRED" || error.status === 401) return true;
+    return error.code === "SESSION_EXPIRED";
   }
   if (error instanceof Error) {
-    return /session expired|please sign in again/i.test(error.message);
+    return /session expired\.?\s*please sign in again/i.test(error.message);
   }
   return false;
 }
 
 export function isServerError(error: unknown): boolean {
-  if (error instanceof ApiRequestError && error.status != null && error.status >= 500) {
-    return true;
+  if (error instanceof ApiRequestError) {
+    if (error.code === "SERVER_ERROR") return true;
+    if (error.status != null && error.status >= 500) return true;
   }
   return false;
 }

@@ -4,12 +4,14 @@ import { StatusBar } from "expo-status-bar";
 import {
   ActivityIndicator,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableWithoutFeedback,
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -64,31 +66,30 @@ export function LoginScreen() {
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <KeyboardAvoidingView
           style={styles.flex}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 8}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
         >
-          <ScrollView
-            style={styles.flex}
-            contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 16) }]}
-            keyboardShouldPersistTaps="always"
-            keyboardDismissMode="on-drag"
-            bounces={false}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.header}>
-              <View style={styles.brandRow}>
-                <View style={styles.logoSm}>
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            <ScrollView
+              style={styles.flex}
+              contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) }]}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              bounces={false}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.header}>
+                <View style={styles.logoHero}>
                   {LOGO_IMAGE ? (
-                    <Image source={LOGO_IMAGE} style={styles.logoSmImg} resizeMode="contain" />
+                    <Image source={LOGO_IMAGE} style={styles.logoHeroImg} resizeMode="contain" />
                   ) : (
-                    <Ionicons name="leaf" size={18} color={AUTH_THEME.neon} />
+                    <Ionicons name="leaf" size={36} color={AUTH_THEME.neonMid} />
                   )}
                 </View>
                 <Text style={styles.brandName} numberOfLines={1}>
                   {BRAND.appName}
                 </Text>
               </View>
-            </View>
 
             <View style={styles.hero}>
               <Text style={styles.timeGreeting}>{greetingForHour()}</Text>
@@ -168,7 +169,8 @@ export function LoginScreen() {
               <Text style={styles.footer}>Need help? Contact admin</Text>
               <Text style={styles.footerHint}>{BRAND.employeeHint}</Text>
             </View>
-          </ScrollView>
+            </ScrollView>
+          </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </View>
@@ -189,40 +191,38 @@ const styles = StyleSheet.create({
   },
   scroll: {
     flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingTop: 4
+    justifyContent: "center",
+    minHeight: "100%",
+    paddingHorizontal: 22,
+    paddingTop: 8
   },
   header: {
     alignItems: "center",
-    flexDirection: "row",
-    minHeight: 48
+    marginBottom: 8
   },
-  brandRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 10
-  },
-  logoSm: {
+  logoHero: {
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderRadius: 10,
-    height: 36,
+    borderRadius: 18,
+    height: 72,
     justifyContent: "center",
-    width: 36
+    marginBottom: 12,
+    width: 72
   },
-  logoSmImg: {
-    height: 26,
-    width: 26
+  logoHeroImg: {
+    height: 50,
+    width: 50
   },
   brandName: {
     color: AUTH_THEME.text,
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: -0.2
+    fontSize: 22,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+    textAlign: "center"
   },
   hero: {
-    marginTop: 20,
-    paddingBottom: 4
+    marginTop: 16,
+    paddingBottom: 2
   },
   timeGreeting: {
     color: AUTH_THEME.neon,
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
   },
   formSection: {
     gap: 14,
-    marginTop: 22
+    marginTop: 18
   },
   errorBox: {
     alignItems: "center",

@@ -1,9 +1,13 @@
 import { API_BASE_URL } from "../api/config";
+import { refreshAccessTokenOnce } from "../api/tokenRefresh";
 import { getDeviceSessionHeaderEntries } from "../api/deviceSessionHeaders";
 import { SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
-import { getAccessToken, getRefreshToken, updateAccessToken, clearTokens } from "../storage/tokenStorage";
+import { getAccessToken } from "../storage/tokenStorage";
 import { handleDeviceSessionConflict } from "../storage/sessionConflict";
-import { extractApiErrorCode, formatApiErrorMessage, isDeviceSessionConflictPayload } from "../utils/apiError";
+import {
+  formatApiErrorMessage,
+  isDeviceSessionConflictPayload
+} from "../utils/apiError";
 import { unwrapSuccessEnvelope } from "../utils/apiUnwrap";
 
 export type MultipartFilePayload = {
@@ -74,34 +78,12 @@ export function uploadMultipart(
         xhr.onload = async () => {
           try {
             if (xhr.status === 401 && accessToken) {
-              const refresh = await getRefreshToken();
-              if (!refresh) {
-                await clearTokens();
-                reject(new Error("Session expired. Please sign in again."));
-                return;
+              try {
+                const newAccess = await refreshAccessTokenOnce();
+                void attempt(newAccess);
+              } catch (err) {
+                reject(err instanceof Error ? err : new Error("Upload failed"));
               }
-              const res = await fetch(`${API_BASE_URL}auth/refresh/`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ refresh })
-              });
-              const body = (await res.json()) as Record<string, unknown>;
-              let newAccess: string | null = null;
-              if (typeof body.access === "string") {
-                newAccess = body.access;
-              } else if (typeof body.data === "object" && body.data) {
-                const nested = (body.data as Record<string, unknown>).access;
-                if (typeof nested === "string") {
-                  newAccess = nested;
-                }
-              }
-              if (!newAccess) {
-                await clearTokens();
-                reject(new Error("Session expired. Please sign in again."));
-                return;
-              }
-              await updateAccessToken(newAccess);
-              void attempt(newAccess);
               return;
             }
 

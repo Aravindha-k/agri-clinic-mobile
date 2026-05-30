@@ -5,7 +5,7 @@ import { getCurrentEmployee, isFieldEmployee } from "../api/employees";
 import { SESSION_EXPIRED_MESSAGE } from "../constants/authMessages";
 import { SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
 import { registerGoToLogin } from "./authRecovery";
-import { clearDeviceSessionId } from "./deviceSessionStorage";
+import { clearDeviceSessionId, ensureDeviceSessionLoaded } from "./deviceSessionStorage";
 import { registerSessionExpiredTeardown } from "./sessionExpired";
 import { registerSessionTeardown } from "./sessionConflict";
 import { getAccessToken, saveTokens, clearTokens } from "./tokenStorage";
@@ -103,6 +103,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      await ensureDeviceSessionLoaded();
+
       try {
         const employee = await getCurrentEmployee();
         if (!isFieldEmployee(employee)) {
@@ -160,6 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoginNotice(null);
       const tokens = await loginRequest(username, password);
       await saveTokens(tokens);
+      await ensureDeviceSessionLoaded();
       try {
         const employee = await getCurrentEmployee();
         if (!isFieldEmployee(employee)) {

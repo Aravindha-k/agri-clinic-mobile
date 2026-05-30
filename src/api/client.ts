@@ -1,25 +1,41 @@
 import { API_BASE_URL } from "./config";
 import { applyDeviceSessionHeader } from "./deviceSessionHeaders";
 import { SESSION_REPLACED_CODES, SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
-import { clearTokens, getAccessToken, getRefreshToken, updateAccessToken } from "../storage/tokenStorage";
+import { getAccessToken, getRefreshToken, updateAccessToken } from "../storage/tokenStorage";
 import { handleDeviceSessionConflict, isDeviceSessionConflict } from "../storage/sessionConflict";
-import { ApiRequestError, extractApiErrorCode, formatApiErrorMessage, isDeviceSessionConflictPayload } from "../utils/apiError";
+import { handleSessionExpired } from "../storage/sessionExpired";
+import {
+  ApiRequestError,
+  extractApiErrorCode,
+  formatApiErrorMessage,
+  isAuthExpiredError,
+  isDeviceSessionConflictPayload,
+  isNetworkError,
+  networkError,
+  serverError,
+  SESSION_EXPIRED_MESSAGE,
+  SERVER_MESSAGE
+} from "../utils/apiError";
 import { unwrapSuccessEnvelope } from "../utils/apiUnwrap";
 
 type ApiOptions = RequestInit & {
   auth?: boolean;
 };
 
-async function parseResponse(response: Response) {
+async function readResponseBody(response: Response) {
   const text = await response.text();
-  let data: unknown = null;
-  if (text) {
-    try {
-      data = JSON.parse(text) as unknown;
-    } catch {
-      throw new Error("Server returned an unexpected response. Please try again.");
-    }
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new ApiRequestError("Server returned an unexpected response. Please try again.", {
+      code: "INVALID_RESPONSE"
+    });
   }
+}
+
+async function parseResponse(response: Response) {
+  const data = await readResponseBody(response);
   if (!response.ok) {
     const code = extractApiErrorCode(data);
     if (isDeviceSessionConflictPayload(data, response.status)) {
@@ -28,6 +44,13 @@ async function parseResponse(response: Response) {
         code: code && SESSION_REPLACED_CODES.has(code) ? code : "SESSION_REPLACED",
         status: response.status
       });
+    }
+    if (response.status === 401) {
+      await handleSessionExpired();
+      throw new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
+    }
+    if (response.status >= 500) {
+      throw serverError(SERVER_MESSAGE, response.status);
     }
     throw new ApiRequestError(formatApiErrorMessage(data, "Request failed", response.status), {
       code: code ?? undefined,
@@ -41,14 +64,38 @@ async function parseResponse(response: Response) {
 async function refreshAccessToken() {
   const refresh = await getRefreshToken();
   if (!refresh) {
-    throw new Error("Session expired. Please sign in again.");
+    await handleSessionExpired();
+    throw new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
   }
 
-  const response = await fetch(`${API_BASE_URL}auth/refresh/`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh })
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}auth/refresh/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh })
+    });
+  } catch (err) {
+    if (isNetworkError(err)) {
+      throw networkError();
+    }
+    throw err;
+  }
+
+  if (response.status === 401) {
+    await handleSessionExpired();
+    throw new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
+  }
+
+  if (!response.ok) {
+    if (response.status >= 500) {
+      throw serverError(SERVER_MESSAGE, response.status);
+    }
+    const data = await readResponseBody(response);
+    throw new ApiRequestError(formatApiErrorMessage(data, "Could not refresh session.", response.status), {
+      status: response.status
+    });
+  }
 
   const data = (await parseResponse(response)) as Record<string, unknown> | null;
   const access =
@@ -56,7 +103,8 @@ async function refreshAccessToken() {
     (typeof data?.access_token === "string" && data.access_token) ||
     (typeof data?.token === "string" && data.token);
   if (!access) {
-    throw new Error("Refresh response did not include an access token.");
+    await handleSessionExpired();
+    throw new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
   }
   await updateAccessToken(access);
   return access;
@@ -88,29 +136,36 @@ export async function apiClient<T>(path: string, options: ApiOptions = {}): Prom
 
   try {
     let response = await request();
+
     if (response.status === 401 && auth) {
       try {
         const newAccess = await refreshAccessToken();
         requestHeaders.set("Authorization", `Bearer ${newAccess}`);
         response = await request();
       } catch (error) {
-        if (!isDeviceSessionConflict(error)) {
-          await clearTokens();
+        if (isDeviceSessionConflict(error) || isNetworkError(error) || isAuthExpiredError(error)) {
+          throw error;
         }
-        throw error;
+        await handleSessionExpired();
+        throw new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
       }
+    }
+
+    if (response.status === 401 && auth) {
+      await handleSessionExpired();
+      throw new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
     }
 
     return (await parseResponse(response)) as T;
   } catch (err) {
-    if (isDeviceSessionConflict(err)) {
+    if (isDeviceSessionConflict(err) || isAuthExpiredError(err)) {
       throw err;
     }
-    if (err instanceof TypeError) {
-      throw new Error("No internet connection. Check your network and try again.");
+    if (isNetworkError(err)) {
+      throw networkError();
     }
-    if (err instanceof Error && /network request failed|failed to fetch|network error/i.test(err.message)) {
-      throw new Error("No internet connection. Check your network and try again.");
+    if (err instanceof ApiRequestError) {
+      throw err;
     }
     throw err;
   }

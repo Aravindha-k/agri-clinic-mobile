@@ -1,5 +1,4 @@
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
-import { AppErrorBoundary } from "../components/AppErrorBoundary";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { View } from "react-native";
@@ -101,8 +100,10 @@ function MainTabs() {
 }
 
 export function RootNavigator() {
-  const { isReady, isAuthenticated } = useAuth();
+  const { isReady, isAuthenticated, authLoading, bootstrapIssue } = useAuth();
   const { theme, isDark } = useTheme();
+
+  const showBootstrap = !isReady || authLoading || bootstrapIssue !== "none";
 
   const navTheme = {
     ...DefaultTheme,
@@ -119,9 +120,8 @@ export function RootNavigator() {
 
   return (
     <NavigationContainer theme={navTheme}>
-      <AppErrorBoundary>
       <RootStack.Navigator screenOptions={{ headerShown: false }}>
-        {!isReady ? (
+        {showBootstrap ? (
           <RootStack.Screen name="Splash" component={BootstrapScreen} />
         ) : isAuthenticated ? (
           <>
@@ -144,7 +144,6 @@ export function RootNavigator() {
           <RootStack.Screen name="Auth" component={AuthNavigator} />
         )}
       </RootStack.Navigator>
-      </AppErrorBoundary>
     </NavigationContainer>
   );
 }

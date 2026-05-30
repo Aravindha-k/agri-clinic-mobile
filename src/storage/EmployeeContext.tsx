@@ -1,12 +1,15 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Employee, getCurrentEmployee } from "../api/employees";
-import { useAuth } from "./AuthContext";
+import { useAuth, useAuthSessionReady } from "./AuthContext";
 import { useFieldDataRefresh } from "./FieldDataRefreshContext";
 import { registerSessionTeardown } from "./sessionConflict";
+import { isAuthExpiredError, isNetworkError } from "../utils/apiError";
+import { isDeviceSessionConflict } from "./sessionConflict";
 
 type EmployeeContextValue = {
   employee: Employee | null;
   loading: boolean;
+  employeeLoading: boolean;
   error: string;
   refreshEmployee: () => Promise<Employee | null>;
 };
@@ -15,6 +18,7 @@ const EmployeeContext = createContext<EmployeeContextValue | undefined>(undefine
 
 export function EmployeeProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
+  const sessionReady = useAuthSessionReady();
   const { employeePhotoVersion } = useFieldDataRefresh();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(false);
@@ -33,35 +37,42 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
       setEmployee(row);
       return row;
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unable to load employee profile.";
+      if (isDeviceSessionConflict(err) || isAuthExpiredError(err)) {
+        return null;
+      }
+      const message = isNetworkError(err)
+        ? "Profile will load when you are back online."
+        : err instanceof Error
+          ? err.message
+          : "Unable to load employee profile.";
       setError(message);
-      throw err;
+      return null;
     } finally {
       setLoading(false);
     }
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      void refreshEmployee().catch(() => undefined);
-    } else {
+    if (sessionReady) {
+      void refreshEmployee();
+    } else if (!isAuthenticated) {
       setEmployee(null);
       setError("");
     }
-  }, [isAuthenticated, refreshEmployee]);
+  }, [isAuthenticated, refreshEmployee, sessionReady]);
 
   useEffect(() => {
-    if (!isAuthenticated || employeePhotoVersion <= 0) return;
-    void refreshEmployee().catch(() => undefined);
-  }, [employeePhotoVersion, isAuthenticated, refreshEmployee]);
+    if (!sessionReady || employeePhotoVersion <= 0) return;
+    void refreshEmployee();
+  }, [employeePhotoVersion, refreshEmployee, sessionReady]);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!sessionReady) return;
     const interval = setInterval(() => {
-      void refreshEmployee().catch(() => undefined);
+      void refreshEmployee();
     }, 3 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [isAuthenticated, refreshEmployee]);
+  }, [refreshEmployee, sessionReady]);
 
   useEffect(() => {
     return registerSessionTeardown(() => {
@@ -71,7 +82,13 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ employee, loading, error, refreshEmployee }),
+    () => ({
+      employee,
+      loading,
+      employeeLoading: loading,
+      error,
+      refreshEmployee
+    }),
     [employee, loading, error, refreshEmployee]
   );
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -33,13 +33,20 @@ function heroMarginTop(safeTop: number) {
 }
 
 export function LoginScreen() {
-  const { signIn } = useAuth();
+  const { signIn, loginNotice, clearLoginNotice } = useAuth();
   const insets = useSafeAreaInsetsCompat();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loginError, setLoginError] = useState("");
+
+  useEffect(() => {
+    if (loginNotice) {
+      setLoginError(loginNotice);
+      clearLoginNotice();
+    }
+  }, [clearLoginNotice, loginNotice]);
 
   async function handleLogin() {
     const user = username.trim();

@@ -25,7 +25,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
           color={offlineHint ? colors.warning : colors.danger}
         />
       </View>
-      <Text style={[type.sectionTitle, styles.title]}>{offlineHint ? "Connection problem" : "Something went wrong"}</Text>
+      <Text style={[type.sectionTitle, styles.title]}>{offlineHint ? "Connection problem" : "We could not load this"}</Text>
       <Text style={[type.meta, styles.message]}>{message}</Text>
       {offlineHint ? <Text style={[type.caption, styles.hint]}>Try again when you have a stable signal.</Text> : null}
       {onRetry ? (

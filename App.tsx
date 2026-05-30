@@ -1,6 +1,7 @@
 import { StatusBar } from "expo-status-bar";
 import { Dimensions } from "react-native";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
+import { AppErrorBoundary } from "./src/components/AppErrorBoundary";
 import type { Metrics } from "react-native-safe-area-context";
 import { AuthProvider } from "./src/storage/AuthContext";
 import { EmployeeProvider } from "./src/storage/EmployeeContext";
@@ -11,6 +12,7 @@ import { TrackingProvider } from "./src/storage/TrackingContext";
 import { GpsComplianceProvider } from "./src/storage/GpsComplianceContext";
 import { GpsComplianceShell } from "./src/components/GpsComplianceShell";
 import { GpsWorkdayGate } from "./src/components/GpsWorkdayGate";
+import { WorkdayInactiveBanner } from "./src/components/WorkdayInactiveBanner";
 import { useAppSplash } from "./src/hooks/useAppSplash";
 import { ThemeProvider, useTheme } from "./src/theme";
 
@@ -34,25 +36,28 @@ function AppShell() {
 export default function App() {
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics ?? FALLBACK_METRICS}>
-      <ThemeProvider>
-        <AuthProvider>
-          <FieldDataRefreshProvider>
-            <EmployeeProvider>
-            <OfflineSyncProvider>
-              <GpsComplianceProvider>
-                <TrackingProvider>
-                  <GpsComplianceShell>
-                    <GpsWorkdayGate>
-                      <AppShell />
-                    </GpsWorkdayGate>
-                  </GpsComplianceShell>
-                </TrackingProvider>
-              </GpsComplianceProvider>
-            </OfflineSyncProvider>
-            </EmployeeProvider>
-          </FieldDataRefreshProvider>
-        </AuthProvider>
-      </ThemeProvider>
+      <AppErrorBoundary>
+        <ThemeProvider>
+          <AuthProvider>
+            <FieldDataRefreshProvider>
+              <EmployeeProvider>
+                <OfflineSyncProvider>
+                  <GpsComplianceProvider>
+                    <TrackingProvider>
+                      <GpsComplianceShell>
+                        <WorkdayInactiveBanner />
+                        <GpsWorkdayGate>
+                          <AppShell />
+                        </GpsWorkdayGate>
+                      </GpsComplianceShell>
+                    </TrackingProvider>
+                  </GpsComplianceProvider>
+                </OfflineSyncProvider>
+              </EmployeeProvider>
+            </FieldDataRefreshProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </AppErrorBoundary>
     </SafeAreaProvider>
   );
 }

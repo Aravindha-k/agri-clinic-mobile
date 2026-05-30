@@ -1,6 +1,10 @@
+import { SESSION_EXPIRED_MESSAGE } from "../constants/authMessages";
 import { SESSION_REPLACED_CODES, SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
 
 const GENERIC_SUBMIT_MESSAGE = "Farmer, crop, and GPS location are required to submit a visit.";
+
+const NETWORK_MESSAGE = "No internet connection. Check your network and try again.";
+const SERVER_MESSAGE = "Our servers are busy right now. Please try again in a moment.";
 
 export class ApiRequestError extends Error {
   code?: string;
@@ -28,6 +32,42 @@ export function isDeviceSessionConflictPayload(data: unknown, status: number): b
   if (code && SESSION_REPLACED_CODES.has(code)) return true;
   return status === 409 && code != null && SESSION_REPLACED_CODES.has(code);
 }
+
+export function isNetworkError(error: unknown): boolean {
+  if (error instanceof TypeError) return true;
+  if (error instanceof ApiRequestError && error.code === "NETWORK_ERROR") return true;
+  if (error instanceof Error) {
+    return /no internet|network request failed|failed to fetch|network error|timeout/i.test(error.message);
+  }
+  return false;
+}
+
+export function isAuthExpiredError(error: unknown): boolean {
+  if (error instanceof ApiRequestError) {
+    if (error.code === "SESSION_EXPIRED" || error.status === 401) return true;
+  }
+  if (error instanceof Error) {
+    return /session expired|please sign in again/i.test(error.message);
+  }
+  return false;
+}
+
+export function isServerError(error: unknown): boolean {
+  if (error instanceof ApiRequestError && error.status != null && error.status >= 500) {
+    return true;
+  }
+  return false;
+}
+
+export function networkError(message = NETWORK_MESSAGE) {
+  return new ApiRequestError(message, { code: "NETWORK_ERROR" });
+}
+
+export function serverError(message = SERVER_MESSAGE, status = 500) {
+  return new ApiRequestError(message, { code: "SERVER_ERROR", status });
+}
+
+export { NETWORK_MESSAGE, SERVER_MESSAGE, SESSION_EXPIRED_MESSAGE };
 
 function humanizeField(key: string) {
   if (key === "non_field_errors") return "";

@@ -7,6 +7,7 @@ export function CinematicAuthBackground() {
   return (
     <View style={styles.wrap} pointerEvents="none">
       <View style={[styles.base, { backgroundColor: AUTH_THEME.bg }]} />
+      <View style={[styles.mid, { backgroundColor: AUTH_THEME.bgMid }]} />
       <View style={[styles.glow, { backgroundColor: AUTH_THEME.bgGlow }]} />
       <View style={styles.vignette} />
       <Ionicons name="leaf-outline" size={120} color="rgba(61,255,138,0.04)" style={styles.leafTL} />
@@ -22,6 +23,14 @@ const styles = StyleSheet.create({
   },
   base: {
     ...StyleSheet.absoluteFillObject
+  },
+  mid: {
+    height: "45%",
+    left: 0,
+    opacity: 0.55,
+    position: "absolute",
+    right: 0,
+    top: 0
   },
   glow: {
     bottom: 0,

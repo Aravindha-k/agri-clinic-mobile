@@ -3,7 +3,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import {
   ActivityIndicator,
-  Dimensions,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -20,17 +19,7 @@ import { GlassLoginField } from "../components/login/GlassLoginField";
 import { useAuth } from "../storage/AuthContext";
 import { AUTH_THEME } from "../theme/authTheme";
 import { useSafeAreaInsetsCompat } from "../hooks/useSafeAreaInsetsCompat";
-
-const SCREEN_H = Dimensions.get("window").height;
-const HEADER_H = 56;
-const HERO_BLOCK_H = 130;
-
-/** Positions hero block center near 37% of screen height. */
-function heroMarginTop(safeTop: number) {
-  const targetCenter = SCREEN_H * 0.37;
-  const topOfHero = targetCenter - HERO_BLOCK_H / 2;
-  return Math.max(8, topOfHero - safeTop - HEADER_H);
-}
+import { greetingForHour, LOGIN_WELCOME_SUBTITLE, LOGIN_WELCOME_TITLE } from "../utils/greeting";
 
 export function LoginScreen() {
   const { signIn, loginNotice, clearLoginNotice } = useAuth();
@@ -76,118 +65,108 @@ export function LoginScreen() {
         <KeyboardAvoidingView
           style={styles.flex}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 12}
+          keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 8}
         >
           <ScrollView
             style={styles.flex}
-            contentContainerStyle={styles.scroll}
+            contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 16) }]}
             keyboardShouldPersistTaps="always"
             keyboardDismissMode="on-drag"
             bounces={false}
             showsVerticalScrollIndicator={false}
           >
-            <View style={styles.main}>
-              {/* Header — fixed 56 */}
-              <View style={styles.header}>
-                <View style={styles.brandRow}>
-                  <View style={styles.logoSm}>
-                    {LOGO_IMAGE ? (
-                      <Image source={LOGO_IMAGE} style={styles.logoSmImg} resizeMode="contain" />
-                    ) : (
-                      <Ionicons name="leaf" size={18} color={AUTH_THEME.neon} />
-                    )}
-                  </View>
-                  <Text style={styles.brandName} numberOfLines={1}>
-                    {BRAND.appName}
-                  </Text>
+            <View style={styles.header}>
+              <View style={styles.brandRow}>
+                <View style={styles.logoSm}>
+                  {LOGO_IMAGE ? (
+                    <Image source={LOGO_IMAGE} style={styles.logoSmImg} resizeMode="contain" />
+                  ) : (
+                    <Ionicons name="leaf" size={18} color={AUTH_THEME.neon} />
+                  )}
                 </View>
-                <Pressable style={styles.helpChip} accessibilityRole="button">
-                  <Ionicons name="help-circle-outline" size={16} color={AUTH_THEME.textMuted} />
-                  <Text style={styles.helpText}>Help</Text>
-                </Pressable>
-              </View>
-
-              {/* Hero — ~37% screen, then form directly below */}
-              <View style={[styles.hero, { marginTop: heroMarginTop(insets.top) }]}>
-                <Text style={styles.headline}>Start Your Field Work Today</Text>
-                <Text style={styles.subline}>
-                  Manage visits, farmers, GPS tracking and field reports in one place.
+                <Text style={styles.brandName} numberOfLines={1}>
+                  {BRAND.appName}
                 </Text>
               </View>
+            </View>
 
-              {/* Form — compact, not pinned to bottom */}
-              <View style={styles.formSection}>
-                {loginError ? (
-                  <View style={styles.errorBox}>
-                    <Ionicons name="alert-circle" size={18} color={AUTH_THEME.danger} />
-                    <Text style={styles.errorText}>{loginError}</Text>
-                  </View>
-                ) : null}
+            <View style={styles.hero}>
+              <Text style={styles.timeGreeting}>{greetingForHour()}</Text>
+              <Text style={styles.welcome}>{LOGIN_WELCOME_TITLE}</Text>
+              <Text style={styles.subline}>{LOGIN_WELCOME_SUBTITLE}</Text>
+            </View>
 
-                <GlassLoginField
-                  icon="person-outline"
-                  placeholder="Employee ID or username"
-                  value={username}
-                  onChangeText={(t) => {
-                    setUsername(t);
-                    if (loginError) setLoginError("");
-                  }}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!loading}
-                  returnKeyType="next"
-                />
+            <View style={styles.formSection}>
+              {loginError ? (
+                <View style={styles.errorBox}>
+                  <Ionicons name="alert-circle" size={18} color={AUTH_THEME.danger} />
+                  <Text style={styles.errorText}>{loginError}</Text>
+                </View>
+              ) : null}
 
-                <GlassLoginField
-                  icon="lock-closed-outline"
-                  placeholder="Password"
-                  value={password}
-                  onChangeText={(t) => {
-                    setPassword(t);
-                    if (loginError) setLoginError("");
-                  }}
-                  secureTextEntry={!showPassword}
-                  editable={!loading}
-                  returnKeyType="done"
-                  onSubmitEditing={() => {
-                    if (canSubmit) void handleLogin();
-                  }}
-                  right={
-                    <Pressable
-                      onPress={() => setShowPassword((v) => !v)}
-                      hitSlop={12}
-                      accessibilityRole="button"
-                      accessibilityLabel={showPassword ? "Hide password" : "Show password"}
-                    >
-                      <Ionicons
-                        name={showPassword ? "eye-off-outline" : "eye-outline"}
-                        size={22}
-                        color={AUTH_THEME.textMuted}
-                      />
-                    </Pressable>
-                  }
-                />
+              <GlassLoginField
+                icon="person-outline"
+                placeholder="Employee ID or username"
+                value={username}
+                onChangeText={(t) => {
+                  setUsername(t);
+                  if (loginError) setLoginError("");
+                }}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!loading}
+                returnKeyType="next"
+              />
 
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={!canSubmit}
-                  onPress={() => void handleLogin()}
-                  style={({ pressed }) => [
-                    styles.signInBtn,
-                    !canSubmit && styles.signInBtnOff,
-                    pressed && canSubmit && styles.signInBtnPressed
-                  ]}
-                >
-                  {loading ? (
-                    <ActivityIndicator color={AUTH_THEME.bg} />
-                  ) : (
-                    <Text style={[styles.signInText, !canSubmit && styles.signInTextOff]}>Sign In</Text>
-                  )}
-                </Pressable>
+              <GlassLoginField
+                icon="lock-closed-outline"
+                placeholder="Password"
+                value={password}
+                onChangeText={(t) => {
+                  setPassword(t);
+                  if (loginError) setLoginError("");
+                }}
+                secureTextEntry={!showPassword}
+                editable={!loading}
+                returnKeyType="done"
+                onSubmitEditing={() => {
+                  if (canSubmit) void handleLogin();
+                }}
+                right={
+                  <Pressable
+                    onPress={() => setShowPassword((v) => !v)}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                  >
+                    <Ionicons
+                      name={showPassword ? "eye-off-outline" : "eye-outline"}
+                      size={22}
+                      color={AUTH_THEME.textMuted}
+                    />
+                  </Pressable>
+                }
+              />
 
-                <Text style={styles.footer}>Need help? Contact admin</Text>
-                <Text style={styles.footerHint}>{BRAND.employeeHint}</Text>
-              </View>
+              <Pressable
+                accessibilityRole="button"
+                disabled={!canSubmit}
+                onPress={() => void handleLogin()}
+                style={({ pressed }) => [
+                  styles.signInBtn,
+                  !canSubmit && styles.signInBtnOff,
+                  pressed && canSubmit && styles.signInBtnPressed
+                ]}
+              >
+                {loading ? (
+                  <ActivityIndicator color={AUTH_THEME.bg} />
+                ) : (
+                  <Text style={[styles.signInText, !canSubmit && styles.signInTextOff]}>Sign In</Text>
+                )}
+              </Pressable>
+
+              <Text style={styles.footer}>Need help? Contact admin</Text>
+              <Text style={styles.footerHint}>{BRAND.employeeHint}</Text>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -209,25 +188,19 @@ const styles = StyleSheet.create({
     flex: 1
   },
   scroll: {
-    flexGrow: 1
-  },
-  main: {
-    paddingBottom: 32,
-    paddingHorizontal: 20
+    flexGrow: 1,
+    paddingHorizontal: 20,
+    paddingTop: 4
   },
   header: {
     alignItems: "center",
     flexDirection: "row",
-    height: HEADER_H,
-    justifyContent: "space-between"
+    minHeight: 48
   },
   brandRow: {
     alignItems: "center",
-    flex: 1,
     flexDirection: "row",
-    gap: 10,
-    minWidth: 0,
-    paddingRight: 8
+    gap: 10
   },
   logoSm: {
     alignItems: "center",
@@ -243,48 +216,38 @@ const styles = StyleSheet.create({
   },
   brandName: {
     color: AUTH_THEME.text,
-    flex: 1,
     fontSize: 16,
     fontWeight: "700",
     letterSpacing: -0.2
   },
-  helpChip: {
-    alignItems: "center",
-    backgroundColor: AUTH_THEME.chip,
-    borderColor: AUTH_THEME.glassBorder,
-    borderRadius: 18,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 7
-  },
-  helpText: {
-    color: AUTH_THEME.textMuted,
-    fontSize: 12,
-    fontWeight: "600"
-  },
   hero: {
-    minHeight: HERO_BLOCK_H
+    marginTop: 20,
+    paddingBottom: 4
   },
-  headline: {
+  timeGreeting: {
+    color: AUTH_THEME.neon,
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: 0.2
+  },
+  welcome: {
     color: AUTH_THEME.text,
-    fontSize: 32,
+    fontSize: 30,
     fontWeight: "800",
     letterSpacing: -0.7,
-    lineHeight: 38
+    lineHeight: 36,
+    marginTop: 6
   },
   subline: {
     color: AUTH_THEME.textMuted,
     fontSize: 15,
     fontWeight: "400",
     lineHeight: 22,
-    marginTop: 10
+    marginTop: 8
   },
   formSection: {
     gap: 14,
-    marginTop: 24,
-    paddingBottom: 8
+    marginTop: 22
   },
   errorBox: {
     alignItems: "center",
@@ -308,7 +271,7 @@ const styles = StyleSheet.create({
     backgroundColor: AUTH_THEME.neonMid,
     borderRadius: 14,
     justifyContent: "center",
-    marginTop: 6,
+    marginTop: 4,
     minHeight: 54
   },
   signInBtnOff: {
@@ -332,13 +295,13 @@ const styles = StyleSheet.create({
     color: AUTH_THEME.textMuted,
     fontSize: 13,
     fontWeight: "500",
-    marginTop: 16,
+    marginTop: 14,
     textAlign: "center"
   },
   footerHint: {
     color: AUTH_THEME.textDim,
     fontSize: 11,
-    marginTop: 6,
+    marginTop: 4,
     textAlign: "center"
   }
 });

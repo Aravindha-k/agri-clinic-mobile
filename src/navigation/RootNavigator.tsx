@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { View } from "react-native";
+import { AppStartupIntro } from "../components/auth/AppStartupIntro";
 import { useAuth } from "../storage/AuthContext";
 import { useTheme } from "../theme";
 import { BootstrapScreen } from "../screens/BootstrapScreen";
@@ -99,11 +101,50 @@ function MainTabs() {
   );
 }
 
-export function RootNavigator() {
+function AppRoutes() {
   const { isReady, isAuthenticated, authLoading, bootstrapIssue } = useAuth();
-  const { theme, isDark } = useTheme();
 
   const showBootstrap = !isReady || authLoading || bootstrapIssue !== "none";
+
+  if (showBootstrap) {
+    return (
+      <RootStack.Navigator screenOptions={{ headerShown: false }}>
+        <RootStack.Screen name="Splash" component={BootstrapScreen} />
+      </RootStack.Navigator>
+    );
+  }
+
+  if (isAuthenticated) {
+    return (
+      <RootStack.Navigator screenOptions={{ headerShown: false }}>
+        <RootStack.Screen name="Main" component={MainTabs} />
+        <RootStack.Screen
+          name="VisitFlow"
+          component={VisitFlowNavigator}
+          options={{ presentation: "modal", animation: "slide_from_bottom" }}
+        />
+        <RootStack.Screen name="LiveMap" component={LiveMapScreen} options={{ contentStyle: { flex: 1 } }} />
+        <RootStack.Screen name="TravelHistory" component={TravelHistoryScreen} options={{ contentStyle: { flex: 1 } }} />
+        <RootStack.Screen name="FarmerMap" component={FarmerMapScreen} options={{ contentStyle: { flex: 1 } }} />
+        <RootStack.Screen
+          name="OfflineSync"
+          component={OfflineSyncScreen}
+          options={{ contentStyle: { flex: 1 }, animation: "slide_from_right" }}
+        />
+      </RootStack.Navigator>
+    );
+  }
+
+  return (
+    <RootStack.Navigator screenOptions={{ headerShown: false }}>
+      <RootStack.Screen name="Auth" component={AuthNavigator} />
+    </RootStack.Navigator>
+  );
+}
+
+export function RootNavigator() {
+  const { theme, isDark } = useTheme();
+  const [introComplete, setIntroComplete] = useState(false);
 
   const navTheme = {
     ...DefaultTheme,
@@ -120,30 +161,8 @@ export function RootNavigator() {
 
   return (
     <NavigationContainer theme={navTheme}>
-      <RootStack.Navigator screenOptions={{ headerShown: false }}>
-        {showBootstrap ? (
-          <RootStack.Screen name="Splash" component={BootstrapScreen} />
-        ) : isAuthenticated ? (
-          <>
-            <RootStack.Screen name="Main" component={MainTabs} />
-            <RootStack.Screen
-              name="VisitFlow"
-              component={VisitFlowNavigator}
-              options={{ presentation: "modal", animation: "slide_from_bottom" }}
-            />
-            <RootStack.Screen name="LiveMap" component={LiveMapScreen} options={{ contentStyle: { flex: 1 } }} />
-            <RootStack.Screen name="TravelHistory" component={TravelHistoryScreen} options={{ contentStyle: { flex: 1 } }} />
-            <RootStack.Screen name="FarmerMap" component={FarmerMapScreen} options={{ contentStyle: { flex: 1 } }} />
-            <RootStack.Screen
-              name="OfflineSync"
-              component={OfflineSyncScreen}
-              options={{ contentStyle: { flex: 1 }, animation: "slide_from_right" }}
-            />
-          </>
-        ) : (
-          <RootStack.Screen name="Auth" component={AuthNavigator} />
-        )}
-      </RootStack.Navigator>
+      <AppRoutes />
+      {!introComplete ? <AppStartupIntro onComplete={() => setIntroComplete(true)} /> : null}
     </NavigationContainer>
   );
 }

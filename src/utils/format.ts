@@ -1,6 +1,7 @@
 import { extractMasterPk } from "./masterId";
 import { resolveFarmerPk } from "../visit/resolveFarmerPk";
 import { parsePaginatedList } from "./apiUnwrap";
+import { applyObservationPayload } from "./visitFieldNotes";
 
 export function normalizeNullable(value: unknown) {
   if (value === "") {
@@ -77,7 +78,8 @@ export function normalizeVisitPayload(values: Record<string, unknown>) {
     "pesticide_advice",
     "irrigation_advice",
     "general_advice",
-    "follow_up_required"
+    "follow_up_required",
+    "recommendation"
   ].forEach((field) => {
     if (values[field] !== undefined) {
       payload[field] = values[field];
@@ -138,6 +140,22 @@ export function normalizeMobileVisitSubmitPayload(
   delete payload.employee;
 
   applyFkIds(payload, ["district", "village", "crop", "farmer", "farmer_id", "crop_id"]);
+
+  applyObservationPayload(payload, values);
+
+  const problemCategoryId = normalizeId(values.problem_category_id);
+  if (problemCategoryId !== null && problemCategoryId !== undefined && problemCategoryId !== "") {
+    payload.problem_category_id = problemCategoryId;
+  }
+  const problemMasterId = normalizeId(values.problem_master_id);
+  if (problemMasterId !== null && problemMasterId !== undefined && problemMasterId !== "") {
+    payload.problem_master_id = problemMasterId;
+  }
+  const problemDescription = String(values.problem_description ?? values.problem_seen ?? "").trim();
+  if (problemDescription) {
+    payload.problem_description = problemDescription;
+    payload.problem_seen = problemDescription;
+  }
 
   return payload;
 }

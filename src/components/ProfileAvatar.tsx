@@ -4,14 +4,15 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View, ViewStyle 
 import { useTheme } from "../theme";
 import { cacheBustPhotoUrl, initialsFromName } from "../utils/profilePhotoUrl";
 
-export type ProfileAvatarSize = "xs" | "sm" | "md" | "lg" | "xl";
+export type ProfileAvatarSize = "xs" | "sm" | "md" | "lg" | "xl" | "xxl";
 
 const SIZES: Record<ProfileAvatarSize, number> = {
   xs: 32,
-  md: 48,
   sm: 40,
+  md: 48,
   lg: 64,
-  xl: 96
+  xl: 88,
+  xxl: 112
 };
 
 type Props = {

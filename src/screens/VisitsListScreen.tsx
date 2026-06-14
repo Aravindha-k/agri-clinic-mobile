@@ -1,16 +1,17 @@
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { fetchVisitsPage, isVisitHistoryEntry, Visit } from "../api/visits";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
 import { InlineErrorBanner } from "../components/InlineErrorBanner";
-import { AppHeader, SearchBar, SkeletonCard, SyncStatusBadge, VisitCard } from "../components/ui";
+import { AppHeader, ListFooterSkeleton, SearchBar, SkeletonCard, SyncStatusBadge, VisitCard } from "../components/ui";
 import { VisitsStackParamList } from "../navigation/types";
 import { useFieldDataRefresh } from "../storage/FieldDataRefreshContext";
+import { useSecureScreen } from "../hooks/useSecureScreen";
 import { useTabBarBottomInset } from "../hooks/useTabBarBottomInset";
 import { useTheme } from "../theme";
-import { listCardLayout, listCardType } from "../theme/listCard";
+import { listCardLayout } from "../theme/listCard";
 import { useRefreshControlProps } from "../hooks/useRefreshControlProps";
 import { visitDisplayIso } from "../utils/format";
 import { resolveVisitFarmer } from "../utils/visitFarmer";
@@ -44,6 +45,7 @@ function sortVisitsNewestFirst(items: Visit[]) {
 }
 
 export function VisitsListScreen({ navigation }: Props) {
+  useSecureScreen();
   const { theme } = useTheme();
   const c = theme.colors;
   const { visitsVersion } = useFieldDataRefresh();
@@ -122,20 +124,17 @@ export function VisitsListScreen({ navigation }: Props) {
       <AppHeader
         title="Visits"
         subtitle="All field visits"
-        showLogoMark
         right={<SyncStatusBadge onPress={() => rootNav?.navigate("OfflineSync")} />}
       />
       <View style={styles.toolbar}>
         {error && visits.length > 0 ? <InlineErrorBanner message={error} onRetry={() => load(true)} /> : null}
         <SearchBar value={query} onChangeText={setQuery} placeholder="Search farmer, village, crop…" />
-        <View style={[styles.countBar, { backgroundColor: c.card, borderColor: c.border }]}>
-          <Text style={[listCardType.metric, { color: c.primaryDark }]}>
+        <Text style={[styles.countLine, { color: c.muted }]}>
+          <Text style={{ color: c.primaryDark, fontWeight: "800" }}>
             {query.trim() ? visible.length : totalCount ?? visible.length}
           </Text>
-          <Text style={[listCardType.meta, { color: c.muted, flex: 1 }]}>
-            {query.trim() ? "visits matching search" : "total visits logged"}
-          </Text>
-        </View>
+          {query.trim() ? " matching search" : " total visits logged"}
+        </Text>
       </View>
       {loading && visits.length === 0 ? (
         <View style={styles.pad}>
@@ -163,18 +162,14 @@ export function VisitsListScreen({ navigation }: Props) {
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           onEndReached={() => void loadMore()}
           onEndReachedThreshold={0.4}
-          ListFooterComponent={
-            loadingMore ? (
-              <View style={styles.footer}>
-                <ActivityIndicator color={c.primary} />
-              </View>
-            ) : null
-          }
+          ListFooterComponent={loadingMore ? <ListFooterSkeleton /> : null}
           ListEmptyComponent={
             <EmptyState
               title="No visits yet"
               message={query.trim() ? "Try a different search." : "Submitted field visits will appear here."}
               illustration="visits"
+              actionLabel={query.trim() ? "Clear search" : undefined}
+              onAction={query.trim() ? () => setQuery("") : undefined}
             />
           }
         />
@@ -186,15 +181,7 @@ export function VisitsListScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   toolbar: { gap: listCardLayout.listGap, paddingHorizontal: 16, paddingTop: 8 },
-  countBar: {
-    alignItems: "center",
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10
-  },
+  countLine: { fontSize: 13, fontWeight: "600", lineHeight: 18 },
   list: { paddingHorizontal: 16, paddingTop: 4 },
   separator: { height: listCardLayout.listGap },
   footer: { alignItems: "center", paddingVertical: 16 },

@@ -19,11 +19,11 @@ export function GlassLoginField({ icon, right, style, onFocus, onBlur, editable 
         styles.field,
         {
           borderColor: focused ? AUTH_THEME.glassFocus : AUTH_THEME.glassBorder,
-          backgroundColor: focused ? "rgba(61,255,138,0.08)" : AUTH_THEME.glass
+          backgroundColor: focused ? "rgba(255,255,255,0.1)" : AUTH_THEME.glass
         }
       ]}
     >
-      <Ionicons name={icon} size={20} color={focused ? AUTH_THEME.neon : AUTH_THEME.textDim} />
+      <Ionicons name={icon} size={20} color={focused ? AUTH_THEME.highlightMid : AUTH_THEME.textDim} />
       <TextInput
         {...props}
         editable={editable}

@@ -1,6 +1,6 @@
-import { Ionicons } from "@expo/vector-icons";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { BRAND, LOGO_IMAGE } from "../brand/constants";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { BrandLogo } from "./brand/BrandLogo";
+import { BRAND } from "../config/brand";
 import { colors } from "../theme/colors";
 import { space } from "../theme/layout";
 
@@ -23,13 +23,7 @@ export function AppFallbackScreen({
 }: Props) {
   return (
     <View style={styles.root}>
-      {LOGO_IMAGE ? (
-        <Image source={LOGO_IMAGE} style={styles.logo} resizeMode="contain" accessibilityIgnoresInvertColors />
-      ) : (
-        <View style={styles.logoPlaceholder}>
-          <Ionicons name="leaf" size={36} color={colors.primary} />
-        </View>
-      )}
+      <BrandLogo variant="default" width={72} height={72} />
       <Text style={styles.brand}>{BRAND.appName}</Text>
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.message}>{message}</Text>
@@ -54,18 +48,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     padding: space.xl
-  },
-  logo: {
-    height: 72,
-    width: 72
-  },
-  logoPlaceholder: {
-    alignItems: "center",
-    backgroundColor: colors.primarySoft,
-    borderRadius: 20,
-    height: 72,
-    justifyContent: "center",
-    width: 72
   },
   brand: {
     color: colors.primaryDark,

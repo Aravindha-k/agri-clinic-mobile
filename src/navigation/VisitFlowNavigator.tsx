@@ -1,9 +1,6 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { VisitFlowProvider } from "../visit/VisitFlowContext";
-import { NewVisitFarmerScreen } from "../screens/visit/NewVisitFarmerScreen";
-import { NewVisitDetailsScreen } from "../screens/visit/NewVisitDetailsScreen";
-import { VisitSummaryScreen } from "../screens/visit/VisitSummaryScreen";
-import { VisitSuccessScreen } from "../screens/visit/VisitSuccessScreen";
+import VisitFlowShell from "../../mobile/app/visit/index";
+import VisitSuccessScreen from "../../mobile/app/visit/success";
 import { VisitFlowParamList } from "./types";
 import { useTheme } from "../theme";
 
@@ -13,19 +10,15 @@ export function VisitFlowNavigator() {
   const { theme } = useTheme();
 
   return (
-    <VisitFlowProvider>
-      <Stack.Navigator
-        screenOptions={{
-          headerShown: false,
-          animation: "slide_from_right",
-          contentStyle: { backgroundColor: theme.colors.background }
-        }}
-      >
-        <Stack.Screen name="NewVisitFarmer" component={NewVisitFarmerScreen} />
-        <Stack.Screen name="NewVisitDetails" component={NewVisitDetailsScreen} />
-        <Stack.Screen name="VisitSummary" component={VisitSummaryScreen} />
-        <Stack.Screen name="VisitSuccess" component={VisitSuccessScreen} options={{ gestureEnabled: false }} />
-      </Stack.Navigator>
-    </VisitFlowProvider>
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        animation: "slide_from_right",
+        contentStyle: { backgroundColor: theme.colors.background }
+      }}
+    >
+      <Stack.Screen name="NewVisitFarmer" component={VisitFlowShell} />
+      <Stack.Screen name="VisitSuccess" component={VisitSuccessScreen} options={{ gestureEnabled: false }} />
+    </Stack.Navigator>
   );
 }

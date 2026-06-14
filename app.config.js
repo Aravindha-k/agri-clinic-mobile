@@ -1,23 +1,33 @@
 /** @type {import('expo/config').ExpoConfig} */
+const brand = require("./src/config/brand.config.js");
 const PRODUCTION_API_URL = "https://agri-clinic-backend.onrender.com/api/v1/";
 
+const resolvedApiUrl = process.env.EXPO_PUBLIC_API_URL || PRODUCTION_API_URL;
+const isProductionApi = resolvedApiUrl.includes("agri-clinic-backend.onrender.com");
+
 module.exports = () => ({
-  name: "Kavya Agri Clinic",
+  name: brand.appName,
   slug: "agri-clinic-field-app",
   version: "1.0.0",
   orientation: "portrait",
   userInterfaceStyle: "light",
   scheme: "agriclinicfield",
-  icon: "./assets/kavya-logo.png",
+  icon: brand.iconAsset,
   splash: {
-    image: "./assets/kavya-logo.png",
+    image: brand.logoAsset,
     resizeMode: "contain",
-    backgroundColor: "#0F5132"
+    backgroundColor: brand.splashBackgroundColor
   },
   assetBundlePatterns: ["**/*"],
   ios: {
     supportsTablet: true,
-    bundleIdentifier: "com.kavya.agriclinic"
+    bundleIdentifier: "com.kavya.agriclinic",
+    infoPlist: {
+      UIBackgroundModes: ["location"],
+      NSLocationWhenInUseUsageDescription: `Allow ${brand.appName} to use your location while you are working in the field.`,
+      NSLocationAlwaysAndWhenInUseUsageDescription:
+        "Allow location all the time for route tracking during your workday."
+    }
   },
   android: {
     package: "com.kavya.agriclinic",
@@ -31,11 +41,12 @@ module.exports = () => ({
       "CAMERA",
       "RECORD_AUDIO",
       "READ_EXTERNAL_STORAGE",
-      "READ_MEDIA_IMAGES"
+      "READ_MEDIA_IMAGES",
+      "POST_NOTIFICATIONS"
     ],
     adaptiveIcon: {
-      foregroundImage: "./assets/kavya-logo.png",
-      backgroundColor: "#0F5132"
+      foregroundImage: brand.adaptiveIconAsset,
+      backgroundColor: brand.iconBackgroundColor
     },
     queries: [
       { package: "com.google.android.apps.maps" },
@@ -60,7 +71,9 @@ module.exports = () => ({
     [
       "expo-location",
       {
-        locationWhenInUsePermission: "Allow Kavya Agri Clinic to use your location while you are working in the field.",
+        locationWhenInUsePermission: `Allow ${brand.appName} to use your location while you are working in the field.`,
+        locationAlwaysAndWhenInUsePermission:
+          "Allow location all the time for route tracking during your workday.",
         isAndroidBackgroundLocationEnabled: true,
         isAndroidForegroundServiceEnabled: true
       }
@@ -68,33 +81,35 @@ module.exports = () => ({
     [
       "expo-splash-screen",
       {
-        image: "./assets/kavya-logo.png",
+        image: brand.logoAsset,
         imageWidth: 160,
         resizeMode: "contain",
-        backgroundColor: "#0F5132"
+        backgroundColor: brand.splashBackgroundColor
       }
     ],
     "expo-font",
     [
       "expo-image-picker",
       {
-        photosPermission: "Allow Kavya Agri Clinic to access photos for visit evidence and profile pictures.",
-        cameraPermission: "Allow Kavya Agri Clinic to take photos for visits and profile pictures."
+        photosPermission: `Allow ${brand.appName} to access photos for visit evidence and profile pictures.`,
+        cameraPermission: `Allow ${brand.appName} to take photos for visits and profile pictures.`
       }
     ],
     [
       "expo-av",
       {
-        microphonePermission: "Allow Kavya Agri Clinic to record voice notes for visit evidence."
+        microphonePermission: `Allow ${brand.appName} to record voice notes for visit evidence.`
       }
-    ]
+    ],
+    "@react-native-community/datetimepicker",
+    "expo-secure-store"
   ],
   extra: {
     eas: {
       projectId: "9393aa2a-1981-442c-8560-dcfa87f3c772"
     },
-    apiUrl: process.env.EXPO_PUBLIC_API_URL || PRODUCTION_API_URL,
-    apiBaseUrl: process.env.EXPO_PUBLIC_API_URL || PRODUCTION_API_URL,
-    production: true
+    apiUrl: resolvedApiUrl,
+    apiBaseUrl: resolvedApiUrl,
+    production: isProductionApi
   }
 });

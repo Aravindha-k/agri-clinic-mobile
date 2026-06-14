@@ -55,9 +55,16 @@ export function parsePaginatedList<T = unknown>(payload: unknown): PaginatedList
     let results: T[] = [];
     if (Array.isArray(o.results)) {
       results = o.results as T[];
-    } else if (Array.isArray(o.data)) {
+    } else if (o.data != null && typeof o.data === "object" && !Array.isArray(o.data)) {
+      const nested = o.data as Record<string, unknown>;
+      if (Array.isArray(nested.results)) {
+        results = nested.results as T[];
+      }
+    }
+    if (results.length === 0 && Array.isArray(o.data)) {
       results = o.data as T[];
-    } else {
+    }
+    if (results.length === 0) {
       for (const key of ["features", "employees", "locations", "items"] as const) {
         if (Array.isArray(o[key])) {
           results = o[key] as T[];
@@ -65,8 +72,20 @@ export function parsePaginatedList<T = unknown>(payload: unknown): PaginatedList
         }
       }
     }
-    const next = typeof o.next === "string" && o.next.length > 0 ? o.next : null;
-    const count = typeof o.count === "number" ? o.count : results.length;
+    let next =
+      typeof o.next === "string" && o.next.length > 0
+        ? o.next
+        : o.data != null && typeof o.data === "object" && !Array.isArray(o.data)
+          ? (typeof (o.data as Record<string, unknown>).next === "string"
+              ? ((o.data as Record<string, unknown>).next as string)
+              : null)
+          : null;
+    const count =
+      typeof o.count === "number"
+        ? o.count
+        : o.data != null && typeof o.data === "object" && typeof (o.data as Record<string, unknown>).count === "number"
+          ? ((o.data as Record<string, unknown>).count as number)
+          : results.length;
     return { results, next, count };
   }
   return { results: [], next: null, count: 0 };

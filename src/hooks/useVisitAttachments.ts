@@ -40,6 +40,30 @@ export function useVisitAttachments(visitId: number | null | undefined) {
     }
   }, [visitId]);
 
+  const uploadPhotoPair = useCallback(
+    async (proof: LocalFilePayload, original: LocalFilePayload) => {
+      if (!visitId || visitId <= 0) return;
+      setUploading({ progress: 0, label: original.name });
+      setError("");
+      try {
+        const orig = await uploadVisitAttachmentFile(visitId, original, (p) =>
+          setUploading({ progress: p * 0.45, label: original.name })
+        );
+        setAttachments((prev) => [orig, ...prev]);
+        const proofRow = await uploadVisitAttachmentFile(visitId, proof, (p) =>
+          setUploading({ progress: 0.45 + p * 0.55, label: proof.name })
+        );
+        setAttachments((prev) => [proofRow, ...prev]);
+      } catch (err) {
+        setError(friendlyUploadError(err));
+        throw err;
+      } finally {
+        setUploading(null);
+      }
+    },
+    [visitId]
+  );
+
   const uploadFile = useCallback(
     async (file: LocalFilePayload) => {
       if (!visitId || visitId <= 0) return;
@@ -105,6 +129,7 @@ export function useVisitAttachments(visitId: number | null | undefined) {
     canManage,
     refresh,
     uploadFile,
+    uploadPhotoPair,
     uploadText,
     remove,
     setError

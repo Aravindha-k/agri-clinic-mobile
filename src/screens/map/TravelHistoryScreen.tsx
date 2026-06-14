@@ -9,6 +9,7 @@ import { FieldMapView } from "../../components/map/FieldMapView";
 import { MapErrorBoundary } from "../../components/map/MapErrorBoundary";
 import { AppHeader, PrimaryButton } from "../../components/ui";
 import { useMapAreaHeight } from "../../hooks/useMapAreaHeight";
+import { useSecureScreen } from "../../hooks/useSecureScreen";
 import { RootStackParamList } from "../../navigation/types";
 import { useTheme } from "../../theme";
 import { fontWeights } from "../../theme/fontWeights";
@@ -19,6 +20,7 @@ import { DEFAULT_MAP_REGION, fitMapRegion } from "../../utils/mapRegion";
 type Props = NativeStackScreenProps<RootStackParamList, "TravelHistory">;
 
 export function TravelHistoryScreen({ navigation }: Props) {
+  useSecureScreen();
   const { theme } = useTheme();
   const c = theme.colors;
   const { width } = useWindowDimensions();
@@ -146,9 +148,13 @@ export function TravelHistoryScreen({ navigation }: Props) {
 
         {!loading && points.length === 0 ? (
           <EmptyState
-            title="No travel route yet"
-            message="Start work on Home. Your path appears here as GPS check-ins are saved during the day."
+            title="No route history yet"
+            message="Start your workday from Tracking. Your path appears here as GPS check-ins are saved."
             illustration="map"
+            actionLabel="Open tracking"
+            onAction={() => {
+              navigation.navigate("Main", { screen: "Profile", params: { screen: "TrackingWorkspace" } });
+            }}
           />
         ) : (
           <>

@@ -6,7 +6,7 @@ type Props = {
   onPress: () => void;
   loading?: boolean;
   disabled?: boolean;
-  variant?: "primary" | "secondary" | "outline" | "ghost";
+  variant?: "primary" | "secondary" | "outline" | "ghost" | "danger";
   size?: "md" | "sm";
   style?: ViewStyle;
 };
@@ -21,8 +21,16 @@ export function PrimaryButton({
   style
 }: Props) {
   const { colors, radius, layout, shadows } = useDesignSystem();
-  const isPrimary = variant === "primary";
+  const isPrimary = variant === "primary" || variant === "danger";
   const minH = size === "sm" ? layout.buttonMinHeightSm : layout.buttonMinHeight;
+  const bg =
+    variant === "outline" || variant === "ghost"
+      ? "transparent"
+      : variant === "secondary"
+        ? colors.primarySoft
+        : variant === "danger"
+          ? colors.danger
+          : colors.primary;
 
   return (
     <Pressable
@@ -34,12 +42,7 @@ export function PrimaryButton({
         {
           minHeight: minH,
           borderRadius: radius.button,
-          backgroundColor:
-            variant === "outline" || variant === "ghost"
-              ? "transparent"
-              : variant === "secondary"
-                ? colors.primarySoft
-                : colors.primary,
+          backgroundColor: bg,
           borderColor: variant === "outline" ? colors.primary : "transparent",
           borderWidth: variant === "outline" ? 1.5 : 0,
           opacity: disabled ? 0.5 : pressed ? 0.92 : 1,
@@ -58,7 +61,7 @@ export function PrimaryButton({
             size === "sm" && styles.textSm,
             {
               color:
-                variant === "primary"
+                variant === "primary" || variant === "danger"
                   ? "#FFFFFF"
                   : variant === "secondary"
                     ? colors.primaryDark

@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image, StyleSheet, Text, View, ViewStyle } from "react-native";
-import { BRAND, LOGO_IMAGE } from "../../brand/constants";
+import { BRAND, LOGO_IMAGE } from "../../config/brand";
+import { LOGO_SIZES } from "../../brand/logoSizing";
 import { useTheme } from "../../theme";
 
-const SIZES = { xs: 28, sm: 40, md: 52, lg: 72, xl: 96 } as const;
+const SIZES = LOGO_SIZES.appLogo;
 export type AppLogoSize = keyof typeof SIZES;
 
 type Props = {
@@ -59,7 +60,7 @@ export function AppLogo({
   const mark = LOGO_IMAGE ? (
     <Image
       source={LOGO_IMAGE}
-      style={{ width: dim, height: dim }}
+      style={{ width: dim, height: dim, aspectRatio: 1 }}
       resizeMode="contain"
       accessibilityLabel="Clinic logo"
     />

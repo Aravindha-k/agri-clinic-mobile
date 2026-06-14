@@ -56,6 +56,12 @@ export function hasValidGps(values: VisitFormValues): boolean {
 
 export function hasObservation(values: VisitFormValues): boolean {
   return (
+    Boolean(coerceStr(values.observation)) ||
+    Boolean(coerceStr(values.field_notes)) ||
+    Boolean(coerceStr(values.problem_seen)) ||
+    Boolean(coerceStr(values.problem_description)) ||
+    Boolean(coerceStr(values.problem_master_id)) ||
+    Boolean(coerceStr(values.action_taken)) ||
     Boolean(coerceStr(values.crop_health)) ||
     Boolean(coerceStr(values.weed_condition)) ||
     values.pest_issue === true ||
@@ -118,7 +124,7 @@ export function getDetailsStepIssues(values: VisitFormValues): VisitValidationIs
   if (!hasObservation(normalized)) {
     issues.push({
       field: "observation",
-      message: "Add crop health, weeds, pest/disease, or recommendation",
+      message: "Add observation / field notes, problem seen, or action taken",
       step: "details"
     });
   }
@@ -171,7 +177,7 @@ export function getSubmitIssues(values: VisitFormValues): VisitValidationIssue[]
   if (!hasObservation(normalized)) {
     issues.push({
       field: "observation",
-      message: "Recommendation or field observation is required",
+      message: "Observation / field notes or action details are required",
       step: "details"
     });
   }
@@ -198,7 +204,7 @@ export function getSubmitSummaryLines(issues: VisitValidationIssue[]): string[] 
         lines.push("GPS location is required");
         break;
       case "observation":
-        lines.push("Recommendation or field observation is required");
+        lines.push("Observation / field notes or action details are required");
         break;
       default:
         lines.push(issue.message);

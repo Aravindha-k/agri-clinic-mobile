@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View, ViewStyle } from "react-native";
 import { BrandLogo } from "../components/BrandLogo";
-import { BRAND } from "../brand/constants";
+import { BRAND } from "../config/brand";
 import { colors } from "../theme/colors";
 import { space } from "../theme/layout";
 import { typography } from "../theme/typography";

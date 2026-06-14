@@ -1,10 +1,11 @@
-import { StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useDesignSystem } from "../../hooks/useDesignSystem";
 
-const STEPS = ["Farmer", "Field", "Review"] as const;
+const STEPS = ["Farmer", "Crop", "Category", "Problem", "Advice", "Photos", "Submit"] as const;
 
 type Props = {
-  step: 0 | 1 | 2;
+  /** 0 = Farmer … 6 = Submit / review */
+  step: 0 | 1 | 2 | 3 | 4 | 5 | 6;
 };
 
 export function VisitStepProgress({ step }: Props) {
@@ -12,7 +13,7 @@ export function VisitStepProgress({ step }: Props) {
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.track}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.track}>
         {STEPS.map((label, index) => {
           const done = index < step;
           const active = index === step;
@@ -27,7 +28,7 @@ export function VisitStepProgress({ step }: Props) {
                   }
                 ]}
               >
-                <Text style={{ color: done || active ? "#FFFFFF" : colors.muted, fontSize: 11, fontWeight: "900" }}>
+                <Text style={{ color: done || active ? "#FFFFFF" : colors.muted, fontSize: 10, fontWeight: "900" }}>
                   {index + 1}
                 </Text>
               </View>
@@ -35,19 +36,23 @@ export function VisitStepProgress({ step }: Props) {
                 style={[
                   type.caption,
                   {
-                    color: active ? colors.primaryDark : colors.muted,
-                    fontWeight: active ? "800" : "600"
+                    color: active ? colors.primaryDark : done ? colors.textSecondary : colors.muted,
+                    fontWeight: active ? "800" : "600",
+                    fontSize: 10
                   }
                 ]}
+                numberOfLines={1}
               >
                 {label}
               </Text>
             </View>
           );
         })}
-      </View>
+      </ScrollView>
       <View style={[styles.bar, { backgroundColor: colors.borderSubtle ?? colors.border }]}>
-        <View style={[styles.fill, { backgroundColor: colors.primary, width: `${((step + 1) / STEPS.length) * 100}%` }]} />
+        <View
+          style={[styles.fill, { backgroundColor: colors.primary, width: `${((step + 1) / STEPS.length) * 100}%` }]}
+        />
       </View>
     </View>
   );
@@ -55,15 +60,15 @@ export function VisitStepProgress({ step }: Props) {
 
 const styles = StyleSheet.create({
   wrap: { gap: 8 },
-  track: { flexDirection: "row", justifyContent: "space-between" },
-  step: { alignItems: "center", flex: 1, gap: 4 },
+  track: { gap: 6, paddingHorizontal: 2 },
+  step: { alignItems: "center", gap: 4, minWidth: 52 },
   dot: {
     alignItems: "center",
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
-    height: 26,
+    height: 24,
     justifyContent: "center",
-    width: 26
+    width: 24
   },
   bar: { borderRadius: 999, height: 4, overflow: "hidden" },
   fill: { borderRadius: 999, height: "100%" }

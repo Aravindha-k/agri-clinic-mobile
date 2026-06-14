@@ -23,8 +23,14 @@ function resolveApiBaseUrl(): string {
     return normalizeApiBaseUrl(fromEnv);
   }
 
-  // Local testing (expo start, no build env) → LAN backend
+  // Local testing (expo start) — LAN backend unless forced to cloud
   if (__DEV__) {
+    const useCloud =
+      process.env.EXPO_PUBLIC_USE_PRODUCTION_API === "1" ||
+      process.env.EXPO_PUBLIC_USE_PRODUCTION_API === "true";
+    if (useCloud) {
+      return PRODUCTION_API_BASE_URL;
+    }
     const devOverride = process.env.EXPO_PUBLIC_DEV_API_URL?.trim();
     return normalizeApiBaseUrl(devOverride || LOCAL_DEV_API_BASE_URL);
   }
@@ -36,3 +42,7 @@ export const API_BASE_URL = resolveApiBaseUrl();
 
 /** True when app talks to Render (APK / release builds). */
 export const IS_PRODUCTION_API = API_BASE_URL.startsWith("https://agri-clinic-backend.onrender.com");
+
+if (__DEV__) {
+  console.log("[API] Using base URL:", API_BASE_URL);
+}

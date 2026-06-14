@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { Employee, getCurrentEmployee } from "../api/employees";
+import { Employee } from "../api/employees";
 import { useAuth, useAuthSessionReady } from "./AuthContext";
 import { useFieldDataRefresh } from "./FieldDataRefreshContext";
 import { registerSessionTeardown } from "./sessionConflict";
@@ -17,24 +17,21 @@ type EmployeeContextValue = {
 const EmployeeContext = createContext<EmployeeContextValue | undefined>(undefined);
 
 export function EmployeeProvider({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, employee: authEmployee, refreshUser } = useAuth();
   const sessionReady = useAuthSessionReady();
   const { employeePhotoVersion } = useFieldDataRefresh();
-  const [employee, setEmployee] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const refreshEmployee = useCallback(async () => {
     if (!isAuthenticated) {
-      setEmployee(null);
       setError("");
       return null;
     }
     setLoading(true);
     try {
       setError("");
-      const row = await getCurrentEmployee();
-      setEmployee(row);
+      const row = await refreshUser();
       return row;
     } catch (err) {
       if (isDeviceSessionConflict(err) || isAuthExpiredError(err)) {
@@ -54,16 +51,13 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, refreshUser]);
 
   useEffect(() => {
-    if (sessionReady) {
-      void refreshEmployee();
-    } else if (!isAuthenticated) {
-      setEmployee(null);
+    if (!isAuthenticated) {
       setError("");
     }
-  }, [isAuthenticated, refreshEmployee, sessionReady]);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (!sessionReady || employeePhotoVersion <= 0) return;
@@ -71,29 +65,20 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
   }, [employeePhotoVersion, refreshEmployee, sessionReady]);
 
   useEffect(() => {
-    if (!sessionReady) return;
-    const interval = setInterval(() => {
-      void refreshEmployee();
-    }, 3 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [refreshEmployee, sessionReady]);
-
-  useEffect(() => {
     return registerSessionTeardown(() => {
-      setEmployee(null);
       setError("");
     });
   }, []);
 
   const value = useMemo(
     () => ({
-      employee,
+      employee: authEmployee,
       loading,
       employeeLoading: loading,
       error,
       refreshEmployee
     }),
-    [employee, loading, error, refreshEmployee]
+    [authEmployee, loading, error, refreshEmployee]
   );
 
   return <EmployeeContext.Provider value={value}>{children}</EmployeeContext.Provider>;

@@ -32,15 +32,50 @@ export function isWorkdayExpiredPayload(data: unknown): boolean {
   return isWorkdayExpiredMessage(detail);
 }
 
+/** Map API workday payloads (`id` or `workday_id`) into a consistent shape. */
+export function normalizeWorkdayRow(raw: unknown): WorkdayStatus | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const row = raw as Record<string, unknown>;
+  const workdayId = Number(row.workday_id ?? row.id);
+  if (!Number.isFinite(workdayId) || workdayId <= 0) {
+    return null;
+  }
+
+  const startedAt =
+    typeof row.started_at === "string"
+      ? row.started_at
+      : typeof row.start_time === "string"
+        ? row.start_time
+        : undefined;
+
+  return {
+    id: typeof row.id === "number" ? row.id : workdayId,
+    workday_id: workdayId,
+    date: typeof row.date === "string" ? row.date : undefined,
+    start_time: typeof row.start_time === "string" ? row.start_time : startedAt,
+    started_at: startedAt,
+    end_time: (row.end_time as string | null | undefined) ?? null,
+    is_active: row.is_active !== false,
+    auto_ended: Boolean(row.auto_ended),
+    last_heartbeat: typeof row.last_heartbeat === "string" ? row.last_heartbeat : null,
+    last_location: (row.last_location as WorkdayStatus["last_location"]) ?? null
+  };
+}
+
 /** Only treat as active when server row has id and is_active is not explicitly false. */
 export function normalizeActiveWorkday(raw: WorkdayStatus | null | undefined): WorkdayStatus | null {
-  if (!raw?.workday_id) {
+  const normalized = normalizeWorkdayRow(raw);
+  if (!normalized || normalized.is_active === false) {
     return null;
   }
-  if (raw.is_active === false) {
-    return null;
-  }
-  return raw;
+  return normalized;
+}
+
+export function isWorkdayAlreadyActiveMessage(message: string): boolean {
+  return /already.*(active|started)|workday.*(active|started)|duplicate.*workday/i.test(message);
 }
 
 export function workdayFetchFromError(error: unknown): WorkdayFetchResult | null {

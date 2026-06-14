@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import * as DocumentPicker from "expo-document-picker";
-import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -13,8 +12,11 @@ import {
   View
 } from "react-native";
 import { useVisitAttachments } from "../../hooks/useVisitAttachments";
+import { useVisitPhotoWithWatermark } from "../../hooks/useVisitPhotoWithWatermark";
 import { useTheme } from "../../theme";
 import { listCardType } from "../../theme/listCard";
+import { pickPendingImageUri } from "../../visit/visitEvidencePickers";
+import { buildVisitPhotoWatermarkMeta } from "../../utils/buildVisitPhotoWatermarkMeta";
 import {
   assertFileUnderLimit,
   friendlyPickerCancel,
@@ -22,18 +24,31 @@ import {
   inferAttachmentType,
   prepareImageForUpload
 } from "../../utils/visitAttachmentFiles";
-import { PremiumCard } from "../brand/PremiumCard";
+import { getForegroundLocation } from "../../utils/location";
+import { ClinicCard } from "../brand/ClinicCard";
 import { AttachmentCard } from "./AttachmentCard";
 import { TextNoteModal } from "./TextNoteModal";
+import { VisitPhotoWatermarkPreview } from "./VisitPhotoWatermarkPreview";
+
+type WatermarkContext = {
+  village?: string | null;
+  district?: string | null;
+  land_name?: string | null;
+  farmer_name?: string | null;
+  employeeName?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+};
 
 type Props = {
   visitId: number | null | undefined;
+  watermarkContext?: WatermarkContext;
   /** Load attachments when section mounts / screen focuses */
   autoLoad?: boolean;
   compact?: boolean;
 };
 
-export function VisitEvidenceSection({ visitId, autoLoad = true, compact }: Props) {
+export function VisitEvidenceSection({ visitId, watermarkContext, autoLoad = true, compact }: Props) {
   const { theme } = useTheme();
   const c = theme.colors;
   const {
@@ -45,10 +60,19 @@ export function VisitEvidenceSection({ visitId, autoLoad = true, compact }: Prop
     canManage,
     refresh,
     uploadFile,
+    uploadPhotoPair,
     uploadText,
     remove,
     setError
   } = useVisitAttachments(visitId);
+  const {
+    previewVisible,
+    previewImageUri,
+    previewMeta,
+    openPreview,
+    closePreview,
+    buildAttachment
+  } = useVisitPhotoWithWatermark();
 
   const [textModalVisible, setTextModalVisible] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -85,47 +109,29 @@ export function VisitEvidenceSection({ visitId, autoLoad = true, compact }: Prop
   async function pickImage(source: "camera" | "library") {
     setError("");
     try {
-      if (source === "camera") {
-        const perm = await ImagePicker.requestCameraPermissionsAsync();
-        if (!perm.granted) {
-          Alert.alert("Camera permission", "Allow camera access to take visit photos.");
-          return;
+      const uri = await pickPendingImageUri(source);
+      if (!uri) return;
+      let lat = watermarkContext?.latitude ?? null;
+      let lng = watermarkContext?.longitude ?? null;
+      if (lat == null || lng == null) {
+        try {
+          const loc = await getForegroundLocation();
+          if (loc.granted) {
+            lat = loc.location.coords.latitude;
+            lng = loc.location.coords.longitude;
+          }
+        } catch {
+          // optional GPS
         }
-        const result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ["images"],
-          quality: 0.85,
-          allowsEditing: false
-        });
-        if (result.canceled || !result.assets[0]) return;
-        const asset = result.assets[0];
-        const prepared = await prepareImageForUpload(asset.uri);
-        await uploadFile({
-          uri: prepared.uri,
-          name: prepared.name,
-          mimeType: prepared.mimeType,
-          attachmentType: "image"
-        });
-      } else {
-        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!perm.granted) {
-          Alert.alert("Gallery permission", "Allow photo library access to attach images.");
-          return;
-        }
-        const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ["images"],
-          quality: 0.85,
-          allowsMultipleSelection: false
-        });
-        if (result.canceled || !result.assets[0]) return;
-        const asset = result.assets[0];
-        const prepared = await prepareImageForUpload(asset.uri);
-        await uploadFile({
-          uri: prepared.uri,
-          name: prepared.name,
-          mimeType: prepared.mimeType,
-          attachmentType: "image"
-        });
       }
+      const meta = buildVisitPhotoWatermarkMeta({
+        values: watermarkContext,
+        employeeName: watermarkContext?.employeeName,
+        visitId,
+        latitude: lat,
+        longitude: lng
+      });
+      openPreview(uri, meta);
     } catch (err) {
       if (friendlyPickerCancel(err)) return;
       setError(friendlyUploadError(err));
@@ -133,7 +139,7 @@ export function VisitEvidenceSection({ visitId, autoLoad = true, compact }: Prop
   }
 
   function showPhotoOptions() {
-    Alert.alert("Add photo", "Choose a source", [
+    Alert.alert("Add photo", "GPS watermark preview before upload.", [
       { text: "Camera", onPress: () => void runUpload(() => pickImage("camera")) },
       { text: "Gallery", onPress: () => void runUpload(() => pickImage("library")) },
       { text: "Cancel", style: "cancel" }
@@ -228,16 +234,17 @@ export function VisitEvidenceSection({ visitId, autoLoad = true, compact }: Prop
 
   if (!canManage) {
     return (
-      <PremiumCard elevated tint="soft">
+      <ClinicCard>
         <Text style={[listCardType.meta, { color: c.muted }]}>
           Save the visit online first, then you can add photos, files, and notes as evidence.
         </Text>
-      </PremiumCard>
+      </ClinicCard>
     );
   }
 
   return (
-    <View style={styles.wrap}>
+    <>
+    <ClinicCard style={styles.wrap}>
       <Text style={[styles.sectionTitle, { color: c.muted }]}>Visit evidence / attachments</Text>
 
       <View style={styles.actionsGrid}>
@@ -339,7 +346,46 @@ export function VisitEvidenceSection({ visitId, autoLoad = true, compact }: Prop
           });
         }}
       />
-    </View>
+    </ClinicCard>
+
+    {previewImageUri && previewMeta ? (
+      <VisitPhotoWatermarkPreview
+        visible={previewVisible}
+        imageUri={previewImageUri}
+        meta={previewMeta}
+        onCancel={closePreview}
+        onConfirm={(result) => {
+          void runUpload(async () => {
+            const item = await buildAttachment(result);
+            if (item.originalUri && item.originalName && item.originalMimeType && item.uri && item.name && item.mimeType) {
+              await uploadPhotoPair(
+                {
+                  uri: item.uri,
+                  name: item.name,
+                  mimeType: item.mimeType,
+                  attachmentType: "image"
+                },
+                {
+                  uri: item.originalUri,
+                  name: item.originalName,
+                  mimeType: item.originalMimeType,
+                  attachmentType: "image"
+                }
+              );
+            } else if (item.uri && item.name && item.mimeType) {
+              await uploadFile({
+                uri: item.uri,
+                name: item.name,
+                mimeType: item.mimeType,
+                attachmentType: "image"
+              });
+            }
+            closePreview();
+          });
+        }}
+      />
+    ) : null}
+    </>
   );
 }
 

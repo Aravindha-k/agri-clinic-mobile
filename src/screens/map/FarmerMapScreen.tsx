@@ -9,6 +9,7 @@ import { FieldMapView, type MapCoordinate } from "../../components/map/FieldMapV
 import { MapErrorBoundary } from "../../components/map/MapErrorBoundary";
 import { AppHeader, PrimaryButton } from "../../components/ui";
 import { useMapAreaHeight } from "../../hooks/useMapAreaHeight";
+import { useSecureScreen } from "../../hooks/useSecureScreen";
 import { useMapTabBarBottomPadding } from "../../hooks/useTabBarBottomInset";
 import { FarmersStackParamList } from "../../navigation/types";
 import { useTheme } from "../../theme";
@@ -25,6 +26,7 @@ type Props = NativeStackScreenProps<FarmersStackParamList, "FarmerMap">;
 const FIT_PADDING = { top: 80, right: 60, bottom: MAP_SCREEN_BOTTOM_PADDING, left: 60 };
 
 export function FarmerMapScreen({ navigation, route }: Props) {
+  useSecureScreen();
   const { theme } = useTheme();
   const c = theme.colors;
   const { width } = useWindowDimensions();

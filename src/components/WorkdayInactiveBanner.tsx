@@ -5,11 +5,11 @@ import { useTheme } from "../theme";
 import { space } from "../theme/layout";
 
 export function WorkdayInactiveBanner() {
-  const { workdayInactiveBanner, busy, startDay } = useTracking();
+  const { workdayInactiveBanner, busy, startDay, isActive } = useTracking();
   const { theme } = useTheme();
   const c = theme.colors;
 
-  if (!workdayInactiveBanner) {
+  if (!workdayInactiveBanner || isActive) {
     return null;
   }
 
@@ -34,14 +34,14 @@ export function WorkdayInactiveBanner() {
 const styles = StyleSheet.create({
   wrap: {
     alignItems: "center",
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+    gap: 10,
     marginHorizontal: space.lg,
     marginTop: space.sm,
-    padding: 12
+    paddingHorizontal: 14,
+    paddingVertical: 11
   },
   text: {
     flex: 1,

@@ -20,15 +20,33 @@ export function AppHeader({ title, subtitle, onBack, right, showLogoMark = false
   const insets = useSafeAreaInsetsCompat();
   const { colors } = useDesignSystem();
   const isDark = variant === "dark";
-  const bg = isDark ? colors.offlineBackground : colors.primaryGradientStart;
-  const glow = isDark ? colors.offlineCard : colors.primaryGradientEnd;
+  const light = !isDark;
+  const bg = isDark ? colors.offlineBackground : colors.card;
+  const titleColor = light ? colors.text : "#FFFFFF";
+  const subColor = light ? colors.muted : "rgba(255,255,255,0.86)";
+  const iconColor = light ? colors.primaryDark : "#FFFFFF";
 
   return (
-    <View style={[styles.wrap, { paddingTop: insets.top + 8, backgroundColor: bg, paddingBottom: layout.headerPaddingBottom }]}>
-      <View style={[styles.glow, { backgroundColor: glow }]} />
-      <View style={[styles.leafA, { opacity: isDark ? 0.08 : 0.12 }]}>
-        <Ionicons name="leaf" size={64} color="#FFFFFF" />
-      </View>
+    <View
+      style={[
+        styles.wrap,
+        {
+          paddingTop: insets.top + 8,
+          backgroundColor: bg,
+          paddingBottom: layout.headerPaddingBottom,
+          borderBottomColor: colors.borderSubtle ?? colors.border,
+          borderBottomWidth: light ? StyleSheet.hairlineWidth : 0
+        }
+      ]}
+    >
+      {isDark ? (
+        <>
+          <View style={[styles.glow, { backgroundColor: colors.offlineCard }]} />
+          <View style={[styles.leafA, { opacity: 0.08 }]}>
+            <Ionicons name="leaf" size={64} color="#FFFFFF" />
+          </View>
+        </>
+      ) : null}
       <View style={styles.row}>
         {onBack ? (
           <Pressable
@@ -37,20 +55,23 @@ export function AppHeader({ title, subtitle, onBack, right, showLogoMark = false
             style={({ pressed }) => [styles.back, pressed && { opacity: 0.85 }]}
             accessibilityRole="button"
           >
-            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+            <Ionicons name="chevron-back" size={24} color={iconColor} />
           </Pressable>
         ) : null}
         {showLogoMark ? (
           <View style={styles.logoSlot}>
-            <AppLogo size="xs" variant="onPrimary" />
+            <AppLogo size="sm" bare variant="dark" />
           </View>
         ) : null}
         <View style={styles.titles}>
-          <Text style={[styles.title, large && styles.titleLg, isDark && styles.titleDark]} numberOfLines={1}>
+          <Text
+            style={[styles.title, large && styles.titleLg, { color: titleColor }]}
+            numberOfLines={1}
+          >
             {title}
           </Text>
           {subtitle ? (
-            <Text style={[styles.sub, isDark && styles.subDark]} numberOfLines={1}>
+            <Text style={[styles.sub, { color: subColor }]} numberOfLines={1}>
               {subtitle}
             </Text>
           ) : null}
@@ -77,7 +98,7 @@ const styles = StyleSheet.create({
   back: { padding: 2 },
   logoSlot: { flexShrink: 0 },
   titles: { flex: 1, minWidth: 0 },
-  title: { color: "#FFFFFF", fontSize: 19, fontWeight: "900", letterSpacing: -0.25 },
+  title: { color: "#FFFFFF", fontSize: 20, fontWeight: "800", letterSpacing: -0.2 },
   titleLg: { fontSize: 21 },
   titleDark: { fontSize: 18 },
   sub: { color: "rgba(255,255,255,0.86)", fontSize: 12, lineHeight: 17, marginTop: 2 },

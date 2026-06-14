@@ -1,10 +1,29 @@
 import { SESSION_EXPIRED_MESSAGE } from "../constants/authMessages";
 import { SESSION_REPLACED_CODES, SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
+import { API_BASE_URL } from "../api/config";
 
 const GENERIC_SUBMIT_MESSAGE = "Farmer, crop, and GPS location are required to submit a visit.";
 
 const NETWORK_MESSAGE = "No internet connection. Check your network and try again.";
 const SERVER_MESSAGE = "Our servers are busy right now. Please try again in a moment.";
+
+function isPrivateLanApiUrl(url: string): boolean {
+  return /https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.|localhost|127\.)/i.test(url);
+}
+
+/** Clearer copy when dev app points at a PC on the LAN (Wi‑Fi/mobile data alone is not enough). */
+export function getNetworkMessage(): string {
+  if (__DEV__ && isPrivateLanApiUrl(API_BASE_URL)) {
+    const host = API_BASE_URL.replace(/\/api\/v1\/?$/i, "");
+    return (
+      `Cannot reach your development server (${host}). ` +
+      "Your phone must use the same Wi‑Fi as this PC — mobile data cannot open a 192.168 address. " +
+      "Keep Django running: python manage.py runserver 0.0.0.0:8000. " +
+      "If it still fails, allow port 8000 in Windows Firewall or set EXPO_PUBLIC_USE_PRODUCTION_API=1 in .env.local to use the cloud API."
+    );
+  }
+  return NETWORK_MESSAGE;
+}
 
 export class ApiRequestError extends Error {
   code?: string;
@@ -33,7 +52,16 @@ export function isDeviceSessionConflictPayload(data: unknown, status: number): b
   return status === 409 && code != null && SESSION_REPLACED_CODES.has(code);
 }
 
+export function isLanOnlyError(error: unknown): boolean {
+  if (error instanceof ApiRequestError && error.code === "LAN_ONLY") return true;
+  if (error && typeof error === "object" && "code" in error) {
+    return (error as { code?: string }).code === "LAN_ONLY";
+  }
+  return false;
+}
+
 export function isNetworkError(error: unknown): boolean {
+  if (isLanOnlyError(error)) return true;
   if (error instanceof TypeError) return true;
   if (error instanceof ApiRequestError && error.code === "NETWORK_ERROR") return true;
   if (error instanceof Error) {
@@ -61,7 +89,7 @@ export function isServerError(error: unknown): boolean {
   return false;
 }
 
-export function networkError(message = NETWORK_MESSAGE) {
+export function networkError(message = getNetworkMessage()) {
   return new ApiRequestError(message, { code: "NETWORK_ERROR" });
 }
 

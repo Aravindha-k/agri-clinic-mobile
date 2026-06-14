@@ -7,7 +7,7 @@ export type AuthStackParamList = {
 
 export type VisitsStackParamList = {
   VisitsList: undefined;
-  VisitDetail: { id: number };
+  VisitDetail: { id: number; fromSubmit?: boolean };
 };
 
 export type FarmersStackParamList = {
@@ -17,10 +17,39 @@ export type FarmersStackParamList = {
 };
 
 export type VisitFlowParamList = {
-  NewVisitFarmer: { prefill?: VisitFormPrefill; fresh?: boolean } | undefined;
-  NewVisitDetails: undefined;
-  VisitSummary: undefined;
-  VisitSuccess: { visitId: number; queued: boolean; queueId?: string; evidenceWarning?: string };
+  NewVisitFarmer: { prefill?: VisitFormPrefill; fresh?: boolean; fastRevisit?: boolean } | undefined;
+  VisitSuccess: {
+    visitId: number;
+    queued: boolean;
+    queueId?: string;
+    evidenceWarning?: string;
+    farmerId?: string;
+    farmerName?: string;
+    village?: string;
+    savedCrop?: string;
+    savedObservation?: string;
+    savedProblemSeen?: string;
+    savedRecommendation?: string;
+    savedActionTaken?: string;
+    savedFollowUpDate?: string;
+    submittedAt?: string;
+    gpsConfirmed?: boolean;
+  };
+};
+
+export type ProfileStackParamList = {
+  ProfileMain: undefined;
+  TrackingWorkspace: undefined;
+  ProblemsCatalog: undefined;
+  Settings: undefined;
+  Help: undefined;
+};
+
+/** @deprecated Use ProfileStackParamList — kept for deep-link compatibility */
+export type MoreStackParamList = ProfileStackParamList & {
+  MoreMenu?: undefined;
+  Profile?: undefined;
+  Visits?: NavigatorScreenParams<VisitsStackParamList>;
 };
 
 export type MainTabParamList = {
@@ -28,7 +57,7 @@ export type MainTabParamList = {
   Farmers: NavigatorScreenParams<FarmersStackParamList>;
   StartVisit: undefined;
   Visits: NavigatorScreenParams<VisitsStackParamList>;
-  Profile: undefined;
+  Profile: NavigatorScreenParams<ProfileStackParamList>;
 };
 
 export type FarmerMapParams = {

@@ -1,6 +1,6 @@
 import { StyleSheet, Text, ViewStyle } from "react-native";
 import { useDesignSystem } from "../../hooks/useDesignSystem";
-import { PremiumCard } from "../brand/PremiumCard";
+import { ClinicCard } from "../brand/ClinicCard";
 
 type Props = {
   label: string;
@@ -12,10 +12,10 @@ export function StatWidget({ label, value, style }: Props) {
   const { colors, type } = useDesignSystem();
 
   return (
-    <PremiumCard elevated compact style={StyleSheet.flatten([styles.card, style])}>
-      <Text style={[type.metric, { color: colors.primaryDark }]}>{value}</Text>
-      <Text style={[type.caption, { marginTop: 2 }]}>{label}</Text>
-    </PremiumCard>
+    <ClinicCard compact accent style={StyleSheet.flatten([styles.card, style])}>
+      <Text style={[type.metric, { color: colors.text, fontSize: 28 }]}>{value}</Text>
+      <Text style={[type.caption, { color: colors.muted, marginTop: 4 }]}>{label}</Text>
+    </ClinicCard>
   );
 }
 

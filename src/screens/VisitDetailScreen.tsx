@@ -90,20 +90,11 @@ export function VisitDetailScreen({ route, navigation }: Props) {
         </AppCard>
 
         <AppCard elevated>
-          <SectionHeader title="Issue & advice" />
-          <AdviceRow label="Crop health" value={visit.crop_health} />
-          <AdviceRow label="Weeds" value={visit.weed_condition} />
-          <AdviceRow label="Notes" value={visit.notes} />
-          <AdviceRow label="Recommendation" value={visit.general_advice} />
-          <AdviceRow label="Fertilizer advice" value={visit.fertilizer_advice} />
-          <AdviceRow label="Pesticide advice" value={visit.pesticide_advice} />
-          <AdviceRow label="Irrigation advice" value={visit.irrigation_advice} />
-          <Text style={[shared.label, styles.flagsLabel]}>Flags</Text>
-          <Text style={shared.value}>
-            {[visit.pest_issue ? "Pest issue" : null, visit.disease_issue ? "Disease issue" : null, visit.follow_up_required ? "Follow-up" : null]
-              .filter(Boolean)
-              .join(" · ") || "None recorded"}
-          </Text>
+          <SectionHeader title="Field record" />
+          <AdviceRow label="Field notes" value={visit.field_notes || visit.general_advice} emptyLabel="Not added by employee" />
+          <AdviceRow label="Problem Seen" value={visit.problem_seen} emptyLabel="Not added by employee" />
+          <AdviceRow label="Action Taken" value={visit.action_taken} emptyLabel="Not added by employee" />
+          <AdviceRow label="Follow-up Date" value={visit.follow_up_date || visit.next_visit_date} emptyLabel="Not added by employee" />
         </AppCard>
 
         <AppCard elevated>
@@ -118,12 +109,20 @@ export function VisitDetailScreen({ route, navigation }: Props) {
   );
 }
 
-function AdviceRow({ label, value }: { label: string; value?: string | null }) {
-  if (!value?.trim()) return null;
+function AdviceRow({
+  label,
+  value,
+  emptyLabel = "Not added by employee"
+}: {
+  label: string;
+  value?: string | null;
+  emptyLabel?: string;
+}) {
+  const text = value?.trim() ? value.trim() : emptyLabel;
   return (
     <View style={styles.adviceBlock}>
       <Text style={shared.label}>{label}</Text>
-      <Text style={shared.value}>{value}</Text>
+      <Text style={[shared.value, !value?.trim() && { color: colors.muted }]}>{text}</Text>
     </View>
   );
 }

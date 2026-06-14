@@ -1,16 +1,43 @@
 import { apiClient } from "./client";
-import { saveDeviceSessionId, saveSessionMetadata } from "../storage/deviceSessionStorage";
+import {
+  DEVICE_SESSION_STORAGE_ERROR,
+  saveDeviceSessionId,
+  saveSessionMetadata,
+  verifyDeviceSessionSaved
+} from "../storage/deviceSessionStorage";
 import { getOrCreateDeviceId } from "../storage/deviceIdStorage";
 import { getRefreshToken, StoredTokens } from "../storage/tokenStorage";
 import { getDeviceInfo } from "../utils/deviceInfo";
-import { unwrapSuccessEnvelope } from "../utils/apiUnwrap";
+import { normalizeLoginResponse } from "../utils/parseLoginResponse";
 
-function extractDeviceSessionId(data: unknown): string | null {
-  const unwrapped = unwrapSuccessEnvelope<Record<string, unknown>>(data) ?? data;
-  if (!unwrapped || typeof unwrapped !== "object") return null;
-  const row = unwrapped as Record<string, unknown>;
-  const id = row.device_session_id ?? row.deviceSessionId;
-  return typeof id === "string" && id.trim() ? id.trim() : null;
+const MOBILE_AUTH_LOGIN = "mobile/auth/login/";
+
+function devLogLogin(message: string) {
+  if (__DEV__) {
+    console.log(`[Auth] ${message}`);
+  }
+}
+
+async function persistLoginSession(normalized: ReturnType<typeof normalizeLoginResponse>, deviceId: string) {
+  devLogLogin(`device_session_id present=${Boolean(normalized.deviceSessionId)}`);
+  try {
+    await saveDeviceSessionId(normalized.deviceSessionId);
+    await saveSessionMetadata({
+      sessionVersion: normalized.sessionVersion,
+      activeDeviceId: normalized.activeDeviceId ?? deviceId
+    });
+    const verified = await verifyDeviceSessionSaved(normalized.deviceSessionId);
+    devLogLogin(`device_session saved=${verified}`);
+    if (!verified) {
+      throw new Error(DEVICE_SESSION_STORAGE_ERROR);
+    }
+  } catch (err) {
+    devLogLogin(`device_session saved=false (${err instanceof Error ? err.message : "unknown"})`);
+    if (err instanceof Error && err.message === DEVICE_SESSION_STORAGE_ERROR) {
+      throw err;
+    }
+    throw new Error(DEVICE_SESSION_STORAGE_ERROR);
+  }
 }
 
 export async function loginRequest(identifier: string, password: string): Promise<StoredTokens> {
@@ -22,34 +49,18 @@ export async function loginRequest(identifier: string, password: string): Promis
     ? { employee_id: trimmed, password, device_id: deviceId, ...deviceInfo }
     : { username: trimmed, password, device_id: deviceId, ...deviceInfo };
 
-  const data = await apiClient<Record<string, string>>("auth/login/", {
+  const raw = await apiClient<unknown>(MOBILE_AUTH_LOGIN, {
     method: "POST",
     auth: false,
     body: JSON.stringify(loginBody)
   });
 
-  const access = data.access || data.access_token || data.token;
-  const refresh = data.refresh || data.refresh_token;
-  if (!access || !refresh) {
-    throw new Error("Login response did not include access and refresh tokens.");
-  }
+  devLogLogin("login success received");
 
-  const deviceSessionId = extractDeviceSessionId(data);
-  if (deviceSessionId) {
-    await saveDeviceSessionId(deviceSessionId);
-  }
+  const normalized = normalizeLoginResponse(raw);
+  await persistLoginSession(normalized, deviceId);
 
-  const row = (unwrapSuccessEnvelope<Record<string, unknown>>(data) ?? data) as Record<string, unknown>;
-  await saveSessionMetadata({
-    sessionVersion: (row.session_version ?? row.sessionVersion) as string | number | null | undefined,
-    activeDeviceId: (typeof row.active_device_id === "string"
-      ? row.active_device_id
-      : typeof row.device_id === "string"
-        ? row.device_id
-        : deviceId) as string
-  });
-
-  return { access, refresh };
+  return { access: normalized.access, refresh: normalized.refresh };
 }
 
 export async function logoutRequest() {

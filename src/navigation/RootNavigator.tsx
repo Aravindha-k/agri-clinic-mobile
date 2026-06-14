@@ -1,31 +1,41 @@
-import { useEffect, useState } from "react";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { useCallback, useState } from "react";
 import { View } from "react-native";
-import { AppStartupIntro } from "../components/auth/AppStartupIntro";
+import { AnimatedSplashScreen } from "../components/brand/AnimatedSplashScreen";
+import { TabBarIcon } from "../components/ui/TabBarIcon";
+import { VisitFabTabButton } from "../components/ui/VisitFabTabButton";
+import { useAppSplash } from "../hooks/useAppSplash";
+import { useSafeAreaInsetsCompat } from "../hooks/useSafeAreaInsetsCompat";
+import { useI18n } from "../i18n/I18nContext";
 import { useAuth } from "../storage/AuthContext";
-import { getAccessToken } from "../storage/tokenStorage";
 import { useTheme } from "../theme";
-import { BootstrapScreen } from "../screens/BootstrapScreen";
+import { DS, TAB_BAR } from "../theme/globalStyles";
+import { useSyncStore } from "../../mobile/lib/store/syncStore";
+import { StartupScreen } from "../screens/StartupScreen";
 import { AuthStartScreen } from "../screens/AuthStartScreen";
-import { HomeScreen } from "../screens/HomeScreen";
-import { VisitsListScreen } from "../screens/VisitsListScreen";
-import { FarmersListScreen } from "../screens/FarmersListScreen";
-import { FarmerDetailScreen } from "../screens/FarmerDetailScreen";
-import { ProfileScreen } from "../screens/ProfileScreen";
+import HomeTabScreen from "../../mobile/app/(tabs)/index";
+import VisitsTabScreen from "../../mobile/app/(tabs)/visits";
+import FarmersTabScreen from "../../mobile/app/(tabs)/farmers";
+import FarmerProfileScreen from "../../mobile/app/farmer/[id]";
+import ProfileTabScreen from "../../mobile/app/(tabs)/profile";
+import ProblemsCatalogScreen from "../../mobile/app/problems";
 import { FarmerMapScreen } from "../screens/map/FarmerMapScreen";
 import { LiveMapScreen } from "../screens/map/LiveMapScreen";
 import { TravelHistoryScreen } from "../screens/map/TravelHistoryScreen";
 import { OfflineSyncScreen } from "../screens/OfflineSyncScreen";
-import { NotificationsScreen } from "../screens/NotificationsScreen";
-import { VisitDetailTimelineScreen } from "../screens/visit/VisitDetailTimelineScreen";
-import { BottomNav } from "../components/ui";
+import NotificationsScreen from "../../mobile/app/notifications";
+import { SettingsScreen } from "../screens/SettingsScreen";
+import { HelpScreen } from "../screens/HelpScreen";
+import TrackingWorkspaceScreen from "../../mobile/app/tracking";
+import VisitDetailScreen from "../../mobile/app/visit/[id]";
 import { VisitFlowNavigator } from "./VisitFlowNavigator";
 import {
   AuthStackParamList,
   FarmersStackParamList,
   MainTabParamList,
+  ProfileStackParamList,
   RootStackParamList,
   VisitsStackParamList
 } from "./types";
@@ -35,6 +45,7 @@ const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const VisitsStack = createNativeStackNavigator<VisitsStackParamList>();
 const FarmersStack = createNativeStackNavigator<FarmersStackParamList>();
+const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
 
 function AuthNavigator() {
   return (
@@ -53,8 +64,8 @@ function VisitsNavigator() {
         contentStyle: { backgroundColor: theme.colors.background }
       }}
     >
-      <VisitsStack.Screen name="VisitsList" component={VisitsListScreen} />
-      <VisitsStack.Screen name="VisitDetail" component={VisitDetailTimelineScreen} />
+      <VisitsStack.Screen name="VisitsList" component={VisitsTabScreen} />
+      <VisitsStack.Screen name="VisitDetail" component={VisitDetailScreen} />
     </VisitsStack.Navigator>
   );
 }
@@ -71,10 +82,28 @@ function FarmersNavigator() {
         contentStyle: { backgroundColor: theme.colors.background }
       }}
     >
-      <FarmersStack.Screen name="FarmersList" component={FarmersListScreen} options={{ headerShown: false }} />
-      <FarmersStack.Screen name="FarmerDetail" component={FarmerDetailScreen} options={{ headerShown: false }} />
+      <FarmersStack.Screen name="FarmersList" component={FarmersTabScreen} options={{ headerShown: false }} />
+      <FarmersStack.Screen name="FarmerDetail" component={FarmerProfileScreen} options={{ headerShown: false }} />
       <FarmersStack.Screen name="FarmerMap" component={FarmerMapScreen} options={{ headerShown: false }} />
     </FarmersStack.Navigator>
+  );
+}
+
+function ProfileNavigator() {
+  const { theme } = useTheme();
+  return (
+    <ProfileStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: theme.colors.background }
+      }}
+    >
+      <ProfileStack.Screen name="ProfileMain" component={ProfileTabScreen} />
+      <ProfileStack.Screen name="TrackingWorkspace" component={TrackingWorkspaceScreen} />
+      <ProfileStack.Screen name="ProblemsCatalog" component={ProblemsCatalogScreen} />
+      <ProfileStack.Screen name="Settings" component={SettingsScreen} />
+      <ProfileStack.Screen name="Help" component={HelpScreen} />
+    </ProfileStack.Navigator>
   );
 }
 
@@ -84,34 +113,96 @@ function StartVisitPlaceholder() {
 
 function MainTabs() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsetsCompat();
+  const { t } = useI18n();
+  const pendingVisitsCount = useSyncStore((state) => state.pendingVisitsCount);
+  const safeBottom = Math.max(insets.bottom, 0);
 
   return (
     <Tab.Navigator
-      tabBar={(props) => <BottomNav {...props} />}
       sceneContainerStyle={{ flex: 1, backgroundColor: theme.colors.background }}
-      screenOptions={{
+      screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarHideOnKeyboard: true
-      }}
+        tabBarHideOnKeyboard: true,
+        tabBarActiveTintColor: TAB_BAR.activeTintColor,
+        tabBarInactiveTintColor: TAB_BAR.inactiveTintColor,
+        tabBarLabelStyle: TAB_BAR.labelStyle,
+        tabBarStyle: {
+          backgroundColor: TAB_BAR.backgroundColor,
+          borderTopWidth: TAB_BAR.borderTopWidth,
+          borderTopColor: TAB_BAR.borderTopColor,
+          height: TAB_BAR.height + safeBottom,
+          paddingBottom: TAB_BAR.paddingBottom + safeBottom,
+          paddingTop: TAB_BAR.paddingTop,
+          elevation: 0,
+          shadowOpacity: 0
+        },
+        tabBarIcon: ({ focused, color }) => (
+          <TabBarIcon routeName={route.name} focused={focused} color={color} />
+        )
+      })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: "Home" }} />
-      <Tab.Screen name="Farmers" component={FarmersNavigator} options={{ tabBarLabel: "Farmers" }} />
-      <Tab.Screen name="StartVisit" component={StartVisitPlaceholder} options={{ tabBarLabel: "" }} />
-      <Tab.Screen name="Visits" component={VisitsNavigator} options={{ tabBarLabel: "Visits" }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: "Profile" }} />
+      <Tab.Screen
+        name="Home"
+        component={HomeTabScreen}
+        options={{ tabBarLabel: t("tabs.home") }}
+      />
+      <Tab.Screen
+        name="Farmers"
+        component={FarmersNavigator}
+        options={{ tabBarLabel: t("tabs.farmers") }}
+      />
+      <Tab.Screen
+        name="StartVisit"
+        component={StartVisitPlaceholder}
+        options={{
+          tabBarLabel: "",
+          tabBarButton: (props) => <VisitFabTabButton {...props} />
+        }}
+      />
+      <Tab.Screen
+        name="Visits"
+        component={VisitsNavigator}
+        options={{
+          tabBarLabel: t("tabs.visits"),
+          tabBarBadge:
+            pendingVisitsCount > 0 ? (pendingVisitsCount > 99 ? "99+" : pendingVisitsCount) : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: DS.danger,
+            fontSize: 9,
+            fontWeight: "700",
+            lineHeight: 14
+          }
+        }}
+      />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileNavigator}
+        options={{ tabBarLabel: t("tabs.profile") }}
+      />
     </Tab.Navigator>
   );
 }
 
 function AppRoutes() {
   const { isReady, isAuthenticated, authLoading, bootstrapIssue } = useAuth();
+  const { hideNativeSplash } = useAppSplash(true);
+  const [introDone, setIntroDone] = useState(false);
 
-  const showBootstrap = !isReady || authLoading || bootstrapIssue !== "none";
+  const handleIntroFinish = useCallback(() => setIntroDone(true), []);
+  const authSettled = isReady && !authLoading;
+  const showIntro = !introDone || !authSettled;
 
-  if (showBootstrap) {
+  if (showIntro) {
+    return (
+      <AnimatedSplashScreen onFinish={handleIntroFinish} onReady={hideNativeSplash} />
+    );
+  }
+
+  if (bootstrapIssue !== "none") {
     return (
       <RootStack.Navigator screenOptions={{ headerShown: false }}>
-        <RootStack.Screen name="Splash" component={BootstrapScreen} />
+        <RootStack.Screen name="Splash" component={StartupScreen} />
       </RootStack.Navigator>
     );
   }
@@ -151,32 +242,6 @@ function AppRoutes() {
 
 export function RootNavigator() {
   const { theme, isDark } = useTheme();
-  const { isReady, isAuthenticated, loginNotice } = useAuth();
-  const [introComplete, setIntroComplete] = useState(false);
-  const [hadStoredToken, setHadStoredToken] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    void getAccessToken().then((token) => {
-      setHadStoredToken(Boolean(token));
-      if (token) {
-        setIntroComplete(true);
-      }
-    });
-  }, []);
-
-  useEffect(() => {
-    if (loginNotice) {
-      setIntroComplete(true);
-    }
-  }, [loginNotice]);
-
-  useEffect(() => {
-    if (isReady && isAuthenticated) {
-      setIntroComplete(true);
-    }
-  }, [isAuthenticated, isReady]);
-
-  const showIntro = hadStoredToken === false && !introComplete;
 
   const navTheme = {
     ...DefaultTheme,
@@ -194,7 +259,6 @@ export function RootNavigator() {
   return (
     <NavigationContainer theme={navTheme}>
       <AppRoutes />
-      {showIntro ? <AppStartupIntro onComplete={() => setIntroComplete(true)} /> : null}
     </NavigationContainer>
   );
 }

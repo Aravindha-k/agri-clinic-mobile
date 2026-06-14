@@ -1,33 +1,353 @@
-import { useEffect, useState } from "react";
-import { Ionicons } from "@expo/vector-icons";
-import { StatusBar } from "expo-status-bar";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
+  View,
+  Text,
+  TextInput,
   Image,
+  TouchableOpacity,
+  Animated,
+  Easing,
+  SafeAreaView,
+  StatusBar,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
-  ScrollView,
+  Dimensions,
   StyleSheet,
-  Text,
-  View
+  ActivityIndicator,
+  ScrollView
 } from "react-native";
-import { BRAND, LOGO_IMAGE } from "../brand/constants";
-import { AuthScreenLayout } from "../components/auth/AuthScreenLayout";
-import { GlassLoginField } from "../components/login/GlassLoginField";
+import Svg, { Circle, Path } from "react-native-svg";
+import { Ionicons } from "@expo/vector-icons";
+import { BRAND, LOGO_IMAGE } from "../config/brand";
+import { useSecureScreen } from "../hooks/useSecureScreen";
 import { useAuth } from "../storage/AuthContext";
-import { AUTH_THEME } from "../theme/authTheme";
-import { useSafeAreaInsetsCompat } from "../hooks/useSafeAreaInsetsCompat";
-import { greetingForHour, LOGIN_WELCOME_SUBTITLE, LOGIN_WELCOME_TITLE } from "../utils/greeting";
+import { LOGO_SIZES } from "../brand/logoSizing";
+import { FONTS } from "../theme/fonts";
+import { ApiRequestError, getNetworkMessage, isNetworkError } from "../utils/apiError";
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const { height: SH } = Dimensions.get("window");
+
+const DARK = "#0d1f14";
+const ACCENT = "#4caf82";
+const ACCENT_DARK = "#16a34a";
+const TOP_H = Math.round(SH * 0.38);
+const RING_C = 452;
+const LOGO_SIZE = LOGO_SIZES.loginPlate;
+const LOGO_IMG = LOGO_SIZES.loginMark;
+
+const SERVICE_CARDS = [
+  { icon: "leaf-outline" as const, lines: ["Field", "Inspection"] },
+  { icon: "water-outline" as const, lines: ["Crop", "Solutions"] },
+  { icon: "nutrition-outline" as const, lines: ["Seeds &", "Fertilizers"] }
+];
+
+const STATS = [
+  { value: "100+", label: "Farmers" },
+  { value: "6+", label: "Services" },
+  { value: "GPS", label: "Tracking" }
+];
+
+function ringLoop(
+  scale: Animated.Value,
+  opacity: Animated.Value,
+  toScale: number,
+  toOpacity: number,
+  baseOpacity: number,
+  dur: number,
+  delay: number
+) {
+  return Animated.loop(
+    Animated.sequence([
+      Animated.delay(delay),
+      Animated.parallel([
+        Animated.timing(scale, {
+          toValue: toScale,
+          duration: dur,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true
+        }),
+        Animated.timing(opacity, {
+          toValue: toOpacity,
+          duration: dur,
+          useNativeDriver: true
+        })
+      ]),
+      Animated.parallel([
+        Animated.timing(scale, {
+          toValue: 1,
+          duration: dur,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true
+        }),
+        Animated.timing(opacity, {
+          toValue: baseOpacity,
+          duration: dur,
+          useNativeDriver: true
+        })
+      ])
+    ])
+  );
+}
+
+function dotLoop(dot: Animated.Value, delay: number) {
+  return Animated.loop(
+    Animated.sequence([
+      Animated.delay(delay),
+      Animated.timing(dot, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.timing(dot, { toValue: 0.2, duration: 500, useNativeDriver: true })
+    ])
+  );
+}
+
+function floatLoop(val: Animated.Value, dur: number, delay: number) {
+  return Animated.loop(
+    Animated.sequence([
+      Animated.delay(delay),
+      Animated.timing(val, {
+        toValue: -7,
+        duration: dur,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true
+      }),
+      Animated.timing(val, {
+        toValue: 0,
+        duration: dur,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true
+      })
+    ])
+  );
+}
+
+function LeafIcon({ size, style }: { size: number; style?: object }) {
+  return (
+    <View style={style}>
+      <Svg width={size} height={size} viewBox="0 0 24 24">
+        <Path
+          d="M12 2C7.5 8.5 4.5 12 12 22C19.5 12 16.5 8.5 12 2Z"
+          fill={ACCENT}
+          opacity={0.055}
+        />
+      </Svg>
+    </View>
+  );
+}
 
 export function LoginScreen() {
+  useSecureScreen();
   const { signIn, loginNotice, clearLoginNotice } = useAuth();
-  const insets = useSafeAreaInsetsCompat();
-  const [username, setUsername] = useState("");
+
+  const rotate = useRef(new Animated.Value(0)).current;
+  const r1s = useRef(new Animated.Value(1)).current;
+  const r1o = useRef(new Animated.Value(0.12)).current;
+  const r2s = useRef(new Animated.Value(1)).current;
+  const r2o = useRef(new Animated.Value(0.07)).current;
+  const r3s = useRef(new Animated.Value(1)).current;
+  const r3o = useRef(new Animated.Value(0.04)).current;
+  const d1 = useRef(new Animated.Value(0.2)).current;
+  const d2 = useRef(new Animated.Value(0.2)).current;
+  const d3 = useRef(new Animated.Value(0.2)).current;
+  const cardY = useRef(new Animated.Value(70)).current;
+  const cardAlpha = useRef(new Animated.Value(0)).current;
+  const authAlpha = useRef(new Animated.Value(0)).current;
+  const tag1Y = useRef(new Animated.Value(0)).current;
+  const tag2Y = useRef(new Animated.Value(0)).current;
+  const tag3Y = useRef(new Animated.Value(0)).current;
+  const circleOpacity = useRef(new Animated.Value(0)).current;
+  const logoScale = useRef(new Animated.Value(0)).current;
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+
+  const rotLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+  const logoPulseRef = useRef<Animated.CompositeAnimation | null>(null);
+  const ringRefs = useRef<Animated.CompositeAnimation[]>([]);
+  const dotRefs = useRef<Animated.CompositeAnimation[]>([]);
+  const floatRefs = useRef<Animated.CompositeAnimation[]>([]);
+
+  const [empId, setEmpId] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loginError, setLoginError] = useState("");
+
+  const startLogoIdlePulse = useCallback(() => {
+    logoPulseRef.current?.stop();
+    logoScale.setValue(1);
+    logoPulseRef.current = Animated.loop(
+      Animated.sequence([
+        Animated.timing(logoScale, {
+          toValue: 1.06,
+          duration: 1500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true
+        }),
+        Animated.timing(logoScale, {
+          toValue: 1,
+          duration: 1500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true
+        })
+      ])
+    );
+    logoPulseRef.current.start();
+  }, [logoScale]);
+
+  const speedUpAnimations = useCallback(() => {
+    rotLoopRef.current?.stop();
+    rotate.setValue(0);
+    rotLoopRef.current = Animated.loop(
+      Animated.timing(rotate, {
+        toValue: 1,
+        duration: 900,
+        easing: Easing.linear,
+        useNativeDriver: true
+      })
+    );
+    rotLoopRef.current.start();
+
+    logoPulseRef.current?.stop();
+    logoPulseRef.current = Animated.loop(
+      Animated.sequence([
+        Animated.timing(logoScale, { toValue: 1.1, duration: 350, useNativeDriver: true }),
+        Animated.timing(logoScale, { toValue: 0.96, duration: 350, useNativeDriver: true })
+      ])
+    );
+    logoPulseRef.current.start();
+
+    Animated.timing(authAlpha, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+  }, [authAlpha, logoScale, rotate]);
+
+  const slowDownAnimations = useCallback(() => {
+    rotLoopRef.current?.stop();
+    rotate.setValue(0);
+    rotLoopRef.current = Animated.loop(
+      Animated.timing(rotate, {
+        toValue: 1,
+        duration: 8000,
+        easing: Easing.linear,
+        useNativeDriver: true
+      })
+    );
+    rotLoopRef.current.start();
+    startLogoIdlePulse();
+    authAlpha.setValue(0);
+  }, [authAlpha, rotate, startLogoIdlePulse]);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(cardY, {
+        toValue: 0,
+        duration: 650,
+        delay: 200,
+        easing: Easing.out(Easing.back(1.3)),
+        useNativeDriver: true
+      }),
+      Animated.timing(cardAlpha, {
+        toValue: 1,
+        duration: 500,
+        delay: 200,
+        useNativeDriver: true
+      })
+    ]).start();
+
+    Animated.parallel([
+      Animated.timing(circleOpacity, {
+        toValue: 1,
+        duration: 300,
+        delay: 80,
+        useNativeDriver: true
+      }),
+      Animated.timing(logoOpacity, {
+        toValue: 1,
+        duration: 500,
+        delay: 180,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true
+      })
+    ]).start();
+
+    Animated.spring(logoScale, {
+      toValue: 1,
+      tension: 55,
+      friction: 6,
+      delay: 180,
+      useNativeDriver: true
+    }).start(({ finished }) => {
+      if (finished) startLogoIdlePulse();
+    });
+
+    rotate.setValue(0);
+    rotLoopRef.current = Animated.loop(
+      Animated.timing(rotate, {
+        toValue: 1,
+        duration: 8000,
+        easing: Easing.linear,
+        useNativeDriver: true
+      })
+    );
+    rotLoopRef.current.start();
+
+    ringRefs.current = [
+      ringLoop(r1s, r1o, 1.08, 0.32, 0.12, 1500, 0),
+      ringLoop(r2s, r2o, 1.13, 0.2, 0.07, 1750, 600),
+      ringLoop(r3s, r3o, 1.18, 0.12, 0.04, 2000, 1200)
+    ];
+    ringRefs.current.forEach((anim) => anim.start());
+
+    dotRefs.current = [dotLoop(d1, 0), dotLoop(d2, 250), dotLoop(d3, 500)];
+    dotRefs.current.forEach((anim) => anim.start());
+
+    floatRefs.current = [
+      floatLoop(tag1Y, 1400, 0),
+      floatLoop(tag2Y, 1600, 400),
+      floatLoop(tag3Y, 1300, 800)
+    ];
+    floatRefs.current.forEach((anim) => anim.start());
+
+    return () => {
+      rotLoopRef.current?.stop();
+      logoPulseRef.current?.stop();
+      ringRefs.current.forEach((anim) => anim.stop());
+      dotRefs.current.forEach((anim) => anim.stop());
+      floatRefs.current.forEach((anim) => anim.stop());
+      rotate.stopAnimation();
+      logoScale.stopAnimation();
+      logoOpacity.stopAnimation();
+      circleOpacity.stopAnimation();
+      r1s.stopAnimation();
+      r1o.stopAnimation();
+      r2s.stopAnimation();
+      r2o.stopAnimation();
+      r3s.stopAnimation();
+      r3o.stopAnimation();
+      d1.stopAnimation();
+      d2.stopAnimation();
+      d3.stopAnimation();
+      tag1Y.stopAnimation();
+      tag2Y.stopAnimation();
+      tag3Y.stopAnimation();
+    };
+  }, [
+    cardAlpha,
+    cardY,
+    circleOpacity,
+    d1,
+    d2,
+    d3,
+    logoOpacity,
+    logoScale,
+    r1o,
+    r1s,
+    r2o,
+    r2s,
+    r3o,
+    r3s,
+    rotate,
+    startLogoIdlePulse,
+    tag1Y,
+    tag2Y,
+    tag3Y
+  ]);
 
   useEffect(() => {
     if (loginNotice) {
@@ -37,251 +357,555 @@ export function LoginScreen() {
   }, [clearLoginNotice, loginNotice]);
 
   async function handleLogin() {
-    const user = username.trim();
-    if (!user || !password) {
+    const user = empId.trim();
+    if (!user || !password.trim()) {
       setLoginError("Enter username and password.");
       return;
     }
+
     setLoading(true);
     setLoginError("");
+    speedUpAnimations();
+
     try {
       await signIn(user, password);
     } catch (error) {
-      setLoginError(error instanceof Error ? error.message : "Please check your credentials.");
+      slowDownAnimations();
+      if (error instanceof ApiRequestError && error.code === "INVALID_CREDENTIALS") {
+        setLoginError(error.message || "Please check your credentials.");
+      } else if (isNetworkError(error)) {
+        setLoginError(getNetworkMessage());
+      } else {
+        setLoginError(error instanceof Error ? error.message : "Please check your credentials.");
+      }
     } finally {
       setLoading(false);
     }
   }
 
-  const canSubmit = Boolean(username.trim() && password) && !loading;
+  const spin = rotate.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
+  const tagFloats = [tag1Y, tag2Y, tag3Y];
 
   return (
-    <View style={styles.root}>
-      <StatusBar style="light" />
-      <AuthScreenLayout variant="brand" contentStyle={styles.layout}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
-          style={styles.flex}
-        >
-          <ScrollView
-            contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 16) }]}
-            keyboardShouldPersistTaps="always"
-            keyboardDismissMode="on-drag"
-            bounces={false}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.heroBlock}>
-              <View style={styles.logoPlate}>
-                {LOGO_IMAGE ? (
-                  <Image source={LOGO_IMAGE} style={styles.logo} resizeMode="contain" />
-                ) : (
-                  <Ionicons name="leaf" size={32} color={AUTH_THEME.neonMid} />
-                )}
-              </View>
-              <Text style={styles.brandName}>{BRAND.appName}</Text>
-              <Text style={styles.timeGreeting}>{greetingForHour()}</Text>
-              <Text style={styles.welcome}>{LOGIN_WELCOME_TITLE}</Text>
-              <Text style={styles.subline}>{LOGIN_WELCOME_SUBTITLE}</Text>
-            </View>
+    <KeyboardAvoidingView
+      style={styles.root}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <StatusBar barStyle="light-content" backgroundColor={DARK} />
 
-            <View style={styles.card}>
-              {loginError ? (
-                <View style={styles.errorBox}>
-                  <Ionicons name="alert-circle" size={18} color={AUTH_THEME.danger} />
-                  <Text style={styles.errorText}>{loginError}</Text>
-                </View>
-              ) : null}
+      {/* ── DARK TOP ZONE ── */}
+      <View style={[styles.topZone, { height: TOP_H }]}>
+        <LeafIcon size={52} style={styles.leaf1} />
+        <LeafIcon size={64} style={styles.leaf2} />
+        <LeafIcon size={44} style={styles.leaf3} />
 
-              <GlassLoginField
-                icon="person-outline"
-                placeholder="Employee ID or username"
-                value={username}
-                onChangeText={(t) => {
-                  setUsername(t);
-                  if (loginError) setLoginError("");
-                }}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!loading}
-                returnKeyType="next"
+        <View style={styles.logoStack}>
+          <Animated.View
+            style={[
+              styles.pulseRing,
+              { width: 200, height: 200, borderRadius: 100, opacity: r3o, transform: [{ scale: r3s }] }
+            ]}
+          />
+          <Animated.View
+            style={[
+              styles.pulseRing,
+              { width: 174, height: 174, borderRadius: 87, opacity: r2o, transform: [{ scale: r2s }] }
+            ]}
+          />
+          <Animated.View
+            style={[
+              styles.pulseRing,
+              { width: 148, height: 148, borderRadius: 74, opacity: r1o, transform: [{ scale: r1s }] }
+            ]}
+          />
+
+          <Animated.View style={[styles.arcWrap, { transform: [{ rotate: spin }] }]}>
+            <Svg width={166} height={166}>
+              <Circle cx={83} cy={83} r={80} stroke="rgba(255,255,255,0.08)" strokeWidth={1} fill="none" />
+              <AnimatedCircle
+                cx={83}
+                cy={83}
+                r={80}
+                stroke={ACCENT}
+                strokeWidth={2}
+                strokeLinecap="round"
+                fill="none"
+                strokeDasharray={`${RING_C * 0.35} ${RING_C}`}
+                rotation={-90}
+                origin="83, 83"
               />
+            </Svg>
+          </Animated.View>
 
-              <GlassLoginField
-                icon="lock-closed-outline"
-                placeholder="Password"
-                value={password}
-                onChangeText={(t) => {
-                  setPassword(t);
-                  if (loginError) setLoginError("");
-                }}
-                secureTextEntry={!showPassword}
-                editable={!loading}
-                returnKeyType="done"
-                onSubmitEditing={() => {
-                  if (canSubmit) void handleLogin();
-                }}
-                right={
-                  <Pressable
-                    onPress={() => setShowPassword((v) => !v)}
-                    hitSlop={12}
-                    accessibilityRole="button"
-                    accessibilityLabel={showPassword ? "Hide password" : "Show password"}
-                  >
-                    <Ionicons
-                      name={showPassword ? "eye-off-outline" : "eye-outline"}
-                      size={22}
-                      color={AUTH_THEME.textMuted}
-                    />
-                  </Pressable>
-                }
-              />
-
-              <Pressable
-                accessibilityRole="button"
-                disabled={!canSubmit}
-                onPress={() => void handleLogin()}
-                style={({ pressed }) => [
-                  styles.signInBtn,
-                  !canSubmit && styles.signInBtnOff,
-                  pressed && canSubmit && styles.signInBtnPressed
-                ]}
+          <Animated.View style={[styles.logoCircle, { opacity: circleOpacity }]}>
+            {LOGO_IMAGE ? (
+              <Animated.View
+                style={[styles.logoInner, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}
               >
-                {loading ? (
-                  <ActivityIndicator color={AUTH_THEME.bg} />
-                ) : (
-                  <Text style={[styles.signInText, !canSubmit && styles.signInTextOff]}>Sign In</Text>
-                )}
-              </Pressable>
+                <Image source={LOGO_IMAGE} style={styles.logoImg} resizeMode="contain" accessibilityLabel="App logo" />
+              </Animated.View>
+            ) : null}
+          </Animated.View>
+        </View>
+
+        <Text style={styles.appName}>{BRAND.splashTitle}</Text>
+
+        {loading ? (
+          <Animated.Text style={[styles.authStatus, { opacity: authAlpha }]}>Authenticating…</Animated.Text>
+        ) : null}
+
+        <View style={styles.dotsRow}>
+          {[d1, d2, d3].map((d, i) => (
+            <Animated.View key={i} style={[styles.dot, { opacity: d }]} />
+          ))}
+        </View>
+      </View>
+
+      {/* ── WHITE FORM CARD ── */}
+      <Animated.View style={[styles.card, { opacity: cardAlpha, transform: [{ translateY: cardY }] }]}>
+        <View style={styles.cardGreenLine} />
+
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.cardScroll}
+        >
+          <Text style={styles.welcomeTitle}>Welcome back</Text>
+          <Text style={styles.welcomeSub}>
+            {loading ? "Verifying your credentials…" : "Sign in to your field workspace"}
+          </Text>
+
+          {loginError ? (
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle" size={16} color="#dc2626" />
+              <Text style={styles.errorText}>{loginError}</Text>
+            </View>
+          ) : null}
+
+          <Text style={styles.fieldLabel}>Employee ID</Text>
+          <View style={[styles.inputBox, loading && styles.inputDisabled]}>
+            <Ionicons name="id-card-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
+            <TextInput
+              value={empId}
+              onChangeText={(t) => {
+                setEmpId(t);
+                if (loginError) setLoginError("");
+              }}
+              placeholder="e.g. AG-8821"
+              placeholderTextColor="#cbd5e1"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!loading}
+              style={styles.input}
+            />
+            {empId.length > 2 && !loading ? (
+              <Ionicons name="checkmark-circle" size={18} color={ACCENT_DARK} />
+            ) : null}
+          </View>
+
+          <Text style={styles.fieldLabel}>Password</Text>
+          <View style={[styles.inputBox, loading && styles.inputDisabled]}>
+            <Ionicons name="lock-closed-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
+            <TextInput
+              value={password}
+              onChangeText={(t) => {
+                setPassword(t);
+                if (loginError) setLoginError("");
+              }}
+              placeholder="Enter password"
+              placeholderTextColor="#cbd5e1"
+              secureTextEntry={!showPw}
+              editable={!loading}
+              style={styles.input}
+              onSubmitEditing={() => void handleLogin()}
+            />
+            <TouchableOpacity
+              onPress={() => setShowPw((p) => !p)}
+              style={styles.eyeBtn}
+              disabled={loading}
+            >
+              <Ionicons name={showPw ? "eye-off-outline" : "eye-outline"} size={18} color="#64748b" />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity style={styles.forgotBtn} disabled={loading}>
+            <Text style={styles.forgotText}>Forgot password?</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.signInBtn, loading && styles.signInBtnBusy]}
+            onPress={() => void handleLogin()}
+            disabled={loading}
+            activeOpacity={0.9}
+          >
+            {loading ? (
+              <>
+                <ActivityIndicator color="#fff" size="small" />
+                <Text style={styles.signInBtnText}>Signing in…</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.signInBtnText}>Sign In</Text>
+                <Ionicons name="arrow-forward" size={16} color="#fff" />
+              </>
+            )}
+          </TouchableOpacity>
+
+          {/* ── BOTTOM FILL — Service cards + stats ── */}
+          <View style={styles.bottomFill}>
+            <View style={styles.servicesHeader}>
+              <View style={styles.servicesLine} />
+              <Text style={styles.servicesTitle}>Our Services</Text>
+              <View style={styles.servicesLine} />
             </View>
 
-            <Text style={styles.footer}>Need help? Contact admin</Text>
-            <Text style={styles.footerHint}>{BRAND.employeeHint}</Text>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </AuthScreenLayout>
-    </View>
+            <View style={styles.serviceRow}>
+              {SERVICE_CARDS.map((card, index) => (
+                <Animated.View
+                  key={card.icon}
+                  style={[styles.serviceCard, { transform: [{ translateY: tagFloats[index] }] }]}
+                >
+                  <View style={styles.serviceIconWrap}>
+                    <Ionicons name={card.icon} size={20} color={ACCENT_DARK} />
+                  </View>
+                  <Text style={styles.serviceLabel}>
+                    {card.lines[0]}
+                    {"\n"}
+                    {card.lines[1]}
+                  </Text>
+                </Animated.View>
+              ))}
+            </View>
+
+            <View style={styles.statsBar}>
+              {STATS.map((stat, index) => (
+                <View key={stat.label} style={[styles.statItem, index > 0 && styles.statItemBorder]}>
+                  <Text style={styles.statValue}>{stat.value}</Text>
+                  <Text style={styles.statLabel}>{stat.label}</Text>
+                </View>
+              ))}
+            </View>
+
+            <Text style={styles.trustCopy}>
+              Trusted agriculture partner for{"\n"}better crop yield & soil health
+            </Text>
+          </View>
+        </ScrollView>
+
+        <SafeAreaView>
+          <Text style={styles.footer}>
+            {BRAND.appName} · {BRAND.portalSubtitle}
+          </Text>
+        </SafeAreaView>
+      </Animated.View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  flex: { flex: 1 },
-  layout: {
-    justifyContent: "flex-start",
-    paddingHorizontal: 0
+  root: {
+    backgroundColor: DARK,
+    flex: 1
   },
-  scroll: {
-    flexGrow: 1,
-    paddingHorizontal: 22,
-    paddingTop: 12
-  },
-  heroBlock: {
+  topZone: {
     alignItems: "center",
-    marginBottom: 20,
-    paddingTop: 8
+    backgroundColor: DARK,
+    justifyContent: "flex-end",
+    overflow: "hidden",
+    paddingBottom: 14
   },
-  logoPlate: {
+  leaf1: {
+    left: "6%",
+    position: "absolute",
+    top: "10%",
+    transform: [{ rotate: "-28deg" }]
+  },
+  leaf2: {
+    position: "absolute",
+    right: "8%",
+    top: "6%",
+    transform: [{ rotate: "22deg" }]
+  },
+  leaf3: {
+    left: "42%",
+    position: "absolute",
+    top: "4%",
+    transform: [{ rotate: "-8deg" }]
+  },
+  logoStack: {
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    height: 80,
+    height: 200,
     justifyContent: "center",
-    marginBottom: 14,
-    width: 80
+    width: 200
   },
-  logo: { height: 54, width: 54 },
-  brandName: {
-    color: AUTH_THEME.text,
-    fontSize: 24,
-    fontWeight: "800",
-    letterSpacing: -0.4,
-    textAlign: "center"
+  pulseRing: {
+    borderColor: "rgba(76,175,130,0.55)",
+    borderWidth: 1,
+    position: "absolute"
   },
-  timeGreeting: {
-    color: AUTH_THEME.neon,
-    fontSize: 13,
+  arcWrap: {
+    alignItems: "center",
+    height: 166,
+    justifyContent: "center",
+    position: "absolute",
+    width: 166
+  },
+  logoCircle: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.95)",
+    borderColor: "rgba(76,175,130,0.55)",
+    borderRadius: LOGO_SIZE / 2,
+    borderWidth: 3,
+    height: LOGO_SIZE,
+    justifyContent: "center",
+    overflow: "hidden",
+    width: LOGO_SIZE
+  },
+  logoInner: {
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  logoImg: {
+    height: LOGO_IMG,
+    width: LOGO_IMG
+  },
+  appName: {
+    color: "rgba(255,255,255,0.92)",
+    fontFamily: FONTS.bold,
+    fontSize: 17,
     fontWeight: "700",
-    letterSpacing: 0.3,
-    marginTop: 10
+    letterSpacing: 0.5,
+    marginTop: 8
   },
-  welcome: {
-    color: AUTH_THEME.text,
-    fontSize: 26,
-    fontWeight: "800",
-    letterSpacing: -0.5,
-    lineHeight: 32,
-    marginTop: 4,
-    textAlign: "center"
+  authStatus: {
+    color: ACCENT,
+    fontFamily: FONTS.medium,
+    fontSize: 11,
+    fontWeight: "500",
+    letterSpacing: 0.8,
+    marginTop: 4
   },
-  subline: {
-    color: AUTH_THEME.textMuted,
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 6,
-    textAlign: "center"
+  dotsRow: {
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 8
+  },
+  dot: {
+    backgroundColor: ACCENT,
+    borderRadius: 3,
+    height: 6,
+    width: 6
   },
   card: {
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderColor: "rgba(255,255,255,0.12)",
-    borderRadius: 20,
-    borderWidth: 1,
-    gap: 14,
-    padding: 18
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    flex: 1,
+    overflow: "hidden"
+  },
+  cardGreenLine: {
+    backgroundColor: ACCENT_DARK,
+    height: 3,
+    width: "100%"
+  },
+  cardScroll: {
+    flexGrow: 1,
+    paddingBottom: 8,
+    paddingHorizontal: 24,
+    paddingTop: 20
+  },
+  welcomeTitle: {
+    color: "#0f172a",
+    fontFamily: FONTS.extrabold,
+    fontSize: 22,
+    fontWeight: "800"
+  },
+  welcomeSub: {
+    color: "#94a3b8",
+    fontFamily: FONTS.regular,
+    fontSize: 12,
+    fontWeight: "400",
+    marginBottom: 16,
+    marginTop: 4
   },
   errorBox: {
     alignItems: "center",
-    backgroundColor: AUTH_THEME.dangerBg,
-    borderColor: "rgba(255,107,107,0.35)",
+    backgroundColor: "#fef2f2",
+    borderColor: "#fecaca",
     borderRadius: 12,
     borderWidth: 1,
     flexDirection: "row",
     gap: 8,
-    padding: 12
+    marginBottom: 12,
+    padding: 10
   },
   errorText: {
-    color: AUTH_THEME.danger,
+    color: "#dc2626",
     flex: 1,
-    fontSize: 13,
+    fontFamily: FONTS.medium,
+    fontSize: 12
+  },
+  fieldLabel: {
+    color: "#64748b",
+    fontFamily: FONTS.semibold,
+    fontSize: 11,
     fontWeight: "600",
-    lineHeight: 18
+    marginBottom: 6
+  },
+  inputBox: {
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderColor: "#e2e8f0",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    flexDirection: "row",
+    height: 48,
+    marginBottom: 12,
+    paddingHorizontal: 12
+  },
+  inputDisabled: {
+    opacity: 0.7
+  },
+  inputIcon: {
+    marginRight: 8
+  },
+  input: {
+    color: "#0f172a",
+    flex: 1,
+    fontFamily: FONTS.regular,
+    fontSize: 14,
+    paddingVertical: 0
+  },
+  eyeBtn: {
+    paddingHorizontal: 4
+  },
+  forgotBtn: {
+    alignSelf: "flex-end",
+    marginBottom: 14,
+    marginTop: -2
+  },
+  forgotText: {
+    color: ACCENT_DARK,
+    fontFamily: FONTS.semibold,
+    fontSize: 11,
+    fontWeight: "600"
   },
   signInBtn: {
     alignItems: "center",
-    backgroundColor: AUTH_THEME.neonMid,
+    backgroundColor: ACCENT_DARK,
     borderRadius: 14,
+    flexDirection: "row",
+    gap: 8,
+    height: 48,
+    justifyContent: "center"
+  },
+  signInBtnBusy: {
+    opacity: 0.9
+  },
+  signInBtnText: {
+    color: "#fff",
+    fontFamily: FONTS.bold,
+    fontSize: 14,
+    fontWeight: "700"
+  },
+  bottomFill: {
+    marginTop: 20,
+    paddingBottom: 4
+  },
+  servicesHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 14
+  },
+  servicesLine: {
+    backgroundColor: "#e2e8f0",
+    flex: 1,
+    height: 1
+  },
+  servicesTitle: {
+    color: "#64748b",
+    fontFamily: FONTS.semibold,
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.6,
+    textTransform: "uppercase"
+  },
+  serviceRow: {
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
+    marginBottom: 14
+  },
+  serviceCard: {
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    borderColor: "#e2e8f0",
+    borderRadius: 14,
+    borderWidth: 1,
+    flex: 1,
+    gap: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 12
+  },
+  serviceIconWrap: {
+    alignItems: "center",
+    backgroundColor: "#f0fdf4",
+    borderRadius: 10,
+    height: 36,
     justifyContent: "center",
-    marginTop: 4,
-    minHeight: 52
+    width: 36
   },
-  signInBtnOff: {
-    backgroundColor: "rgba(46,230,106,0.28)",
-    borderColor: "rgba(61,255,138,0.2)",
-    borderWidth: 1
-  },
-  signInBtnPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.99 }]
-  },
-  signInText: {
-    color: AUTH_THEME.bg,
-    fontSize: 17,
-    fontWeight: "800"
-  },
-  signInTextOff: {
-    color: "rgba(5,13,10,0.55)"
-  },
-  footer: {
-    color: AUTH_THEME.textMuted,
-    fontSize: 13,
-    fontWeight: "500",
-    marginTop: 18,
+  serviceLabel: {
+    color: "#334155",
+    fontFamily: FONTS.semibold,
+    fontSize: 10,
+    fontWeight: "600",
+    lineHeight: 14,
     textAlign: "center"
   },
-  footerHint: {
-    color: AUTH_THEME.textDim,
+  statsBar: {
+    backgroundColor: "#f0fdf4",
+    borderColor: "#bbf7d0",
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    marginBottom: 12,
+    overflow: "hidden"
+  },
+  statItem: {
+    alignItems: "center",
+    flex: 1,
+    paddingVertical: 12
+  },
+  statItemBorder: {
+    borderLeftColor: "#bbf7d0",
+    borderLeftWidth: 1
+  },
+  statValue: {
+    color: ACCENT_DARK,
+    fontFamily: FONTS.bold,
+    fontSize: 15,
+    fontWeight: "700"
+  },
+  statLabel: {
+    color: "#64748b",
+    fontFamily: FONTS.medium,
+    fontSize: 10,
+    marginTop: 2
+  },
+  trustCopy: {
+    color: "#94a3b8",
+    fontFamily: FONTS.regular,
     fontSize: 11,
-    marginTop: 4,
+    lineHeight: 16,
+    textAlign: "center"
+  },
+  footer: {
+    color: "#94a3b8",
+    fontFamily: FONTS.regular,
+    fontSize: 10,
+    paddingBottom: 6,
     textAlign: "center"
   }
 });

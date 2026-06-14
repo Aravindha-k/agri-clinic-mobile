@@ -7,7 +7,10 @@ import { normalizeVisitFromApi } from "./visitFarmer";
 
 export type VisitFormPrefill = Partial<
   Omit<VisitFormValues, "latitude" | "longitude" | "local_sync_id">
->;
+> & {
+  problem_category_code?: string;
+  recommendation?: string;
+};
 
 export type VisitDraftMetaFromPrefill = {
   farmerDisplayName?: string;
@@ -78,6 +81,22 @@ export function prefillFromFarmer(farmer: Farmer): VisitFormPrefill {
   };
 }
 
+function problemCategoryIdFromVisit(visit: Visit): string {
+  if (visit.problem_category_id != null) return String(visit.problem_category_id);
+  const nested = visit.field_visit?.problem_category?.id;
+  return nested != null ? String(nested) : "";
+}
+
+function problemMasterIdFromVisit(visit: Visit): string {
+  if (visit.problem_master_id != null) return String(visit.problem_master_id);
+  const nested = visit.field_visit?.problem_master?.id;
+  return nested != null ? String(nested) : "";
+}
+
+function problemCategoryCodeFromVisit(visit: Visit): string {
+  return visit.field_visit?.problem_category?.code?.trim() || "";
+}
+
 export function prefillFromVisit(visit: Visit): VisitFormPrefill {
   return {
     district: masterPkToString(visit.district),
@@ -94,8 +113,18 @@ export function prefillFromVisit(visit: Visit): VisitFormPrefill {
     pesticide_advice: visit.pesticide_advice || "",
     irrigation_advice: visit.irrigation_advice || "",
     general_advice: visit.general_advice || "",
+    recommendation: visit.recommendation || "",
     follow_up_required: Boolean(visit.follow_up_required),
-    next_visit_date: visit.next_visit_date || ""
+    next_visit_date: visit.next_visit_date || "",
+    observation: visit.observation || visit.field_notes || "",
+    field_notes: visit.field_notes || visit.observation || "",
+    problem_seen: visit.problem_seen || "",
+    action_taken: visit.action_taken || "",
+    follow_up_date: visit.follow_up_date || visit.next_visit_date || "",
+    crop_name: visit.crop_name || "",
+    problem_category_id: problemCategoryIdFromVisit(visit),
+    problem_master_id: problemMasterIdFromVisit(visit),
+    problem_category_code: problemCategoryCodeFromVisit(visit)
   };
 }
 
@@ -179,6 +208,11 @@ export function buildRevisitPrefill(farmer: Farmer, lastVisit?: Visit | null): V
     irrigation_advice: fromVisit.irrigation_advice,
     general_advice: fromVisit.general_advice,
     follow_up_required: fromVisit.follow_up_required,
+    observation: fromVisit.observation,
+    field_notes: fromVisit.field_notes,
+    problem_seen: fromVisit.problem_seen,
+    action_taken: fromVisit.action_taken,
+    follow_up_date: fromVisit.follow_up_date,
     next_visit_date: fromVisit.next_visit_date
   };
 }
@@ -237,6 +271,7 @@ export type LoadedRevisitPrefill = {
   values: VisitFormPrefill;
   meta: VisitDraftMetaFromPrefill;
   farmer: Farmer;
+  lastVisit: Visit | null;
 };
 
 /** Load full farmer profile, last visit, land plots, and resolve master IDs for dropdowns. */
@@ -268,7 +303,7 @@ export async function loadRevisitPrefill(
 
   const values = normalizeRevisitPrefill(full, lastVisit, mastersWithCrops, landFromFields);
   const meta = metaFromRevisitPrefill(full, lastVisit, mastersWithCrops, values);
-  return { values, meta, farmer: full };
+  return { values, meta, farmer: full, lastVisit };
 }
 
 /** If crop id stored in form does not match options, resolve by display label. */

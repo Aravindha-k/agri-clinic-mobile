@@ -1,8 +1,7 @@
 import type { VisitFormValues } from "../api/visits";
-import { createFarmer, getFarmersForFieldWorker } from "../api/farmers";
+import { createFarmer, findFarmerByPhoneOrName } from "../api/farmers";
 import { getOptionLabel, getVillages } from "../api/masters";
 import { extractMasterPk, masterPkToString } from "../utils/masterId";
-import { phonesMatch } from "../utils/phoneMatch";
 import { hasCompleteNewFarmerDetails } from "./farmerDetails";
 import { resolveFarmerPk } from "./resolveFarmerPk";
 import { coerceStr, normalizeVisitGpsFields } from "./visitValidation";
@@ -54,6 +53,14 @@ export async function prepareVisitForSubmit(values: VisitFormValues): Promise<Vi
     weed_condition: coerceStr(values.weed_condition),
     general_advice: coerceStr(values.general_advice),
     notes: coerceStr(values.notes),
+    observation: coerceStr(values.observation),
+    field_notes: coerceStr(values.field_notes),
+    problem_seen: coerceStr(values.problem_seen),
+    problem_description: coerceStr(values.problem_description),
+    problem_category_id: coerceStr(values.problem_category_id),
+    problem_master_id: coerceStr(values.problem_master_id),
+    action_taken: coerceStr(values.action_taken),
+    follow_up_date: coerceStr(values.follow_up_date),
     fertilizer_advice: coerceStr(values.fertilizer_advice),
     pesticide_advice: coerceStr(values.pesticide_advice),
     irrigation_advice: coerceStr(values.irrigation_advice)
@@ -70,11 +77,7 @@ export async function prepareVisitForSubmit(values: VisitFormValues): Promise<Vi
   }
 
   try {
-    const farmers = await getFarmersForFieldWorker();
-    const byPhone = phone ? farmers.find((f) => phonesMatch(f.phone, phone)) : undefined;
-    const byName =
-      !byPhone && name ? farmers.find((f) => coerceStr(f.name).toLowerCase() === name) : undefined;
-    const match = byPhone ?? byName;
+    const match = await findFarmerByPhoneOrName(phone, name);
     if (match?.id != null) {
       next = {
         ...next,
@@ -121,8 +124,7 @@ export async function prepareVisitForSubmit(values: VisitFormValues): Promise<Vi
     }
   } catch (err) {
     try {
-      const farmers = await getFarmersForFieldWorker();
-      const existing = farmers.find((f) => phonesMatch(f.phone, farmerPhone));
+      const existing = await findFarmerByPhoneOrName(farmerPhone, farmerName);
       if (existing?.id != null) {
         return {
           ...next,

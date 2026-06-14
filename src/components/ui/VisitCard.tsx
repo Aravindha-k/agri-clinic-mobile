@@ -31,8 +31,7 @@ export function VisitCard({ visit, onPress, compact = false }: Props) {
       accessibilityRole="button"
       style={({ pressed }) => [styles.wrap, pressed && styles.pressed]}
     >
-      <View style={[listCardStyles.cardShell, { backgroundColor: c.card, borderColor: c.border }, shadows.card]}>
-        <View style={[listCardStyles.accent, { backgroundColor: hasGps ? c.primary : c.muted }]} />
+      <View style={[listCardStyles.cardShell, { backgroundColor: c.card, borderColor: c.borderSubtle }, shadows.card]}>
         <View style={listCardStyles.cardBody}>
           <View style={listCardStyles.row}>
             <View style={[listCardStyles.avatar, { backgroundColor: c.primarySoft }]}>
@@ -42,9 +41,12 @@ export function VisitCard({ visit, onPress, compact = false }: Props) {
               <Text style={[listCardType.title, { color: c.text }]} numberOfLines={1}>
                 {farmer.name !== "—" ? farmer.name : "Farmer"}
               </Text>
+              <Text style={[listCardType.caption, { color: c.muted }, listCardStyles.dateLine]} numberOfLines={1}>
+                {when}
+              </Text>
               <View style={listCardStyles.metaRow}>
                 <Ionicons name="location-outline" size={listCardLayout.iconSize} color={c.muted} />
-                <Text style={[listCardType.meta, { color: c.muted, flex: 1 }]} numberOfLines={1}>
+                <Text style={[listCardType.meta, { color: c.textSecondary, flex: 1 }]} numberOfLines={1}>
                   {place}
                 </Text>
               </View>
@@ -57,8 +59,15 @@ export function VisitCard({ visit, onPress, compact = false }: Props) {
                     </Text>
                   </View>
                   <View style={listCardStyles.metaRow}>
-                    <Ionicons name={hasGps ? "navigate" : "navigate-outline"} size={listCardLayout.iconSize} color={hasGps ? c.success : c.muted} />
-                    <Text style={[listCardType.meta, { color: hasGps ? c.success : c.muted, flex: 1 }]} numberOfLines={1}>
+                    <Ionicons
+                      name={hasGps ? "navigate" : "navigate-outline"}
+                      size={listCardLayout.iconSize}
+                      color={hasGps ? c.primary : c.muted}
+                    />
+                    <Text
+                      style={[listCardType.meta, { color: hasGps ? c.primary : c.muted, flex: 1 }]}
+                      numberOfLines={1}
+                    >
                       {hasGps ? "GPS captured" : "No GPS"}
                     </Text>
                   </View>
@@ -72,22 +81,19 @@ export function VisitCard({ visit, onPress, compact = false }: Props) {
                 </View>
               )}
             </View>
-            <View style={[styles.timeBadge, { backgroundColor: c.cardMuted }]}>
-              <Text style={[listCardType.caption, { color: c.textSecondary }]}>{when}</Text>
-            </View>
+            <Ionicons name="chevron-forward" size={20} color={c.muted} style={styles.chevron} />
           </View>
 
           {!compact && farmer.phone !== "—" ? (
-            <Pressable
-              onPress={(e) => {
-                e.stopPropagation();
-                Linking.openURL(`tel:${farmer.phone}`);
-              }}
-              style={[listCardStyles.actionBtn, styles.callBtn, { borderColor: c.border, backgroundColor: c.primarySoft }]}
-            >
-              <Ionicons name="call" size={16} color={c.primaryDark} />
-              <Text style={[listCardType.caption, { color: c.primaryDark }]}>Call farmer</Text>
-            </Pressable>
+            <View style={[listCardStyles.footerRow, { borderTopColor: c.borderSubtle }]}>
+              <Pressable
+                onPress={() => Linking.openURL(`tel:${farmer.phone}`)}
+                style={[listCardStyles.actionBtn, { backgroundColor: c.primary, borderColor: c.primary }]}
+              >
+                <Ionicons name="call" size={16} color="#FFFFFF" />
+                <Text style={[listCardType.caption, { color: "#FFFFFF" }]}>Call farmer</Text>
+              </Pressable>
+            </View>
           ) : null}
         </View>
       </View>
@@ -96,24 +102,7 @@ export function VisitCard({ visit, onPress, compact = false }: Props) {
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    marginBottom: 0
-  },
-  pressed: {
-    opacity: 0.96,
-    transform: [{ scale: 0.995 }]
-  },
-  timeBadge: {
-    alignSelf: "flex-start",
-    borderRadius: 8,
-    maxWidth: 88,
-    paddingHorizontal: 8,
-    paddingVertical: 5
-  },
-  callBtn: {
-    alignSelf: "flex-start",
-    flex: 0,
-    marginTop: 12,
-    paddingHorizontal: 12
-  }
+  wrap: { marginBottom: 0 },
+  pressed: { opacity: 0.96 },
+  chevron: { marginTop: 4 }
 });

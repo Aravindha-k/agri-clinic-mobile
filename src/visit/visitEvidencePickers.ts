@@ -10,7 +10,8 @@ import {
 } from "../utils/visitAttachmentFiles";
 import { createPendingAttachmentId, PendingVisitAttachment } from "./pendingAttachments";
 
-export async function pickPendingImage(source: "camera" | "library"): Promise<PendingVisitAttachment | null> {
+/** Returns raw image URI — caller applies GPS watermark preview before upload. */
+export async function pickPendingImageUri(source: "camera" | "library"): Promise<string | null> {
   if (source === "camera") {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
@@ -23,15 +24,7 @@ export async function pickPendingImage(source: "camera" | "library"): Promise<Pe
       allowsEditing: false
     });
     if (result.canceled || !result.assets[0]) return null;
-    const prepared = await prepareImageForUpload(result.assets[0].uri);
-    return {
-      id: createPendingAttachmentId(),
-      attachmentType: "image",
-      uri: prepared.uri,
-      name: prepared.name,
-      mimeType: prepared.mimeType,
-      createdAt: new Date().toISOString()
-    };
+    return result.assets[0].uri;
   }
 
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -45,7 +38,14 @@ export async function pickPendingImage(source: "camera" | "library"): Promise<Pe
     allowsMultipleSelection: false
   });
   if (result.canceled || !result.assets[0]) return null;
-  const prepared = await prepareImageForUpload(result.assets[0].uri);
+  return result.assets[0].uri;
+}
+
+/** @deprecated Use pickPendingImageUri + watermark preview flow */
+export async function pickPendingImage(source: "camera" | "library"): Promise<PendingVisitAttachment | null> {
+  const uri = await pickPendingImageUri(source);
+  if (!uri) return null;
+  const prepared = await prepareImageForUpload(uri);
   return {
     id: createPendingAttachmentId(),
     attachmentType: "image",

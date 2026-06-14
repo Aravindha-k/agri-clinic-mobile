@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
-import { Farmer, getFarmer, getFarmersForFieldWorker } from "../api/farmers";
-import { getCrops, getDistricts, getOptionLabel, getVillages, MasterOption } from "../api/masters";
+import { Farmer, getFarmer } from "../api/farmers";
+import { getOptionLabel, MasterOption } from "../api/masters";
+import { useMasterData } from "../storage/MasterDataContext";
 import { Visit, VisitFormValues } from "../api/visits";
 import { AppButton } from "../components/AppButton";
 import { AppCard } from "../components/AppCard";
@@ -13,7 +14,6 @@ import { FadeInView } from "../components/FadeInView";
 import { ListSkeleton } from "../components/ListSkeleton";
 import { colors } from "../theme/colors";
 import { space } from "../theme/layout";
-import { asArray } from "../utils/format";
 import { prefillFromFarmer, VisitFormPrefill } from "../utils/farmerPrefill";
 import { getForegroundLocation, toVisitLocation } from "../utils/location";
 
@@ -38,7 +38,12 @@ const emptyValues: VisitFormValues = {
   pesticide_advice: "",
   irrigation_advice: "",
   general_advice: "",
-  follow_up_required: false
+  follow_up_required: false,
+  observation: "",
+  field_notes: "",
+  problem_seen: "",
+  action_taken: "",
+  follow_up_date: ""
 };
 
 function mergePrefill(prefill?: VisitFormPrefill): VisitFormValues {
@@ -90,12 +95,8 @@ export function VisitForm({
     }
     return mergePrefill(prefill);
   });
+  const { districts, villages, crops, syncing: masterSyncing } = useMasterData();
   const [loading, setLoading] = useState(false);
-  const [masterLoading, setMasterLoading] = useState(true);
-  const [districts, setDistricts] = useState<MasterOption[]>([]);
-  const [villages, setVillages] = useState<MasterOption[]>([]);
-  const [crops, setCrops] = useState<MasterOption[]>([]);
-  const [farmers, setFarmers] = useState<Farmer[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickedFarmerName, setPickedFarmerName] = useState<string | null>(prefill?.farmer_name?.trim() || null);
   const [loadedFarmer, setLoadedFarmer] = useState<Farmer | null>(null);
@@ -125,31 +126,7 @@ export function VisitForm({
     };
   }, [applyFarmerFromApi, prefill?.farmer_id]);
 
-  useEffect(() => {
-    let mounted = true;
-    Promise.all([getDistricts(), getVillages(), getCrops(), getFarmersForFieldWorker()])
-      .then(([districtData, villageData, cropData, farmerData]) => {
-        if (!mounted) {
-          return;
-        }
-        setDistricts(districtData);
-        setVillages(villageData);
-        setCrops(cropData);
-        setFarmers(asArray<Farmer>(farmerData));
-      })
-      .catch((error) => {
-        Alert.alert("Unable to load form data", error instanceof Error ? error.message : "Please try again.");
-      })
-      .finally(() => {
-        if (mounted) {
-          setMasterLoading(false);
-        }
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const masterLoading = masterSyncing && districts.length === 0;
 
   const districtOptions = useMemo(() => toOptions(districts), [districts]);
   const villageOptions = useMemo(() => {
@@ -189,14 +166,7 @@ export function VisitForm({
     setValues((current) => ({ ...current, farmer_id: "" }));
   }
 
-  async function openFarmerPicker() {
-    try {
-      const farmerData = await getFarmersForFieldWorker();
-      setFarmers(asArray<Farmer>(farmerData));
-    } catch (error) {
-      Alert.alert("Unable to load farmers", error instanceof Error ? error.message : "Please try again.");
-      return;
-    }
+  function openFarmerPicker() {
     setPickerOpen(true);
   }
 
@@ -228,13 +198,17 @@ export function VisitForm({
     }
     if (index === 2) {
       const hasAdvice =
+        Boolean(values.field_notes?.trim()) ||
+        Boolean(values.observation?.trim()) ||
+        Boolean(values.problem_seen?.trim()) ||
+        Boolean(values.action_taken?.trim()) ||
         Boolean(values.notes?.trim()) ||
         Boolean(values.general_advice?.trim()) ||
         Boolean(values.fertilizer_advice?.trim()) ||
         Boolean(values.pesticide_advice?.trim()) ||
         Boolean(values.irrigation_advice?.trim());
       if (!hasAdvice) {
-        Alert.alert("Recommendation", "Add notes or advice for the farmer before submitting.");
+        Alert.alert("Observation / Field Notes", "Add observation or field notes before submitting.");
         return false;
       }
     }
@@ -378,11 +352,14 @@ export function VisitForm({
       {step === 2 ? (
         <FadeInView key="step-2">
         <AppCard elevated style={styles.stepCard}>
-          <Text style={styles.stepHeading}>Recommendation</Text>
+          <Text style={styles.stepHeading}>Observation / Field Notes</Text>
           <Text style={styles.stepHint}>Location is saved automatically when you submit</Text>
           <View style={styles.fieldGroup}>
-            <AppInput label="What you told the farmer" value={values.general_advice || ""} onChangeText={(text) => setField("general_advice", text)} multiline placeholder="Main recommendation" />
-            <AppInput label="Field notes" value={values.notes || ""} onChangeText={(text) => setField("notes", text)} multiline placeholder="Observations, reminders…" />
+            <AppInput label="Observation / Field Notes" value={values.field_notes || values.observation || values.general_advice || ""} onChangeText={(text) => { setField("field_notes", text); setField("observation", text); }} multiline placeholder="What did you observe in the field?" />
+            <AppInput label="Problem Seen" value={values.problem_seen || ""} onChangeText={(text) => setField("problem_seen", text)} multiline placeholder="Pest, disease, nutrient issue…" />
+            <AppInput label="Action Taken" value={values.action_taken || ""} onChangeText={(text) => setField("action_taken", text)} multiline placeholder="Advice or treatment given" />
+            <AppInput label="Follow-up Date (optional)" value={values.follow_up_date || values.next_visit_date || ""} onChangeText={(text) => { setField("follow_up_date", text); setField("next_visit_date", text); }} placeholder="YYYY-MM-DD" />
+            <AppInput label="Field notes (legacy)" value={values.notes || ""} onChangeText={(text) => setField("notes", text)} multiline placeholder="Observations, reminders…" />
             <AppInput label="Fertilizer (optional)" value={values.fertilizer_advice || ""} onChangeText={(text) => setField("fertilizer_advice", text)} multiline />
             <AppInput label="Pesticide (optional)" value={values.pesticide_advice || ""} onChangeText={(text) => setField("pesticide_advice", text)} multiline />
             <Toggle label="Follow-up required" value={Boolean(values.follow_up_required)} onChange={(v) => setField("follow_up_required", v)} />
@@ -405,7 +382,7 @@ export function VisitForm({
         )}
       </View>
 
-      <ExistingFarmerPickerModal visible={pickerOpen} farmers={farmers} onClose={() => setPickerOpen(false)} onSelect={selectFarmer} />
+      <ExistingFarmerPickerModal visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={selectFarmer} />
     </View>
   );
 }

@@ -4,7 +4,7 @@ import { useWorkdayTimer } from "../../hooks/useLiveClock";
 import { useTheme } from "../../theme";
 import { space } from "../../theme/layout";
 import { PrimaryButton } from "../ui/PrimaryButton";
-import { PremiumCard } from "../brand/PremiumCard";
+import { ClinicCard } from "../brand/ClinicCard";
 
 type Props = {
   isActive: boolean;
@@ -40,25 +40,25 @@ export function WorkdayStatusCard({
 
   if (!isActive) {
     return (
-      <PremiumCard elevated tint="soft" style={{ ...styles.card, borderLeftColor: c.primary }}>
+      <ClinicCard style={styles.card}>
         <View style={styles.idleHeader}>
           <View style={[styles.idleIcon, { backgroundColor: c.primarySoft }]}>
             <Ionicons name="sunny-outline" size={20} color={c.primaryDark} />
           </View>
           <View style={styles.idleText}>
-            <Text style={[styles.idleTitle, { color: c.text }]}>Ready for the field?</Text>
+            <Text style={[styles.idleTitle, { color: c.text }]}>Daily Operations</Text>
             <Text style={[styles.idleHint, { color: c.muted }]}>
-              Start your workday to begin GPS tracking and today's timer.
+              Workday status · Start your workday to begin GPS tracking and today's timer.
             </Text>
           </View>
         </View>
         <PrimaryButton title="Start work today" onPress={onStart} loading={busy} style={styles.startBtn} />
-      </PremiumCard>
+      </ClinicCard>
     );
   }
 
   return (
-    <PremiumCard elevated tint="soft" style={{ ...styles.card, borderLeftColor: c.success }}>
+    <ClinicCard style={styles.card}>
       <View style={styles.activeTop}>
         <View style={[styles.statusPill, { backgroundColor: c.successSoft }]}>
           <View style={[styles.pulseDot, { backgroundColor: c.success }]} />
@@ -94,14 +94,16 @@ export function WorkdayStatusCard({
           <Text style={[styles.syncValue, { color: c.text }]}>{formatSyncTime(nextSyncAt)}</Text>
         </View>
       </View>
-    </PremiumCard>
+
+      <Text style={[styles.autoEndHint, { color: c.muted }]}>
+        Workday ends automatically — no manual sign-off needed.
+      </Text>
+    </ClinicCard>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderLeftWidth: 4,
-    borderRadius: 18,
     gap: 0,
     paddingVertical: 2
   },
@@ -208,5 +210,11 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
     marginHorizontal: 12,
     width: StyleSheet.hairlineWidth
+  },
+  autoEndHint: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 14,
+    textAlign: "center"
   }
 });

@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { EmptyState } from "../components/EmptyState";
 import { AppHeader, PremiumCard, PrimaryButton } from "../components/ui";
+import { formatRelativeTime } from "../utils/formatRelativeTime";
 import { RootStackParamList } from "../navigation/types";
 import { useGpsWorkGuard } from "../hooks/useGpsWorkGuard";
 import { useOfflineSync } from "../storage/OfflineSyncContext";
@@ -58,7 +59,9 @@ export function OfflineSyncScreen({ navigation }: Props) {
           loading={syncing}
           disabled={!count}
         />
-        {lastSyncAt ? <Text style={[styles.meta, { color: c.offlineMuted }]}>Last sync: {formatDisplayDateTime(lastSyncAt)}</Text> : null}
+        <Text style={[styles.meta, { color: c.offlineMuted }]}>
+          {lastSyncAt ? `Last synced ${formatRelativeTime(lastSyncAt)}` : "Not synced yet"}
+        </Text>
       </View>
       <FlatList
         data={queue}
@@ -66,7 +69,13 @@ export function OfflineSyncScreen({ navigation }: Props) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlProps} />}
         contentContainerStyle={[styles.list, !count && styles.listEmpty]}
         ListEmptyComponent={
-          <EmptyState title="All synced" message="No visits waiting to upload." illustration="sync" />
+          <EmptyState
+            title="All synced"
+            message="No visits waiting to upload. Field work is fully backed up."
+            illustration="sync"
+            actionLabel="Back"
+            onAction={() => navigation.goBack()}
+          />
         }
         renderItem={({ item }) => (
           <PremiumCard elevated style={{ backgroundColor: c.offlineCard }}>

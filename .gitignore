@@ -1,5 +1,8 @@
 node_modules
 .expo/
+.expo-export-test/
+.expo-export-brand-test/
+.expo-bundle-check/
 dist/
 *.apk
 *.aab

@@ -1,13 +1,16 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { loginRequest, logoutRequest } from "../api/auth";
-import { getCurrentEmployee, isFieldEmployee } from "../api/employees";
+import { Employee, getCurrentEmployee, isFieldEmployee } from "../api/employees";
+import { clearInflightRequests } from "../api/requestDedupe";
+import { clearMasterDataCache } from "./masterDataCache";
+import { logApiTelemetrySummary, resetApiTelemetry } from "../api/apiTelemetry";
 import { SESSION_EXPIRED_MESSAGE } from "../constants/authMessages";
 import { SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
 import { registerGoToLogin } from "./authRecovery";
-import { clearDeviceSessionId, ensureDeviceSessionLoaded, getDeviceSessionId } from "./deviceSessionStorage";
+import { clearDeviceSessionId, DEVICE_SESSION_STORAGE_ERROR, ensureDeviceSessionLoaded, getDeviceSessionId } from "./deviceSessionStorage";
 import { registerSessionExpiredTeardown } from "./sessionExpired";
 import { registerSessionTeardown } from "./sessionConflict";
-import { getAccessToken, saveTokens, clearTokens } from "./tokenStorage";
+import { getAccessToken, saveTokens, clearTokens, type StoredTokens } from "./tokenStorage";
 import { ApiRequestError, isAuthExpiredError, isNetworkError, isServerError } from "../utils/apiError";
 import { isDeviceSessionConflict } from "./sessionConflict";
 
@@ -21,8 +24,10 @@ type AuthContextValue = {
   authLoading: boolean;
   bootstrapIssue: BootstrapIssue;
   loginNotice: string | null;
+  employee: Employee | null;
   clearLoginNotice: () => void;
   retryBootstrap: () => Promise<void>;
+  refreshUser: () => Promise<Employee | null>;
   signIn: (username: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -32,7 +37,20 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 function isRetriableAuthError(err: unknown): boolean {
   if (isNetworkError(err) || isServerError(err)) return true;
   if (err instanceof ApiRequestError) {
-    return err.code === "AUTH_UNCERTAIN" || err.code === "DEVICE_SESSION_REQUIRED";
+    return err.code === "DEVICE_SESSION_REQUIRED";
+  }
+  return false;
+}
+
+/** Saved tokens from another backend (e.g. local vs Render) — re-login, not "server down". */
+function shouldForceReLoginOnBootstrap(err: unknown): boolean {
+  if (isAuthExpiredError(err)) return true;
+  if (err instanceof ApiRequestError && err.status === 401) {
+    return (
+      err.code === "AUTH_UNCERTAIN" ||
+      err.code === "INVALID_CREDENTIALS" ||
+      err.code === "SESSION_EXPIRED"
+    );
   }
   return false;
 }
@@ -43,6 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [bootstrapIssue, setBootstrapIssue] = useState<BootstrapIssue>("none");
   const [loginNotice, setLoginNotice] = useState<string | null>(null);
+  const [employee, setEmployee] = useState<Employee | null>(null);
   const bootstrapRunningRef = useRef(false);
 
   const clearLoginNotice = useCallback(() => {
@@ -52,12 +71,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const performLocalSignOut = useCallback(async (options?: { notice?: string | null }) => {
     await clearTokens();
     await clearDeviceSessionId();
+    await clearMasterDataCache().catch(() => undefined);
+    clearInflightRequests();
+    resetApiTelemetry();
+    setEmployee(null);
     setIsAuthenticated(false);
     setBootstrapIssue("none");
     setIsReady(true);
     if (options?.notice) {
       setLoginNotice(options.notice);
     }
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    const token = await getAccessToken();
+    if (!token) {
+      setEmployee(null);
+      return null;
+    }
+    const row = await getCurrentEmployee();
+    setEmployee(row);
+    return row;
   }, []);
 
   const forceSessionConflictLogout = useCallback(async () => {
@@ -101,9 +135,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       await ensureDeviceSessionLoaded();
 
+      if (!(await getDeviceSessionId())) {
+        await performLocalSignOut({
+          notice: "This device needs a fresh sign-in. Please log in again."
+        });
+        return;
+      }
+
       try {
-        const employee = await getCurrentEmployee();
-        if (!isFieldEmployee(employee)) {
+        const profile = await getCurrentEmployee();
+        if (!isFieldEmployee(profile)) {
           try {
             await logoutRequest().catch(() => undefined);
           } finally {
@@ -111,14 +152,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           return;
         }
+        setEmployee(profile);
         setIsAuthenticated(true);
         setBootstrapIssue("none");
       } catch (err) {
         if (isDeviceSessionConflict(err)) {
           return;
         }
-        if (isAuthExpiredError(err)) {
-          await forceSessionExpiredLogout();
+        if (shouldForceReLoginOnBootstrap(err)) {
+          await performLocalSignOut({
+            notice: "Session is not valid for this server. Please sign in again."
+          });
           return;
         }
         if (isRetriableAuthError(err)) {
@@ -133,6 +177,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAuthLoading(false);
       setIsReady(true);
       bootstrapRunningRef.current = false;
+      if (__DEV__) {
+        setTimeout(() => logApiTelemetrySummary(), 2500);
+      }
     }
   }, [forceSessionExpiredLogout, performLocalSignOut]);
 
@@ -146,41 +193,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await bootstrap();
   }, [bootstrap]);
 
+  const establishAuthenticatedSession = useCallback(async () => {
+    await ensureDeviceSessionLoaded();
+
+    if (!(await getDeviceSessionId())) {
+      throw new Error(DEVICE_SESSION_STORAGE_ERROR);
+    }
+
+    try {
+      const profile = await getCurrentEmployee();
+      if (!isFieldEmployee(profile)) {
+        try {
+          await logoutRequest();
+        } finally {
+          await performLocalSignOut({ notice: FIELD_EMPLOYEE_ONLY_MESSAGE });
+        }
+        throw new Error(FIELD_EMPLOYEE_ONLY_MESSAGE);
+      }
+      setEmployee(profile);
+      setBootstrapIssue("none");
+      setIsAuthenticated(true);
+      setIsReady(true);
+    } catch (err) {
+      if (isRetriableAuthError(err)) {
+        setIsAuthenticated(true);
+        setBootstrapIssue(isNetworkError(err) ? "network" : "server");
+        setIsReady(true);
+        return;
+      }
+      throw err;
+    }
+  }, [performLocalSignOut]);
+
   const signIn = useCallback(
     async (username: string, password: string) => {
       setLoginNotice(null);
       const tokens = await loginRequest(username, password);
       await saveTokens(tokens);
-      await ensureDeviceSessionLoaded();
-
-      if (!(await getDeviceSessionId())) {
-        throw new Error("Login succeeded but device session was not saved. Please try again.");
-      }
-
-      try {
-        const employee = await getCurrentEmployee();
-        if (!isFieldEmployee(employee)) {
-          try {
-            await logoutRequest();
-          } finally {
-            await performLocalSignOut({ notice: FIELD_EMPLOYEE_ONLY_MESSAGE });
-          }
-          throw new Error(FIELD_EMPLOYEE_ONLY_MESSAGE);
-        }
-        setBootstrapIssue("none");
-        setIsAuthenticated(true);
-        setIsReady(true);
-      } catch (err) {
-        if (isRetriableAuthError(err)) {
-          setIsAuthenticated(true);
-          setBootstrapIssue(isNetworkError(err) ? "network" : "server");
-          setIsReady(true);
-          return;
-        }
-        throw err;
-      }
+      await establishAuthenticatedSession();
     },
-    [performLocalSignOut]
+    [establishAuthenticatedSession]
   );
 
   const signOut = useCallback(async () => {
@@ -198,8 +250,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       authLoading,
       bootstrapIssue,
       loginNotice,
+      employee,
       clearLoginNotice,
       retryBootstrap,
+      refreshUser,
       signIn,
       signOut
     }),
@@ -209,8 +263,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       authLoading,
       bootstrapIssue,
       loginNotice,
+      employee,
       clearLoginNotice,
       retryBootstrap,
+      refreshUser,
       signIn,
       signOut
     ]

@@ -2,8 +2,12 @@ import { apiClient } from "./client";
 import { getDeviceInfo } from "../utils/deviceInfo";
 import { asArray } from "../utils/format";
 import { resolveList } from "../utils/apiUnwrap";
+import { ApiRequestError } from "../utils/apiError";
 import {
+  isWorkdayAlreadyActiveMessage,
+  isWorkdayInactiveMessage,
   normalizeActiveWorkday,
+  normalizeWorkdayRow,
   workdayFetchFromError,
   type WorkdayFetchResult
 } from "../utils/workdayStatus";
@@ -23,6 +27,8 @@ export type LocationPushPayload = {
   speed?: number | null;
   heading?: number | null;
   captured_at: string;
+  /** Alias for captured_at — some backends expect `timestamp`. */
+  timestamp?: string;
   /** Legacy field accepted by some backends alongside captured_at. */
   recorded_at?: string;
   workday_id?: number;
@@ -58,10 +64,11 @@ export function isWorkdayActive(status: WorkdayStatus | null | undefined) {
 /** Fetch current workday; never throws on expired/missing — returns a discriminated result. */
 export async function fetchCurrentWorkday(): Promise<WorkdayFetchResult> {
   try {
-    const data = await apiClient<WorkdayStatus>("tracking/workday/current/");
-    const workday = normalizeActiveWorkday(data);
+    const data = await apiClient<unknown>("tracking/workday/current/", { source: "Tracking" });
+    const workday = normalizeActiveWorkday(normalizeWorkdayRow(data));
     if (!workday) {
-      if (data?.auto_ended || data?.is_active === false) {
+      const row = normalizeWorkdayRow(data);
+      if (row?.auto_ended || row?.is_active === false) {
         return workdayFetchFromError(new Error("auto-ended after 9 hours")) ?? { kind: "none" };
       }
       return { kind: "none" };
@@ -124,11 +131,88 @@ export async function getAllWorkdayLocations(workdayId: number): Promise<Locatio
   return all;
 }
 
-export function startWorkday() {
-  return apiClient("tracking/workday/start/", {
+export type WorkdayStartCoords = {
+  latitude: number;
+  longitude: number;
+  accuracy?: number | null;
+};
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function startWorkday(coords?: WorkdayStartCoords): Promise<WorkdayStatus | null> {
+  const data = await apiClient<unknown>("tracking/workday/start/", {
     method: "POST",
-    body: JSON.stringify({})
+    body: JSON.stringify(
+      coords
+        ? {
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+            accuracy: coords.accuracy ?? undefined
+          }
+        : {}
+    ),
+    source: "Tracking"
   });
+  return normalizeActiveWorkday(normalizeWorkdayRow(data));
+}
+
+/** Start workday or resume if already active; retries current-workday fetch when needed. */
+export async function ensureActiveWorkday(coords: WorkdayStartCoords): Promise<WorkdayStatus> {
+  let lastError: unknown = null;
+
+  try {
+    const started = await startWorkday(coords);
+    if (started) {
+      return started;
+    }
+  } catch (error) {
+    lastError = error;
+    const message = error instanceof Error ? error.message : "";
+    if (!isWorkdayAlreadyActiveMessage(message) && !isWorkdayInactiveMessage(message)) {
+      await startMobileWorkSession(coords);
+    }
+  }
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (attempt > 0) {
+      await sleep(400 * attempt);
+    }
+    const current = await fetchCurrentWorkday();
+    if (current.kind === "active") {
+      return current.workday;
+    }
+  }
+
+  if (lastError instanceof ApiRequestError) {
+    throw lastError;
+  }
+  if (lastError instanceof Error) {
+    throw lastError;
+  }
+  throw new ApiRequestError("Could not confirm your workday. Please try again.");
+}
+
+/** Best-effort mobile dashboard work session — must not block tracking workday start. */
+export async function startMobileWorkSession(coords: {
+  latitude: number;
+  longitude: number;
+  accuracy?: number | null;
+}) {
+  try {
+    await apiClient("mobile/work/start/", {
+      method: "POST",
+      body: JSON.stringify({
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        accuracy: coords.accuracy ?? undefined
+      }),
+      source: "Tracking"
+    });
+  } catch {
+    // tracking/workday/start/ remains source of truth
+  }
 }
 
 export function endWorkday() {

@@ -1,26 +1,108 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useState } from "react";
-import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { Farmer } from "../api/farmers";
+import { FlashList } from "@shopify/flash-list";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Farmer, fetchFarmersPage } from "../api/farmers";
 import { ProfileAvatar } from "./ProfileAvatar";
-import { farmerMatchesSearch } from "../utils/farmerSearch";
+import { ListFooterSkeleton } from "./ui/ListFooterSkeleton";
 import { extractPhotoUrl } from "../utils/profilePhotoUrl";
 import { useSafeAreaInsetsCompat } from "../hooks/useSafeAreaInsetsCompat";
 import { colors } from "../theme/colors";
 import { space } from "../theme/layout";
 
+const SEARCH_DEBOUNCE_MS = 300;
+const PAGE_SIZE = 50;
+
 type Props = {
   visible: boolean;
-  farmers: Farmer[];
   onClose: () => void;
   onSelect: (farmer: Farmer) => void;
 };
 
-export function ExistingFarmerPickerModal({ visible, farmers, onClose, onSelect }: Props) {
+export function ExistingFarmerPickerModal({ visible, onClose, onSelect }: Props) {
   const insets = useSafeAreaInsetsCompat();
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [farmers, setFarmers] = useState<Farmer[]>([]);
+  const [nextUrl, setNextUrl] = useState<string | null>(null);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
+  const requestId = useRef(0);
 
-  const filtered = useMemo(() => farmers.filter((f) => farmerMatchesSearch(f, query)), [farmers, query]);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const loadFirstPage = useCallback(async (search: string) => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const id = ++requestId.current;
+    setLoading(true);
+    setLoadError("");
+    setNextUrl(null);
+    setTotalCount(null);
+    try {
+      const page = await fetchFarmersPage({
+        search: search || undefined,
+        pageSize: PAGE_SIZE,
+        signal: controller.signal,
+        source: "ExistingFarmerPickerModal"
+      });
+      if (controller.signal.aborted || id !== requestId.current) return;
+      setFarmers(page.results);
+      setNextUrl(page.next);
+      setTotalCount(page.count);
+    } catch (err) {
+      if (controller.signal.aborted || id !== requestId.current) return;
+      setFarmers([]);
+      setNextUrl(null);
+      setTotalCount(null);
+      setLoadError(err instanceof Error ? err.message : "Could not search farmers.");
+    } finally {
+      if (!controller.signal.aborted && id === requestId.current) {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!visible) return;
+    void loadFirstPage(debouncedQuery);
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, [visible, debouncedQuery, loadFirstPage]);
+
+  const loadMore = useCallback(async () => {
+    if (!nextUrl || loadingMore || loading) return;
+    setLoadingMore(true);
+    try {
+      const page = await fetchFarmersPage({ nextUrl, source: "ExistingFarmerPickerModal" });
+      setFarmers((current) => {
+        const seen = new Set(current.map((f) => f.id));
+        const merged = [...current];
+        for (const row of page.results) {
+          if (!seen.has(row.id)) {
+            merged.push(row);
+          }
+        }
+        return merged;
+      });
+      setNextUrl(page.next);
+      if (page.count != null) {
+        setTotalCount(page.count);
+      }
+    } catch {
+      // keep loaded rows
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loading, loadingMore, nextUrl]);
 
   function handleSelect(farmer: Farmer) {
     setQuery("");
@@ -33,6 +115,18 @@ export function ExistingFarmerPickerModal({ visible, farmers, onClose, onSelect 
     onClose();
   }
 
+  const countLine = (() => {
+    const shown = farmers.length;
+    const total = totalCount ?? shown;
+    if (debouncedQuery) {
+      return `${shown} match${shown === 1 ? "" : "es"}${totalCount != null ? ` · ${total} in directory` : ""}`;
+    }
+    if (totalCount != null && totalCount > shown) {
+      return `Showing ${shown} of ${total} — scroll for more or search`;
+    }
+    return totalCount != null ? `${total} farmers in directory` : `${shown} farmers`;
+  })();
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
       <View style={styles.backdrop}>
@@ -40,7 +134,9 @@ export function ExistingFarmerPickerModal({ visible, farmers, onClose, onSelect 
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, space.lg) }]}>
           <View style={styles.handle} />
           <Text style={styles.title}>Choose existing farmer</Text>
-          <Text style={styles.subtitle}>Search the directory. To register someone new, close this and enter their details on the form.</Text>
+          <Text style={styles.subtitle}>
+            Search the full directory, or scroll to load more farmers.
+          </Text>
 
           <View style={styles.searchWrap}>
             <Ionicons name="search" size={18} color={colors.muted} />
@@ -59,32 +155,47 @@ export function ExistingFarmerPickerModal({ visible, farmers, onClose, onSelect 
             ) : null}
           </View>
 
-          <FlatList
-            data={filtered}
-            keyExtractor={(item) => String(item.id)}
-            keyboardShouldPersistTaps="handled"
-            style={styles.list}
-            ListEmptyComponent={
-              <Text style={styles.empty}>
-                {query.trim() ? "No farmers match your search." : "No farmers loaded yet. Pull to refresh the Farmers tab or try again."}
-              </Text>
-            }
-            renderItem={({ item }) => {
-              const place = [item.village_name || item.village, item.district_name || item.district].filter(Boolean).join(", ");
-              return (
-                <Pressable onPress={() => handleSelect(item)} style={styles.row} accessibilityRole="button">
-                  <ProfileAvatar name={item.name} photoUrl={extractPhotoUrl(item)} size="sm" />
-                  <View style={styles.rowBody}>
-                    <Text style={styles.rowTitle}>{item.name || "Farmer"}</Text>
-                    <Text style={styles.rowMeta} numberOfLines={2}>
-                      {[item.phone, place].filter(Boolean).join(" · ") || "No details"}
+          {!loading && !loadError ? <Text style={styles.countLine}>{countLine}</Text> : null}
+          {loadError ? <Text style={styles.error}>{loadError}</Text> : null}
+
+          <View style={styles.listWrap}>
+            {loading && farmers.length === 0 ? (
+              <ListFooterSkeleton />
+            ) : (
+              <FlashList
+                data={farmers}
+                keyExtractor={(item) => String(item.id)}
+                keyboardShouldPersistTaps="handled"
+                onEndReached={() => void loadMore()}
+                onEndReachedThreshold={0.35}
+                ListFooterComponent={loadingMore ? <ListFooterSkeleton /> : null}
+                ListEmptyComponent={
+                  !loading ? (
+                    <Text style={styles.empty}>
+                      {debouncedQuery ? "No farmers match your search." : "No farmers in directory."}
                     </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-                </Pressable>
-              );
-            }}
-          />
+                  ) : null
+                }
+                renderItem={({ item }) => {
+                  const place = [item.village_name || item.village, item.district_name || item.district]
+                    .filter(Boolean)
+                    .join(", ");
+                  return (
+                    <Pressable onPress={() => handleSelect(item)} style={styles.row} accessibilityRole="button">
+                      <ProfileAvatar name={item.name} photoUrl={extractPhotoUrl(item)} size="sm" />
+                      <View style={styles.rowBody}>
+                        <Text style={styles.rowTitle}>{item.name || "Farmer"}</Text>
+                        <Text style={styles.rowMeta} numberOfLines={2}>
+                          {[item.phone, place].filter(Boolean).join(" · ") || "No details"}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+                    </Pressable>
+                  );
+                }}
+              />
+            )}
+          </View>
 
           <Pressable onPress={handleClose} style={styles.cancelBtn} accessibilityRole="button">
             <Text style={styles.cancelText}>Cancel</Text>
@@ -108,7 +219,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: "78%",
+    height: "78%",
     paddingHorizontal: space.lg,
     paddingTop: space.md
   },
@@ -140,7 +251,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     gap: space.sm,
-    marginBottom: space.md,
+    marginBottom: space.sm,
     paddingHorizontal: 12,
     paddingVertical: 10
   },
@@ -151,8 +262,15 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     paddingVertical: 0
   },
-  list: {
-    flexGrow: 0
+  countLine: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "600",
+    marginBottom: space.sm
+  },
+  listWrap: {
+    flex: 1,
+    minHeight: 120
   },
   row: {
     alignItems: "center",
@@ -161,14 +279,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: space.md,
     paddingVertical: 14
-  },
-  rowIcon: {
-    alignItems: "center",
-    backgroundColor: colors.primarySoft,
-    borderRadius: 10,
-    height: 40,
-    justifyContent: "center",
-    width: 40
   },
   rowBody: {
     flex: 1,
@@ -190,6 +300,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     paddingVertical: space.xl,
+    textAlign: "center"
+  },
+  error: {
+    color: colors.danger,
+    fontSize: 13,
+    marginBottom: space.sm,
     textAlign: "center"
   },
   cancelBtn: {

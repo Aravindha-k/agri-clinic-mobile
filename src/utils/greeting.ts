@@ -9,4 +9,4 @@ export function greetingForHour(date = new Date()) {
 }
 
 export const LOGIN_WELCOME_TITLE = "Welcome Back";
-export const LOGIN_WELCOME_SUBTITLE = "Sign in to continue your field work";
+export const LOGIN_WELCOME_SUBTITLE = "Field Employee Login";

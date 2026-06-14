@@ -8,9 +8,14 @@ import {
 export type PendingVisitAttachment = {
   id: string;
   attachmentType: VisitAttachmentType;
+  /** Watermarked proof image (primary upload). */
   uri?: string;
   name?: string;
   mimeType?: string;
+  /** Original capture kept for admin review. */
+  originalUri?: string;
+  originalName?: string;
+  originalMimeType?: string;
   textContent?: string;
   createdAt: string;
 };
@@ -46,6 +51,17 @@ export async function uploadAllPendingAttachments(
         if (!text) continue;
         await uploadVisitTextNote(visitId, text);
       } else if (item.uri && item.name && item.mimeType) {
+        if (item.originalUri && item.originalName && item.originalMimeType) {
+          const original: LocalFilePayload = {
+            uri: item.originalUri,
+            name: item.originalName,
+            mimeType: item.originalMimeType,
+            attachmentType: item.attachmentType
+          };
+          await uploadVisitAttachmentFile(visitId, original, (p) =>
+            onProgress?.(i, total, `${label} (original)`, p * 0.45)
+          );
+        }
         const file: LocalFilePayload = {
           uri: item.uri,
           name: item.name,

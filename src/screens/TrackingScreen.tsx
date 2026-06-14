@@ -25,7 +25,6 @@ export function TrackingScreen() {
   const {
     busy,
     currentLocation,
-    endDay,
     error,
     gpsState,
     isActive,
@@ -62,14 +61,6 @@ export function TrackingScreen() {
       await startDay();
     } catch (err) {
       Alert.alert("Unable to start work", err instanceof Error ? err.message : "Please try again.");
-    }
-  }
-
-  async function handleEndDay() {
-    try {
-      await endDay();
-    } catch (err) {
-      Alert.alert("Unable to end day", err instanceof Error ? err.message : "Please try again.");
     }
   }
 
@@ -172,8 +163,9 @@ export function TrackingScreen() {
       {isActive ? (
         <FadeInView delay={100}>
           <View style={styles.footer}>
-            <Text style={styles.footerHint}>You usually do not need to end work—the app stops automatically after today’s limit.</Text>
-            <AppButton title="End day" onPress={handleEndDay} loading={busy} variant="secondary" />
+            <Text style={styles.footerHint}>
+              Workday ends automatically at day close — no manual sign-off needed.
+            </Text>
           </View>
         </FadeInView>
       ) : null}

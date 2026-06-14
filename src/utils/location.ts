@@ -1,5 +1,7 @@
 import * as Location from "expo-location";
 import type { LocationPushPayload } from "../api/tracking";
+import { BACKGROUND_PERMISSION_MESSAGE } from "../tracking/backgroundLocationService";
+import { trackingDevLog } from "../tracking/trackingDevLog";
 import { hasValidMapCoords } from "./mapCoords";
 
 export type ForegroundLocationResult =
@@ -11,6 +13,46 @@ export type ForegroundLocationResult =
       granted: false;
       message: string;
     };
+
+export type TrackingPermissionResult = {
+  foreground: boolean;
+  background: boolean;
+  message?: string;
+};
+
+/** Request foreground then background location for route tracking. */
+export async function ensureTrackingPermissions(): Promise<TrackingPermissionResult> {
+  const servicesEnabled = await Location.hasServicesEnabledAsync();
+  if (!servicesEnabled) {
+    return {
+      foreground: false,
+      background: false,
+      message: "GPS is turned off. Please enable location services and try again."
+    };
+  }
+
+  const foreground = await Location.requestForegroundPermissionsAsync();
+  trackingDevLog("foreground_permission", foreground.status);
+  if (foreground.status !== "granted") {
+    return {
+      foreground: false,
+      background: false,
+      message: "Location permission is required for field tracking."
+    };
+  }
+
+  const background = await Location.requestBackgroundPermissionsAsync();
+  trackingDevLog("background_permission", background.status);
+  if (background.status !== "granted") {
+    return {
+      foreground: true,
+      background: false,
+      message: BACKGROUND_PERMISSION_MESSAGE
+    };
+  }
+
+  return { foreground: true, background: true };
+}
 
 export async function getForegroundLocation(): Promise<ForegroundLocationResult> {
   try {
@@ -30,10 +72,22 @@ export async function getForegroundLocation(): Promise<ForegroundLocationResult>
       };
     }
 
-    const location = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
-      mayShowUserSettingsDialog: true
-    });
+    let location: Location.LocationObject | null = null;
+    try {
+      location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+        mayShowUserSettingsDialog: true
+      });
+    } catch {
+      location = await Location.getLastKnownPositionAsync();
+    }
+
+    if (!location) {
+      return {
+        granted: false,
+        message: "Waiting for GPS fix. Try again in a few seconds or move to an open area."
+      };
+    }
 
     const { latitude, longitude } = location.coords;
     if (!hasValidMapCoords(latitude, longitude)) {
@@ -67,7 +121,10 @@ export function toVisitLocation(location: Location.LocationObject) {
   };
 }
 
-export function toTrackingPayload(location: Location.LocationObject): LocationPushPayload {
+export function toTrackingPayload(
+  location: Location.LocationObject,
+  workdayId?: number
+): LocationPushPayload {
   const lat = location.coords.latitude;
   const lng = location.coords.longitude;
   if (!hasValidMapCoords(lat, lng)) {
@@ -86,6 +143,8 @@ export function toTrackingPayload(location: Location.LocationObject): LocationPu
     speed: typeof speed === "number" && Number.isFinite(speed) ? speed : null,
     heading: typeof heading === "number" && Number.isFinite(heading) ? heading : null,
     captured_at: capturedAt,
-    recorded_at: capturedAt
+    recorded_at: capturedAt,
+    timestamp: capturedAt,
+    ...(workdayId != null ? { workday_id: workdayId } : {})
   };
 }

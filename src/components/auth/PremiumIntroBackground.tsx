@@ -10,7 +10,7 @@ export function PremiumIntroBackground({ variant = "brand" }: { variant?: Varian
 
   return (
     <View style={styles.wrap} pointerEvents="none">
-      <View style={[styles.base, { backgroundColor: "#030806" }]} />
+      <View style={[styles.base, { backgroundColor: BRAND_COLORS.secondary }]} />
       <View
         style={[
           styles.radialTop,
@@ -24,7 +24,7 @@ export function PremiumIntroBackground({ variant = "brand" }: { variant?: Varian
         style={[
           styles.radialBottom,
           {
-            backgroundColor: isStory ? BRAND_COLORS.gradientBottom : "#0A1F17",
+            backgroundColor: isStory ? BRAND_COLORS.gradientBottom : BRAND_COLORS.secondary,
             opacity: isStory ? 0.4 : 0.65
           }
         ]}
@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
     right: "-8%"
   },
   accentLine: {
-    backgroundColor: "rgba(61,255,138,0.12)",
+    backgroundColor: "rgba(255,255,255,0.12)",
     height: 1,
     left: "12%",
     position: "absolute",

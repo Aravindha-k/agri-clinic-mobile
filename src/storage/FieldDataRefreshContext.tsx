@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { invalidateHomeVisitsCache } from "../utils/visitsCache";
 
 type FieldDataRefreshContextValue = {
   visitsVersion: number;
@@ -18,8 +19,8 @@ export function FieldDataRefreshProvider({ children }: { children: React.ReactNo
   const [employeePhotoVersion, setEmployeePhotoVersion] = useState(0);
 
   const bumpAfterVisitChange = useCallback(() => {
+    invalidateHomeVisitsCache();
     setVisitsVersion((v) => v + 1);
-    setFarmersVersion((v) => v + 1);
   }, []);
 
   const bumpAfterFarmerPhotoChange = useCallback(() => {

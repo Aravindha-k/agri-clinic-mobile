@@ -10,6 +10,7 @@ import {
   SESSION_EXPIRED_MESSAGE,
   SERVER_MESSAGE
 } from "../utils/apiError";
+import { classify401Response } from "../utils/authFailure";
 import { unwrapSuccessEnvelope } from "../utils/apiUnwrap";
 
 async function readResponseBody(response: Response): Promise<unknown> {
@@ -46,7 +47,7 @@ export async function refreshAccessTokenShared(): Promise<string> {
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}auth/refresh/`, {
+    response = await fetch(`${API_BASE_URL}mobile/auth/refresh/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh })
@@ -59,8 +60,22 @@ export async function refreshAccessTokenShared(): Promise<string> {
   }
 
   if (response.status === 401) {
-    await handleSessionExpired();
-    throw new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
+    const data = await readResponseBody(response);
+    const kind = classify401Response(data, 401);
+    if (kind === "token_expired") {
+      await handleSessionExpired();
+      throw new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
+    }
+    if (kind === "device_session") {
+      throw new ApiRequestError("Device session could not be verified. Please sign in again.", {
+        code: "DEVICE_SESSION_REQUIRED",
+        status: 401
+      });
+    }
+    throw new ApiRequestError(formatApiErrorMessage(data, "Could not refresh session. Please try again.", 401), {
+      code: "AUTH_UNCERTAIN",
+      status: 401
+    });
   }
 
   if (!response.ok) {

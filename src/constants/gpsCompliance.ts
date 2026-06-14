@@ -1,4 +1,4 @@
-/** GPS compliance timing for field work (Kavya Agri Clinic). */
+/** GPS compliance timing for field work (Kavya Field). */
 export const GPS_REMINDER_INTERVAL_MS = 5 * 60 * 1000;
 export const GPS_BLOCK_AFTER_MS = 30 * 60 * 1000;
 /** How often we probe device GPS / permission state. */

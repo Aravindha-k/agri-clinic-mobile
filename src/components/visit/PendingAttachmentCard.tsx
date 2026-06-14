@@ -59,6 +59,12 @@ export function PendingAttachmentCard({ item, onDelete }: Props) {
         <Text style={[styles.badgeText, { color: c.warning }]}>Pending</Text>
       </View>
 
+      {type === "image" && item.originalUri ? (
+        <View style={[styles.proofBadge, { backgroundColor: c.primary }]}>
+          <Text style={styles.proofBadgeText}>Proof</Text>
+        </View>
+      ) : null}
+
       {type === "image" && item.uri ? (
         <Image source={{ uri: item.uri }} style={styles.thumb} resizeMode="cover" />
       ) : (
@@ -127,6 +133,16 @@ const styles = StyleSheet.create({
     zIndex: 2
   },
   badgeText: { fontSize: 9, fontWeight: "800", letterSpacing: 0.3 },
+  proofBadge: {
+    borderRadius: 6,
+    left: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    position: "absolute",
+    top: 28,
+    zIndex: 2
+  },
+  proofBadgeText: { color: "#FFFFFF", fontSize: 8, fontWeight: "800" },
   thumb: { borderRadius: 10, height: 64, width: 64 },
   iconBox: {
     alignItems: "center",

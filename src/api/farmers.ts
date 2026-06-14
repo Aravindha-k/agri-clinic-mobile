@@ -24,6 +24,11 @@ export type Farmer = {
   profile_photo_url?: string | null;
   profile_photo?: string | null;
   photo?: string | null;
+  visit_count?: number;
+  visits?: number;
+  total_visits?: number;
+  latest_visit_date?: string | null;
+  assigned_employee?: number | null;
 };
 
 type PaginatedFarmers = {
@@ -39,30 +44,73 @@ function farmerKey(phone?: string | null, name?: string | null) {
   return `${(phone || "").trim().toLowerCase()}|${(name || "").trim().toLowerCase()}`;
 }
 
-/** Fetch one page of farmers — no client-side status/active filtering. */
-async function fetchFarmersPage(page: number): Promise<{ results: Farmer[]; hasNext: boolean }> {
-  const data = await apiClient<Farmer[] | PaginatedFarmers>(
-    `farmers/?page=${page}&page_size=${FARMERS_PAGE_SIZE}`
-  );
+export type FarmerListQuery = {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  /** Village name filter (backend matches village name). */
+  village?: string;
+  nextUrl?: string | null;
+  signal?: AbortSignal;
+  source?: string;
+};
 
+export type FarmerListPage = {
+  results: Farmer[];
+  next: string | null;
+  count: number | null;
+};
+
+/** Fetch one page of farmers with optional server search / village filter. */
+export async function fetchFarmersPage(options: FarmerListQuery = {}): Promise<FarmerListPage> {
+  let path = `farmers/?page=${options.page ?? 1}&page_size=${options.pageSize ?? FARMERS_PAGE_SIZE}`;
+  if (options.nextUrl) {
+    path = apiPathFromNextUrl(options.nextUrl);
+    if (!path) {
+      return { results: [], next: null, count: 0 };
+    }
+  } else {
+    const params = new URLSearchParams();
+    params.set("page", String(options.page ?? 1));
+    params.set("page_size", String(options.pageSize ?? FARMERS_PAGE_SIZE));
+    if (options.search?.trim()) {
+      params.set("search", options.search.trim());
+    }
+    if (options.village?.trim()) {
+      params.set("village", options.village.trim());
+    }
+    path = `farmers/?${params.toString()}`;
+  }
+
+  const data = await apiClient<Farmer[] | PaginatedFarmers>(path, {
+    signal: options.signal,
+    source: options.source,
+    dedupe: !options.signal
+  });
   if (Array.isArray(data)) {
-    return { results: data, hasNext: false };
+    return { results: data, next: null, count: data.length };
   }
 
   const results = asArray<Farmer>(data);
-  const hasNext = Boolean(data && typeof data === "object" && data.next);
-  return { results, hasNext };
+  const next =
+    data && typeof data === "object" && typeof data.next === "string" && data.next.length > 0
+      ? data.next
+      : null;
+  const count = data && typeof data === "object" && typeof data.count === "number" ? data.count : null;
+  return { results, next, count };
 }
 
 /** All farmers from the API (every page). Visit count does not affect inclusion. */
 export async function getAllFarmers(): Promise<Farmer[]> {
   const all: Farmer[] = [];
+  let next: string | null = null;
   for (let page = 1; page <= MAX_FARMER_PAGES; page += 1) {
-    const { results, hasNext } = await fetchFarmersPage(page);
-    all.push(...results);
-    if (!hasNext || results.length === 0) {
+    const batch = await fetchFarmersPage(next ? { nextUrl: next } : { page });
+    all.push(...batch.results);
+    if (!batch.next || batch.results.length === 0) {
       break;
     }
+    next = batch.next;
   }
   return all;
 }
@@ -80,6 +128,23 @@ export function getFarmersForFieldWorker(): Promise<Farmer[]> {
 
 export function getFarmers() {
   return getAllFarmers();
+}
+
+/** Lookup a farmer by phone or name without loading the full directory. */
+export async function findFarmerByPhoneOrName(phone?: string, name?: string): Promise<Farmer | null> {
+  const search = (phone || name || "").trim();
+  if (!search) return null;
+  const page = await fetchFarmersPage({ search, pageSize: 20, source: "findFarmerByPhoneOrName" });
+  const phoneNorm = (phone || "").trim();
+  const nameNorm = (name || "").trim().toLowerCase();
+  const byPhone = phoneNorm
+    ? page.results.find((f) => (f.phone || "").trim() === phoneNorm)
+    : undefined;
+  if (byPhone) return byPhone;
+  if (nameNorm) {
+    return page.results.find((f) => (f.name || "").trim().toLowerCase() === nameNorm) ?? null;
+  }
+  return page.results[0] ?? null;
 }
 
 export function getFarmer(id: number) {

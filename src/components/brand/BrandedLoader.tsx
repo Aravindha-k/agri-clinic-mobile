@@ -2,11 +2,11 @@ import { useEffect, useRef } from "react";
 
 import { ActivityIndicator, Animated, Easing, StyleSheet, Text, View } from "react-native";
 
-import { BRAND } from "../../brand/constants";
+import { BRAND } from "../../config/brand";
 
 import { fontWeights } from "../../theme/fontWeights";
 
-import { AppLogo } from "./AppLogo";
+import { BrandLogo } from "./BrandLogo";
 
 
 
@@ -88,7 +88,7 @@ export function BrandedLoader() {
 
       <Animated.View style={{ transform: [{ scale: pulse }] }}>
 
-        <AppLogo size="xl" variant="onPrimary" bare />
+        <BrandLogo variant="onPrimary" />
 
       </Animated.View>
 

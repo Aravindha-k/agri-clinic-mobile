@@ -19,11 +19,18 @@ import {
   SERVER_MESSAGE
 } from "../utils/apiError";
 import { classify401Response } from "../utils/authFailure";
-import { setConnectivityOnline } from "../utils/connectivityBus";
+import { isLanUrl, LAN_ONLY_MESSAGE, createLanOnlyError } from "../../mobile/lib/api";
+import { setConnectivityOnline, setLanOnlyMode } from "../utils/connectivityBus";
 import { unwrapSuccessEnvelope } from "../utils/apiUnwrap";
+import { trackApiCall } from "./apiTelemetry";
+import { dedupeRequest } from "./requestDedupe";
 
 type ApiOptions = RequestInit & {
   auth?: boolean;
+  /** Dev telemetry: which screen/module initiated the request. */
+  source?: string;
+  /** When false, skip in-flight dedupe (default: true for GET). */
+  dedupe?: boolean;
 };
 
 function shouldRethrowWithoutLogout(error: unknown): boolean {
@@ -41,11 +48,19 @@ function shouldRethrowWithoutLogout(error: unknown): boolean {
 
 function devLogApi(
   path: string,
-  meta: { auth: boolean; hasToken: boolean; hasDeviceSession: boolean; status?: number }
+  meta: {
+    auth: boolean;
+    hasToken: boolean;
+    hasDeviceSession: boolean;
+    status?: number;
+    source?: string;
+    duplicate?: boolean;
+  }
 ) {
+  trackApiCall(path, meta.source, meta.duplicate);
   if (!__DEV__) return;
   console.log(
-    `[API] ${path} | auth=${meta.auth ? "yes" : "no"} token=${meta.hasToken ? "yes" : "no"} deviceSession=${meta.hasDeviceSession ? "yes" : "no"}${meta.status != null ? ` status=${meta.status}` : ""}`
+    `[API] ${path} | auth=${meta.auth ? "yes" : "no"} token=${meta.hasToken ? "yes" : "no"} deviceSession=${meta.hasDeviceSession ? "yes" : "no"}${meta.status != null ? ` status=${meta.status}` : ""}${meta.source ? ` source=${meta.source}` : ""}${meta.duplicate ? " duplicate" : ""}`
   );
 }
 
@@ -119,8 +134,8 @@ async function handleAuth401AfterRefresh(response: Response, auth: boolean): Pro
   throw401Error(data, auth);
 }
 
-export async function apiClient<T>(path: string, options: ApiOptions = {}): Promise<T> {
-  const { auth = true, headers, body, ...rest } = options;
+async function executeApiClient<T>(path: string, options: ApiOptions = {}): Promise<T> {
+  const { auth = true, headers, body, source, signal, ...rest } = options;
   const requestHeaders = new Headers(headers);
   requestHeaders.set("Accept", "application/json");
 
@@ -143,13 +158,14 @@ export async function apiClient<T>(path: string, options: ApiOptions = {}): Prom
   const request = () =>
     fetch(`${API_BASE_URL}${path}`, {
       ...rest,
+      signal,
       headers: requestHeaders,
       body
     });
 
   try {
     let response = await request();
-    devLogApi(path, { auth, hasToken, hasDeviceSession, status: response.status });
+    devLogApi(path, { auth, hasToken, hasDeviceSession, status: response.status, source });
 
     if (response.status === 401 && auth) {
       try {
@@ -158,7 +174,7 @@ export async function apiClient<T>(path: string, options: ApiOptions = {}): Prom
         requestHeaders.set("Authorization", `Bearer ${newAccess}`);
         hasDeviceSession = await applyDeviceSessionHeader(requestHeaders);
         response = await request();
-        devLogApi(`${path} (retry)`, { auth, hasToken, hasDeviceSession, status: response.status });
+        devLogApi(`${path} (retry)`, { auth, hasToken, hasDeviceSession, status: response.status, source });
       } catch (error) {
         if (shouldRethrowWithoutLogout(error) || isAuthExpiredError(error)) {
           throw error;
@@ -171,13 +187,25 @@ export async function apiClient<T>(path: string, options: ApiOptions = {}): Prom
       await handleAuth401AfterRefresh(response, auth);
     }
 
+    setLanOnlyMode(false);
     setConnectivityOnline(true);
     return (await parseResponse(response, { auth })) as T;
   } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw err;
+    }
     if (isDeviceSessionConflict(err) || isAuthExpiredError(err)) {
       throw err;
     }
     if (isNetworkError(err)) {
+      if (__DEV__) {
+        const detail = err instanceof Error ? err.message : String(err);
+        console.warn(`[API] Cannot reach ${API_BASE_URL} (${detail})`);
+      }
+      if (isLanUrl(API_BASE_URL)) {
+        setLanOnlyMode(true);
+        throw createLanOnlyError(LAN_ONLY_MESSAGE);
+      }
       setConnectivityOnline(false);
       throw networkError();
     }
@@ -186,4 +214,14 @@ export async function apiClient<T>(path: string, options: ApiOptions = {}): Prom
     }
     throw err;
   }
+}
+
+export async function apiClient<T>(path: string, options: ApiOptions = {}): Promise<T> {
+  const method = (options.method || "GET").toUpperCase();
+  const shouldDedupe = options.dedupe !== false && method === "GET" && !options.signal;
+  if (!shouldDedupe) {
+    return executeApiClient<T>(path, options);
+  }
+  const key = `${method}:${path}`;
+  return dedupeRequest(key, options.source, () => executeApiClient<T>(path, options));
 }

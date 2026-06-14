@@ -1,39 +1,47 @@
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { Farmer, getFarmer, getFarmerActivity, getFarmerFields, getFarmerVisits } from "../api/farmers";
 import { Visit } from "../api/visits";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
 import { FadeInView } from "../components/FadeInView";
-import { ListSkeleton } from "../components/ListSkeleton";
-import { FarmerPhotoPicker } from "../components/FarmerPhotoPicker";
-import { AppHeader, FilterChips, PremiumCard, PrimaryButton } from "../components/ui";
+import { FarmerDetailSkeleton } from "../components/farmer/FarmerDetailSkeleton";
+import { FarmerOverviewStats } from "../components/farmer/FarmerOverviewStats";
+import { FarmerProfileHeader } from "../components/farmer/FarmerProfileHeader";
+import { FarmerTimelineCard } from "../components/farmer/FarmerTimelineCard";
+import { FarmerVisitHistoryCard } from "../components/farmer/FarmerVisitHistoryCard";
+import { AppHeader, FilterChips, PrimaryButton } from "../components/ui";
 import { useGpsWorkGuard } from "../hooks/useGpsWorkGuard";
+import { useSecureScreen } from "../hooks/useSecureScreen";
+import { useDesignSystem } from "../hooks/useDesignSystem";
 import { useFieldDataRefresh } from "../storage/FieldDataRefreshContext";
 import { FarmersStackParamList } from "../navigation/types";
-import { useTheme } from "../theme";
-import { space } from "../theme/layout";
 import { useRefreshControlProps } from "../hooks/useRefreshControlProps";
 import { asArray, getVisitDisplayDateTime } from "../utils/format";
 import { navigateFarmerMap } from "../navigation/navigateFarmerMap";
 import { prefillFromFarmer } from "../utils/farmerPrefill";
+import {
+  buildFarmerTimeline,
+  countOpenIssues,
+  extractRecommendations
+} from "../utils/farmerTimeline";
 
 type Props = NativeStackScreenProps<FarmersStackParamList, "FarmerDetail">;
 
-type TabKey = "Overview" | "Lands" | "Visits" | "Activity";
+type TabKey = "Overview" | "Fields" | "Visits" | "Recommendations" | "Timeline";
 
 const TAB_OPTIONS: { key: TabKey; label: string }[] = [
   { key: "Overview", label: "Overview" },
-  { key: "Lands", label: "Lands" },
-  { key: "Visits", label: "Visits" },
-  { key: "Activity", label: "Activity" }
+  { key: "Fields", label: "Fields" },
+  { key: "Visits", label: "Visit History" },
+  { key: "Recommendations", label: "Recommendations" },
+  { key: "Timeline", label: "Timeline" }
 ];
 
 export function FarmerDetailScreen({ route, navigation }: Props) {
-  const { theme } = useTheme();
-  const c = theme.colors;
+  useSecureScreen();
+  const { colors, type, shadows } = useDesignSystem();
   const [farmer, setFarmer] = useState<Farmer | null>(null);
   const [fields, setFields] = useState<unknown[]>([]);
   const [visits, setVisits] = useState<Visit[]>([]);
@@ -72,28 +80,21 @@ export function FarmerDetailScreen({ route, navigation }: Props) {
   }, [route.params.id]);
 
   useEffect(() => {
-    load(false);
+    void load(false);
   }, [load]);
 
   const sortedVisits = useMemo(() => {
     return [...visits].sort((a, b) => visitTimestamp(b) - visitTimestamp(a));
   }, [visits]);
 
+  const timeline = useMemo(() => buildFarmerTimeline(visits, activity), [visits, activity]);
+  const recommendations = useMemo(() => extractRecommendations(visits), [visits]);
+  const openIssues = useMemo(() => countOpenIssues(visits), [visits]);
+
   const lastVisitedLabel = useMemo(() => {
     const latest = sortedVisits[0];
-    if (!latest || typeof latest !== "object" || !visitTimestamp(latest)) return "Not visited yet";
-    const r = latest as { visit_date?: string; visit_time?: string; created_at?: string; updated_at?: string };
-    return getVisitDisplayDateTime(r);
-  }, [sortedVisits]);
-
-  const activeCropLabel = useMemo(() => {
-    const latest = sortedVisits[0];
-    if (!latest || typeof latest !== "object") return "Not recorded";
-    const r = latest as Record<string, unknown>;
-    const cropInfo = r.crop_info && typeof r.crop_info === "object" ? (r.crop_info as { name?: string }).name : null;
-    if (cropInfo) return cropInfo;
-    if (typeof r.crop === "string" && r.crop.trim() && !/^\d+$/.test(r.crop)) return r.crop;
-    return "Not recorded";
+    if (!latest) return "—";
+    return getVisitDisplayDateTime(latest) || "—";
   }, [sortedVisits]);
 
   function openAddVisit() {
@@ -101,7 +102,7 @@ export function FarmerDetailScreen({ route, navigation }: Props) {
     if (!canRunWorkAction()) return;
     navigation.getParent()?.getParent()?.navigate("VisitFlow", {
       screen: "NewVisitFarmer",
-      params: { prefill: prefillFromFarmer(farmer) }
+      params: { prefill: prefillFromFarmer(farmer), fastRevisit: true }
     });
   }
 
@@ -118,209 +119,193 @@ export function FarmerDetailScreen({ route, navigation }: Props) {
 
   if (loading) {
     return (
-      <View style={[styles.skeletonWrap, { backgroundColor: c.background }]}>
-        <ListSkeleton rows={4} />
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <AppHeader title="Farmer" onBack={() => navigation.goBack()} />
+        <FarmerDetailSkeleton />
       </View>
     );
   }
-  if (error) return <ErrorState message={error} onRetry={() => load(false)} />;
+
+  if (error) return <ErrorState message={error} onRetry={() => void load(false)} />;
   if (!farmer) return null;
 
-  const place = [farmer.village_name || farmer.village, farmer.district_name || farmer.district].filter(Boolean).join(", ") || "Not provided";
+  const place =
+    [farmer.village_name || farmer.village, farmer.district_name || farmer.district].filter(Boolean).join(", ") ||
+    "Location not set";
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.background }}>
-      <AppHeader title={farmer.name || "Farmer"} subtitle={place} onBack={() => navigation.goBack()} />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <AppHeader title="Farmer profile" subtitle={farmer.name || "Farmer"} onBack={() => navigation.goBack()} />
       <ScrollView
         contentContainerStyle={styles.screen}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(true); }} {...refreshControlProps} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              void load(true);
+            }}
+            {...refreshControlProps}
+          />
+        }
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
         <FadeInView>
-          <PremiumCard elevated>
-            <FarmerPhotoPicker
-              farmer={farmer}
-              compact
-              onFarmerUpdated={(updated) => {
-                setFarmer(updated);
-                bumpAfterFarmerPhotoChange();
-              }}
-            />
-            <View style={styles.heroTop}>
-              <View style={styles.heroCopy}>
-                <Text style={[styles.title, { color: c.text }]}>{farmer.name || "Farmer"}</Text>
-                <View style={styles.heroRow}>
-                  <Ionicons name="call-outline" size={15} color={c.muted} />
-                  <Text style={[styles.meta, { color: c.muted }]}>{farmer.phone?.trim() || "Not provided"}</Text>
-                </View>
-                <View style={styles.heroRow}>
-                  <Ionicons name="leaf-outline" size={15} color={c.muted} />
-                  <Text style={[styles.meta, { color: c.muted }]}>{farmer.crop_name || activeCropLabel}</Text>
-                </View>
-              </View>
-            </View>
-            <View style={styles.heroActions}>
-              <PrimaryButton title="View on map" onPress={openFarmerMap} variant="secondary" style={styles.heroBtn} />
-              <PrimaryButton title="Revisit" onPress={openAddVisit} style={styles.heroBtn} />
-            </View>
-          </PremiumCard>
+          <FarmerProfileHeader
+            farmer={farmer}
+            villageLabel={place}
+            onFarmerUpdated={(updated) => {
+              setFarmer(updated);
+              bumpAfterFarmerPhotoChange();
+            }}
+            onNewVisit={openAddVisit}
+          />
+        </FadeInView>
+
+        <FadeInView delay={30}>
+          <FarmerOverviewStats
+            totalVisits={sortedVisits.length}
+            lastVisitLabel={lastVisitedLabel}
+            fieldsCount={fields.length}
+            openIssues={openIssues}
+            onVisitsPress={() => setActiveTab("Visits")}
+          />
         </FadeInView>
 
         <FilterChips options={TAB_OPTIONS} value={activeTab} onChange={setActiveTab} />
 
-        {activeTab === "Overview" ? (
-          <>
-            <PremiumCard elevated tint="primary">
-              <View style={styles.locationRow}>
-                <Ionicons name="location-outline" size={22} color={c.primaryDark} />
-                <View style={styles.locationCopy}>
-                  <Text style={[styles.sectionTitle, { color: c.text }]}>Village & location</Text>
-                  <Text style={[styles.meta, { color: c.muted, marginTop: 4 }]}>{place}</Text>
-                </View>
+        <FadeInView key={activeTab} delay={20}>
+          {activeTab === "Overview" ? (
+            <View style={styles.panel}>
+              <View style={[styles.mapCard, { backgroundColor: colors.card, borderColor: colors.borderSubtle }, shadows.card]}>
+                <Text style={type.sectionTitle}>Location</Text>
+                <Text style={[type.meta, { marginTop: 6 }]}>{place}</Text>
+                <PrimaryButton title="View on map" variant="secondary" onPress={openFarmerMap} style={{ marginTop: 12 }} />
               </View>
-              <PrimaryButton title="View on map" onPress={openFarmerMap} variant="secondary" style={{ marginTop: 12 }} />
-            </PremiumCard>
-            <PremiumCard elevated tint="soft">
-              <Text style={[styles.sectionTitle, { color: c.text }]}>At a glance</Text>
-              <InfoRow label="Last visited" value={lastVisitedLabel} />
-              <InfoRow label="Latest crop" value={activeCropLabel} />
-              <InfoRow
-                label="Land area"
-                value={String(farmer.land_area || farmer.total_land_area || "Not provided")}
-              />
-            </PremiumCard>
-            <PremiumCard elevated>
-              <Text style={[styles.sectionTitle, { color: c.text }]}>Recent visits</Text>
               {sortedVisits.length === 0 ? (
-                <Text style={[styles.emptyInline, { color: c.muted }]}>No visits yet. Tap Revisit to log your first field visit.</Text>
+                <EmptyState
+                  title="No visits yet"
+                  message="Start a field visit to build this farmer's history."
+                  illustration="visits"
+                  actionLabel="New visit"
+                  onAction={openAddVisit}
+                />
               ) : (
-                sortedVisits.slice(0, 4).map((item, index) => (
-                  <View key={index} style={[styles.visitRow, index > 0 && { borderTopColor: c.border, borderTopWidth: 1, marginTop: 12, paddingTop: 12 }]}>
-                    <Text style={[styles.listTitle, { color: c.text }]}>{summarize(item)}</Text>
-                    <Text style={[styles.listMeta, { color: c.muted }]}>{detailLine(item)}</Text>
+                sortedVisits.slice(0, 3).map((visit) => <FarmerVisitHistoryCard key={visit.id} visit={visit} />)
+              )}
+            </View>
+          ) : null}
+
+          {activeTab === "Fields" ? (
+            <View style={styles.panel}>
+              {fields.length === 0 ? (
+                <EmptyState
+                  title="No fields yet"
+                  message="Plots and land parcels linked to this farmer will appear here."
+                  illustration="map"
+                />
+              ) : (
+                fields.map((item, index) => (
+                  <View
+                    key={index}
+                    style={[styles.fieldCard, { backgroundColor: colors.card, borderColor: colors.borderSubtle }, shadows.card]}
+                  >
+                    <Text style={type.cardTitle}>{fieldTitle(item)}</Text>
+                    <Text style={[type.meta, { marginTop: 4 }]}>{fieldDetail(item)}</Text>
                   </View>
                 ))
               )}
-            </PremiumCard>
-          </>
-        ) : null}
+            </View>
+          ) : null}
 
-        {activeTab === "Lands" ? (
-          <Panel>
-            {fields.length === 0 ? (
-              <EmptyState title="No land files" message="Plots linked to this farmer will appear here." illustration="map" />
-            ) : (
-              fields.map((item, index) => (
-                <PremiumCard key={index} elevated>
-                  <Text style={[styles.listTitle, { color: c.text }]}>{summarize(item)}</Text>
-                  <Text style={[styles.listMeta, { color: c.muted }]}>{detailLine(item)}</Text>
-                </PremiumCard>
-              ))
-            )}
-          </Panel>
-        ) : null}
+          {activeTab === "Visits" ? (
+            <View style={styles.panel}>
+              <PrimaryButton title="New visit" onPress={openAddVisit} variant="secondary" style={{ marginBottom: 4 }} />
+              {sortedVisits.length === 0 ? (
+                <EmptyState
+                  title="No visit history"
+                  message="Every field visit for this farmer is listed here."
+                  illustration="visits"
+                  actionLabel="Start visit"
+                  onAction={openAddVisit}
+                />
+              ) : (
+                sortedVisits.map((visit) => <FarmerVisitHistoryCard key={visit.id} visit={visit} />)
+              )}
+            </View>
+          ) : null}
 
-        {activeTab === "Visits" ? (
-          <Panel>
-            <PrimaryButton title="Revisit" onPress={openAddVisit} variant="secondary" style={styles.panelAddBtn} />
-            {sortedVisits.length === 0 ? (
-              <EmptyState title="No visits" message="Start a new field visit for this farmer." illustration="visits" />
-            ) : (
-              sortedVisits.map((item, index) => (
-                <PremiumCard key={index} elevated>
-                  <Text style={[styles.listTitle, { color: c.text }]}>{summarize(item)}</Text>
-                  <Text style={[styles.listMeta, { color: c.muted }]}>{detailLine(item)}</Text>
-                </PremiumCard>
-              ))
-            )}
-          </Panel>
-        ) : null}
+          {activeTab === "Recommendations" ? (
+            <View style={styles.panel}>
+              {recommendations.length === 0 ? (
+                <EmptyState
+                  title="No recommendations yet"
+                  message="Advice you give during visits will show up here for quick reference."
+                  illustration="generic"
+                  actionLabel="New visit"
+                  onAction={openAddVisit}
+                />
+              ) : (
+                recommendations.map((rec) => (
+                  <View
+                    key={rec.id}
+                    style={[styles.recCard, { backgroundColor: colors.primarySoft, borderColor: colors.borderSubtle }]}
+                  >
+                    <Text style={type.caption}>{rec.dateLabel}</Text>
+                    <Text style={[type.bodyStrong, { color: colors.text, marginTop: 6 }]}>{rec.text}</Text>
+                  </View>
+                ))
+              )}
+            </View>
+          ) : null}
 
-        {activeTab === "Activity" ? (
-          <Panel>
-            {activity.length === 0 ? (
-              <EmptyState title="No activity" message="Recent touchpoints will display when available." illustration="generic" />
-            ) : (
-              activity.map((item, index) => (
-                <PremiumCard key={index} elevated>
-                  <Text style={[styles.listTitle, { color: c.text }]}>{summarize(item)}</Text>
-                  <Text style={[styles.listMeta, { color: c.muted }]}>{detailLine(item)}</Text>
-                </PremiumCard>
-              ))
-            )}
-          </Panel>
-        ) : null}
+          {activeTab === "Timeline" ? (
+            <View style={styles.panel}>
+              {timeline.length === 0 ? (
+                <EmptyState
+                  title="No activity yet"
+                  message="Visits, recommendations, and issues will appear in chronological order."
+                  illustration="generic"
+                  actionLabel="New visit"
+                  onAction={openAddVisit}
+                />
+              ) : (
+                timeline.map((event, index) => (
+                  <FarmerTimelineCard key={event.id} event={event} isLast={index === timeline.length - 1} />
+                ))
+              )}
+            </View>
+          ) : null}
+        </FadeInView>
       </ScrollView>
     </View>
   );
 }
 
-function Panel({ children }: { children: ReactNode }) {
-  return <View style={styles.panel}>{children}</View>;
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  const { theme } = useTheme();
-  return (
-    <View style={styles.infoRow}>
-      <Text style={{ color: theme.colors.muted, fontSize: 12, fontWeight: "700" }}>{label}</Text>
-      <Text style={{ color: theme.colors.text, fontSize: 15, fontWeight: "800", marginTop: 4 }}>{value}</Text>
-    </View>
-  );
-}
-
-function visitDateIso(item: unknown): string | null {
-  if (!item || typeof item !== "object") return null;
-  const r = item as Record<string, unknown>;
-  const d = r.created_at || r.date || r.recorded_at;
-  return typeof d === "string" ? d : null;
-}
-
-function visitTimestamp(item: unknown) {
-  const iso = visitDateIso(item);
-  if (!iso) return 0;
-  const t = new Date(iso).getTime();
+function visitTimestamp(item: Visit) {
+  const raw = item.visit_date || item.created_at || item.updated_at;
+  if (!raw) return 0;
+  const t = new Date(raw).getTime();
   return Number.isNaN(t) ? 0 : t;
 }
 
-function summarize(item: unknown) {
-  if (item === null || item === undefined) return "Visit";
-  if (typeof item !== "object") return String(item);
+function fieldTitle(item: unknown) {
+  if (!item || typeof item !== "object") return "Field";
   const r = item as Record<string, unknown>;
-  const crop = r.crop_info && typeof r.crop_info === "object" ? (r.crop_info as Record<string, unknown>).name : null;
-  return String(r.farmer_name || crop || r.name || r.field_name || r.plot_name || r.crop || r.activity_type || r.title || "Visit");
+  return String(r.field_name || r.plot_name || r.name || "Field");
 }
 
-function detailLine(item: unknown) {
+function fieldDetail(item: unknown) {
   if (!item || typeof item !== "object") return "";
   const r = item as Record<string, unknown>;
-  const date = visitDateIso(item);
-  if (date) return getVisitDisplayDateTime({ created_at: date, visit_date: typeof r.visit_date === "string" ? r.visit_date : null, visit_time: typeof r.visit_time === "string" ? r.visit_time : null });
-  const bits = [r.area, r.acreage, r.village_name, r.notes].filter((x) => typeof x === "string" && String(x).trim());
-  return bits.slice(0, 2).join(" · ") || " ";
+  return [r.area, r.acreage, r.crop_name, r.village_name].filter((x) => typeof x === "string" && x.trim()).join(" · ");
 }
 
 const styles = StyleSheet.create({
-  skeletonWrap: { flex: 1, padding: space.lg },
-  screen: { gap: 14, padding: space.lg, paddingBottom: 32 },
-  heroTop: { alignItems: "center", flexDirection: "row", gap: 14 },
-  avatar: { alignItems: "center", borderRadius: 18, height: 64, justifyContent: "center", width: 64 },
-  initial: { fontSize: 26, fontWeight: "900" },
-  heroCopy: { flex: 1 },
-  title: { fontSize: 20, fontWeight: "900" },
-  heroRow: { alignItems: "center", flexDirection: "row", gap: 8, marginTop: 6 },
-  meta: { flex: 1, fontSize: 14, lineHeight: 20 },
-  heroActions: { flexDirection: "row", gap: 10, marginTop: space.lg },
-  heroBtn: { flex: 1 },
-  locationRow: { alignItems: "flex-start", flexDirection: "row", gap: 12 },
-  locationCopy: { flex: 1 },
-  sectionTitle: { fontSize: 16, fontWeight: "900", marginBottom: 12 },
-  infoRow: { marginBottom: 14 },
+  screen: { gap: 16, padding: 16, paddingBottom: 32 },
   panel: { gap: 10 },
-  panelAddBtn: { marginBottom: space.sm },
-  listTitle: { fontSize: 16, fontWeight: "800" },
-  listMeta: { fontSize: 13, marginTop: 4 },
-  visitRow: { paddingVertical: 4 },
-  emptyInline: { fontSize: 14, lineHeight: 20 }
+  mapCard: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16 },
+  fieldCard: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 14 },
+  recCard: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14 }
 });

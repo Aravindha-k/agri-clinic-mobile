@@ -1,2 +1,1 @@
-/** @deprecated Use AppLogo from components/brand */
-export { AppLogo as BrandLogo, type AppLogoSize as BrandLogoSize } from "./brand/AppLogo";
+export { BrandLogo, type BrandLogoSize, type BrandLogoVariant } from "./brand/BrandLogo";

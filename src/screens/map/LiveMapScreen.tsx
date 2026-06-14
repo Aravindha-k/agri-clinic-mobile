@@ -5,12 +5,12 @@ import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-na
 import { ErrorState } from "../../components/ErrorState";
 import { FieldMapView } from "../../components/map/FieldMapView";
 import { MapErrorBoundary } from "../../components/map/MapErrorBoundary";
-import { AppHeader } from "../../components/ui";
+import { StitchAppBar } from "../../components/stitch/StitchAppBar";
 import { useMapAreaHeight } from "../../hooks/useMapAreaHeight";
+import { useSecureScreen } from "../../hooks/useSecureScreen";
 import { RootStackParamList } from "../../navigation/types";
 import { useTracking } from "../../storage/TrackingContext";
 import { useTheme } from "../../theme";
-import { fontWeights } from "../../theme/fontWeights";
 import { formatShortDateTime } from "../../utils/format";
 import { getForegroundLocation } from "../../utils/location";
 import { hasValidMapCoords, parseMapCoord } from "../../utils/mapCoords";
@@ -20,6 +20,7 @@ import { DEFAULT_MAP_REGION, fitMapRegion } from "../../utils/mapRegion";
 type Props = NativeStackScreenProps<RootStackParamList, "LiveMap">;
 
 export function LiveMapScreen({ navigation }: Props) {
+  useSecureScreen();
   const { theme } = useTheme();
   const c = theme.colors;
   const { width } = useWindowDimensions();
@@ -157,18 +158,27 @@ export function LiveMapScreen({ navigation }: Props) {
     );
   }
 
+  const workdayLabel = isActive ? "WORKDAY ACTIVE" : "WORKDAY INACTIVE";
+  const elapsed = isActive ? "Tracking on" : "Start day on Home";
+
   return (
     <View style={[styles.screen, { backgroundColor: c.background }]}>
-      <AppHeader title="Live map" subtitle="Your current field position" onBack={() => navigation.goBack()} />
+      <StitchAppBar title="Live Tracking" subtitle="Field route & GPS" onBack={() => navigation.goBack()} />
       <View style={styles.body}>
-        <View style={[styles.badge, { backgroundColor: c.primaryDark }]}>
-          <View style={styles.liveDot} />
-          <View style={styles.badgeCopy}>
-            <Text style={styles.badgeTitle}>Location active</Text>
-            <Text style={styles.badgeSub}>{label}</Text>
+        <View style={[styles.statusOverlay, { backgroundColor: c.card, borderColor: c.borderSubtle }]}>
+          <View style={styles.statusCol}>
+            <Text style={[styles.statusEyebrow, { color: c.primary }]}>{workdayLabel}</Text>
+            <Text style={[styles.statusMain, { color: c.text }]}>{elapsed}</Text>
+          </View>
+          <View style={[styles.statusDivider, { backgroundColor: c.border }]} />
+          <View style={styles.statusCol}>
+            <Text style={[styles.statusEyebrow, { color: c.muted }]}>GPS</Text>
+            <Text style={[styles.statusMain, { color: c.text }]} numberOfLines={1}>
+              {label}
+            </Text>
           </View>
           <Pressable onPress={() => void refreshTracking().catch(() => undefined)} hitSlop={8}>
-            <Ionicons name="refresh" size={20} color="#FFFFFF" />
+            <Ionicons name="refresh" size={22} color={c.primaryDark} />
           </Pressable>
         </View>
 
@@ -220,19 +230,20 @@ export function LiveMapScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   body: { alignItems: "center", flex: 1, gap: 12, paddingHorizontal: 16, paddingTop: 12 },
-  badge: {
+  statusOverlay: {
     alignItems: "center",
     alignSelf: "stretch",
-    borderRadius: 14,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14
   },
-  badgeCopy: { flex: 1 },
-  liveDot: { backgroundColor: "#4ADE80", borderRadius: 99, height: 10, width: 10 },
-  badgeTitle: { color: "#FFFFFF", fontSize: 14, fontWeight: fontWeights.heavy },
-  badgeSub: { color: "rgba(255,255,255,0.8)", fontSize: 12, marginTop: 2 },
+  statusCol: { flex: 1, minWidth: 0 },
+  statusDivider: { alignSelf: "stretch", width: StyleSheet.hairlineWidth },
+  statusEyebrow: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
+  statusMain: { fontSize: 15, fontWeight: "800", marginTop: 4 },
   warn: { alignSelf: "stretch", borderRadius: 12, borderWidth: 1, padding: 12 },
   warnText: { fontSize: 13, fontWeight: "700", lineHeight: 18, textAlign: "center" },
   fallbackCard: {

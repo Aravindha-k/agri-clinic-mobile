@@ -19,7 +19,8 @@ export type VisitTimelineEvent = {
 export function buildVisitTimelineEvents(visit: Visit, farmer: ResolvedFarmer): VisitTimelineEvent[] {
   const when = getVisitDisplayDateTime(visit);
   const hasGps = Boolean(visit.latitude && visit.longitude);
-  const advice = visit.general_advice || visit.fertilizer_advice || visit.notes;
+  const observationText =
+    visit.field_notes || visit.observation || visit.general_advice || visit.fertilizer_advice || visit.notes;
 
   return [
     {
@@ -41,9 +42,9 @@ export function buildVisitTimelineEvents(visit: Visit, farmer: ResolvedFarmer): 
       icon: "location-outline"
     },
     {
-      title: "Recommendation Added",
+      title: "Observation / Field Notes",
       subtitle: when,
-      body: advice?.trim() ? advice.trim() : "Not recorded",
+      body: observationText?.trim() ? observationText.trim() : "Not added by employee",
       icon: "chatbubble-ellipses-outline"
     },
     {

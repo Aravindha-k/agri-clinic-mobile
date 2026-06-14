@@ -29,6 +29,8 @@ type GpsComplianceContextValue = {
   bannerTitle: string;
   bannerSubtitle: string;
   refreshGpsStatus: () => Promise<void>;
+  /** Call right after the user grants location (e.g. workday start) for instant UI update. */
+  notifyGpsGranted: () => void;
   /** Returns false when work actions must not run (30+ min without GPS). */
   ensureWorkAllowed: (actionLabel?: string) => boolean;
   /** Shows permission settings guidance (does not block unless status is blocked). */
@@ -88,6 +90,13 @@ export function GpsComplianceProvider({ children }: { children: React.ReactNode 
         Alert.alert("GPS required", GPS_REMINDER_MESSAGE);
       }
     }
+  }, []);
+
+  const notifyGpsGranted = useCallback(() => {
+    offlineSinceRef.current = null;
+    lastReminderAtRef.current = 0;
+    setAvailability("active");
+    setStatus("active");
   }, []);
 
   const refreshGpsStatus = useCallback(async () => {
@@ -189,6 +198,7 @@ export function GpsComplianceProvider({ children }: { children: React.ReactNode 
       bannerTitle: bannerCopy.title,
       bannerSubtitle: bannerCopy.subtitle,
       refreshGpsStatus,
+      notifyGpsGranted,
       ensureWorkAllowed,
       showPermissionHelp
     }),
@@ -197,6 +207,7 @@ export function GpsComplianceProvider({ children }: { children: React.ReactNode 
       bannerCopy.subtitle,
       bannerCopy.title,
       ensureWorkAllowed,
+      notifyGpsGranted,
       permissionDenied,
       refreshGpsStatus,
       showPermissionHelp,

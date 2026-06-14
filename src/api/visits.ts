@@ -53,6 +53,21 @@ export type Visit = {
   irrigation_advice?: string | null;
   general_advice?: string | null;
   follow_up_required?: boolean | null;
+  observation?: string | null;
+  field_notes?: string | null;
+  problem_seen?: string | null;
+  problem_description?: string | null;
+  problem_category_id?: number | null;
+  problem_master_id?: number | null;
+  field_visit?: {
+    problem_category?: { id?: number; code?: string; name?: string };
+    problem_master?: { id?: number; name?: string; tamil_name?: string };
+    problem_subcategory?: { id?: number; name?: string; tamil_name?: string };
+    problem_description?: string;
+  };
+  action_taken?: string | null;
+  follow_up_date?: string | null;
+  recommendation?: string | null;
 };
 
 export type VisitFormValues = {
@@ -78,6 +93,16 @@ export type VisitFormValues = {
   irrigation_advice?: string;
   general_advice?: string;
   follow_up_required?: boolean;
+  observation?: string;
+  field_notes?: string;
+  problem_seen?: string;
+  problem_category_id?: string;
+  problem_master_id?: string;
+  problem_description?: string;
+  action_taken?: string;
+  follow_up_date?: string;
+  crop_name?: string;
+  recommendation?: string;
 };
 
 export type VisitListPage = PaginatedList<Visit>;
@@ -104,18 +129,48 @@ export function parseVisitListPayload(data: unknown): VisitListPage {
   return normalizeVisitPage(parsePaginatedList<Visit>(data));
 }
 
-export async function fetchVisitsPage(options?: { page?: number; nextUrl?: string | null }): Promise<VisitListPage> {
+export type VisitDateFilter = "today" | "week" | "month" | "all";
+
+export async function fetchVisitsPage(options?: {
+  page?: number;
+  pageSize?: number;
+  nextUrl?: string | null;
+  dateFilter?: VisitDateFilter;
+  search?: string;
+  signal?: AbortSignal;
+  source?: string;
+}): Promise<VisitListPage> {
   let path = MOBILE_VISITS;
   if (options?.nextUrl) {
     path = apiPathFromNextUrl(options.nextUrl);
     if (!path) {
       return { results: [], next: null, count: 0 };
     }
-  } else if (options?.page && options.page > 1) {
-    path = `${MOBILE_VISITS}?page=${options.page}`;
+  } else {
+    const params = new URLSearchParams();
+    if (options?.page && options.page > 1) {
+      params.set("page", String(options.page));
+    }
+    if (options?.pageSize) {
+      params.set("page_size", String(options.pageSize));
+    }
+    if (options?.dateFilter && options.dateFilter !== "all") {
+      params.set("date_filter", options.dateFilter);
+    }
+    if (options?.search?.trim()) {
+      params.set("search", options.search.trim());
+    }
+    const qs = params.toString();
+    if (qs) {
+      path = `${MOBILE_VISITS}?${qs}`;
+    }
   }
 
-  const data = await apiClient<unknown>(path);
+  const data = await apiClient<unknown>(path, {
+    signal: options?.signal,
+    source: options?.source,
+    dedupe: !options?.signal
+  });
   return parseVisitListPayload(data);
 }
 
@@ -192,7 +247,13 @@ export async function submitMobileVisit(
   const visitRow = data.visit ?? (data as unknown as Visit);
   const normalized = normalizeVisitFromApi(visitRow);
   const id = data.visit_id ?? normalized.id;
-  return { ...normalized, id };
+
+  try {
+    const saved = normalizeVisitFromApi(await getVisit(id));
+    return { ...saved, id };
+  } catch {
+    return { ...normalized, id };
+  }
 }
 
 /** @deprecated Use submitMobileVisit */

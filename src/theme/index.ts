@@ -11,3 +11,6 @@ export type { DesignSystem, TypographyScale } from "./designSystem";
 export { listCardType, listCardLayout, listCardStyles } from "./listCard";
 export { refreshControlProps } from "./refresh";
 export { premium } from "./premiumTokens";
+export { DS, TAB_BAR, STATUS_BAR } from "./globalStyles";
+export { FONTS } from "./fonts";
+export { applyGlobalFonts } from "./applyGlobalFonts";

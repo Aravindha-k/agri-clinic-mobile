@@ -13,7 +13,7 @@ type Props = {
 export function PremiumCard({ children, style, elevated = true, tint = "default", compact }: Props) {
   const { colors, radius, layout, shadows } = useDesignSystem();
   const bg =
-    tint === "soft" ? colors.cardMuted : tint === "primary" ? colors.primarySoft : colors.surface ?? colors.card;
+    tint === "soft" ? colors.cardMuted : tint === "primary" ? colors.primarySoft : colors.card;
 
   return (
     <View

@@ -27,6 +27,7 @@ import { useLanOnlyMode } from "../../../src/hooks/useLanOnlyMode";
 import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
 import { useTabBarBottomInset } from "../../../src/hooks/useTabBarBottomInset";
 import { useRefreshControlProps } from "../../../src/hooks/useRefreshControlProps";
+import { useWorkdayTimer } from "../../../src/hooks/useLiveClock";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
@@ -99,17 +100,6 @@ function HeaderBrandCombo() {
   );
 }
 
-function formatTime(seconds: number): string {
-  const h = Math.floor(seconds / 3600)
-    .toString()
-    .padStart(2, "0");
-  const m = Math.floor((seconds % 3600) / 60)
-    .toString()
-    .padStart(2, "0");
-  const s = (seconds % 60).toString().padStart(2, "0");
-  return `${h}:${m}:${s}`;
-}
-
 function NotificationBell({ count, onPress }: { count: number; onPress: () => void }) {
   return (
     <Pressable
@@ -146,7 +136,7 @@ function WorkdayTimerCard({
   startedAt,
   distanceKm,
   busy,
-  nowMs,
+  timerDisplay,
   onStart,
   t
 }: {
@@ -154,7 +144,7 @@ function WorkdayTimerCard({
   startedAt: string | null;
   distanceKm: number;
   busy: boolean;
-  nowMs: number;
+  timerDisplay: string;
   onStart: () => void;
   t: (key: string) => string;
 }) {
@@ -176,9 +166,6 @@ function WorkdayTimerCard({
     );
   }
 
-  const startMs = startedAt ? new Date(startedAt).getTime() : NaN;
-  const elapsedSeconds =
-    startedAt && !Number.isNaN(startMs) ? Math.max(0, Math.floor((nowMs - startMs) / 1000)) : 0;
   const todayLabel = dayjs().format("dddd, D MMM");
 
   return (
@@ -193,10 +180,14 @@ function WorkdayTimerCard({
         <Text style={styles.timerLabel}>ACTIVE WORKDAY</Text>
       </View>
 
-      <Text style={styles.timerValue}>{formatTime(elapsedSeconds)}</Text>
+      <Text style={styles.timerValue} accessibilityLabel={`Workday timer ${timerDisplay}`}>
+        {timerDisplay}
+      </Text>
 
       <Text style={styles.timerSub}>
-        Started {formatShortTime(startedAt)} · {formatDistanceKm(distanceKm)} km covered
+        {startedAt
+          ? `Started ${formatShortTime(startedAt)} · ${formatDistanceKm(distanceKm)} km covered`
+          : `${formatDistanceKm(distanceKm)} km covered today`}
       </Text>
 
       <Text style={styles.timerDate}>{todayLabel}</Text>
@@ -269,7 +260,7 @@ export default function HomeTabScreen() {
   const refreshControlProps = useRefreshControlProps();
   const { pendingCount, syncAll, lastSyncAt } = useOfflineSync();
   const { visitsVersion } = useFieldDataRefresh();
-  const { isActive, startedAt: trackingStartedAt, startDay, busy, refreshTracking } = useTracking();
+  const { isActive, startedAt: trackingStartedAt, startDay, busy, refreshTracking, workday } = useTracking();
   const unreadNotifCount = useSyncStore((state) => state.unreadNotifCount);
   const lanOnly = useLanOnlyMode();
 
@@ -277,14 +268,17 @@ export default function HomeTabScreen() {
   const [workStatus, setWorkStatus] = useState<MobileWorkStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const rootNav = navigation.getParent();
   const workActive = isActive || Boolean(workStatus?.is_active);
   const startedAt =
-    (isActive && trackingStartedAt) || workStatus?.started_at || trackingStartedAt || null;
+    trackingStartedAt ||
+    workStatus?.started_at ||
+    workday?.started_at ||
+    workday?.start_time ||
+    null;
+  const workdayTimer = useWorkdayTimer(startedAt, workActive);
   const distanceKm = workStatus?.distance_km ?? 0;
-  const routePoints = workStatus?.route_points ?? 0;
   const headerDate = dayjs().format("dddd, D MMM");
 
   const loadAll = useCallback(async (isRefresh = false) => {
@@ -322,20 +316,6 @@ export default function HomeTabScreen() {
       void fetchDashboard({ force: true }).then(setDashboard).catch(() => undefined);
     }
   }, [visitsVersion]);
-
-  useEffect(() => {
-    if (!workActive) return;
-    const tick = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(tick);
-  }, [workActive]);
-
-  useEffect(() => {
-    if (!workActive) return;
-    const poll = setInterval(() => {
-      void fetchDashboard({ force: true }).then(setDashboard).catch(() => undefined);
-    }, 60_000);
-    return () => clearInterval(poll);
-  }, [workActive]);
 
   async function onRefresh() {
     setRefreshing(true);
@@ -440,14 +420,17 @@ export default function HomeTabScreen() {
           startedAt={startedAt}
           distanceKm={distanceKm}
           busy={busy}
-          nowMs={nowMs}
+          timerDisplay={workdayTimer.display}
           onStart={confirmStartWorkday}
           t={t}
         />
 
         <View style={styles.statsGrid}>
           <StatCard value={formatDistanceKm(distanceKm)} label={t("home.distanceToday")} />
-          <StatCard value={routePoints} label={t("home.routePoints")} />
+          <StatCard
+            value={workActive ? workdayTimer.compact : "0h 0m"}
+            label={t("home.hoursWorked")}
+          />
           <StatCard value={dashboard?.visits_today ?? 0} label={t("home.visitsToday")} />
           <StatCard value={dashboard?.farmers_covered ?? 0} label={t("home.farmersCovered")} />
         </View>
@@ -621,19 +604,20 @@ const styles = StyleSheet.create({
     zIndex: 2
   },
   timerLabel: {
-    color: "rgba(255,255,255,0.65)",
-    fontFamily: FONTS.bold,
-    fontSize: 9,
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 10,
     fontWeight: "700",
     letterSpacing: 1,
     textTransform: "uppercase"
   },
   timerValue: {
-    color: "#fff",
-    fontFamily: FONTS.extrabold,
-    fontSize: 32,
+    color: "#ffffff",
+    fontSize: 36,
+    fontVariant: ["tabular-nums"],
     fontWeight: "800",
-    letterSpacing: 2,
+    includeFontPadding: false,
+    letterSpacing: 1,
+    lineHeight: 42,
     marginTop: 8,
     zIndex: 2
   },

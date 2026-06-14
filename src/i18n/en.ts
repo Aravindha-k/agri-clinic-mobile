@@ -53,6 +53,7 @@ export const en = {
     startWorkdayConfirm: "Start workday?",
     startWorkdayBody: "GPS activates automatically once you begin.",
     distanceToday: "Distance today",
+    hoursWorked: "Hours worked",
     routePoints: "Route points",
     visitsToday: "Visits today",
     farmersCovered: "Farmers covered",

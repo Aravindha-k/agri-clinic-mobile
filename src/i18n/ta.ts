@@ -55,6 +55,7 @@ export const ta: TranslationTree = {
     startWorkdayConfirm: "பணி நாள் தொடங்கவா?",
     startWorkdayBody: "தொடங்கியவுடன் GPS தானாக இயங்கும்.",
     distanceToday: "இன்றைய தூரம்",
+    hoursWorked: "வேலை நேரம்",
     routePoints: "வழி புள்ளிகள்",
     visitsToday: "இன்றைய வருகைகள்",
     farmersCovered: "சந்தித்த விவசாயிகள்",

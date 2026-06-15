@@ -1,12 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Text, ViewStyle } from "react-native";
 import { FONTS } from "../../src/theme/fonts";
-
-const DS = {
-  surface: "#ffffff",
-  inputBorder: "#e2e8f0",
-  textSubtle: "#64748b",
-  accent: "#16a34a"
-} as const;
+import { ENT } from "../../src/theme/enterprise";
 
 export type FilterPill = {
   id: string;
@@ -37,7 +31,6 @@ function FilterPillButton({ label, active, onPress }: Omit<FilterPill, "id">) {
   );
 }
 
-/** Horizontal filter pills — constrained height so pills never stretch vertically. */
 export function FilterPillRow({ pills, style }: Props) {
   return (
     <ScrollView
@@ -75,26 +68,29 @@ const styles = StyleSheet.create({
   pill: {
     alignSelf: "center",
     borderRadius: 99,
-    borderWidth: 1.5,
     flexShrink: 0,
-    paddingHorizontal: 14,
-    paddingVertical: 6
+    paddingHorizontal: 16,
+    paddingVertical: 7
   },
   pillInactive: {
-    backgroundColor: DS.surface,
-    borderColor: DS.inputBorder
+    backgroundColor: ENT.card,
+    borderColor: ENT.border,
+    borderWidth: 1
   },
   pillActive: {
-    backgroundColor: DS.accent,
-    borderColor: DS.accent
+    backgroundColor: ENT.primary,
+    borderColor: ENT.primary,
+    borderWidth: 1
   },
   pillText: {
-    color: DS.textSubtle,
-    fontFamily: FONTS.semibold,
-    fontSize: 10,
-    fontWeight: "600"
+    color: ENT.textSecondary,
+    fontFamily: FONTS.medium,
+    fontSize: 11,
+    fontWeight: "500"
   },
   pillTextActive: {
-    color: "#fff"
+    color: ENT.white,
+    fontFamily: FONTS.bold,
+    fontWeight: "700"
   }
 });

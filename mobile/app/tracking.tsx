@@ -22,6 +22,7 @@ import { useTracking } from "../../src/storage/TrackingContext";
 import { isSameVisitLocalDay } from "../../src/utils/format";
 import { getHomeVisits } from "../../src/utils/visitsCache";
 import { PrimaryButton, StatusChip } from "../components/ui";
+import { NeonProgressBar } from "../../src/components/cinematic";
 import { fetchWorkStatus } from "../lib/homeApi";
 import {
   flushGpsBuffer,
@@ -328,9 +329,7 @@ export default function TrackingWorkspaceScreen() {
         {pending > 0 ? (
           <View style={styles.bufferPending}>
             <Text style={styles.bufferTitle}>{pending} points pending sync</Text>
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${bufferStatus.percent}%` }]} />
-            </View>
+            <NeonProgressBar progress={bufferStatus.percent / 100} height={4} style={styles.progressTrack} />
             <Text style={styles.bufferMeta}>{bufferStatus.percent}% of buffer ({bufferStatus.max} max)</Text>
             <Pressable
               onPress={() => void handleSyncGps()}

@@ -2,27 +2,17 @@ import { Ionicons } from "@expo/vector-icons";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { FONTS } from "../../../src/theme/fonts";
+import { ENT, ENT_CARD_SHADOW } from "../../../src/theme/enterprise";
 import type { FarmerWorkflowMeta } from "../../lib/workQueue";
 import type { MobileFarmer } from "../../lib/farmersApi";
-import { avatarInitials, getAvatarColors } from "../../lib/avatarColor";
+import { avatarInitials } from "../../lib/avatarColor";
 import { farmerVisitCount } from "../../lib/farmerStatus";
 import { buildFarmerWorkflowMeta } from "../../lib/workQueue";
 
-const DS = {
-  surface: "#ffffff",
-  border: "#f1f5f9",
-  textPrimary: "#0f172a",
-  textMuted: "#94a3b8",
-  textAction: "#475569",
-  accent: "#16a34a",
-  inputBorder: "#e2e8f0"
-} as const;
-
 function FarmerAvatar({ name }: { name: string }) {
-  const { bg, text } = getAvatarColors(name);
   return (
-    <View style={[styles.avatar, { backgroundColor: bg }]}>
-      <Text style={[styles.avatarText, { color: text }]}>{avatarInitials(name)}</Text>
+    <View style={styles.avatar}>
+      <Text style={styles.avatarText}>{avatarInitials(name)}</Text>
     </View>
   );
 }
@@ -69,7 +59,7 @@ export function FarmerDirectoryCard({ farmer, workflow, onPress, onCall, onMap, 
           </Text>
           {village ? (
             <View style={styles.locationRow}>
-              <Ionicons name="location-outline" size={10} color={DS.textMuted} />
+              <Ionicons name="location-outline" size={10} color={ENT.textSecondary} />
               <Text style={styles.location} numberOfLines={1}>
                 {village}
               </Text>
@@ -92,7 +82,7 @@ export function FarmerDirectoryCard({ farmer, workflow, onPress, onCall, onMap, 
           disabled={!canCall}
           style={({ pressed }) => [styles.outlineBtn, !canCall && styles.btnDisabled, pressed && canCall && { opacity: 0.88 }]}
         >
-          <Ionicons name="call-outline" size={13} color={DS.textAction} />
+          <Ionicons name="call-outline" size={13} color={ENT.textSecondary} />
           <Text style={styles.outlineBtnText}>{t("farmers.call")}</Text>
         </Pressable>
 
@@ -103,7 +93,7 @@ export function FarmerDirectoryCard({ farmer, workflow, onPress, onCall, onMap, 
           }}
           style={({ pressed }) => [styles.outlineBtn, pressed && { opacity: 0.88 }]}
         >
-          <Ionicons name="map-outline" size={13} color={DS.textAction} />
+          <Ionicons name="map-outline" size={13} color={ENT.textSecondary} />
           <Text style={styles.outlineBtnText}>{t("farmers.map")}</Text>
         </Pressable>
 
@@ -126,18 +116,14 @@ export function FarmerDirectoryCard({ farmer, workflow, onPress, onCall, onMap, 
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: DS.surface,
-    borderColor: DS.border,
-    borderRadius: 18,
-    borderWidth: 1,
-    elevation: 2,
+    backgroundColor: ENT.card,
+    borderColor: ENT.border,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
     marginBottom: 10,
     marginHorizontal: 16,
     padding: 14,
-    shadowColor: "#0f172a",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8
+    ...ENT_CARD_SHADOW
   },
   topRow: {
     alignItems: "center",
@@ -146,12 +132,14 @@ const styles = StyleSheet.create({
   },
   avatar: {
     alignItems: "center",
+    backgroundColor: ENT.primarySoft,
     borderRadius: 20,
     height: 40,
     justifyContent: "center",
     width: 40
   },
   avatarText: {
+    color: ENT.primary,
     fontFamily: FONTS.extrabold,
     fontSize: 12,
     fontWeight: "800"
@@ -162,9 +150,9 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   name: {
-    color: DS.textPrimary,
+    color: ENT.text,
     fontFamily: FONTS.bold,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "700"
   },
   locationRow: {
@@ -173,15 +161,15 @@ const styles = StyleSheet.create({
     gap: 4
   },
   location: {
-    color: DS.textMuted,
+    color: ENT.textSecondary,
     flex: 1,
     fontFamily: FONTS.regular,
-    fontSize: 10
+    fontSize: 11
   },
   lastVisit: {
-    color: DS.textMuted,
+    color: ENT.textMuted,
     fontFamily: FONTS.regular,
-    fontSize: 10,
+    fontSize: 10.5,
     marginTop: 2
   },
   buttonRow: {
@@ -191,10 +179,10 @@ const styles = StyleSheet.create({
   },
   outlineBtn: {
     alignItems: "center",
-    backgroundColor: DS.surface,
-    borderColor: DS.inputBorder,
+    backgroundColor: ENT.bg,
+    borderColor: ENT.border,
     borderRadius: 9,
-    borderWidth: 1.5,
+    borderWidth: 1,
     flex: 1,
     flexDirection: "row",
     gap: 4,
@@ -202,9 +190,9 @@ const styles = StyleSheet.create({
     justifyContent: "center"
   },
   outlineBtnText: {
-    color: DS.textAction,
+    color: ENT.textSecondary,
     fontFamily: FONTS.semibold,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "600"
   },
   btnDisabled: {
@@ -212,7 +200,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     alignItems: "center",
-    backgroundColor: DS.accent,
+    backgroundColor: ENT.primary,
     borderRadius: 9,
     flex: 1.8,
     flexDirection: "row",
@@ -221,9 +209,9 @@ const styles = StyleSheet.create({
     justifyContent: "center"
   },
   primaryBtnText: {
-    color: "#fff",
+    color: ENT.white,
     fontFamily: FONTS.bold,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "700"
   }
 });

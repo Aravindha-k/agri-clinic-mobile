@@ -6,7 +6,7 @@ export const stitch = {
   cardTint: "#EEF4FF",
   primary: "#0F5132",
   primaryDark: "#0B5A38",
-  primarySoft: "#D8F0E3",
+  primarySoft: "#D4EDE0",
   text: "#122018",
   textSecondary: "#3D5247",
   muted: "#6B7F74",

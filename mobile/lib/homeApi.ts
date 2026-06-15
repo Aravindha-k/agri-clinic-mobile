@@ -1,5 +1,6 @@
 import { apiClient } from "../../src/api/client";
 import { fetchCurrentWorkday } from "../../src/api/tracking";
+import { resolveWorkdayStartedAt } from "../../src/utils/workdayStartedAt";
 import type { Visit } from "../../src/api/visits";
 import { isSameVisitLocalDay, visitDisplayIso } from "../../src/utils/format";
 import { cropLabelFromVisit } from "../../src/utils/farmerPrefill";
@@ -233,14 +234,19 @@ export async function fetchDashboard(options?: { force?: boolean }): Promise<Das
 export async function fetchWorkStatus(): Promise<MobileWorkStatus> {
   try {
     const data = await apiClient<Record<string, unknown>>("mobile/work/status/", { source: "HomeDashboard" });
-    return {
-      is_active: Boolean(data.is_active ?? data.active),
+    const startedAtSource = {
       started_at:
         typeof data.started_at === "string"
           ? data.started_at
           : typeof data.start_time === "string"
             ? data.start_time
             : null,
+      start_time: typeof data.start_time === "string" ? data.start_time : null,
+      date: typeof data.date === "string" ? data.date : null
+    };
+    return {
+      is_active: Boolean(data.is_active ?? data.active),
+      started_at: resolveWorkdayStartedAt(startedAtSource),
       distance_km: typeof data.distance_km === "number" ? data.distance_km : Number(data.distance_km) || 0,
       route_points:
         typeof data.route_points === "number"
@@ -254,7 +260,7 @@ export async function fetchWorkStatus(): Promise<MobileWorkStatus> {
       const w = result.workday;
       return {
         is_active: true,
-        started_at: w.started_at ?? w.start_time ?? null,
+        started_at: resolveWorkdayStartedAt(w),
         distance_km: 0,
         workday_id: w.workday_id ?? w.id
       };

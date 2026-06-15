@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import NumberFlip from "../cinematic/NumberFlip";
 import { useDesignSystem } from "../../hooks/useDesignSystem";
 
 type Props = {
@@ -9,9 +10,11 @@ type Props = {
   hint?: string;
   accent?: boolean;
   onPress?: () => void;
+  /** Animate numeric values with flip counter. */
+  animateValue?: boolean;
 };
 
-export function KpiCard({ icon, label, value, hint, accent, onPress }: Props) {
+export function KpiCard({ icon, label, value, hint, accent, onPress, animateValue = true }: Props) {
   const { colors, type, shadows } = useDesignSystem();
 
   const inner = (
@@ -28,9 +31,17 @@ export function KpiCard({ icon, label, value, hint, accent, onPress }: Props) {
       <View style={[styles.iconWrap, { backgroundColor: accent ? colors.card : colors.primarySoft }]}>
         <Ionicons name={icon} size={20} color={colors.primary} />
       </View>
-      <Text style={[type.metric, { color: colors.text }]} numberOfLines={1}>
-        {value}
-      </Text>
+      {animateValue && (typeof value === "number" || /^\d/.test(String(value))) ? (
+        <NumberFlip
+          value={value}
+          style={{ ...type.metric, color: colors.text }}
+          glowInterval={accent ? 3000 : 0}
+        />
+      ) : (
+        <Text style={[type.metric, { color: colors.text }]} numberOfLines={1}>
+          {value}
+        </Text>
+      )}
       <Text style={[type.caption, { color: colors.textSecondary }]} numberOfLines={1}>
         {label}
       </Text>

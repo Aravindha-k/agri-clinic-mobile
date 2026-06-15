@@ -43,21 +43,12 @@ import { getGpsBufferStatus } from "../../lib/gps/trackingService";
 import { clearAppStorage } from "../../lib/mmkv";
 import { readPendingVisits } from "../../lib/pendingVisitsQueue";
 import { syncAll } from "../../lib/offlineSyncManager";
+import { DS } from "../../../src/theme/globalStyles";
+import { ScreenBackground } from "../../../src/components/glass";
+import { ENT, ENT_CARD_SHADOW, ENT_SECTION_LABEL } from "../../../src/theme/enterprise";
+import { BRAND_COLORS } from "../../../src/config/brand";
 
-const DS = {
-  bg: "#f8fafc",
-  surface: "#ffffff",
-  border: "#f1f5f9",
-  inputBorder: "#e2e8f0",
-  textPrimary: "#0f172a",
-  textMuted: "#94a3b8",
-  textSubtle: "#64748b",
-  accent: "#16a34a",
-  accentBg: "#f0fdf4",
-  danger: "#dc2626",
-  dangerBorder: "#fee2e2",
-  hero: "#16a34a"
-} as const;
+const PROFILE_DS = { ...DS, dangerBorder: "#fee2e2", hero: BRAND_COLORS.primary } as const;
 
 type MenuRow = {
   key: string;
@@ -68,14 +59,16 @@ type MenuRow = {
 };
 
 function SectionLabel({ title }: { title: string }) {
-  return <Text style={styles.sectionLabel}>{title.toUpperCase()}</Text>;
+  return <Text style={[styles.sectionLabel, ENT_SECTION_LABEL]}>{title.toUpperCase()}</Text>;
 }
 
 /** Part 1 — PLACEMENT 2: compact logo + version on hero */
 function HeroBrandMark({ version }: { version: string }) {
   return (
     <View style={styles.heroBrand}>
-      <BrandLogo variant="onPrimary" width={36} height={36} />
+      <View style={styles.heroLogoWrap}>
+        <BrandLogo variant="onPrimary" width={44} height={44} />
+      </View>
       <Text style={styles.heroVersion}>v{version}</Text>
     </View>
   );
@@ -117,7 +110,7 @@ function MenuItemCard({ row }: { row: MenuRow }) {
       style={({ pressed }) => [styles.menuItem, pressed && { opacity: 0.92 }]}
     >
       <View style={styles.menuIconBox}>
-        <Ionicons name={row.icon} size={16} color={DS.accent} />
+        <Ionicons name={row.icon} size={16} color={ENT.textSecondary} />
       </View>
       <Text style={styles.menuLabel}>{row.title}</Text>
       {row.badge != null && row.badge > 0 ? (
@@ -125,7 +118,7 @@ function MenuItemCard({ row }: { row: MenuRow }) {
           <Text style={styles.menuBadgeText}>{row.badge > 99 ? "99+" : row.badge}</Text>
         </View>
       ) : null}
-      <Ionicons name="chevron-forward" size={14} color="#cbd5e1" />
+      <Ionicons name="chevron-forward" size={14} color={ENT.textMuted} />
     </Pressable>
   );
 }
@@ -141,7 +134,7 @@ function LanguageMenuItem({
   return (
     <View style={styles.menuItem}>
       <View style={styles.menuIconBox}>
-        <Ionicons name="language-outline" size={16} color={DS.accent} />
+        <Ionicons name="language-outline" size={16} color={ENT.textSecondary} />
       </View>
       <Text style={styles.menuLabel}>{t("profile.language")}</Text>
       <View style={styles.langToggle}>
@@ -350,6 +343,7 @@ export default function ProfileTabScreen() {
 
   return (
     <View style={styles.screen}>
+      <ScreenBackground />
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -452,7 +446,7 @@ export default function ProfileTabScreen() {
             onPress={confirmSignOut}
             style={({ pressed }) => [styles.signOutBtn, pressed && { opacity: 0.92 }]}
           >
-            <Ionicons name="log-out-outline" size={15} color={DS.danger} />
+            <Ionicons name="log-out-outline" size={15} color={PROFILE_DS.danger} />
             <Text style={styles.signOutText}>{t("profile.signOut")}</Text>
           </Pressable>
         </View>
@@ -463,7 +457,7 @@ export default function ProfileTabScreen() {
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: DS.bg,
+    backgroundColor: ENT.bg,
     flex: 1
   },
   scrollView: {
@@ -473,7 +467,7 @@ const styles = StyleSheet.create({
     flexGrow: 1
   },
   hero: {
-    backgroundColor: DS.hero,
+    backgroundColor: ENT.headerGreen,
     paddingBottom: 18,
     paddingHorizontal: 20
   },
@@ -485,6 +479,14 @@ const styles = StyleSheet.create({
   },
   heroBrand: {
     gap: 4
+  },
+  heroLogoWrap: {
+    borderColor: "rgba(255,255,255,0.5)",
+    borderRadius: 12,
+    borderWidth: 2,
+    height: 48,
+    overflow: "hidden",
+    width: 48
   },
   heroVersion: {
     color: "rgba(255,255,255,0.75)",
@@ -552,66 +554,67 @@ const styles = StyleSheet.create({
   },
   statBox: {
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.14)",
+    backgroundColor: ENT.card,
+    borderColor: ENT.border,
     borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
     flex: 1,
     paddingHorizontal: 12,
-    paddingVertical: 10
+    paddingVertical: 10,
+    ...ENT_CARD_SHADOW
   },
   statValue: {
-    color: "#fff",
-    fontSize: 18,
+    color: ENT.text,
+    fontSize: 22,
     fontWeight: "800"
   },
   statLabel: {
-    color: "rgba(255,255,255,0.65)",
-    fontSize: 9,
+    color: ENT.textSecondary,
+    fontSize: 9.5,
     fontWeight: "500",
     marginTop: 2,
     textAlign: "center"
   },
   menuSection: {
-    backgroundColor: DS.bg,
+    backgroundColor: ENT.bg,
     flex: 1,
     paddingBottom: 8
   },
   sectionLabel: {
-    color: DS.textMuted,
-    fontSize: 9,
-    fontWeight: "700",
-    letterSpacing: 1,
     marginBottom: 6,
     marginHorizontal: 16,
-    marginTop: 14,
-    textTransform: "uppercase"
+    marginTop: 14
   },
   menuItem: {
     alignItems: "center",
-    backgroundColor: DS.surface,
+    backgroundColor: ENT.card,
+    borderColor: ENT.border,
     borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
     gap: 12,
     marginBottom: 8,
     marginHorizontal: 16,
     paddingHorizontal: 14,
-    paddingVertical: 12
+    paddingVertical: 12,
+    ...ENT_CARD_SHADOW
   },
   menuIconBox: {
     alignItems: "center",
-    backgroundColor: DS.accentBg,
+    backgroundColor: ENT.bg,
     borderRadius: 11,
     height: 36,
     justifyContent: "center",
     width: 36
   },
   menuLabel: {
-    color: DS.textPrimary,
+    color: ENT.text,
     flex: 1,
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: "600"
   },
   menuBadge: {
-    backgroundColor: DS.danger,
+    backgroundColor: PROFILE_DS.danger,
     borderRadius: 99,
     minWidth: 20,
     paddingHorizontal: 6,
@@ -633,14 +636,14 @@ const styles = StyleSheet.create({
     paddingVertical: 4
   },
   langPillActive: {
-    backgroundColor: DS.accent
+    backgroundColor: PROFILE_DS.accent
   },
   langPillInactive: {
-    borderColor: DS.inputBorder,
+    borderColor: PROFILE_DS.inputBorder,
     borderWidth: 1.5
   },
   langPillText: {
-    color: DS.textMuted,
+    color: PROFILE_DS.textMuted,
     fontSize: 9.5,
     fontWeight: "700"
   },
@@ -648,17 +651,18 @@ const styles = StyleSheet.create({
     color: "#fff"
   },
   syncCard: {
-    backgroundColor: DS.surface,
-    borderColor: DS.border,
+    backgroundColor: ENT.card,
+    borderColor: ENT.border,
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     marginHorizontal: 16,
     marginTop: 4,
-    padding: 14
+    padding: 14,
+    ...ENT_CARD_SHADOW
   },
   syncRow: {
-    borderBottomColor: DS.bg,
-    borderBottomWidth: 1,
+    borderBottomColor: ENT.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
     justifyContent: "space-between",
     paddingVertical: 5
@@ -667,24 +671,24 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0
   },
   syncKey: {
-    color: DS.textSubtle,
+    color: ENT.textSecondary,
     fontSize: 11,
     fontWeight: "500"
   },
   syncValue: {
-    color: DS.textPrimary,
+    color: ENT.text,
     fontSize: 11,
     fontWeight: "700"
   },
   syncValueWarn: {
-    color: "#b45309"
+    color: ENT.warning
   },
   syncValueNever: {
-    color: DS.danger
+    color: ENT.danger
   },
   syncBtn: {
     alignItems: "center",
-    backgroundColor: DS.accent,
+    backgroundColor: ENT.primary,
     borderRadius: 14,
     flexDirection: "row",
     gap: 8,
@@ -703,19 +707,20 @@ const styles = StyleSheet.create({
   },
   signOutBtn: {
     alignItems: "center",
-    backgroundColor: DS.surface,
-    borderColor: DS.dangerBorder,
+    backgroundColor: ENT.card,
+    borderColor: ENT.border,
     borderRadius: 14,
-    borderWidth: 1.5,
+    borderWidth: 1,
     flexDirection: "row",
     gap: 8,
     height: 44,
     justifyContent: "center",
     marginHorizontal: 16,
-    marginTop: 8
+    marginTop: 8,
+    ...ENT_CARD_SHADOW
   },
   signOutText: {
-    color: DS.danger,
+    color: PROFILE_DS.danger,
     fontSize: 13,
     fontWeight: "600"
   }

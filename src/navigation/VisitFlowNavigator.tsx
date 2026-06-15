@@ -3,6 +3,7 @@ import VisitFlowShell from "../../mobile/app/visit/index";
 import VisitSuccessScreen from "../../mobile/app/visit/success";
 import { VisitFlowParamList } from "./types";
 import { useTheme } from "../theme";
+import { stackScreenOptionsPush } from "./transitions";
 
 const Stack = createNativeStackNavigator<VisitFlowParamList>();
 
@@ -13,8 +14,8 @@ export function VisitFlowNavigator() {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        animation: "slide_from_right",
-        contentStyle: { backgroundColor: theme.colors.background }
+        contentStyle: { backgroundColor: theme.colors.background },
+        ...stackScreenOptionsPush
       }}
     >
       <Stack.Screen name="NewVisitFarmer" component={VisitFlowShell} />

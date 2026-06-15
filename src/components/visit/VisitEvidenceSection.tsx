@@ -12,6 +12,7 @@ import {
   View
 } from "react-native";
 import { useVisitAttachments } from "../../hooks/useVisitAttachments";
+import { NeonProgressBar } from "../cinematic/NeonProgressBar";
 import { useVisitPhotoWithWatermark } from "../../hooks/useVisitPhotoWithWatermark";
 import { useTheme } from "../../theme";
 import { listCardType } from "../../theme/listCard";
@@ -291,12 +292,7 @@ export function VisitEvidenceSection({ visitId, watermarkContext, autoLoad = tru
             </Text>
           </View>
           <View style={[styles.progressTrack, { backgroundColor: c.border }]}>
-            <View
-              style={[
-                styles.progressFill,
-                { backgroundColor: c.primary, width: `${Math.max(8, uploading.progress * 100)}%` }
-              ]}
-            />
+            <NeonProgressBar progress={uploading.progress} height={4} trackColor={c.border} />
           </View>
         </View>
       ) : null}

@@ -1,29 +1,33 @@
 import { FONTS } from "./fonts";
+import { ENT } from "./enterprise";
 
-/** Part 1 design tokens — shared across tab bar and screens. */
+/** Enterprise design tokens — shared across tab bar and main app screens. */
 export const DS = {
-  bg: "#f8fafc",
-  surface: "#ffffff",
-  border: "#f1f5f9",
-  inputBorder: "#e2e8f0",
-  textPrimary: "#0f172a",
-  textMuted: "#94a3b8",
-  textSubtle: "#64748b",
-  accent: "#16a34a",
-  accentBg: "#f0fdf4",
-  tabInactive: "#cbd5e1",
-  danger: "#dc2626"
+  bg: ENT.bg,
+  surface: ENT.card,
+  border: ENT.border,
+  inputBorder: ENT.borderStrong,
+  textPrimary: ENT.text,
+  textMuted: ENT.textSecondary,
+  textSubtle: ENT.textMuted,
+  accent: ENT.primary,
+  accentDark: ENT.primary,
+  accentBg: ENT.primarySoft,
+  accentBorder: ENT.primaryMuted,
+  live: ENT.primary,
+  tabInactive: ENT.textMuted,
+  danger: ENT.danger
 } as const;
 
 export const TAB_BAR = {
-  backgroundColor: DS.surface,
+  backgroundColor: ENT.card,
   borderTopWidth: 1,
-  borderTopColor: DS.border,
+  borderTopColor: ENT.border,
   height: 64,
   paddingBottom: 10,
   paddingTop: 6,
-  activeTintColor: DS.accent,
-  inactiveTintColor: DS.tabInactive,
+  activeTintColor: ENT.primary,
+  inactiveTintColor: ENT.textMuted,
   labelStyle: {
     fontSize: 9,
     fontWeight: "600" as const,
@@ -34,5 +38,5 @@ export const TAB_BAR = {
 
 export const STATUS_BAR = {
   barStyle: "dark-content" as const,
-  backgroundColor: DS.surface
+  backgroundColor: ENT.bg
 };

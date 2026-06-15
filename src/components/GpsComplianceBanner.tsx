@@ -2,12 +2,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsetsCompat } from "../hooks/useSafeAreaInsetsCompat";
 import { useGpsCompliance } from "../storage/GpsComplianceContext";
-import { useTheme } from "../theme";
+import { ENT } from "../theme/enterprise";
 
 export function GpsComplianceBanner() {
   const { status, bannerTitle, bannerSubtitle, permissionDenied, showPermissionHelp } = useGpsCompliance();
-  const { theme } = useTheme();
-  const c = theme.colors;
   const insets = useSafeAreaInsetsCompat();
 
   if (status === "active") {
@@ -15,8 +13,6 @@ export function GpsComplianceBanner() {
   }
 
   const blocked = status === "blocked";
-  const bg = blocked ? c.dangerSoft : c.warningSoft;
-  const border = blocked ? c.danger : c.warning;
   const icon: keyof typeof Ionicons.glyphMap = blocked
     ? "close-circle"
     : permissionDenied
@@ -24,28 +20,15 @@ export function GpsComplianceBanner() {
       : "location-outline";
 
   return (
-    <View
-      style={[
-        styles.wrap,
-        {
-          paddingTop: Math.max(insets.top, 8),
-          backgroundColor: bg,
-          borderBottomColor: border
-        }
-      ]}
-    >
-      <Ionicons name={icon} size={20} color={border} />
+    <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) }]}>
+      <Ionicons name={icon} size={18} color={blocked ? ENT.danger : ENT.warning} />
       <View style={styles.textCol}>
-        <Text style={[styles.title, { color: c.text }]}>{bannerTitle}</Text>
-        <Text style={[styles.sub, { color: c.muted }]}>{bannerSubtitle}</Text>
+        <Text style={styles.title}>{bannerTitle}</Text>
+        <Text style={styles.sub}>{bannerSubtitle}</Text>
       </View>
       {permissionDenied && !blocked ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={showPermissionHelp}
-          style={[styles.btn, { borderColor: border }]}
-        >
-          <Text style={[styles.btnText, { color: border }]}>Settings</Text>
+        <Pressable accessibilityRole="button" onPress={showPermissionHelp} style={styles.btn}>
+          <Text style={styles.btnText}>Settings</Text>
         </Pressable>
       ) : null}
     </View>
@@ -55,6 +38,8 @@ export function GpsComplianceBanner() {
 const styles = StyleSheet.create({
   wrap: {
     alignItems: "center",
+    backgroundColor: ENT.warningSoft,
+    borderBottomColor: ENT.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
     gap: 10,
@@ -62,13 +47,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14
   },
   textCol: { flex: 1, minWidth: 0 },
-  title: { fontSize: 13, fontWeight: "800" },
-  sub: { fontSize: 11, fontWeight: "600", lineHeight: 15, marginTop: 2 },
+  title: { color: ENT.text, fontSize: 13, fontWeight: "800" },
+  sub: { color: ENT.textSecondary, fontSize: 11, fontWeight: "600", lineHeight: 15, marginTop: 2 },
   btn: {
+    borderColor: ENT.borderStrong,
     borderRadius: 8,
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 6
   },
-  btnText: { fontSize: 11, fontWeight: "800" }
+  btnText: { color: ENT.primary, fontSize: 11, fontWeight: "800" }
 });

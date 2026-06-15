@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { StyleSheet, View } from "react-native";
+import { useEffect, useRef } from "react";
+import { Animated, StyleSheet, View } from "react-native";
 import { useSyncStore } from "../../../mobile/lib/store/syncStore";
 import { TAB_BAR } from "../../theme/globalStyles";
 
@@ -22,18 +23,25 @@ export function TabBarIcon({
   color: string;
 }) {
   const unreadNotifCount = useSyncStore((state) => state.unreadNotifCount);
+  const scale = useRef(new Animated.Value(1)).current;
   const icons = TAB_ICONS[routeName];
   const showHomeDot = routeName === "Home" && unreadNotifCount > 0;
+
+  useEffect(() => {
+    if (!focused) return;
+    Animated.sequence([
+      Animated.spring(scale, { toValue: 1.3, useNativeDriver: true, speed: 40, bounciness: 12 }),
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 8 })
+    ]).start();
+  }, [focused, scale]);
 
   if (!icons) return null;
 
   return (
     <View style={styles.wrap}>
-      <Ionicons
-        name={focused ? icons.solid : icons.outline}
-        size={TAB_BAR.iconSize}
-        color={color}
-      />
+      <Animated.View style={{ transform: [{ scale }] }}>
+        <Ionicons name={focused ? icons.solid : icons.outline} size={TAB_BAR.iconSize} color={color} />
+      </Animated.View>
       {showHomeDot ? <View style={styles.dot} /> : null}
     </View>
   );

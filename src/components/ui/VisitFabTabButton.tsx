@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
-import { useCallback, useRef } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Animated, Easing, StyleSheet, View } from "react-native";
 import {
   WorkdayRequiredSheet,
   type WorkdayRequiredSheetRef
@@ -10,15 +10,66 @@ import {
 import { useGpsWorkGuard } from "../../hooks/useGpsWorkGuard";
 import { useActiveWorkday } from "../../hooks/useActiveWorkday";
 import { useTracking } from "../../storage/TrackingContext";
-import { DS } from "../../theme/globalStyles";
 import { FAB_RISE_ABOVE_BAR, FAB_SIZE } from "../../theme/tabBar";
+import { ENT } from "../../theme/enterprise";
+import { PressableScale } from "./PressableScale";
 
 export function VisitFabTabButton({ accessibilityState, style }: BottomTabBarButtonProps) {
   const navigation = useNavigation<any>();
+  const [visitFlowOpen, setVisitFlowOpen] = useState(false);
   const { canRunWorkAction } = useGpsWorkGuard();
   const { isActive } = useActiveWorkday();
   const { startDay, busy } = useTracking();
   const workdaySheetRef = useRef<WorkdayRequiredSheetRef>(null);
+  const fabRotate = useRef(new Animated.Value(0)).current;
+  const fabGlowOpacity = useRef(new Animated.Value(0.35)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(fabGlowOpacity, {
+          toValue: 0.65,
+          duration: 2000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true
+        }),
+        Animated.timing(fabGlowOpacity, {
+          toValue: 0.35,
+          duration: 2000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true
+        })
+      ])
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      fabGlowOpacity.stopAnimation();
+    };
+  }, [fabGlowOpacity]);
+
+  useEffect(() => {
+    const parent = navigation.getParent();
+    if (!parent) return;
+    const sync = () => {
+      const root = parent.getState();
+      const activeRoute = root.routes[root.index];
+      setVisitFlowOpen(activeRoute?.name === "VisitFlow");
+    };
+    sync();
+    return parent.addListener("state", sync);
+  }, [navigation]);
+
+  useEffect(() => {
+    Animated.timing(fabRotate, {
+      toValue: visitFlowOpen ? 1 : 0,
+      duration: 250,
+      easing: Easing.out(Easing.back(1.5)),
+      useNativeDriver: true
+    }).start();
+  }, [fabRotate, visitFlowOpen]);
+
+  const spin = fabRotate.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "45deg"] });
 
   const navigateToNewVisit = useCallback(() => {
     navigation.getParent()?.navigate("VisitFlow", {
@@ -46,16 +97,26 @@ export function VisitFabTabButton({ accessibilityState, style }: BottomTabBarBut
   return (
     <>
       <View style={[styles.slot, style]} accessibilityState={accessibilityState}>
-        <Pressable
+        <PressableScale
           accessibilityRole="button"
           accessibilityState={accessibilityState}
           onPress={handlePress}
-          style={({ pressed }) => [styles.wrap, pressed && styles.pressed]}
+          style={styles.wrap}
+          scaleTo={0.94}
         >
-          <View style={styles.fab}>
-            <Ionicons name="add" size={24} color="#fff" />
-          </View>
-        </Pressable>
+          <Animated.View
+            style={[
+              styles.glowRing,
+              {
+                opacity: fabGlowOpacity
+              }
+            ]}
+          >
+            <Animated.View style={[styles.fab, { transform: [{ rotate: spin }] }]}>
+              <Ionicons name="add" size={26} color={ENT.white} />
+            </Animated.View>
+          </Animated.View>
+        </PressableScale>
       </View>
       <WorkdayRequiredSheet ref={workdaySheetRef} busy={busy} onStart={handleStartWorkdayFromSheet} />
     </>
@@ -74,21 +135,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: -FAB_RISE_ABOVE_BAR
   },
+  glowRing: {
+    borderRadius: FAB_SIZE / 2,
+    elevation: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12
+  },
   fab: {
     alignItems: "center",
-    backgroundColor: DS.accent,
+    backgroundColor: ENT.primary,
     borderRadius: FAB_SIZE / 2,
-    elevation: 4,
     height: FAB_SIZE,
     justifyContent: "center",
-    shadowColor: "#0f172a",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
     width: FAB_SIZE
-  },
-  pressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.94 }]
   }
 });

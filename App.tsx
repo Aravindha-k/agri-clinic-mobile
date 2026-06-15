@@ -32,6 +32,9 @@ import { WorkdayInactiveBanner } from "./src/components/WorkdayInactiveBanner";
 import { NotificationBridge } from "./src/components/NotificationBridge";
 import { NotificationsProvider } from "./src/storage/NotificationsContext";
 import { LanOfflineToast } from "./mobile/components/ui/LanOfflineToast";
+import { GlobalOfflineBanner } from "./src/components/GlobalOfflineBanner";
+import { ToastHost } from "./src/components/ui/ToastHost";
+import { ToastProvider } from "./src/storage/ToastContext";
 import { ThemeProvider } from "./src/theme";
 import { applyGlobalFonts } from "./src/theme/applyGlobalFonts";
 import { STATUS_BAR } from "./src/theme/globalStyles";
@@ -64,7 +67,9 @@ function AppShell() {
   return (
     <>
       <AppStatusBar />
+      <GlobalOfflineBanner />
       <LanOfflineToast />
+      <ToastHost />
       <RootNavigator />
     </>
   );
@@ -105,13 +110,15 @@ export default function App() {
                             <GpsComplianceProvider>
                               <TrackingProvider>
                                 <BottomSheetModalProvider>
-                                  <NotificationBridge />
-                                  <GpsComplianceShell>
-                                    <WorkdayInactiveBanner />
-                                    <GpsWorkdayGate>
-                                      <AppShell />
-                                    </GpsWorkdayGate>
-                                  </GpsComplianceShell>
+                                  <ToastProvider>
+                                    <NotificationBridge />
+                                    <GpsComplianceShell>
+                                      <WorkdayInactiveBanner />
+                                      <GpsWorkdayGate>
+                                        <AppShell />
+                                      </GpsWorkdayGate>
+                                    </GpsComplianceShell>
+                                  </ToastProvider>
                                 </BottomSheetModalProvider>
                               </TrackingProvider>
                             </GpsComplianceProvider>

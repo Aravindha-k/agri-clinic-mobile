@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Image, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
-import { LOGO_IMAGE } from "../../src/config/brand";
+import { LOGO_IMAGE, BRAND_COLORS } from "../../src/config/brand";
 import { FONTS } from "../../src/theme/fonts";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -96,7 +96,7 @@ export function KavyaLoader() {
               cx={RING_SIZE / 2}
               cy={RING_SIZE / 2}
               r={RING_R}
-              stroke="#16a34a"
+              stroke={BRAND_COLORS.primary}
               strokeWidth={2}
               strokeLinecap="round"
               fill="none"
@@ -116,7 +116,7 @@ export function KavyaLoader() {
 
       <View style={styles.dots}>
         {[dot1, dot2, dot3].map((dot, i) => (
-          <Animated.View key={i} style={[styles.dot, { opacity: dot, backgroundColor: "#16a34a" }]} />
+          <Animated.View key={i} style={[styles.dot, { opacity: dot, backgroundColor: BRAND_COLORS.primary }]} />
         ))}
       </View>
 

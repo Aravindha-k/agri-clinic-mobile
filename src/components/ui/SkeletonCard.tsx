@@ -1,42 +1,56 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useRef } from "react";
-import { Animated, StyleSheet, View } from "react-native";
-import { useTheme } from "../../theme";
-import { radius } from "../../theme/radius";
+import { Animated, Easing, StyleSheet, View, type ViewStyle } from "react-native";
 
-export function SkeletonCard({ lines = 3 }: { lines?: number }) {
-  const { theme } = useTheme();
-  const opacity = useRef(new Animated.Value(0.4)).current;
+type Props = {
+  height?: number;
+  style?: ViewStyle;
+};
+
+export function SkeletonCard({ height = 100, style }: Props) {
+  const shimmer = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.4, duration: 700, useNativeDriver: true })
-      ])
+      Animated.timing(shimmer, {
+        toValue: 1,
+        duration: 1200,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true
+      })
     );
     loop.start();
     return () => loop.stop();
-  }, [opacity]);
+  }, [shimmer]);
 
-  const c = theme.colors;
+  const translateX = shimmer.interpolate({ inputRange: [0, 1], outputRange: [-300, 300] });
 
   return (
-    <Animated.View style={[styles.card, { backgroundColor: c.card, opacity }]}>
-      <View style={[styles.line, styles.titleLine, { backgroundColor: c.skeleton }]} />
-      {Array.from({ length: lines }).map((_, i) => (
-        <View key={i} style={[styles.line, { backgroundColor: c.skeleton, width: i === lines - 1 ? "60%" : "90%" }]} />
-      ))}
-    </Animated.View>
+    <View style={[styles.card, { height }, style]}>
+      <Animated.View style={[styles.shimmerWrap, { transform: [{ translateX }] }]}>
+        <LinearGradient
+          colors={["transparent", "rgba(255,255,255,0.45)", "transparent"]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={styles.shimmer}
+        />
+      </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: radius.card,
-    gap: 10,
-    marginBottom: 12,
-    padding: 16
+    backgroundColor: "#e2e8f0",
+    borderRadius: 14,
+    marginBottom: 8,
+    overflow: "hidden"
   },
-  line: { borderRadius: 6, height: 12 },
-  titleLine: { height: 16, marginBottom: 4, width: "45%" }
+  shimmerWrap: {
+    height: "100%",
+    width: 300
+  },
+  shimmer: {
+    flex: 1
+  }
 });

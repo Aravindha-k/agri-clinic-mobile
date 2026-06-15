@@ -54,6 +54,7 @@ export const en = {
     startWorkdayBody: "GPS activates automatically once you begin.",
     distanceToday: "Distance today",
     hoursWorked: "Hours worked",
+    connectingToServer: "Connecting to server...",
     routePoints: "Route points",
     visitsToday: "Visits today",
     farmersCovered: "Farmers covered",

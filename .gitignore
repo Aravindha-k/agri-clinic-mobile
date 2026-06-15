@@ -2,6 +2,7 @@ node_modules
 .expo/
 .expo-export-test/
 .expo-export-brand-test/
+.expo-export-cinematic-test/
 .expo-bundle-check/
 dist/
 *.apk

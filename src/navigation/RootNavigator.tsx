@@ -4,14 +4,12 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useCallback, useState } from "react";
 import { View } from "react-native";
 import { AnimatedSplashScreen } from "../components/brand/AnimatedSplashScreen";
-import { TabBarIcon } from "../components/ui/TabBarIcon";
-import { VisitFabTabButton } from "../components/ui/VisitFabTabButton";
+import { GlassTabBar } from "../components/glass";
 import { useAppSplash } from "../hooks/useAppSplash";
-import { useSafeAreaInsetsCompat } from "../hooks/useSafeAreaInsetsCompat";
 import { useI18n } from "../i18n/I18nContext";
 import { useAuth } from "../storage/AuthContext";
 import { useTheme } from "../theme";
-import { DS, TAB_BAR } from "../theme/globalStyles";
+import { DS } from "../theme/globalStyles";
 import { useSyncStore } from "../../mobile/lib/store/syncStore";
 import { StartupScreen } from "../screens/StartupScreen";
 import { AuthStartScreen } from "../screens/AuthStartScreen";
@@ -32,6 +30,12 @@ import TrackingWorkspaceScreen from "../../mobile/app/tracking";
 import VisitDetailScreen from "../../mobile/app/visit/[id]";
 import { VisitFlowNavigator } from "./VisitFlowNavigator";
 import {
+  stackScreenOptions,
+  stackScreenOptionsModal,
+  stackScreenOptionsPush,
+  tabScreenOptions
+} from "./transitions";
+import {
   AuthStackParamList,
   FarmersStackParamList,
   MainTabParamList,
@@ -49,7 +53,7 @@ const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
 
 function AuthNavigator() {
   return (
-    <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+    <AuthStack.Navigator screenOptions={{ headerShown: false, ...stackScreenOptions }}>
       <AuthStack.Screen name="Login" component={AuthStartScreen} />
     </AuthStack.Navigator>
   );
@@ -61,7 +65,8 @@ function VisitsNavigator() {
     <VisitsStack.Navigator
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: theme.colors.background }
+        contentStyle: { backgroundColor: theme.colors.background },
+        ...stackScreenOptions
       }}
     >
       <VisitsStack.Screen name="VisitsList" component={VisitsTabScreen} />
@@ -79,7 +84,8 @@ function FarmersNavigator() {
         headerTintColor: "#FFFFFF",
         headerTitleStyle: { fontWeight: "700" as const },
         headerShadowVisible: false,
-        contentStyle: { backgroundColor: theme.colors.background }
+        contentStyle: { backgroundColor: theme.colors.background },
+        ...stackScreenOptions
       }}
     >
       <FarmersStack.Screen name="FarmersList" component={FarmersTabScreen} options={{ headerShown: false }} />
@@ -95,7 +101,8 @@ function ProfileNavigator() {
     <ProfileStack.Navigator
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: theme.colors.background }
+        contentStyle: { backgroundColor: theme.colors.background },
+        ...stackScreenOptions
       }}
     >
       <ProfileStack.Screen name="ProfileMain" component={ProfileTabScreen} />
@@ -112,35 +119,18 @@ function StartVisitPlaceholder() {
 }
 
 function MainTabs() {
-  const { theme } = useTheme();
-  const insets = useSafeAreaInsetsCompat();
   const { t } = useI18n();
   const pendingVisitsCount = useSyncStore((state) => state.pendingVisitsCount);
-  const safeBottom = Math.max(insets.bottom, 0);
 
   return (
     <Tab.Navigator
-      sceneContainerStyle={{ flex: 1, backgroundColor: theme.colors.background }}
-      screenOptions={({ route }) => ({
+      tabBar={(props) => <GlassTabBar {...props} />}
+      sceneContainerStyle={{ flex: 1, backgroundColor: "transparent" }}
+      screenOptions={{
+        ...tabScreenOptions,
         headerShown: false,
-        tabBarHideOnKeyboard: true,
-        tabBarActiveTintColor: TAB_BAR.activeTintColor,
-        tabBarInactiveTintColor: TAB_BAR.inactiveTintColor,
-        tabBarLabelStyle: TAB_BAR.labelStyle,
-        tabBarStyle: {
-          backgroundColor: TAB_BAR.backgroundColor,
-          borderTopWidth: TAB_BAR.borderTopWidth,
-          borderTopColor: TAB_BAR.borderTopColor,
-          height: TAB_BAR.height + safeBottom,
-          paddingBottom: TAB_BAR.paddingBottom + safeBottom,
-          paddingTop: TAB_BAR.paddingTop,
-          elevation: 0,
-          shadowOpacity: 0
-        },
-        tabBarIcon: ({ focused, color }) => (
-          <TabBarIcon routeName={route.name} focused={focused} color={color} />
-        )
-      })}
+        tabBarHideOnKeyboard: true
+      }}
     >
       <Tab.Screen
         name="Home"
@@ -156,8 +146,7 @@ function MainTabs() {
         name="StartVisit"
         component={StartVisitPlaceholder}
         options={{
-          tabBarLabel: "",
-          tabBarButton: (props) => <VisitFabTabButton {...props} />
+          tabBarLabel: ""
         }}
       />
       <Tab.Screen
@@ -209,25 +198,25 @@ function AppRoutes() {
 
   if (isAuthenticated) {
     return (
-      <RootStack.Navigator screenOptions={{ headerShown: false }}>
+      <RootStack.Navigator screenOptions={{ headerShown: false, ...stackScreenOptions }}>
         <RootStack.Screen name="Main" component={MainTabs} />
         <RootStack.Screen
           name="VisitFlow"
           component={VisitFlowNavigator}
-          options={{ presentation: "modal", animation: "slide_from_bottom" }}
+          options={stackScreenOptionsModal}
         />
-        <RootStack.Screen name="LiveMap" component={LiveMapScreen} options={{ contentStyle: { flex: 1 } }} />
-        <RootStack.Screen name="TravelHistory" component={TravelHistoryScreen} options={{ contentStyle: { flex: 1 } }} />
-        <RootStack.Screen name="FarmerMap" component={FarmerMapScreen} options={{ contentStyle: { flex: 1 } }} />
+        <RootStack.Screen name="LiveMap" component={LiveMapScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
+        <RootStack.Screen name="TravelHistory" component={TravelHistoryScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
+        <RootStack.Screen name="FarmerMap" component={FarmerMapScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
         <RootStack.Screen
           name="OfflineSync"
           component={OfflineSyncScreen}
-          options={{ contentStyle: { flex: 1 }, animation: "slide_from_right" }}
+          options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }}
         />
         <RootStack.Screen
           name="Notifications"
           component={NotificationsScreen}
-          options={{ contentStyle: { flex: 1 }, animation: "slide_from_right" }}
+          options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }}
         />
       </RootStack.Navigator>
     );

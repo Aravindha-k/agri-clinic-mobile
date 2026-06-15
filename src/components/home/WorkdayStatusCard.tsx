@@ -2,9 +2,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useWorkdayTimer } from "../../hooks/useLiveClock";
 import { useTheme } from "../../theme";
+import { FONTS } from "../../theme/fonts";
 import { space } from "../../theme/layout";
 import { PrimaryButton } from "../ui/PrimaryButton";
 import { ClinicCard } from "../brand/ClinicCard";
+import BorderGlow from "../cinematic/BorderGlow";
+import TripleSonarRipple from "../cinematic/TripleSonarRipple";
 
 type Props = {
   isActive: boolean;
@@ -58,10 +61,11 @@ export function WorkdayStatusCard({
   }
 
   return (
+    <BorderGlow active>
     <ClinicCard style={styles.card}>
       <View style={styles.activeTop}>
         <View style={[styles.statusPill, { backgroundColor: c.successSoft }]}>
-          <View style={[styles.pulseDot, { backgroundColor: c.success }]} />
+          <TripleSonarRipple active size={8} />
           <Text style={[styles.statusText, { color: c.success }]}>On duty</Text>
         </View>
         <Pressable
@@ -99,6 +103,7 @@ export function WorkdayStatusCard({
         Workday ends automatically — no manual sign-off needed.
       </Text>
     </ClinicCard>
+    </BorderGlow>
   );
 }
 
@@ -176,9 +181,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10
   },
   timerValue: {
+    fontFamily: FONTS.extrabold,
     fontSize: 24,
-    fontVariant: ["tabular-nums"],
-    fontWeight: "800",
     letterSpacing: 0.5,
     lineHeight: 28,
     maxWidth: "100%"

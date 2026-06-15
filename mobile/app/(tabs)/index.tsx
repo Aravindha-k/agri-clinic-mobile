@@ -5,13 +5,16 @@ import dayjs from "dayjs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  AppState,
   Image,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  View
+  View,
+  Animated as RNAnimated
 } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -28,12 +31,19 @@ import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
 import { useTabBarBottomInset } from "../../../src/hooks/useTabBarBottomInset";
 import { useRefreshControlProps } from "../../../src/hooks/useRefreshControlProps";
 import { useWorkdayTimer } from "../../../src/hooks/useLiveClock";
+import { useCountUp } from "../../../src/hooks/useCountUp";
+import { GlassCard, ScreenBackground } from "../../../src/components/glass";
+import { ENT, ENT_SECTION_LABEL } from "../../../src/theme/enterprise";
+import { LogoRefreshIndicator } from "../../../src/components/ui/LogoRefreshIndicator";
+import { PressableScale } from "../../../src/components/ui/PressableScale";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
 import { useTracking } from "../../../src/storage/TrackingContext";
 import { formatRelativeTime } from "../../../src/utils/formatRelativeTime";
-import { Avatar, OfflineBanner, PrimaryButton, StatusChip } from "../../components/ui";
+import { resolveWorkdayStartedAt } from "../../../src/utils/workdayStartedAt";
+import { updateCachedWorkdayMetrics } from "../../../src/storage/workdaySessionStorage";
+import { Avatar, OfflineBanner } from "../../components/ui";
 import { KavyaLoader } from "../../components/KavyaLoader";
 import { FONTS } from "../../../src/theme/fonts";
 import { readDashboardCache } from "../../lib/dashboardCache";
@@ -43,18 +53,12 @@ import { useSyncStore } from "../../lib/store/syncStore";
 import { formatDistanceKm, formatShortTime } from "../../lib/format";
 import type { DashboardData, DashboardRecentVisit, MobileWorkStatus } from "../../lib/types";
 
-const DS = {
-  bg: "#f8fafc",
-  surface: "#ffffff",
-  border: "#f1f5f9",
-  textPrimary: "#0f172a",
-  textMuted: "#94a3b8",
-  textSubtle: "#64748b",
-  accent: "#16a34a",
-  accentBg: "#f0fdf4",
-  live: "#22c55e",
-  bellBg: "#f1f5f9"
-} as const;
+const STAT_ICONS = [
+  { icon: "navigate-outline" as const, color: ENT.info, bg: ENT.infoSoft },
+  { icon: "time-outline" as const, color: ENT.warning, bg: ENT.warningSoft },
+  { icon: "clipboard-outline" as const, color: ENT.primary, bg: ENT.primarySoft },
+  { icon: "people-outline" as const, color: "#64748B", bg: "#F1F5F9" }
+];
 
 function PulsingDot({ active }: { active: boolean }) {
   const opacity = useSharedValue(1);
@@ -75,7 +79,7 @@ function PulsingDot({ active }: { active: boolean }) {
 
   return (
     <Animated.View
-      style={[styles.pulseDot, { backgroundColor: active ? DS.live : DS.textMuted }, style]}
+      style={[styles.pulseDot, { backgroundColor: active ? ENT.primary : ENT.textMuted }, style]}
     />
   );
 }
@@ -108,7 +112,7 @@ function NotificationBell({ count, onPress }: { count: number; onPress: () => vo
       accessibilityLabel="Notifications"
       style={({ pressed }) => [styles.bellBtn, pressed && { opacity: 0.88 }]}
     >
-      <Ionicons name="notifications-outline" size={18} color={DS.textSubtle} />
+      <Ionicons name="notifications-outline" size={18} color={ENT.textSecondary} />
       {count > 0 ? (
         <View style={styles.bellBadge}>
           <Text style={styles.bellBadgeText}>{count > 9 ? "9+" : count}</Text>
@@ -137,6 +141,7 @@ function WorkdayTimerCard({
   distanceKm,
   busy,
   timerDisplay,
+  syncLabel,
   onStart,
   t
 }: {
@@ -145,62 +150,80 @@ function WorkdayTimerCard({
   distanceKm: number;
   busy: boolean;
   timerDisplay: string;
+  syncLabel?: string | null;
   onStart: () => void;
   t: (key: string) => string;
 }) {
   if (!active) {
     return (
-      <View style={styles.idleCard}>
-        <View style={styles.idleIconWrap}>
-          <Ionicons name="time-outline" size={20} color={DS.accent} />
+      <GlassCard style={styles.idleCardOuter}>
+        <View style={styles.idleHeaderRow}>
+          <View style={styles.idleIconWrap}>
+            <Ionicons name="time-outline" size={20} color={ENT.primary} />
+          </View>
+          <View style={styles.idleCopy}>
+            <Text style={styles.idleTitle}>{t("home.startWorkday")}</Text>
+            <Text style={styles.idleSub}>{t("home.startWorkdayBody")}</Text>
+          </View>
         </View>
-        <Text style={styles.idleTitle}>{t("home.startWorkday")}</Text>
-        <Text style={styles.idleSub}>{t("home.startWorkdayBody")}</Text>
-        <PrimaryButton
-          label={t("home.startWorkday")}
+        <Pressable
+          accessibilityRole="button"
+          disabled={busy}
           onPress={onStart}
-          loading={busy}
-          icon={<Ionicons name="play" size={18} color="#fff" />}
-        />
-      </View>
+          style={({ pressed }) => [styles.idleCta, pressed && { opacity: 0.92 }, busy && { opacity: 0.6 }]}
+        >
+          <Ionicons name="play" size={18} color="#fff" />
+          <Text style={styles.idleCtaText}>{t("home.startWorkday")}</Text>
+        </Pressable>
+      </GlassCard>
     );
   }
 
   const todayLabel = dayjs().format("dddd, D MMM");
 
   return (
-    <View style={styles.timerCard}>
-      <View style={styles.timerWatermark}>
-        <LogoWatermark size={36} opacity={0.12} />
+    <GlassCard style={styles.timerCardOuter}>
+      <View style={styles.timerCard}>
+        <View style={styles.timerAccent} />
+        <View style={styles.timerStatusRow}>
+          <PulsingDot active />
+          <Text style={styles.timerLabel}>ACTIVE WORKDAY</Text>
+          {syncLabel ? <Text style={styles.timerSyncBadge}>{syncLabel}</Text> : null}
+        </View>
+        <Text style={styles.timerValue} accessibilityLabel={`Workday timer ${timerDisplay}`}>
+          {timerDisplay}
+        </Text>
+        <Text style={styles.timerSub}>
+          {startedAt
+            ? `Started ${formatShortTime(startedAt)} · ${formatDistanceKm(distanceKm)} km covered`
+            : `${formatDistanceKm(distanceKm)} km covered today`}
+        </Text>
+        <Text style={styles.timerDate}>{todayLabel}</Text>
       </View>
-      <View style={styles.timerDecorCircle} />
-
-      <View style={styles.timerStatusRow}>
-        <PulsingDot active />
-        <Text style={styles.timerLabel}>ACTIVE WORKDAY</Text>
-      </View>
-
-      <Text style={styles.timerValue} accessibilityLabel={`Workday timer ${timerDisplay}`}>
-        {timerDisplay}
-      </Text>
-
-      <Text style={styles.timerSub}>
-        {startedAt
-          ? `Started ${formatShortTime(startedAt)} · ${formatDistanceKm(distanceKm)} km covered`
-          : `${formatDistanceKm(distanceKm)} km covered today`}
-      </Text>
-
-      <Text style={styles.timerDate}>{todayLabel}</Text>
-    </View>
+    </GlassCard>
   );
 }
 
-function StatCard({ value, label }: { value: string | number; label: string }) {
+function StatCard({
+  value,
+  label,
+  index
+}: {
+  value: string | number;
+  label: string;
+  index: number;
+}) {
+  const meta = STAT_ICONS[index] ?? STAT_ICONS[0];
   return (
-    <View style={styles.statCard}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
+    <GlassCard style={styles.statCardGlow}>
+      <View style={styles.statCard}>
+        <View style={[styles.statIconWrap, { backgroundColor: meta.bg }]}>
+          <Ionicons name={meta.icon} size={14} color={meta.color} />
+        </View>
+        <Text style={styles.statValue}>{value}</Text>
+        <Text style={styles.statLabel}>{label}</Text>
+      </View>
+    </GlassCard>
   );
 }
 
@@ -211,43 +234,73 @@ type QuickAction = {
   onPress: () => void;
 };
 
-function QuickActionCard({ action }: { action: QuickAction }) {
+function QuickActionCard({ action, index }: { action: QuickAction; index: number }) {
+  const translateY = useRef(new RNAnimated.Value(30)).current;
+  const opacity = useRef(new RNAnimated.Value(0)).current;
+
+  useEffect(() => {
+    RNAnimated.parallel([
+      RNAnimated.spring(translateY, { toValue: 0, speed: 14, bounciness: 8, delay: 500 + index * 80, useNativeDriver: true }),
+      RNAnimated.timing(opacity, { toValue: 1, duration: 300, delay: 500 + index * 80, useNativeDriver: true })
+    ]).start();
+  }, [index, opacity, translateY]);
+
   return (
-    <Pressable
-      onPress={action.onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => [styles.actionCard, pressed && { opacity: 0.92 }]}
-    >
-      <View style={styles.actionIconWrap}>
-        <Ionicons name={action.icon} size={18} color={DS.accent} />
-      </View>
-      <Text style={styles.actionLabel}>{action.label}</Text>
-    </Pressable>
+    <RNAnimated.View style={{ opacity, transform: [{ translateY }] }}>
+      <GlassCard style={styles.actionCardGlow}>
+        <PressableScale onPress={action.onPress} accessibilityRole="button" style={styles.actionCard}>
+          <View style={styles.actionIconWrap}>
+            <Ionicons name={action.icon} size={18} color={ENT.textSecondary} />
+          </View>
+          <Text style={styles.actionLabel}>{action.label}</Text>
+        </PressableScale>
+      </GlassCard>
+    </RNAnimated.View>
   );
 }
 
-function RecentRow({ item }: { item: DashboardRecentVisit }) {
+function RecentRow({ item, index }: { item: DashboardRecentVisit; index: number }) {
+  const translateX = useRef(new RNAnimated.Value(60)).current;
+  const opacity = useRef(new RNAnimated.Value(0)).current;
+
+  useEffect(() => {
+    RNAnimated.parallel([
+      RNAnimated.spring(translateX, { toValue: 0, speed: 14, bounciness: 6, delay: index * 120, useNativeDriver: true }),
+      RNAnimated.timing(opacity, { toValue: 1, duration: 300, delay: index * 120, useNativeDriver: true })
+    ]).start();
+  }, [index, opacity, translateX]);
+
   return (
-    <View style={styles.recentRow}>
-      <Avatar name={item.farmer_name} size="sm" />
-      <View style={styles.recentCopy}>
-        <Text style={styles.recentName} numberOfLines={1}>
-          {item.farmer_name}
-        </Text>
-        {item.crop ? <StatusChip label={item.crop} variant="gray" /> : null}
-      </View>
-      <Text style={styles.recentTime}>{formatRelativeTime(item.visited_at)}</Text>
-    </View>
+    <RNAnimated.View style={[styles.recentRowWrap, { opacity, transform: [{ translateX }] }]}>
+      <GlassCard>
+        <View style={styles.recentRow}>
+          <Avatar name={item.farmer_name} size="sm" />
+          <View style={styles.recentCopy}>
+            <Text style={styles.recentName} numberOfLines={1}>
+              {item.farmer_name}
+            </Text>
+            {item.crop ? (
+              <View style={styles.recentCropBadge}>
+                <Text style={styles.recentCropText}>{item.crop}</Text>
+              </View>
+            ) : null}
+          </View>
+          <Text style={styles.recentTime}>{formatRelativeTime(item.visited_at)}</Text>
+        </View>
+      </GlassCard>
+    </RNAnimated.View>
   );
 }
 
 /** Part 1 — PLACEMENT 3: empty state watermark */
 function RecentEmptyState({ message }: { message: string }) {
   return (
-    <View style={styles.recentEmpty}>
-      <LogoWatermark size={48} opacity={0.1} />
-      <Text style={styles.recentEmptyText}>{message}</Text>
-    </View>
+    <GlassCard style={styles.recentEmptyGlow}>
+      <View style={styles.recentEmpty}>
+        <LogoWatermark size={48} opacity={0.08} />
+        <Text style={styles.recentEmptyText}>{message}</Text>
+      </View>
+    </GlassCard>
   );
 }
 
@@ -260,7 +313,7 @@ export default function HomeTabScreen() {
   const refreshControlProps = useRefreshControlProps();
   const { pendingCount, syncAll, lastSyncAt } = useOfflineSync();
   const { visitsVersion } = useFieldDataRefresh();
-  const { isActive, startedAt: trackingStartedAt, startDay, busy, refreshTracking, workday } = useTracking();
+  const { isActive, startedAt: trackingStartedAt, startDay, busy, refreshTracking, workday, workdaySyncStatus, cachedDistanceKm } = useTracking();
   const unreadNotifCount = useSyncStore((state) => state.unreadNotifCount);
   const lanOnly = useLanOnlyMode();
 
@@ -271,22 +324,66 @@ export default function HomeTabScreen() {
 
   const rootNav = navigation.getParent();
   const workActive = isActive || Boolean(workStatus?.is_active);
-  const startedAt =
-    trackingStartedAt ||
-    workStatus?.started_at ||
-    workday?.started_at ||
-    workday?.start_time ||
-    null;
+  const startedAt = useMemo(() => {
+    return (
+      resolveWorkdayStartedAt(workday) ||
+      trackingStartedAt ||
+      resolveWorkdayStartedAt(workStatus) ||
+      null
+    );
+  }, [trackingStartedAt, workStatus, workday]);
   const workdayTimer = useWorkdayTimer(startedAt, workActive);
-  const distanceKm = workStatus?.distance_km ?? 0;
+  const distanceKm = workStatus?.distance_km ?? cachedDistanceKm ?? 0;
+  const visitsCount = useCountUp(dashboard?.visits_today ?? 0, 1200, 400);
+  const farmersCount = useCountUp(dashboard?.farmers_covered ?? 0, 1000, 500);
+  const distanceCount = useCountUp(Math.round(distanceKm * 10), 1400, 300) / 10;
+
+  const timerCardScale = useRef(new RNAnimated.Value(0.85)).current;
+  const timerCardOpacity = useRef(new RNAnimated.Value(0)).current;
+  const statAnims = useRef(
+    [0, 1, 2, 3].map(() => ({
+      y: new RNAnimated.Value(20),
+      opacity: new RNAnimated.Value(0)
+    }))
+  ).current;
+
+  useEffect(() => {
+    RNAnimated.parallel([
+      RNAnimated.spring(timerCardScale, { toValue: 1, speed: 12, bounciness: 8, delay: 200, useNativeDriver: true }),
+      RNAnimated.timing(timerCardOpacity, { toValue: 1, duration: 400, delay: 200, useNativeDriver: true })
+    ]).start();
+
+    RNAnimated.stagger(
+      80,
+      statAnims.map((a) =>
+        RNAnimated.parallel([
+          RNAnimated.spring(a.y, { toValue: 0, speed: 15, bounciness: 8, useNativeDriver: true }),
+          RNAnimated.timing(a.opacity, { toValue: 1, duration: 300, useNativeDriver: true })
+        ])
+      )
+    ).start();
+  }, [statAnims, timerCardOpacity, timerCardScale]);
+  const syncLabel =
+    workActive && (workdaySyncStatus === "syncing" || workdaySyncStatus === "cached")
+      ? t("common.syncing")
+      : workActive && workdaySyncStatus === "connecting"
+        ? t("home.connectingToServer")
+        : null;
   const headerDate = dayjs().format("dddd, D MMM");
+
+  const applyWorkStatus = useCallback((work: MobileWorkStatus) => {
+    setWorkStatus(work);
+    if (work.is_active) {
+      void updateCachedWorkdayMetrics(work.distance_km ?? 0, work.route_points ?? 0);
+    }
+  }, []);
 
   const loadAll = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
     try {
       const [dash, work] = await Promise.all([fetchDashboard({ force: isRefresh }), fetchWorkStatus()]);
       setDashboard(dash);
-      setWorkStatus(work);
+      applyWorkStatus(work);
       void getBadgeCount(true);
     } catch {
       const cachedDash = await readDashboardCache();
@@ -295,7 +392,7 @@ export default function HomeTabScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [applyWorkStatus]);
 
   useEffect(() => {
     void loadAll(false);
@@ -305,11 +402,20 @@ export default function HomeTabScreen() {
     useCallback(() => {
       scrollRef.current?.scrollTo({ y: 0, animated: false });
       void refreshTracking().catch(() => undefined);
-      void fetchWorkStatus().then(setWorkStatus).catch(() => undefined);
+      void fetchWorkStatus().then(applyWorkStatus).catch(() => undefined);
       void getBadgeCount(true);
       void fetchDashboard({ force: true }).then(setDashboard).catch(() => undefined);
-    }, [refreshTracking])
+    }, [applyWorkStatus, refreshTracking])
   );
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      void refreshTracking().catch(() => undefined);
+      void fetchWorkStatus().then(applyWorkStatus).catch(() => undefined);
+    });
+    return () => sub.remove();
+  }, [applyWorkStatus, refreshTracking]);
 
   useEffect(() => {
     if (visitsVersion > 0) {
@@ -331,7 +437,7 @@ export default function HomeTabScreen() {
           void (async () => {
             await startDay();
             await refreshTracking().catch(() => undefined);
-            void fetchWorkStatus().then(setWorkStatus).catch(() => undefined);
+            void fetchWorkStatus().then(applyWorkStatus).catch(() => undefined);
           })();
         }
       }
@@ -370,7 +476,7 @@ export default function HomeTabScreen() {
 
   const lastSyncDate = lastSyncAt ? new Date(lastSyncAt) : null;
 
-  if (loading && !dashboard) {
+  if (loading && !dashboard && !workActive) {
     return (
       <SafeAreaView style={styles.screen} edges={["top"]}>
         <KavyaLoader />
@@ -380,6 +486,8 @@ export default function HomeTabScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
+      <ScreenBackground />
+      <LogoRefreshIndicator refreshing={refreshing} />
       <ScrollView
         ref={scrollRef}
         style={styles.scrollView}
@@ -407,49 +515,57 @@ export default function HomeTabScreen() {
           </View>
 
           <View style={styles.statusChip}>
-            <PulsingDot active={workActive} />
+            {workActive ? <PulsingDot active={workActive} /> : <PulsingDot active={false} />}
             <Text style={styles.statusChipText}>
-              {workActive ? "WORKING · GPS ACTIVE" : "OFF DUTY"}
+              {workActive ? `WORKING · GPS ACTIVE · ${headerDate}` : `OFF DUTY · ${headerDate}`}
             </Text>
           </View>
-          <Text style={styles.headerDate}>{headerDate}</Text>
         </View>
 
-        <WorkdayTimerCard
-          active={workActive}
-          startedAt={startedAt}
-          distanceKm={distanceKm}
-          busy={busy}
-          timerDisplay={workdayTimer.display}
-          onStart={confirmStartWorkday}
-          t={t}
-        />
+        <RNAnimated.View style={{ opacity: timerCardOpacity, transform: [{ scale: timerCardScale }] }}>
+          <WorkdayTimerCard
+            active={workActive}
+            startedAt={startedAt}
+            distanceKm={distanceKm}
+            busy={busy}
+            timerDisplay={workdayTimer.display}
+            syncLabel={syncLabel}
+            onStart={confirmStartWorkday}
+            t={t}
+          />
+        </RNAnimated.View>
 
         <View style={styles.statsGrid}>
-          <StatCard value={formatDistanceKm(distanceKm)} label={t("home.distanceToday")} />
-          <StatCard
-            value={workActive ? workdayTimer.compact : "0h 0m"}
-            label={t("home.hoursWorked")}
-          />
-          <StatCard value={dashboard?.visits_today ?? 0} label={t("home.visitsToday")} />
-          <StatCard value={dashboard?.farmers_covered ?? 0} label={t("home.farmersCovered")} />
+          {[
+            { value: formatDistanceKm(distanceCount), label: t("home.distanceToday") },
+            { value: workActive ? workdayTimer.compact : "0h 0m", label: t("home.hoursWorked") },
+            { value: visitsCount, label: t("home.visitsToday") },
+            { value: farmersCount, label: t("home.farmersCovered") }
+          ].map((stat, index) => (
+            <RNAnimated.View
+              key={stat.label}
+              style={{ opacity: statAnims[index].opacity, transform: [{ translateY: statAnims[index].y }], flexBasis: "47%", flexGrow: 1 }}
+            >
+              <StatCard value={stat.value} label={stat.label} index={index} />
+            </RNAnimated.View>
+          ))}
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>{t("home.quickActions").toUpperCase()}</Text>
+          <Text style={[styles.sectionLabel, ENT_SECTION_LABEL]}>{t("home.quickActions").toUpperCase()}</Text>
           <View style={styles.actionGrid}>
-            {quickActions.map((action) => (
-              <QuickActionCard key={action.key} action={action} />
+            {quickActions.map((action, index) => (
+              <QuickActionCard key={action.key} action={action} index={index} />
             ))}
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>{t("home.recent").toUpperCase()}</Text>
+          <Text style={[styles.sectionLabel, ENT_SECTION_LABEL]}>{t("home.recent").toUpperCase()}</Text>
           {(dashboard?.recent_visits.length ?? 0) > 0 ? (
             <View style={styles.recentList}>
-              {dashboard!.recent_visits.map((item) => (
-                <RecentRow key={item.id} item={item} />
+              {dashboard!.recent_visits.map((item, index) => (
+                <RecentRow key={item.id} item={item} index={index} />
               ))}
             </View>
           ) : (dashboard?.visits_today ?? 0) > 0 ? (
@@ -465,7 +581,7 @@ export default function HomeTabScreen() {
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: DS.bg,
+    backgroundColor: ENT.bg,
     flex: 1
   },
   scrollView: {
@@ -476,9 +592,9 @@ const styles = StyleSheet.create({
     gap: 0
   },
   headerSection: {
-    backgroundColor: DS.surface,
-    borderBottomColor: DS.border,
-    borderBottomWidth: 1,
+    backgroundColor: ENT.card,
+    borderBottomColor: ENT.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     paddingBottom: 14,
     paddingHorizontal: 16,
     paddingTop: 16
@@ -497,9 +613,9 @@ const styles = StyleSheet.create({
     paddingRight: 12
   },
   brandLogo: {
-    borderRadius: 8,
-    height: 32,
-    width: 32
+    borderRadius: 10,
+    height: 36,
+    width: 36
   },
   brandCopy: {
     flex: 1,
@@ -507,29 +623,31 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   brandAppName: {
-    color: DS.textPrimary,
+    color: ENT.text,
     fontFamily: FONTS.bold,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "700",
     letterSpacing: -0.2
   },
   brandVersion: {
-    color: DS.textMuted,
+    color: ENT.textSecondary,
     fontFamily: FONTS.medium,
     fontSize: 10,
     fontWeight: "500"
   },
   bellBtn: {
     alignItems: "center",
-    backgroundColor: DS.bellBg,
+    backgroundColor: ENT.bg,
+    borderColor: ENT.border,
     borderRadius: 12,
-    height: 32,
+    borderWidth: 1,
+    height: 36,
     justifyContent: "center",
-    width: 32
+    width: 36
   },
   bellBadge: {
     alignItems: "center",
-    backgroundColor: "#ef4444",
+    backgroundColor: ENT.danger,
     borderRadius: 7,
     height: 14,
     justifyContent: "center",
@@ -540,15 +658,17 @@ const styles = StyleSheet.create({
     top: -2
   },
   bellBadgeText: {
-    color: "#fff",
+    color: ENT.white,
     fontSize: 8,
     fontWeight: "700"
   },
   statusChip: {
     alignItems: "center",
     alignSelf: "flex-start",
-    backgroundColor: DS.accentBg,
+    backgroundColor: ENT.bg,
+    borderColor: ENT.border,
     borderRadius: 999,
+    borderWidth: 1,
     flexDirection: "row",
     gap: 6,
     marginTop: 10,
@@ -561,109 +681,127 @@ const styles = StyleSheet.create({
     width: 6
   },
   statusChipText: {
-    color: DS.accent,
+    color: ENT.textSecondary,
     fontSize: 9,
     fontWeight: "700",
     letterSpacing: 0.6
   },
-  headerDate: {
-    color: DS.textMuted,
-    fontSize: 10,
-    fontWeight: "500",
-    marginTop: 4
+  timerCardOuter: {
+    marginHorizontal: 16,
+    marginTop: 14
   },
   timerCard: {
-    backgroundColor: DS.accent,
-    borderRadius: 20,
-    marginHorizontal: 16,
-    marginTop: 14,
-    minHeight: 140,
+    minHeight: 120,
     overflow: "hidden",
     padding: 16,
     position: "relative"
   },
-  timerWatermark: {
+  timerAccent: {
+    backgroundColor: ENT.primary,
+    borderRadius: 2,
+    bottom: 12,
+    left: 0,
     position: "absolute",
-    right: 12,
-    top: 10,
-    zIndex: 1
-  },
-  timerDecorCircle: {
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 999,
-    height: 120,
-    position: "absolute",
-    right: -30,
-    top: -30,
-    width: 120
+    top: 12,
+    width: 4
   },
   timerStatusRow: {
     alignItems: "center",
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 6,
-    zIndex: 2
+    paddingLeft: 8
+  },
+  timerSyncBadge: {
+    backgroundColor: ENT.primarySoft,
+    borderRadius: 999,
+    color: ENT.primary,
+    fontFamily: FONTS.medium,
+    fontSize: 9,
+    overflow: "hidden",
+    paddingHorizontal: 8,
+    paddingVertical: 3
   },
   timerLabel: {
-    color: "rgba(255,255,255,0.85)",
+    color: ENT.primary,
+    fontFamily: FONTS.bold,
     fontSize: 10,
-    fontWeight: "700",
     letterSpacing: 1,
     textTransform: "uppercase"
   },
   timerValue: {
-    color: "#ffffff",
+    color: ENT.text,
+    fontFamily: FONTS.extrabold,
     fontSize: 36,
-    fontVariant: ["tabular-nums"],
-    fontWeight: "800",
-    includeFontPadding: false,
     letterSpacing: 1,
-    lineHeight: 42,
+    lineHeight: 44,
     marginTop: 8,
-    zIndex: 2
+    paddingLeft: 8,
+    ...(Platform.OS === "android" ? { includeFontPadding: false } : {})
   },
   timerSub: {
-    color: "rgba(255,255,255,0.65)",
+    color: ENT.textSecondary,
     fontFamily: FONTS.medium,
     fontSize: 10,
-    fontWeight: "500",
     marginTop: 6,
-    zIndex: 2
+    paddingLeft: 8
   },
   timerDate: {
-    color: "rgba(255,255,255,0.5)",
+    color: ENT.textMuted,
     fontFamily: FONTS.medium,
     fontSize: 9.5,
-    fontWeight: "500",
     marginTop: 8,
-    zIndex: 2
+    paddingLeft: 8
   },
-  idleCard: {
-    backgroundColor: DS.surface,
-    borderColor: DS.border,
-    borderRadius: 20,
-    borderWidth: 1,
-    gap: 10,
+  idleCardOuter: {
     marginHorizontal: 16,
     marginTop: 14,
     padding: 16
   },
+  idleHeaderRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 14
+  },
   idleIconWrap: {
     alignItems: "center",
-    backgroundColor: DS.accentBg,
+    backgroundColor: ENT.primarySoft,
     borderRadius: 12,
-    height: 36,
+    height: 40,
     justifyContent: "center",
-    width: 36
+    width: 40
+  },
+  idleCopy: {
+    flex: 1,
+    gap: 3,
+    minWidth: 0
   },
   idleTitle: {
-    color: DS.textPrimary,
+    color: ENT.text,
+    fontFamily: FONTS.bold,
     fontSize: 16,
     fontWeight: "700"
   },
   idleSub: {
-    color: DS.textMuted,
-    fontSize: 13,
-    marginBottom: 4
+    color: ENT.textSecondary,
+    fontFamily: FONTS.medium,
+    fontSize: 12
+  },
+  idleCta: {
+    alignItems: "center",
+    backgroundColor: ENT.primary,
+    borderRadius: 12,
+    flexDirection: "row",
+    gap: 8,
+    height: 44,
+    justifyContent: "center"
+  },
+  idleCtaText: {
+    color: ENT.white,
+    fontFamily: FONTS.bold,
+    fontSize: 14,
+    fontWeight: "700"
   },
   statsGrid: {
     flexDirection: "row",
@@ -672,35 +810,38 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 12
   },
+  statCardGlow: {
+    flex: 1
+  },
   statCard: {
-    backgroundColor: DS.surface,
-    borderColor: DS.border,
-    borderRadius: 14,
-    borderWidth: 1,
     flexBasis: "47%",
     flexGrow: 1,
+    gap: 6,
     padding: 12
   },
+  statIconWrap: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    borderRadius: 8,
+    height: 28,
+    justifyContent: "center",
+    width: 28
+  },
   statValue: {
-    color: DS.textPrimary,
-    fontSize: 24,
+    color: ENT.text,
+    fontSize: 22,
     fontWeight: "800"
   },
   statLabel: {
-    color: DS.textMuted,
+    color: ENT.textSecondary,
     fontSize: 9.5,
-    fontWeight: "500",
-    marginTop: 3
+    fontWeight: "500"
   },
   section: {
     marginHorizontal: 16,
     marginTop: 14
   },
   sectionLabel: {
-    color: DS.textMuted,
-    fontSize: 9,
-    fontWeight: "700",
-    letterSpacing: 1,
     marginBottom: 8
   },
   actionGrid: {
@@ -708,25 +849,24 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 8
   },
+  actionCardGlow: {
+    flex: 1
+  },
   actionCard: {
-    backgroundColor: DS.surface,
-    borderColor: DS.border,
-    borderRadius: 16,
-    borderWidth: 1,
     flexBasis: "47%",
     flexGrow: 1,
     padding: 14
   },
   actionIconWrap: {
     alignItems: "center",
-    backgroundColor: DS.accentBg,
+    backgroundColor: ENT.bg,
     borderRadius: 12,
     height: 36,
     justifyContent: "center",
     width: 36
   },
   actionLabel: {
-    color: DS.textPrimary,
+    color: ENT.text,
     fontSize: 11,
     fontWeight: "700",
     marginTop: 8
@@ -734,12 +874,11 @@ const styles = StyleSheet.create({
   recentList: {
     gap: 8
   },
+  recentRowWrap: {
+    marginBottom: 0
+  },
   recentRow: {
     alignItems: "center",
-    backgroundColor: DS.surface,
-    borderColor: DS.border,
-    borderRadius: 14,
-    borderWidth: 1,
     flexDirection: "row",
     gap: 10,
     padding: 12
@@ -750,27 +889,41 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   recentName: {
-    color: DS.textPrimary,
+    color: ENT.text,
     fontSize: 14,
+    fontWeight: "700"
+  },
+  recentCropBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: ENT.bg,
+    borderColor: ENT.border,
+    borderRadius: 6,
+    borderWidth: 1,
+    paddingHorizontal: 7,
+    paddingVertical: 2
+  },
+  recentCropText: {
+    color: ENT.textSecondary,
+    fontSize: 10,
     fontWeight: "600"
   },
   recentTime: {
-    color: DS.textMuted,
+    color: ENT.textMuted,
     fontSize: 11
+  },
+  recentEmptyGlow: {
+    alignSelf: "stretch"
   },
   recentEmpty: {
     alignItems: "center",
-    backgroundColor: DS.surface,
-    borderColor: DS.border,
-    borderRadius: 14,
-    borderWidth: 1,
     gap: 10,
     paddingVertical: 28
   },
   recentEmptyText: {
-    color: DS.textMuted,
+    color: ENT.textSecondary,
     fontSize: 13,
-    fontWeight: "500"
+    fontWeight: "500",
+    textAlign: "center"
   },
   recentSkeletonWrap: {
     gap: 8

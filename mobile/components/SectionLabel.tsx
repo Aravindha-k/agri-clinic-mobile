@@ -1,23 +1,22 @@
 import { StyleSheet, Text, View } from "react-native";
-import { FONTS } from "../../src/theme/fonts";
+import { ENT_SECTION_LABEL } from "../../src/theme/enterprise";
 
 type Props = {
   title: string;
-  /** Extra top margin for first section in a list */
   first?: boolean;
 };
 
 export function SectionLabel({ title, first }: Props) {
   return (
     <View style={[styles.wrap, first && styles.wrapFirst]}>
-      <Text style={styles.label}>{title.toUpperCase()}</Text>
+      <Text style={[styles.label, ENT_SECTION_LABEL]}>{title.toUpperCase()}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    backgroundColor: "#f8fafc",
+    backgroundColor: "transparent",
     marginBottom: 8,
     marginHorizontal: 16,
     marginTop: 14
@@ -26,11 +25,6 @@ const styles = StyleSheet.create({
     marginTop: 6
   },
   label: {
-    color: "#94a3b8",
-    fontFamily: FONTS.bold,
-    fontSize: 9,
-    fontWeight: "700",
-    letterSpacing: 1,
-    textTransform: "uppercase"
+    marginBottom: 0
   }
 });

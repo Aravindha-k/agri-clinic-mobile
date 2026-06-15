@@ -2,24 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Visit } from "../../../src/api/visits";
 import { FONTS } from "../../../src/theme/fonts";
+import { ENT, ENT_CARD_SHADOW } from "../../../src/theme/enterprise";
 import type { PendingVisitRecord } from "../../lib/pendingVisitsQueue";
 import { avatarInitials, getAvatarColors } from "../../lib/avatarColor";
 import { resolveVisitFarmer } from "../../../src/utils/visitFarmer";
 import { visitDisplayIso } from "../../../src/utils/format";
-
-const DS = {
-  surface: "#ffffff",
-  border: "#f1f5f9",
-  textPrimary: "#0f172a",
-  textMuted: "#94a3b8",
-  textAction: "#475569",
-  accent: "#16a34a",
-  inputBorder: "#e2e8f0",
-  cropBg: "#f0fdf4",
-  cropText: "#15803d",
-  pestBg: "#fef2f2",
-  pestText: "#dc2626"
-} as const;
 
 function VisitAvatar({ name }: { name: string }) {
   const { bg, text } = getAvatarColors(name);
@@ -94,7 +81,7 @@ export function VisitListCard({ visit, pending, onPress }: Props) {
         </View>
         {gpsOk ? (
           <View style={styles.gpsBadge}>
-            <Ionicons name="location" size={10} color={DS.accent} />
+            <Ionicons name="location" size={10} color={ENT.primary} />
             <Text style={styles.gpsText}>GPS ✓</Text>
           </View>
         ) : null}
@@ -119,7 +106,7 @@ export function VisitListCard({ visit, pending, onPress }: Props) {
       </View>
 
       <View style={styles.locationRow}>
-        <Ionicons name="location-outline" size={11} color={DS.textMuted} />
+        <Ionicons name="location-outline" size={11} color={ENT.textSecondary} />
         <Text style={styles.locationText} numberOfLines={1}>
           {village !== "—" ? village : "Village not set"}
         </Text>
@@ -133,7 +120,7 @@ export function VisitListCard({ visit, pending, onPress }: Props) {
           }}
           style={({ pressed }) => [styles.callBtn, pressed && { opacity: 0.88 }]}
         >
-          <Ionicons name="call-outline" size={14} color={DS.accent} />
+          <Ionicons name="call-outline" size={14} color={ENT.textSecondary} />
           <Text style={styles.callBtnText}>Call farmer</Text>
         </Pressable>
       ) : null}
@@ -143,21 +130,17 @@ export function VisitListCard({ visit, pending, onPress }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: DS.surface,
-    borderColor: DS.border,
-    borderRadius: 18,
-    borderWidth: 1,
-    elevation: 2,
+    backgroundColor: ENT.card,
+    borderColor: ENT.border,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
     marginBottom: 10,
     marginHorizontal: 16,
     padding: 14,
-    shadowColor: "#0f172a",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8
+    ...ENT_CARD_SHADOW
   },
   cardPending: {
-    borderLeftColor: "#fbbf24",
+    borderLeftColor: ENT.warning,
     borderLeftWidth: 3
   },
   topRow: {
@@ -190,15 +173,15 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   farmerName: {
-    color: DS.textPrimary,
+    color: ENT.text,
     fontFamily: FONTS.bold,
     fontSize: 13,
     fontWeight: "700"
   },
   time: {
-    color: DS.textMuted,
+    color: ENT.textSecondary,
     fontFamily: FONTS.medium,
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "500"
   },
   gpsBadge: {
@@ -207,9 +190,9 @@ const styles = StyleSheet.create({
     gap: 3
   },
   gpsText: {
-    color: DS.accent,
+    color: ENT.primary,
     fontFamily: FONTS.bold,
-    fontSize: 9,
+    fontSize: 9.5,
     fontWeight: "700"
   },
   tagsRow: {
@@ -219,37 +202,41 @@ const styles = StyleSheet.create({
     marginTop: 10
   },
   cropTag: {
-    backgroundColor: DS.cropBg,
+    backgroundColor: ENT.bg,
+    borderColor: ENT.border,
     borderRadius: 7,
+    borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 3
   },
   cropTagText: {
-    color: DS.cropText,
+    color: ENT.textSecondary,
     fontFamily: FONTS.semibold,
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "600"
   },
   pestTag: {
-    backgroundColor: DS.pestBg,
+    backgroundColor: ENT.dangerSoft,
+    borderColor: "#FECACA",
     borderRadius: 7,
+    borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 3
   },
   pestTagText: {
-    color: DS.pestText,
+    color: ENT.danger,
     fontFamily: FONTS.semibold,
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "600"
   },
   pendingTag: {
-    backgroundColor: "#fffbeb",
+    backgroundColor: ENT.warningSoft,
     borderRadius: 7,
     paddingHorizontal: 8,
     paddingVertical: 3
   },
   pendingTagText: {
-    color: "#b45309",
+    color: ENT.warning,
     fontFamily: FONTS.semibold,
     fontSize: 9,
     fontWeight: "600"
@@ -261,18 +248,18 @@ const styles = StyleSheet.create({
     marginTop: 8
   },
   locationText: {
-    color: DS.textMuted,
+    color: ENT.textSecondary,
     flex: 1,
     fontFamily: FONTS.medium,
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: "500"
   },
   callBtn: {
     alignItems: "center",
-    backgroundColor: DS.surface,
-    borderColor: DS.inputBorder,
+    backgroundColor: ENT.bg,
+    borderColor: ENT.border,
     borderRadius: 10,
-    borderWidth: 1.5,
+    borderWidth: 1,
     flexDirection: "row",
     gap: 6,
     height: 36,
@@ -281,7 +268,7 @@ const styles = StyleSheet.create({
     width: "100%"
   },
   callBtnText: {
-    color: DS.textAction,
+    color: ENT.textSecondary,
     fontFamily: FONTS.semibold,
     fontSize: 11,
     fontWeight: "600"

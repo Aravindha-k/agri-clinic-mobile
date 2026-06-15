@@ -1,6 +1,6 @@
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { useEffect, useRef } from "react";
-import { StyleSheet, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Animated, Dimensions, Easing, StyleSheet, View } from "react-native";
 import type { Farmer } from "../../../src/api/farmers";
 import { useSafeAreaInsetsCompat } from "../../../src/hooks/useSafeAreaInsetsCompat";
 import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
@@ -8,6 +8,8 @@ import { useMasterData } from "../../../src/storage/MasterDataContext";
 import { loadRevisitPrefill } from "../../../src/utils/farmerPrefill";
 import { useVisitFormStore } from "../../store/visitFormStore";
 import VisitCreateStep, { VisitCreateStep2, VisitCreateStep3 } from "./create";
+
+const SCREEN_WIDTH = Dimensions.get("window").width;
 
 export default function VisitFlowShell() {
   useSecureScreen();
@@ -20,6 +22,27 @@ export default function VisitFlowShell() {
   const applyRevisitPrefill = useVisitFormStore((s) => s.applyRevisitPrefill);
   const reset = useVisitFormStore((s) => s.reset);
   const fastRevisitStarted = useRef(false);
+
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const [displayedStep, setDisplayedStep] = useState(step);
+  const prevStep = useRef(step);
+
+  useEffect(() => {
+    if (step === prevStep.current) return;
+    const dir = step > prevStep.current ? 1 : -1;
+    prevStep.current = step;
+
+    Animated.timing(slideAnim, {
+      toValue: -dir * SCREEN_WIDTH,
+      duration: 280,
+      easing: Easing.in(Easing.ease),
+      useNativeDriver: true
+    }).start(() => {
+      setDisplayedStep(step);
+      slideAnim.setValue(dir * SCREEN_WIDTH);
+      Animated.spring(slideAnim, { toValue: 0, speed: 20, bounciness: 6, useNativeDriver: true }).start();
+    });
+  }, [slideAnim, step]);
 
   useEffect(() => {
     if (route.params?.fresh) {
@@ -63,17 +86,22 @@ export default function VisitFlowShell() {
 
   return (
     <View style={[styles.shell, { paddingTop: safeTop }]}>
-      {step === 1 ? <VisitCreateStep onClose={closeFlow} /> : null}
-      {step === 2 ? <VisitCreateStep2 onBack={() => setStep(1)} /> : null}
-      {step === 3 ? (
-        <VisitCreateStep3 onBack={() => setStep(2)} onEditStep2={() => setStep(2)} />
-      ) : null}
+      <Animated.View style={[styles.stepPane, { transform: [{ translateX: slideAnim }] }]}>
+        {displayedStep === 1 ? <VisitCreateStep onClose={closeFlow} /> : null}
+        {displayedStep === 2 ? <VisitCreateStep2 onBack={() => setStep(1)} /> : null}
+        {displayedStep === 3 ? (
+          <VisitCreateStep3 onBack={() => setStep(2)} onEditStep2={() => setStep(2)} />
+        ) : null}
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   shell: {
+    flex: 1
+  },
+  stepPane: {
     flex: 1
   }
 });

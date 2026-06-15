@@ -16,6 +16,10 @@ import {
 } from "react-native";
 import { FilterPillRow } from "../../components/FilterPillRow";
 import { KavyaLoader } from "../../components/KavyaLoader";
+import { CascadeIn } from "../../../src/components/ui/CascadeIn";
+import { NeonProgressBar } from "../../../src/components/cinematic";
+import { ScreenBackground } from "../../../src/components/glass";
+import { SkeletonCard } from "../../../src/components/ui/SkeletonCard";
 import { SectionLabel } from "../../components/SectionLabel";
 import { BrandLogo } from "../../../src/components/brand/BrandLogo";
 import { LOGO_IMAGE } from "../../../src/config/brand";
@@ -52,18 +56,10 @@ import {
   paginateWorkQueueRows,
   type FarmerWorkQueueRow
 } from "../../lib/workQueue";
+import { DS } from "../../../src/theme/globalStyles";
+import { ENT, ENT_CARD_SHADOW } from "../../../src/theme/enterprise";
+import { BRAND_COLORS } from "../../../src/config/brand";
 dayjs.extend(relativeTime);
-
-const DS = {
-  bg: "#f8fafc",
-  surface: "#ffffff",
-  border: "#f1f5f9",
-  inputBorder: "#e2e8f0",
-  textPrimary: "#0f172a",
-  textMuted: "#94a3b8",
-  textSubtle: "#64748b",
-  accent: "#16a34a"
-} as const;
 
 function formatHeaderSubtitle(count: number, iso: string | null): string {
   if (!iso) return `${count} total · not synced`;
@@ -565,7 +561,7 @@ export default function FarmersTabScreen() {
   }, []);
 
   const renderItem = useCallback(
-    ({ item }: { item: MobileFarmer | FarmerWorkQueueRow }) => {
+    ({ item, index }: { item: MobileFarmer | FarmerWorkQueueRow; index: number }) => {
       if ("type" in item) {
         if (item.type === "section") {
           return (
@@ -573,7 +569,8 @@ export default function FarmersTabScreen() {
           );
         }
         return (
-          <FarmerDirectoryCard
+          <CascadeIn index={index % 6}>
+            <FarmerDirectoryCard
             farmer={item.farmer}
             workflow={item.workflow}
             onPress={() => navigation.navigate("FarmerDetail", { id: item.farmer.id })}
@@ -594,10 +591,12 @@ export default function FarmersTabScreen() {
               });
             }}
           />
+          </CascadeIn>
         );
       }
 
       return (
+        <CascadeIn index={index % 6}>
         <FarmerDirectoryCard
           farmer={item}
           onPress={() => navigation.navigate("FarmerDetail", { id: item.id })}
@@ -618,6 +617,7 @@ export default function FarmersTabScreen() {
             });
           }}
         />
+        </CascadeIn>
       );
     },
     [canRunWorkAction, navigation, rootNav]
@@ -626,7 +626,11 @@ export default function FarmersTabScreen() {
   const ListEmptyComponent = useMemo(
     () =>
       isInitialLoading ? (
-        <KavyaLoader />
+        <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonCard key={i} height={110} />
+          ))}
+        </View>
       ) : (
         <FarmersEmptyState
           message={
@@ -658,6 +662,7 @@ export default function FarmersTabScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: safeTop }]}>
+      <ScreenBackground />
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <View style={styles.titleBlock}>
@@ -685,16 +690,11 @@ export default function FarmersTabScreen() {
         </View>
 
         {syncingAll && syncProgress ? (
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width: `${Math.min(100, Math.round((syncProgress.current / Math.max(syncProgress.total, 1)) * 100))}%`
-                }
-              ]}
-            />
-          </View>
+          <NeonProgressBar
+            progress={syncProgress.current / Math.max(syncProgress.total, 1)}
+            height={3}
+            style={styles.progressTrack}
+          />
         ) : null}
 
         {offlineToast ? (
@@ -803,7 +803,7 @@ export default function FarmersTabScreen() {
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: DS.bg,
+    backgroundColor: ENT.bg,
     flex: 1
   },
   listShell: {
@@ -814,9 +814,9 @@ const styles = StyleSheet.create({
     flex: 1
   },
   header: {
-    backgroundColor: DS.surface,
-    borderBottomColor: DS.border,
-    borderBottomWidth: 1,
+    backgroundColor: ENT.card,
+    borderBottomColor: ENT.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     gap: 10,
     padding: 16
   },
@@ -831,19 +831,21 @@ const styles = StyleSheet.create({
     marginRight: 12
   },
   title: {
-    color: DS.textPrimary,
+    color: ENT.text,
     fontSize: 22,
     fontWeight: "800"
   },
   subtitle: {
-    color: DS.textMuted,
+    color: ENT.textSecondary,
     fontSize: 10,
     marginTop: 2
   },
   syncBtn: {
     alignItems: "center",
-    backgroundColor: DS.accent,
+    backgroundColor: ENT.bg,
+    borderColor: ENT.border,
     borderRadius: 12,
+    borderWidth: 1,
     flexDirection: "row",
     gap: 5,
     paddingHorizontal: 12,
@@ -853,13 +855,13 @@ const styles = StyleSheet.create({
     opacity: 0.65
   },
   syncBtnText: {
-    color: "#fff",
+    color: ENT.textSecondary,
     fontSize: 9.5,
     fontWeight: "700",
     maxWidth: 120
   },
   progressTrack: {
-    backgroundColor: "#dcfce7",
+    backgroundColor: BRAND_COLORS.primarySoft,
     borderRadius: 99,
     height: 3,
     overflow: "hidden",
@@ -886,10 +888,10 @@ const styles = StyleSheet.create({
   },
   searchBar: {
     alignItems: "center",
-    backgroundColor: DS.surface,
-    borderColor: DS.inputBorder,
+    backgroundColor: ENT.card,
+    borderColor: ENT.border,
     borderRadius: 14,
-    borderWidth: 1.5,
+    borderWidth: 1,
     flexDirection: "row",
     gap: 10,
     height: 44,

@@ -13,7 +13,10 @@ import { getQueuedVisits } from "../../../src/storage/offlineVisitQueue";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useVisitFormStore } from "../../store/visitFormStore";
 import { GhostButton, PrimaryButton } from "../../components/ui";
-import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
+import { ScreenBackground } from "../../../src/components/glass";
+import GlassCard from "../../../src/components/glass/GlassCard";
+import { ENT } from "../../../src/theme/enterprise";
+import { FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 
 type Props = NativeStackScreenProps<VisitFlowParamList, "VisitSuccess">;
 
@@ -29,18 +32,19 @@ function AnimatedHeroIcon({ queued }: { queued: boolean }) {
   }));
 
   return (
-    <Animated.View
-      style={[
-        styles.heroCircle,
-        { backgroundColor: queued ? Colors.amberBg : Colors.brand50 },
-        animatedStyle
-      ]}
-    >
-      <Ionicons
-        name={queued ? "time-outline" : "checkmark"}
-        size={44}
-        color={queued ? Colors.amber : Colors.brand700}
-      />
+    <Animated.View style={[styles.heroWrap, animatedStyle]}>
+      <View
+        style={[
+          styles.heroCircle,
+          { backgroundColor: queued ? ENT.warningSoft : ENT.primarySoft }
+        ]}
+      >
+        <Ionicons
+          name={queued ? "time-outline" : "checkmark"}
+          size={44}
+          color={queued ? ENT.warning : ENT.primary}
+        />
+      </View>
     </Animated.View>
   );
 }
@@ -121,6 +125,7 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.screen}>
+      <ScreenBackground />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.body}
@@ -145,6 +150,7 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
             {visitId > 0 ? (
               <Text style={styles.visitId}>{t("visitFlow.visitNumber", { id: visitId })}</Text>
             ) : null}
+            <GlassCard style={styles.summaryGlow}>
             <View style={styles.summaryCard}>
               <SummaryLine label={t("visitFlow.farmerSummary")} value={farmerLabel} />
               <SummaryLine label={t("visitFlow.cropSummary")} value={cropLabel} />
@@ -152,6 +158,7 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
               {adviceLabel ? <SummaryLine label={t("visitFlow.adviceSummary")} value={adviceLabel} /> : null}
               <SummaryLine label={t("visitFlow.gpsSummary")} value={gpsLabel} />
             </View>
+            </GlassCard>
             {evidenceWarning ? <Text style={styles.evidenceWarn}>{evidenceWarning}</Text> : null}
           </>
         )}
@@ -176,7 +183,7 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: Colors.bg,
+    backgroundColor: ENT.bg,
     flex: 1
   },
   scrollView: {
@@ -190,6 +197,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.screen,
     paddingTop: 24
   },
+  heroWrap: {
+    alignItems: "center",
+    height: 100,
+    justifyContent: "center",
+    width: 100
+  },
   heroCircle: {
     alignItems: "center",
     borderRadius: 40,
@@ -198,39 +211,38 @@ const styles = StyleSheet.create({
     width: 80
   },
   title: {
-    color: Colors.text1,
+    color: ENT.text,
     fontSize: FontSize.h1,
     fontWeight: FontWeight.bold,
     marginTop: 16,
     textAlign: "center"
   },
   subtitle: {
-    color: Colors.text3,
+    color: ENT.textSecondary,
     fontSize: FontSize.md,
     marginTop: 8,
     textAlign: "center"
   },
   pendingCount: {
-    color: Colors.amberText,
+    color: ENT.warning,
     fontSize: FontSize.md,
     fontWeight: FontWeight.semibold,
     marginTop: 12,
     textAlign: "center"
   },
   visitId: {
-    color: Colors.text4,
+    color: ENT.textMuted,
     fontSize: FontSize.sm,
     marginTop: 6,
     textAlign: "center"
   },
+  summaryGlow: {
+    alignSelf: "stretch",
+    marginTop: 20
+  },
   summaryCard: {
     alignSelf: "stretch",
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderRadius: Radius.card,
-    borderWidth: 1,
     gap: 10,
-    marginTop: 20,
     padding: 16
   },
   summaryLine: {
@@ -238,23 +250,23 @@ const styles = StyleSheet.create({
     gap: 10
   },
   summaryLabel: {
-    color: Colors.text4,
+    color: ENT.textSecondary,
     fontSize: FontSize.sm,
     minWidth: 64
   },
   summaryValue: {
-    color: Colors.text1,
+    color: ENT.text,
     flex: 1,
     fontSize: FontSize.md,
     fontWeight: FontWeight.semibold
   },
   evidenceWarn: {
     alignSelf: "stretch",
-    backgroundColor: Colors.amberBg,
-    borderColor: Colors.amber,
+    backgroundColor: ENT.warningSoft,
+    borderColor: ENT.border,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    color: Colors.amberText,
+    color: ENT.warning,
     fontSize: FontSize.sm,
     marginTop: 12,
     padding: 12,
@@ -273,7 +285,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10
   },
   homeLinkText: {
-    color: Colors.brand700,
+    color: ENT.primary,
     fontSize: FontSize.md,
     fontWeight: FontWeight.semibold
   }

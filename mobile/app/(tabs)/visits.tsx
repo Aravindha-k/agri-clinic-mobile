@@ -3,6 +3,7 @@ import { FlashList } from "@shopify/flash-list";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Image,
   Pressable,
   RefreshControl,
@@ -12,6 +13,11 @@ import {
 } from "react-native";
 import { FilterPillRow } from "../../components/FilterPillRow";
 import { KavyaLoader } from "../../components/KavyaLoader";
+import { CascadeIn } from "../../../src/components/ui/CascadeIn";
+import { NeonProgressBar } from "../../../src/components/cinematic";
+import { ScreenBackground } from "../../../src/components/glass";
+import NumberFlip from "../../../src/components/cinematic/NumberFlip";
+import { SkeletonCard } from "../../../src/components/ui/SkeletonCard";
 import { SectionLabel } from "../../components/SectionLabel";
 import {
   fetchVisitsPage,
@@ -37,18 +43,8 @@ import {
   type VisitListRow
 } from "../../lib/visitListSections";
 import { readPendingVisits, type PendingVisitRecord } from "../../lib/pendingVisitsQueue";
-
-const DS = {
-  bg: "#f8fafc",
-  surface: "#ffffff",
-  border: "#f1f5f9",
-  inputBorder: "#e2e8f0",
-  textPrimary: "#0f172a",
-  textMuted: "#94a3b8",
-  textSubtle: "#64748b",
-  accent: "#16a34a",
-  accentBg: "#f0fdf4"
-} as const;
+import { DS } from "../../../src/theme/globalStyles";
+import { ENT } from "../../../src/theme/enterprise";
 
 function LogoWatermark({ size = 48, opacity = 0.1 }: { size?: number; opacity?: number }) {
   if (!LOGO_IMAGE) return <BrandLogo variant="watermark" width={size} height={size} />;
@@ -100,6 +96,7 @@ export default function VisitsTabScreen() {
   const [dateFilter, setDateFilter] = useState<VisitDateFilter>("all");
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<VisitSyncProgress | null>(null);
+  const listOpacity = useRef(new Animated.Value(1)).current;
 
   const loadPending = useCallback(async () => {
     setPendingVisits(await readPendingVisits());
@@ -197,20 +194,32 @@ export default function VisitsTabScreen() {
     }
   }, [bumpAfterVisitChange, loadPending, loadVisits, refreshQueue, syncing]);
 
+  const switchFilter = useCallback(
+    (newFilter: VisitDateFilter) => {
+      Animated.timing(listOpacity, { toValue: 0, duration: 150, useNativeDriver: true }).start(() => {
+        setDateFilter(newFilter);
+        void loadVisits({ filter: newFilter });
+        Animated.timing(listOpacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+      });
+    },
+    [listOpacity, loadVisits]
+  );
+
   const renderItem = useCallback(
-    ({ item }: { item: VisitListRow }) => {
+    ({ item, index }: { item: VisitListRow; index: number }) => {
       if (item.kind === "section") {
         return <SectionLabel title={item.title} first={item.title === "PENDING SYNC"} />;
       }
-      if (item.kind === "pending") {
-        return <VisitListCard pending={item.pending} />;
-      }
-      return (
-        <VisitListCard
-          visit={item.visit}
-          onPress={() => navigation.navigate("VisitDetail", { id: item.visit.id })}
-        />
-      );
+      const card =
+        item.kind === "pending" ? (
+          <VisitListCard pending={item.pending} />
+        ) : (
+          <VisitListCard
+            visit={item.visit}
+            onPress={() => navigation.navigate("VisitDetail", { id: item.visit.id })}
+          />
+        );
+      return <CascadeIn index={index % 6}>{card}</CascadeIn>;
     },
     [navigation]
   );
@@ -228,7 +237,11 @@ export default function VisitsTabScreen() {
   const ListEmptyComponent = useMemo(
     () =>
       loading ? (
-        <KavyaLoader />
+        <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonCard key={i} height={100} />
+          ))}
+        </View>
       ) : (
         <VisitsEmptyState message={t("home.noVisitsYet")} />
       ),
@@ -247,6 +260,7 @@ export default function VisitsTabScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: safeTop }]}>
+      <ScreenBackground />
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <View style={styles.titleBlock}>
@@ -256,7 +270,7 @@ export default function VisitsTabScreen() {
             </Text>
           </View>
           <View style={styles.countBadge}>
-            <Text style={styles.countBadgeText}>{headerCount}</Text>
+            <NumberFlip value={headerCount} style={styles.countBadgeText} glowInterval={4000} />
           </View>
         </View>
 
@@ -272,6 +286,13 @@ export default function VisitsTabScreen() {
               </Text>
               {syncing && syncProgress?.status === "failed" && syncProgress.error ? (
                 <Text style={styles.pendingBannerError}>{syncProgress.error}</Text>
+              ) : null}
+              {syncing && syncProgress ? (
+                <NeonProgressBar
+                  progress={(syncProgress.index + 1) / Math.max(syncProgress.total, 1)}
+                  height={3}
+                  style={{ marginTop: 8 }}
+                />
               ) : null}
             </View>
             <Pressable
@@ -300,14 +321,11 @@ export default function VisitsTabScreen() {
           id: chip.id,
           label: chip.label,
           active: dateFilter === chip.id,
-          onPress: () => {
-            setDateFilter(chip.id);
-            void loadVisits({ filter: chip.id });
-          }
+          onPress: () => switchFilter(chip.id)
         }))}
       />
 
-      <View style={styles.listShell}>
+      <Animated.View style={[styles.listShell, { opacity: listOpacity }]}>
         <FlashList
           data={listRows}
           renderItem={renderItem}
@@ -323,14 +341,14 @@ export default function VisitsTabScreen() {
           ListFooterComponent={ListFooterComponent}
           ListEmptyComponent={ListEmptyComponent}
         />
-      </View>
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: DS.bg,
+    backgroundColor: ENT.bg,
     flex: 1
   },
   listShell: {
@@ -341,9 +359,9 @@ const styles = StyleSheet.create({
     flex: 1
   },
   header: {
-    backgroundColor: DS.surface,
-    borderBottomColor: DS.border,
-    borderBottomWidth: 1,
+    backgroundColor: ENT.card,
+    borderBottomColor: ENT.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     gap: 10,
     padding: 16
   },
@@ -357,22 +375,24 @@ const styles = StyleSheet.create({
     gap: 2
   },
   title: {
-    color: DS.textPrimary,
+    color: ENT.text,
     fontSize: 22,
     fontWeight: "800"
   },
   subtitle: {
-    color: DS.textMuted,
+    color: ENT.textSecondary,
     fontSize: 10
   },
   countBadge: {
-    backgroundColor: DS.accentBg,
+    backgroundColor: ENT.bg,
+    borderColor: ENT.border,
     borderRadius: 12,
+    borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 6
   },
   countBadgeText: {
-    color: DS.accent,
+    color: ENT.text,
     fontSize: 14,
     fontWeight: "800"
   },
@@ -427,7 +447,7 @@ const styles = StyleSheet.create({
     paddingVertical: 40
   },
   emptyStateText: {
-    color: DS.textMuted,
+    color: ENT.textSecondary,
     fontSize: 13,
     textAlign: "center"
   },

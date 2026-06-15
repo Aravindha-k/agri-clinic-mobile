@@ -18,19 +18,20 @@ import {
 } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
-import { BRAND, LOGO_IMAGE } from "../config/brand";
+import { BRAND, LOGO_IMAGE, BRAND_COLORS } from "../config/brand";
 import { useSecureScreen } from "../hooks/useSecureScreen";
 import { useAuth } from "../storage/AuthContext";
 import { LOGO_SIZES } from "../brand/logoSizing";
 import { FONTS } from "../theme/fonts";
 import { ApiRequestError, getNetworkMessage, isNetworkError } from "../utils/apiError";
+import GradientBackground from "../components/glass/GradientBackground";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const { height: SH } = Dimensions.get("window");
 
 const DARK = "#0d1f14";
-const ACCENT = "#4caf82";
-const ACCENT_DARK = "#16a34a";
+const ACCENT = BRAND_COLORS.primary;
+const ACCENT_DARK = BRAND_COLORS.secondary;
 const TOP_H = Math.round(SH * 0.38);
 const RING_C = 452;
 const LOGO_SIZE = LOGO_SIZES.loginPlate;
@@ -395,6 +396,7 @@ export function LoginScreen() {
 
       {/* ── DARK TOP ZONE ── */}
       <View style={[styles.topZone, { height: TOP_H }]}>
+        <GradientBackground />
         <LeafIcon size={52} style={styles.leaf1} />
         <LeafIcon size={64} style={styles.leaf2} />
         <LeafIcon size={44} style={styles.leaf3} />
@@ -850,7 +852,7 @@ const styles = StyleSheet.create({
   },
   serviceIconWrap: {
     alignItems: "center",
-    backgroundColor: "#f0fdf4",
+    backgroundColor: BRAND_COLORS.primarySoft,
     borderRadius: 10,
     height: 36,
     justifyContent: "center",
@@ -865,8 +867,8 @@ const styles = StyleSheet.create({
     textAlign: "center"
   },
   statsBar: {
-    backgroundColor: "#f0fdf4",
-    borderColor: "#bbf7d0",
+    backgroundColor: BRAND_COLORS.primarySoft,
+    borderColor: BRAND_COLORS.primarySoftBorder,
     borderRadius: 14,
     borderWidth: 1,
     flexDirection: "row",
@@ -879,7 +881,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12
   },
   statItemBorder: {
-    borderLeftColor: "#bbf7d0",
+    borderLeftColor: BRAND_COLORS.primarySoftBorder,
     borderLeftWidth: 1
   },
   statValue: {

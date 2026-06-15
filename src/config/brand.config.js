@@ -1,7 +1,7 @@
 /** Shared brand metadata — imported by `app.config.js` and `brand.ts`. */
 module.exports = {
   companyName: "Kavya Agri-Horti Clinic",
-  appName: "Kavya Field",
+  appName: "Kavya Agri Clinic",
   splashTitle: "Kavya Agri Clinic",
   splashSubtitle: "Field Officer App",
   tagline: "Diagnostics • Solutions • Growth",
@@ -13,6 +13,6 @@ module.exports = {
   splashDurationMs: 7500,
   iconBackgroundColor: "#0F5132",
   logoAsset: "./assets/brand/logo.png",
-  iconAsset: "./assets/brand/logo.png",
-  adaptiveIconAsset: "./assets/brand/logo.png"
+  iconAsset: "./assets/brand/app-icon.png",
+  adaptiveIconAsset: "./assets/brand/adaptive-icon-foreground.png"
 };

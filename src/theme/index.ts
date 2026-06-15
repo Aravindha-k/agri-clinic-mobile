@@ -12,5 +12,6 @@ export { listCardType, listCardLayout, listCardStyles } from "./listCard";
 export { refreshControlProps } from "./refresh";
 export { premium } from "./premiumTokens";
 export { DS, TAB_BAR, STATUS_BAR } from "./globalStyles";
+export { ENT, ENT_SECTION_LABEL, ENT_CARD_SHADOW } from "./enterprise";
 export { FONTS } from "./fonts";
 export { applyGlobalFonts } from "./applyGlobalFonts";

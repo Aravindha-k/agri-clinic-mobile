@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import FloatCard from "../cinematic/FloatCard";
 import { useDesignSystem } from "../../hooks/useDesignSystem";
 
 type Action = {
@@ -20,9 +21,9 @@ export function PremiumQuickActions({ actions }: Props) {
     <View style={styles.wrap}>
       <Text style={[type.sectionTitle, styles.title]}>Quick actions</Text>
       <View style={styles.grid}>
-        {actions.map((action) => (
+        {actions.map((action, index) => (
+          <FloatCard key={action.label} distance={4} duration={3200} delay={index * 120}>
           <Pressable
-            key={action.label}
             accessibilityRole="button"
             onPress={action.onPress}
             style={({ pressed }) => [styles.cell, pressed && { opacity: 0.92 }]}
@@ -56,6 +57,7 @@ export function PremiumQuickActions({ actions }: Props) {
               </Text>
             </View>
           </Pressable>
+          </FloatCard>
         ))}
       </View>
     </View>

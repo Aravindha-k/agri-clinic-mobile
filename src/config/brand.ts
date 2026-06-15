@@ -1,17 +1,22 @@
 import brandMeta from "./brand.config.js";
 
-/** Official clinic palette — must match `app.config.js` splash and native colors. */
+/** Official clinic palette — primary CTAs use #0F6B43; splash keeps cinematic gradient. */
 export const BRAND_COLORS = {
-  /** Deep Clinic Green (primary) */
-  primary: "#0F5132",
+  /** Enterprise primary green */
+  primary: "#0F6B43",
   /** Dark Green (secondary) */
   secondary: "#0B5A38",
   /** White accent for text/icons on green surfaces */
   accent: "#FFFFFF",
+  /** Soft green tint for chips/badges on light backgrounds */
+  primarySoft: "#ECFDF5",
+  /** Muted green border on soft surfaces */
+  primarySoftBorder: "#B8D9C8",
   splash: brandMeta.splashBackgroundColor,
   gradientTop: "#0F5132",
   gradientMid: "#0F5132",
-  gradientBottom: "#157A4C",
+  gradientBottom: "#0B5A38",
+  /** @deprecated Use `secondary` */
   gradientDeep: "#0B5A38"
 } as const;
 

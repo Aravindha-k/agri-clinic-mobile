@@ -9,20 +9,20 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Svg, { Circle, Path } from "react-native-svg";
-import { BRAND, LOGO_IMAGE } from "../../config/brand";
-
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+import Svg, { Path } from "react-native-svg";
+import { BRAND, LOGO_IMAGE, BRAND_COLORS } from "../../config/brand";
+import GradientBackground from "../glass/GradientBackground";
+import DualRings from "../cinematic/DualRings";
+import ScanLine from "../cinematic/ScanLine";
+import { NeonProgressBar } from "../cinematic/NeonProgressBar";
+import { GE } from "../../theme/glassEmerald";
+import { SplashExtraEffects } from "./SplashExtraEffects";
 
 export const SPLASH_INTRO_MS = BRAND.splashDurationMs ?? 7500;
 
-const BG = "#0d1f14";
-const ACCENT = "#4caf82";
-const ACCENT_SOFT = "#a8d5b5";
-const RING_R = 80;
-const RING_C = 503;
-const SVG_SIZE = 166;
-const SVG_CENTER = SVG_SIZE / 2;
+const BG = GE.g1;
+const ACCENT = BRAND_COLORS.primary;
+const ACCENT_SOFT = BRAND_COLORS.primarySoft;
 const LOGO_CIRCLE = 148;
 const LOGO_IMAGE_SIZE = 128;
 
@@ -225,8 +225,7 @@ function PulsingDot({ delayMs }: { delayMs: number }) {
 export function AnimatedSplashScreen({ onFinish, onReady }: Props) {
   const version = Constants.expoConfig?.version ?? "1.0.0";
 
-  const ringOffset = useRef(new Animated.Value(RING_C)).current;
-  const logoScale = useRef(new Animated.Value(0)).current;
+  const logoScale = useRef(new Animated.Value(0.8)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const circleOpacity = useRef(new Animated.Value(0)).current;
   const brandOpacity = useRef(new Animated.Value(0)).current;
@@ -236,18 +235,14 @@ export function AnimatedSplashScreen({ onFinish, onReady }: Props) {
   const loadingOpacity = useRef(new Animated.Value(0)).current;
   const progressWidth = useRef(new Animated.Value(0)).current;
   const statusOpacity = useRef(new Animated.Value(0)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+  const morphScaleX = useRef(new Animated.Value(1)).current;
+  const morphScaleY = useRef(new Animated.Value(1)).current;
 
   const [statusIndex, setStatusIndex] = useState(0);
+  const [loadProgress, setLoadProgress] = useState(0);
 
   useEffect(() => {
-    Animated.timing(ringOffset, {
-      toValue: 0,
-      duration: 1000,
-      delay: 200,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false
-    }).start();
-
     Animated.parallel([
       Animated.timing(circleOpacity, {
         toValue: 1,
@@ -321,6 +316,44 @@ export function AnimatedSplashScreen({ onFinish, onReady }: Props) {
       useNativeDriver: false
     }).start();
 
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 2000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 2000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false
+        })
+      ])
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(morphScaleX, { toValue: 1.3, duration: 4000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(morphScaleY, { toValue: 0.8, duration: 4000, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
+        ]),
+        Animated.parallel([
+          Animated.timing(morphScaleX, { toValue: 0.8, duration: 4000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(morphScaleY, { toValue: 1.3, duration: 4000, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
+        ]),
+        Animated.parallel([
+          Animated.timing(morphScaleX, { toValue: 1, duration: 4000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(morphScaleY, { toValue: 1, duration: 4000, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
+        ])
+      ])
+    ).start();
+
+    const progressListener = progressWidth.addListener(({ value }) => {
+      setLoadProgress(value / 120);
+    });
+
     const statusFadeIn = setTimeout(() => {
       Animated.timing(statusOpacity, {
         toValue: 1,
@@ -351,6 +384,7 @@ export function AnimatedSplashScreen({ onFinish, onReady }: Props) {
     const finishTimer = setTimeout(onFinish, SPLASH_INTRO_MS);
 
     return () => {
+      progressWidth.removeListener(progressListener);
       clearTimeout(statusFadeIn);
       clearTimeout(statusCycleStart);
       if (statusCycle) clearInterval(statusCycle);
@@ -367,15 +401,21 @@ export function AnimatedSplashScreen({ onFinish, onReady }: Props) {
     logoScale,
     onFinish,
     progressWidth,
-    ringOffset,
+    glowAnim,
+    morphScaleX,
+    morphScaleY,
     statusOpacity
   ]);
 
+  const glowShadow = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 28] });
+
   return (
     <View style={{ flex: 1, backgroundColor: BG }} onLayout={() => onReady?.()}>
+      <GradientBackground />
       <StatusBar hidden />
 
       <View style={{ ...StyleSheetAbsolute, backgroundColor: BG }} pointerEvents="none">
+        <SplashExtraEffects />
         {LEAVES.map((leaf, index) => (
           <FloatingLeaf key={index} spec={leaf} />
         ))}
@@ -387,72 +427,63 @@ export function AnimatedSplashScreen({ onFinish, onReady }: Props) {
 
         {/* Zone 2 — center logo block */}
         <View style={{ alignItems: "center", flex: 2, justifyContent: "center", paddingHorizontal: 32 }}>
-          <View
-            style={{
-              alignItems: "center",
-              height: 200,
-              justifyContent: "center",
-              width: 200
-            }}
-          >
-            <PulseRing size={200} delayMs={0} />
-            <PulseRing size={174} delayMs={400} />
-
-            <Svg width={SVG_SIZE} height={SVG_SIZE} style={{ position: "absolute" }}>
-              <Circle
-                cx={SVG_CENTER}
-                cy={SVG_CENTER}
-                r={RING_R}
-                stroke="rgba(255,255,255,0.08)"
-                strokeWidth={1}
-                fill="none"
-              />
-              <AnimatedCircle
-                cx={SVG_CENTER}
-                cy={SVG_CENTER}
-                r={RING_R}
-                stroke={ACCENT}
-                strokeWidth={2}
-                strokeLinecap="round"
-                fill="none"
-                strokeDasharray={`${RING_C} ${RING_C}`}
-                strokeDashoffset={ringOffset}
-                rotation={-90}
-                origin={`${SVG_CENTER}, ${SVG_CENTER}`}
-              />
-            </Svg>
+          <View style={{ alignItems: "center", height: 220, justifyContent: "center", width: 220 }}>
+            <Animated.View
+              style={{
+                backgroundColor: "rgba(76,175,130,0.05)",
+                borderRadius: 65,
+                height: 130,
+                position: "absolute",
+                width: 130,
+                transform: [{ scaleX: morphScaleX }, { scaleY: morphScaleY }]
+              }}
+            />
+            <View style={{ position: "absolute" }}>
+              <DualRings size={170} />
+            </View>
 
             <Animated.View
               style={{
                 alignItems: "center",
-                backgroundColor: "rgba(255,255,255,0.95)",
-                borderColor: "rgba(76,175,130,0.55)",
-                borderRadius: LOGO_CIRCLE / 2,
-                borderWidth: 3,
-                height: LOGO_CIRCLE,
                 justifyContent: "center",
-                opacity: circleOpacity,
-                overflow: "hidden",
-                width: LOGO_CIRCLE
+                shadowColor: "#4ade80",
+                shadowOpacity: 0.4,
+                shadowRadius: glowShadow
               }}
             >
-              {LOGO_IMAGE ? (
-                <Animated.View
-                  style={{
-                    alignItems: "center",
-                    justifyContent: "center",
-                    opacity: logoOpacity,
-                    transform: [{ scale: logoScale }]
-                  }}
-                >
-                  <Image
-                    source={LOGO_IMAGE}
-                    style={{ height: LOGO_IMAGE_SIZE, width: LOGO_IMAGE_SIZE }}
-                    resizeMode="contain"
-                    accessibilityLabel="Kavya Agri Clinic logo"
-                  />
-                </Animated.View>
-              ) : null}
+              <Animated.View
+                style={{
+                  alignItems: "center",
+                  backgroundColor: "rgba(255,255,255,0.95)",
+                  borderColor: "rgba(76,175,130,0.55)",
+                  borderRadius: LOGO_CIRCLE / 2,
+                  borderWidth: 3,
+                  height: LOGO_CIRCLE,
+                  justifyContent: "center",
+                  opacity: circleOpacity,
+                  overflow: "hidden",
+                  width: LOGO_CIRCLE
+                }}
+              >
+                <ScanLine />
+                {LOGO_IMAGE ? (
+                  <Animated.View
+                    style={{
+                      alignItems: "center",
+                      justifyContent: "center",
+                      opacity: logoOpacity,
+                      transform: [{ scale: logoScale }]
+                    }}
+                  >
+                    <Image
+                      source={LOGO_IMAGE}
+                      style={{ height: LOGO_IMAGE_SIZE, width: LOGO_IMAGE_SIZE }}
+                      resizeMode="contain"
+                      accessibilityLabel="Kavya Agri Clinic logo"
+                    />
+                  </Animated.View>
+                ) : null}
+              </Animated.View>
             </Animated.View>
           </View>
 
@@ -528,23 +559,8 @@ export function AnimatedSplashScreen({ onFinish, onReady }: Props) {
             paddingBottom: 8
           }}
         >
-          <View
-            style={{
-              backgroundColor: "rgba(255,255,255,0.1)",
-              borderRadius: 99,
-              height: 2,
-              overflow: "hidden",
-              width: 120
-            }}
-          >
-            <Animated.View
-              style={{
-                backgroundColor: ACCENT,
-                borderRadius: 99,
-                height: 2,
-                width: progressWidth
-              }}
-            />
+          <View style={{ width: 120, marginTop: 0 }}>
+            <NeonProgressBar progress={loadProgress} height={2} trackColor="rgba(255,255,255,0.1)" />
           </View>
 
           <View style={{ alignItems: "center", flexDirection: "row", gap: 6, marginTop: 14 }}>

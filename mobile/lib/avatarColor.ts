@@ -1,7 +1,9 @@
+import { BRAND_COLORS } from "../../src/config/brand";
+
 export function getAvatarColors(name = ""): { bg: string; text: string } {
   const first = name.trim()[0]?.toUpperCase() || "A";
   const code = first.charCodeAt(0);
-  if (code <= 70) return { bg: "#dcfce7", text: "#14532d" };
+  if (code <= 70) return { bg: BRAND_COLORS.primarySoft, text: BRAND_COLORS.secondary };
   if (code <= 77) return { bg: "#dbeafe", text: "#1e3a5f" };
   if (code <= 83) return { bg: "#ede9fe", text: "#3b0764" };
   return { bg: "#fef9c3", text: "#713f12" };

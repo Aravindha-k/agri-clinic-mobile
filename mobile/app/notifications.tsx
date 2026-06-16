@@ -14,7 +14,12 @@ import { useRefreshControlProps } from "../../src/hooks/useRefreshControlProps";
 import { useSafeAreaInsetsCompat } from "../../src/hooks/useSafeAreaInsetsCompat";
 import { useSecureScreen } from "../../src/hooks/useSecureScreen";
 import { formatRelativeTime } from "../../src/utils/formatRelativeTime";
-import { EmptyState, FilterChipRow, Skeleton } from "../components/ui";
+import { requestGpsForFieldWork } from "../../src/utils/locationRequiredModal";
+import { EmptyState, FilterChipRow } from "../components/ui";
+import { EntranceBlocks } from "../components/ui/EntranceBlocks";
+import { FadeInSection, entranceListStagger, entranceStagger } from "../components/ui/FadeInSection";
+import { ScreenEntranceShell } from "../components/layout";
+import { ScreenLoader } from "../components/layout/ScreenLoader";
 import {
   fetchNotificationsPage,
   getBadgeCount,
@@ -188,13 +193,15 @@ export default function NotificationsScreen() {
       case "visit": {
         if (item.reference_id) {
           rootNav?.navigate("Main", {
-            screen: "Visits",
+            screen: "Work",
             params: { screen: "VisitDetail", params: { id: item.reference_id } }
           });
         }
         break;
       }
       case "follow_up": {
+        const allowed = await requestGpsForFieldWork();
+        if (!allowed) break;
         rootNav?.navigate("VisitFlow", {
           screen: "NewVisitFarmer",
           params: {
@@ -210,7 +217,7 @@ export default function NotificationsScreen() {
       }
       case "sync_fail": {
         rootNav?.navigate("Main", {
-          screen: "Profile",
+          screen: "Me",
           params: { screen: "ProfileMain" }
         });
         break;
@@ -220,8 +227,9 @@ export default function NotificationsScreen() {
     }
   }
 
-  const listHeader = (
-    <View style={styles.headerBlock}>
+  const listHeader = (entranceTick: number) => (
+    <FadeInSection replayKey={entranceTick} delay={entranceStagger(0)}>
+      <View style={styles.headerBlock}>
       <View style={styles.topBar}>
         <Pressable onPress={() => navigation.goBack()} style={styles.iconBtn}>
           <Ionicons name="arrow-back" size={18} color={Colors.text1} />
@@ -260,41 +268,50 @@ export default function NotificationsScreen() {
       </FilterChipRow>
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
-    </View>
+      </View>
+    </FadeInSection>
   );
 
   return (
-    <View style={[styles.screen, { paddingTop: safeTop }]}>
-      {loading && items.length === 0 ? (
-        <View style={styles.loadingWrap}>
-          {listHeader}
-          <Skeleton width="100%" height={72} borderRadius={Radius.card} style={styles.skeleton} />
-          <Skeleton width="100%" height={72} borderRadius={Radius.card} style={styles.skeleton} />
-        </View>
-      ) : (
-        <FlashList
-          data={visibleItems}
-          renderItem={({ item }) => <NotificationRow item={item} onPress={handleRowPress} />}
-          keyExtractor={(item) => String(item.id)}
-          ListHeaderComponent={listHeader}
-          style={styles.list}
-          contentContainerStyle={{ paddingBottom: 32, paddingHorizontal: Spacing.screen }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlProps} />}
-          onEndReached={() => {
-            if (nextUrl && !loadingMore) void loadPage({ next: nextUrl });
-          }}
-          onEndReachedThreshold={0.25}
-          ListFooterComponent={
-            loadingMore ? <ActivityIndicator style={styles.footerSpinner} color={Colors.brand700} /> : null
-          }
-          ListEmptyComponent={
-            !loading ? (
-              <EmptyState icon="happy-outline" title="All caught up" subtitle="No notifications" />
-            ) : null
-          }
-        />
-      )}
-    </View>
+    <ScreenEntranceShell style={[styles.screen, { paddingTop: safeTop }]}>
+      {(entranceTick) =>
+        loading && items.length === 0 ? (
+          <ScreenLoader />
+        ) : (
+          <FlashList
+            data={visibleItems}
+            renderItem={({ item, index }) => (
+              <FadeInSection
+                replayKey={entranceTick}
+                delay={entranceListStagger(1, index)}
+                variant="card"
+              >
+                <NotificationRow item={item} onPress={handleRowPress} />
+              </FadeInSection>
+            )}
+            keyExtractor={(item) => String(item.id)}
+            ListHeaderComponent={listHeader(entranceTick)}
+            style={styles.list}
+            contentContainerStyle={{ paddingBottom: 32, paddingHorizontal: Spacing.screen }}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlProps} />}
+            onEndReached={() => {
+              if (nextUrl && !loadingMore) void loadPage({ next: nextUrl });
+            }}
+            onEndReachedThreshold={0.25}
+            ListFooterComponent={
+              loadingMore ? <ActivityIndicator style={styles.footerSpinner} color={Colors.brand700} /> : null
+            }
+            ListEmptyComponent={
+              !loading ? (
+                <EntranceBlocks replayKey={entranceTick} startStep={1}>
+                  <EmptyState icon="happy-outline" title="All caught up" subtitle="No notifications" />
+                </EntranceBlocks>
+              ) : null
+            }
+          />
+        )
+      }
+    </ScreenEntranceShell>
   );
 }
 

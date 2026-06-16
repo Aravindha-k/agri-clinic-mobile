@@ -1,16 +1,41 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { submitMobileVisit } from "../api/visits";
-import { uploadAllPendingAttachments } from "../visit/pendingAttachments";
-import { uploadPendingFarmerPhotoIfNeeded } from "../visit/uploadPendingFarmerPhoto";
-import { isNetworkError } from "../utils/network";
+import type { VisitFormValues } from "../api/visits";
+import type { PickedProfileImage } from "../utils/profileImagePick";
+import type { PendingVisitAttachment } from "../visit/pendingAttachments";
 import {
-  getQueuedVisits,
-  enqueueVisit,
-  removeQueuedVisit,
-  updateQueuedVisit,
-  type QueuedVisit
-} from "./offlineVisitQueue";
+  addToVisitQueue,
+  getPendingVisits,
+  refreshSyncStoreCounts,
+  syncAll as managerSyncAll,
+  type PendingVisit
+} from "../../mobile/lib/sync/offlineSyncManager";
+import { generateLocalSyncId } from "../../mobile/lib/pendingVisitsQueue";
+import { useSyncStore } from "../../mobile/lib/store/syncStore";
 import { useFieldDataRefresh } from "./FieldDataRefreshContext";
+
+export type QueuedVisit = {
+  id: string;
+  values: VisitFormValues;
+  pendingAttachments?: PendingVisitAttachment[];
+  pendingFarmerPhoto?: PickedProfileImage | null;
+  createdAt: string;
+  attempts: number;
+  lastError?: string;
+};
+
+function pendingVisitToQueued(row: PendingVisit): QueuedVisit {
+  const payload = row.payload as Record<string, unknown>;
+  const { __pending_attachments, __pending_farmer_photo, ...values } = payload;
+  return {
+    id: row.local_sync_id,
+    values: values as VisitFormValues,
+    pendingAttachments: (__pending_attachments as PendingVisitAttachment[] | undefined) ?? [],
+    pendingFarmerPhoto: (__pending_farmer_photo as PickedProfileImage | null | undefined) ?? null,
+    createdAt: row.created_at,
+    attempts: row.attempts,
+    lastError: row.status === "failed" ? "Sync failed" : undefined
+  };
+}
 
 type OfflineSyncContextValue = {
   queue: QueuedVisit[];
@@ -20,9 +45,9 @@ type OfflineSyncContextValue = {
   lastSyncFailed: number;
   refreshQueue: () => Promise<void>;
   enqueue: (
-    values: import("../api/visits").VisitFormValues,
-    pendingAttachments?: import("../visit/pendingAttachments").PendingVisitAttachment[],
-    pendingFarmerPhoto?: import("../utils/profileImagePick").PickedProfileImage | null
+    values: VisitFormValues,
+    pendingAttachments?: PendingVisitAttachment[],
+    pendingFarmerPhoto?: PickedProfileImage | null
   ) => Promise<QueuedVisit>;
   syncAll: () => Promise<{ synced: number; failed: number }>;
 };
@@ -32,12 +57,18 @@ const OfflineSyncContext = createContext<OfflineSyncContextValue | undefined>(un
 export function OfflineSyncProvider({ children }: { children: React.ReactNode }) {
   const { bumpAfterVisitChange } = useFieldDataRefresh();
   const [queue, setQueue] = useState<QueuedVisit[]>([]);
-  const [syncing, setSyncing] = useState(false);
-  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [lastSyncFailed, setLastSyncFailed] = useState(0);
+  const syncing = useSyncStore((state) => state.isSyncing);
+  const lastSyncAt = useSyncStore((state) => state.lastSyncedAt);
+  const pendingVisitsCount = useSyncStore((state) => state.pendingVisitsCount);
+  const failedVisitsCount = useSyncStore((state) => state.failedVisitsCount);
 
   const refreshQueue = useCallback(async () => {
-    setQueue(await getQueuedVisits());
+    refreshSyncStoreCounts();
+    const rows = getPendingVisits().filter(
+      (row) => row.status === "pending" || row.status === "syncing" || row.status === "failed"
+    );
+    setQueue(rows.map(pendingVisitToQueued));
   }, []);
 
   useEffect(() => {
@@ -46,66 +77,51 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
 
   const enqueue = useCallback(
     async (
-      values: import("../api/visits").VisitFormValues,
-      pendingAttachments: import("../visit/pendingAttachments").PendingVisitAttachment[] = [],
-      pendingFarmerPhoto: import("../utils/profileImagePick").PickedProfileImage | null = null
+      values: VisitFormValues,
+      pendingAttachments: PendingVisitAttachment[] = [],
+      pendingFarmerPhoto: PickedProfileImage | null = null
     ) => {
-      const item = await enqueueVisit(values, pendingAttachments, pendingFarmerPhoto);
+      const syncId = values.local_sync_id?.trim() || generateLocalSyncId();
+      const payload: Record<string, unknown> = {
+        ...values,
+        local_sync_id: syncId,
+        __pending_attachments: pendingAttachments
+      };
+      if (pendingFarmerPhoto) {
+        payload.__pending_farmer_photo = pendingFarmerPhoto;
+      }
+      await addToVisitQueue(
+        payload,
+        values.farmer_name?.trim() || "Farmer",
+        values.crop_name?.trim() || "Crop",
+        syncId
+      );
       await refreshQueue();
-      return item;
+      const row = getPendingVisits().find((visit) => visit.local_sync_id === syncId);
+      if (!row) {
+        throw new Error("Failed to enqueue visit");
+      }
+      return pendingVisitToQueued(row);
     },
     [refreshQueue]
   );
 
   const syncAll = useCallback(async () => {
-    const items = await getQueuedVisits();
-    if (!items.length) {
-      return { synced: 0, failed: 0 };
-    }
-    setSyncing(true);
-    let synced = 0;
-    let failed = 0;
-    for (const item of items) {
-      try {
-        const visit = await submitMobileVisit(item.values, { localSyncId: item.id });
-        if (item.pendingAttachments?.length) {
-          await uploadAllPendingAttachments(visit.id, item.pendingAttachments);
-        }
-        await uploadPendingFarmerPhotoIfNeeded(
-          String(visit.farmer?.id ?? item.values.farmer_id),
-          item.pendingFarmerPhoto ?? null
-        );
-        await removeQueuedVisit(item.id);
-        synced += 1;
-      } catch (err) {
-        failed += 1;
-        const next: QueuedVisit = {
-          ...item,
-          attempts: item.attempts + 1,
-          lastError: err instanceof Error ? err.message : "Sync failed"
-        };
-        if (!isNetworkError(err)) {
-          await updateQueuedVisit(next);
-        } else {
-          await updateQueuedVisit(next);
-          break;
-        }
-      }
-    }
-    if (synced > 0) {
+    const result = await managerSyncAll();
+    if (result.visits.synced > 0) {
       bumpAfterVisitChange();
     }
-    setLastSyncAt(new Date().toISOString());
-    setLastSyncFailed(failed);
+    setLastSyncFailed(result.visits.failed);
     await refreshQueue();
-    setSyncing(false);
-    return { synced, failed };
+    return { synced: result.visits.synced, failed: result.visits.failed };
   }, [bumpAfterVisitChange, refreshQueue]);
+
+  const pendingCount = pendingVisitsCount + failedVisitsCount;
 
   const value = useMemo(
     () => ({
       queue,
-      pendingCount: queue.length,
+      pendingCount,
       syncing,
       lastSyncAt,
       lastSyncFailed,
@@ -113,7 +129,7 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
       enqueue,
       syncAll
     }),
-    [lastSyncFailed, queue, syncing, lastSyncAt, refreshQueue, enqueue, syncAll]
+    [lastSyncFailed, queue, pendingCount, syncing, lastSyncAt, refreshQueue, enqueue, syncAll]
   );
 
   return <OfflineSyncContext.Provider value={value}>{children}</OfflineSyncContext.Provider>;

@@ -4,7 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { getProblemCategories, type ProblemCategory } from "../../src/api/problems";
 import { useSafeAreaInsetsCompat } from "../../src/hooks/useSafeAreaInsetsCompat";
-import { EmptyState, SearchBar, Skeleton } from "../components/ui";
+import { EmptyState, SearchBar } from "../components/ui";
+import { EntranceBlocks } from "../components/ui/EntranceBlocks";
+import { FadeInSection, entranceListStagger, entranceStagger } from "../components/ui/FadeInSection";
+import { ScreenEntranceShell } from "../components/layout";
+import { ScreenLoader } from "../components/layout/ScreenLoader";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../lib/theme";
 
 export default function ProblemsCatalogScreen() {
@@ -37,39 +41,65 @@ export default function ProblemsCatalogScreen() {
   });
 
   return (
-    <View style={[styles.screen, { paddingTop: safeTop }]}>
-      <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.iconBtn}>
-          <Ionicons name="arrow-back" size={18} color={Colors.text1} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Problem catalog</Text>
-        <View style={styles.iconBtn} />
-      </View>
-
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <SearchBar value={query} onChangeText={setQuery} placeholder="Search categories…" />
-
-        {loading ? (
-          <>
-            <Skeleton width="100%" height={56} borderRadius={Radius.card} />
-            <Skeleton width="100%" height={56} borderRadius={Radius.card} />
-          </>
-        ) : error ? (
-          <EmptyState icon="alert-circle-outline" title="Could not load catalog" subtitle={error} action="Retry" onAction={() => void load()} />
-        ) : filtered.length === 0 ? (
-          <EmptyState icon="leaf-outline" title="No categories" subtitle="Try a different search." />
-        ) : (
-          filtered.map((row) => (
-            <View key={row.id} style={styles.row}>
-              <View style={styles.codeBadge}>
-                <Text style={styles.codeText}>{row.code}</Text>
-              </View>
-              <Text style={styles.rowName}>{row.name}</Text>
+    <ScreenEntranceShell style={[styles.screen, { paddingTop: safeTop }]}>
+      {(entranceTick) => (
+        <>
+          <FadeInSection replayKey={entranceTick} delay={entranceStagger(0)}>
+            <View style={styles.header}>
+              <Pressable onPress={() => navigation.goBack()} style={styles.iconBtn}>
+                <Ionicons name="arrow-back" size={18} color={Colors.text1} />
+              </Pressable>
+              <Text style={styles.headerTitle}>Problem catalog</Text>
+              <View style={styles.iconBtn} />
             </View>
-          ))
-        )}
-      </ScrollView>
-    </View>
+          </FadeInSection>
+
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scroll}
+            showsVerticalScrollIndicator={false}
+          >
+            <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
+              <SearchBar value={query} onChangeText={setQuery} placeholder="Search categories…" />
+            </FadeInSection>
+
+            {loading ? (
+              <ScreenLoader style={{ minHeight: 240 }} />
+            ) : error ? (
+              <EntranceBlocks replayKey={entranceTick} startStep={2}>
+                <EmptyState
+                  icon="alert-circle-outline"
+                  title="Could not load catalog"
+                  subtitle={error}
+                  action="Retry"
+                  onAction={() => void load()}
+                />
+              </EntranceBlocks>
+            ) : filtered.length === 0 ? (
+              <EntranceBlocks replayKey={entranceTick} startStep={2}>
+                <EmptyState icon="leaf-outline" title="No categories" subtitle="Try a different search." />
+              </EntranceBlocks>
+            ) : (
+              filtered.map((row, index) => (
+                <FadeInSection
+                  key={row.id}
+                  replayKey={entranceTick}
+                  delay={entranceListStagger(2, index)}
+                  variant="card"
+                >
+                  <View style={styles.row}>
+                    <View style={styles.codeBadge}>
+                      <Text style={styles.codeText}>{row.code}</Text>
+                    </View>
+                    <Text style={styles.rowName}>{row.name}</Text>
+                  </View>
+                </FadeInSection>
+              ))
+            )}
+          </ScrollView>
+        </>
+      )}
+    </ScreenEntranceShell>
   );
 }
 

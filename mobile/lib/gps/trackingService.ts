@@ -4,6 +4,7 @@ import { pushLocationsBulk, sendHeartbeat, syncLocationQueue } from "../../../sr
 import {
   addGPSPoint,
   flushGPSQueue,
+  refreshSyncStoreCounts,
   type PendingGPSPoint
 } from "../sync/offlineSyncManager";
 import { getJson, setJson, storage } from "../storage";
@@ -13,8 +14,8 @@ const LEGACY_QUEUE_KEY = "agri_pending_location_push_v2";
 export const PENDING_GPS_KEY = "pending_gps_v1";
 export const LAST_GPS_SYNC_KEY = "last_gps_sync_v1";
 export const MAX_GPS_BUFFER = 200;
-export const GPS_FLUSH_THRESHOLD = 50;
-export const GPS_FLUSH_INTERVAL_MS = 5 * 60 * 1000;
+export const GPS_FLUSH_THRESHOLD = 1;
+export const GPS_FLUSH_INTERVAL_MS = 45_000;
 export const GPS_HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
 
 export type GpsBufferPoint = LocationPushPayload & {
@@ -96,6 +97,7 @@ export async function appendPendingGpsPoint(payload: GpsBufferPoint) {
 
 export function clearPendingGpsBuffer() {
   setJson(PENDING_GPS_KEY, []);
+  refreshSyncStoreCounts();
 }
 
 export function getGpsBufferStatus(): GpsBufferStatus {

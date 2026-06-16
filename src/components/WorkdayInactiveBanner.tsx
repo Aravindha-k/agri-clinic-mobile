@@ -1,7 +1,9 @@
+/** @deprecated Not mounted in V2 — workday expiry uses NotificationBridge instead. */
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Colors } from "../../mobile/lib/theme";
 import { useTracking } from "../storage/TrackingContext";
-import { ENT, ENT_CARD_SHADOW } from "../theme/enterprise";
+import { requestGpsForFieldWork } from "../utils/locationRequiredModal";
 import { space } from "../theme/layout";
 
 export function WorkdayInactiveBanner() {
@@ -14,14 +16,18 @@ export function WorkdayInactiveBanner() {
   return (
     <View style={styles.wrap}>
       <View style={styles.iconBox}>
-        <Ionicons name="time-outline" size={18} color={ENT.warning} />
+        <Ionicons name="time-outline" size={18} color={Colors.amber} />
       </View>
       <Text style={styles.text}>{workdayInactiveBanner}</Text>
       <Pressable
         accessibilityRole="button"
         disabled={busy}
         onPress={() => {
-          void startDay().catch(() => undefined);
+          void (async () => {
+            const allowed = await requestGpsForFieldWork();
+            if (!allowed) return;
+            await startDay().catch(() => undefined);
+          })();
         }}
         style={[styles.btn, busy && styles.btnDisabled]}
       >
@@ -34,8 +40,8 @@ export function WorkdayInactiveBanner() {
 const styles = StyleSheet.create({
   wrap: {
     alignItems: "center",
-    backgroundColor: ENT.card,
-    borderColor: ENT.border,
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
@@ -43,19 +49,18 @@ const styles = StyleSheet.create({
     marginHorizontal: space.lg,
     marginTop: space.sm,
     paddingHorizontal: 14,
-    paddingVertical: 11,
-    ...ENT_CARD_SHADOW
+    paddingVertical: 11
   },
   iconBox: {
     alignItems: "center",
-    backgroundColor: ENT.warningSoft,
+    backgroundColor: Colors.amberBg,
     borderRadius: 10,
     height: 32,
     justifyContent: "center",
     width: 32
   },
   text: {
-    color: ENT.text,
+    color: Colors.text1,
     flex: 1,
     fontSize: 13,
     fontWeight: "600",
@@ -63,7 +68,7 @@ const styles = StyleSheet.create({
     minWidth: 160
   },
   btn: {
-    backgroundColor: ENT.primary,
+    backgroundColor: Colors.brand700,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8
@@ -72,7 +77,7 @@ const styles = StyleSheet.create({
     opacity: 0.6
   },
   btnText: {
-    color: ENT.white,
+    color: Colors.surface,
     fontSize: 13,
     fontWeight: "800"
   }

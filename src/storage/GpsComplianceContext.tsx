@@ -17,6 +17,7 @@ import {
   GPS_REMINDER_MESSAGE
 } from "../constants/gpsCompliance";
 import { GpsAvailability, isGpsAvailable, probeGpsAvailability } from "../utils/gpsStatus";
+import { readCachedActiveWorkday } from "./workdaySessionStorage";
 import { useAuth } from "./AuthContext";
 
 export type GpsComplianceStatus = "active" | "required" | "blocked";
@@ -103,6 +104,15 @@ export function GpsComplianceProvider({ children }: { children: React.ReactNode 
     if (!isAuthenticated || probingRef.current) {
       return;
     }
+
+    const activeWorkday = await readCachedActiveWorkday();
+    if (!activeWorkday) {
+      offlineSinceRef.current = null;
+      lastReminderAtRef.current = 0;
+      setStatus("active");
+      return;
+    }
+
     probingRef.current = true;
     try {
       const next = await probeGpsAvailability();

@@ -2,14 +2,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef } from "react";
 import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { FlatCard } from "../../../mobile/components/layout";
+import { Colors } from "../../../mobile/lib/theme";
 import { useToast, type ToastItem, type ToastType } from "../../storage/ToastContext";
-import { ENT, ENT_CARD_SHADOW } from "../../theme/enterprise";
-import GlassCard from "../glass/GlassCard";
 
 const TYPE_STYLES: Record<ToastType, { icon: keyof typeof Ionicons.glyphMap; color: string }> = {
-  success: { icon: "checkmark-circle", color: ENT.primary },
-  error: { icon: "alert-circle", color: ENT.danger },
-  warning: { icon: "warning", color: ENT.warning }
+  success: { icon: "checkmark-circle", color: Colors.brand700 },
+  error: { icon: "alert-circle", color: Colors.red },
+  warning: { icon: "warning", color: Colors.amber }
 };
 
 function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: () => void }) {
@@ -42,7 +42,7 @@ function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: () => vo
         }
       ]}
     >
-      <GlassCard style={styles.glassCard}>
+      <FlatCard style={styles.card}>
         <View style={styles.row}>
           <View style={[styles.iconCircle, { backgroundColor: `${style.color}18` }]}>
             <Ionicons name={style.icon} size={18} color={style.color} />
@@ -51,10 +51,10 @@ function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: () => vo
             {toast.message}
           </Text>
           <Pressable onPress={dismiss} hitSlop={8} accessibilityRole="button" accessibilityLabel="Dismiss">
-            <Ionicons name="close" size={18} color={ENT.textMuted} />
+            <Ionicons name="close" size={18} color={Colors.text4} />
           </Pressable>
         </View>
-      </GlassCard>
+      </FlatCard>
     </Animated.View>
   );
 }
@@ -78,9 +78,8 @@ const styles = StyleSheet.create({
     right: 14,
     zIndex: 9999
   },
-  glassCard: {
-    borderRadius: 14,
-    ...ENT_CARD_SHADOW
+  card: {
+    borderRadius: 14
   },
   row: {
     alignItems: "center",
@@ -97,7 +96,7 @@ const styles = StyleSheet.create({
     width: 28
   },
   message: {
-    color: ENT.text,
+    color: Colors.text1,
     flex: 1,
     fontSize: 13,
     fontWeight: "600"

@@ -26,7 +26,6 @@ import { useAuth } from "../../../src/storage/AuthContext";
 import { useEmployee } from "../../../src/storage/EmployeeContext";
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
 import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
-import { useTracking } from "../../../src/storage/TrackingContext";
 import { isSameVisitLocalDay, visitDisplayIso } from "../../../src/utils/format";
 import { formatDisplayRole } from "../../../src/utils/formatRole";
 import {
@@ -37,15 +36,16 @@ import {
 import { cacheBustPhotoUrl, extractPhotoUrl, photoCacheVersion } from "../../../src/utils/profilePhotoUrl";
 import { getHomeVisits } from "../../../src/utils/visitsCache";
 import { EmptyState } from "../../components/ui";
-import { KavyaLoader } from "../../components/KavyaLoader";
+import { FadeInSection, entranceListStagger, entranceStagger } from "../../components/ui/FadeInSection";
+import { ScreenLoader } from "../../components/layout/ScreenLoader";
+import { useScreenEntrance } from "../../hooks/useScreenEntrance";
 import { getBadgeCount } from "../../lib/notificationsApi";
-import { getGpsBufferStatus } from "../../lib/gps/trackingService";
 import { clearAppStorage } from "../../lib/mmkv";
-import { readPendingVisits } from "../../lib/pendingVisitsQueue";
-import { syncAll } from "../../lib/offlineSyncManager";
+import { useSyncStore } from "../../lib/store/syncStore";
 import { DS } from "../../../src/theme/globalStyles";
-import { ScreenBackground } from "../../../src/components/glass";
-import { ENT, ENT_CARD_SHADOW, ENT_SECTION_LABEL } from "../../../src/theme/enterprise";
+import { ScreenCanvas, ScreenEntranceWash } from "../../components/layout";
+import { Colors } from "../../lib/theme";
+import { SECTION_LABEL } from "../../lib/sectionLabel";
 import { BRAND_COLORS } from "../../../src/config/brand";
 
 const PROFILE_DS = { ...DS, dangerBorder: "#fee2e2", hero: BRAND_COLORS.primary } as const;
@@ -59,7 +59,7 @@ type MenuRow = {
 };
 
 function SectionLabel({ title }: { title: string }) {
-  return <Text style={[styles.sectionLabel, ENT_SECTION_LABEL]}>{title.toUpperCase()}</Text>;
+  return <Text style={[styles.sectionLabel, SECTION_LABEL]}>{title.toUpperCase()}</Text>;
 }
 
 /** Part 1 — PLACEMENT 2: compact logo + version on hero */
@@ -110,7 +110,7 @@ function MenuItemCard({ row }: { row: MenuRow }) {
       style={({ pressed }) => [styles.menuItem, pressed && { opacity: 0.92 }]}
     >
       <View style={styles.menuIconBox}>
-        <Ionicons name={row.icon} size={16} color={ENT.textSecondary} />
+        <Ionicons name={row.icon} size={16} color={Colors.text3} />
       </View>
       <Text style={styles.menuLabel}>{row.title}</Text>
       {row.badge != null && row.badge > 0 ? (
@@ -118,7 +118,7 @@ function MenuItemCard({ row }: { row: MenuRow }) {
           <Text style={styles.menuBadgeText}>{row.badge > 99 ? "99+" : row.badge}</Text>
         </View>
       ) : null}
-      <Ionicons name="chevron-forward" size={14} color={ENT.textMuted} />
+      <Ionicons name="chevron-forward" size={14} color={Colors.text4} />
     </Pressable>
   );
 }
@@ -134,7 +134,7 @@ function LanguageMenuItem({
   return (
     <View style={styles.menuItem}>
       <View style={styles.menuIconBox}>
-        <Ionicons name="language-outline" size={16} color={ENT.textSecondary} />
+        <Ionicons name="language-outline" size={16} color={Colors.text3} />
       </View>
       <Text style={styles.menuLabel}>{t("profile.language")}</Text>
       <View style={styles.langToggle}>
@@ -165,12 +165,13 @@ export default function ProfileTabScreen() {
   const { signOut } = useAuth();
   const { employee, refreshEmployee } = useEmployee();
   const { bumpAfterEmployeePhotoChange } = useFieldDataRefresh();
-  const { pendingCount, lastSyncAt, refreshQueue } = useOfflineSync();
-  const { pendingSyncCount } = useTracking();
+  const { pendingCount, lastSyncAt, refreshQueue, syncAll } = useOfflineSync();
+  const pendingGpsCount = useSyncStore((state) => state.pendingGPSCount);
   const { t, language, setLanguage } = useI18n();
 
   const [profile, setProfile] = useState<Employee | null>(employee);
   const [loading, setLoading] = useState(!employee);
+  const entranceTick = useScreenEntrance();
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -178,24 +179,19 @@ export default function ProfileTabScreen() {
   const [visitsToday, setVisitsToday] = useState(0);
   const [visitsMonth, setVisitsMonth] = useState(0);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
-  const [pendingVisitsCount, setPendingVisitsCount] = useState(0);
-  const [pendingGpsCount, setPendingGpsCount] = useState(0);
   const [syncingAll, setSyncingAll] = useState(false);
 
   const load = useCallback(async () => {
     try {
       setError("");
-      const [me, visits, unread, pendingVisits] = await Promise.all([
+      const [me, visits, unread] = await Promise.all([
         getCurrentEmployee(),
         getHomeVisits({ pageSize: 100, force: true }),
-        getBadgeCount(true),
-        readPendingVisits()
+        getBadgeCount(true)
       ]);
 
       setProfile(me);
       setUnreadNotifications(unread);
-      setPendingVisitsCount(Math.max(pendingCount, pendingVisits.length));
-      setPendingGpsCount(getGpsBufferStatus().pending || pendingSyncCount);
       setPhotoVersion(photoCacheVersion(me) ?? Date.now());
 
       const today = new Date();
@@ -223,7 +219,7 @@ export default function ProfileTabScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [pendingCount, pendingSyncCount, refreshEmployee, refreshQueue, t]);
+  }, [refreshEmployee, refreshQueue, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -298,10 +294,10 @@ export default function ProfileTabScreen() {
         onPress: () => rootNav?.navigate("Notifications")
       },
       {
-        key: "tracking",
-        icon: "navigate-outline",
-        title: t("profile.gpsTracking"),
-        onPress: () => navigation.navigate("TrackingWorkspace")
+        key: "diagnostics",
+        icon: "pulse-outline",
+        title: t("profile.diagnostics"),
+        onPress: () => navigation.navigate("Diagnostics")
       },
       {
         key: "help",
@@ -322,7 +318,7 @@ export default function ProfileTabScreen() {
   if (loading && !profile) {
     return (
       <View style={[styles.screen, { paddingTop: safeTop }]}>
-        <KavyaLoader />
+        <ScreenLoader />
       </View>
     );
   }
@@ -343,7 +339,8 @@ export default function ProfileTabScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScreenBackground />
+      <ScreenCanvas />
+      <ScreenEntranceWash replayKey={entranceTick} />
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -359,58 +356,71 @@ export default function ProfileTabScreen() {
           />
         }
       >
-        <View style={[styles.hero, { paddingTop: safeTop + 20 }]}>
-          <View style={styles.heroTopRow}>
-            <HeroBrandMark version={appVersion} />
-          </View>
+        <FadeInSection replayKey={entranceTick} delay={entranceStagger(0)}>
+          <View style={[styles.hero, { paddingTop: safeTop + 20 }]}>
+            <View style={styles.heroTopRow}>
+              <HeroBrandMark version={appVersion} />
+            </View>
 
-          <View style={styles.userRow}>
-            <HeroAvatar
-              photoUrl={photoUrl}
-              photoVersion={photoVersion}
-              uploading={uploadingPhoto}
-              onPress={() => showProfilePhotoSourcePicker((s) => void changePhoto(s))}
-            />
-            <View style={styles.userCol}>
-              <Text style={styles.userName} numberOfLines={2}>
-                {displayName}
-              </Text>
-              <View style={styles.roleBadge}>
-                <Text style={styles.roleText}>{roleLabel}</Text>
+            <View style={styles.userRow}>
+              <HeroAvatar
+                photoUrl={photoUrl}
+                photoVersion={photoVersion}
+                uploading={uploadingPhoto}
+                onPress={() => showProfilePhotoSourcePicker((s) => void changePhoto(s))}
+              />
+              <View style={styles.userCol}>
+                <Text style={styles.userName} numberOfLines={2}>
+                  {displayName}
+                </Text>
+                <View style={styles.roleBadge}>
+                  <Text style={styles.roleText}>{roleLabel}</Text>
+                </View>
+                <Text style={styles.userMeta} numberOfLines={1}>
+                  {employeeId !== "—" ? `EMP ${employeeId}` : "EMP —"}
+                  {phone !== "—" ? ` · ${phone}` : ""}
+                </Text>
               </View>
-              <Text style={styles.userMeta} numberOfLines={1}>
-                {employeeId !== "—" ? `EMP ${employeeId}` : "EMP —"}
-                {phone !== "—" ? ` · ${phone}` : ""}
-              </Text>
+            </View>
+
+            <View style={styles.statsRow}>
+              <View style={styles.statBox}>
+                <Text style={styles.statValue}>{visitsToday}</Text>
+                <Text style={styles.statLabel}>{t("profile.visitsToday")}</Text>
+              </View>
+              <View style={styles.statBox}>
+                <Text style={styles.statValue}>{visitsMonth}</Text>
+                <Text style={styles.statLabel}>{t("profile.thisMonth")}</Text>
+              </View>
             </View>
           </View>
+        </FadeInSection>
 
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{visitsToday}</Text>
-              <Text style={styles.statLabel}>{t("profile.visitsToday")}</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{visitsMonth}</Text>
-              <Text style={styles.statLabel}>{t("profile.thisMonth")}</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.menuSection}>
+        <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
+          <View style={styles.menuSection}>
           <SectionLabel title={t("profile.menu")} />
 
-          {menuRows.map((row) => (
-            <MenuItemCard key={row.key} row={row} />
+          {menuRows.map((row, index) => (
+            <FadeInSection
+              key={row.key}
+              replayKey={entranceTick}
+              delay={entranceListStagger(2, index)}
+              variant="card"
+            >
+              <MenuItemCard row={row} />
+            </FadeInSection>
           ))}
-          <LanguageMenuItem language={language} onSelect={(lang) => void setLanguage(lang)} />
+          <FadeInSection replayKey={entranceTick} delay={entranceListStagger(2, menuRows.length)} variant="card">
+            <LanguageMenuItem language={language} onSelect={(lang) => void setLanguage(lang)} />
+          </FadeInSection>
 
+          <FadeInSection replayKey={entranceTick} delay={entranceListStagger(2, menuRows.length + 1)} variant="card">
           <View style={styles.syncCard}>
             <SectionLabel title={t("profile.syncOffline")} />
             <View style={styles.syncRow}>
               <Text style={styles.syncKey}>{t("profile.pendingVisits")}</Text>
-              <Text style={[styles.syncValue, pendingVisitsCount > 0 && styles.syncValueWarn]}>
-                {pendingVisitsCount}
+              <Text style={[styles.syncValue, pendingCount > 0 && styles.syncValueWarn]}>
+                {pendingCount}
               </Text>
             </View>
             <View style={styles.syncRow}>
@@ -424,7 +434,9 @@ export default function ProfileTabScreen() {
               <Text style={[styles.syncValue, neverSynced && styles.syncValueNever]}>{lastSyncedLabel}</Text>
             </View>
           </View>
+          </FadeInSection>
 
+          <FadeInSection replayKey={entranceTick} delay={entranceListStagger(2, menuRows.length + 2)} variant="card">
           <Pressable
             onPress={() => void handleSyncAll()}
             disabled={syncingAll}
@@ -441,7 +453,9 @@ export default function ProfileTabScreen() {
             )}
             <Text style={styles.syncBtnText}>{t("profile.syncAllNow")}</Text>
           </Pressable>
+          </FadeInSection>
 
+          <FadeInSection replayKey={entranceTick} delay={entranceListStagger(2, menuRows.length + 3)} variant="card">
           <Pressable
             onPress={confirmSignOut}
             style={({ pressed }) => [styles.signOutBtn, pressed && { opacity: 0.92 }]}
@@ -449,7 +463,9 @@ export default function ProfileTabScreen() {
             <Ionicons name="log-out-outline" size={15} color={PROFILE_DS.danger} />
             <Text style={styles.signOutText}>{t("profile.signOut")}</Text>
           </Pressable>
-        </View>
+          </FadeInSection>
+          </View>
+        </FadeInSection>
       </ScrollView>
     </View>
   );
@@ -457,7 +473,7 @@ export default function ProfileTabScreen() {
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: ENT.bg,
+    backgroundColor: Colors.bg,
     flex: 1
   },
   scrollView: {
@@ -467,7 +483,7 @@ const styles = StyleSheet.create({
     flexGrow: 1
   },
   hero: {
-    backgroundColor: ENT.headerGreen,
+    backgroundColor: Colors.brand700,
     paddingBottom: 18,
     paddingHorizontal: 20
   },
@@ -554,29 +570,28 @@ const styles = StyleSheet.create({
   },
   statBox: {
     alignItems: "center",
-    backgroundColor: ENT.card,
-    borderColor: ENT.border,
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     flex: 1,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    ...ENT_CARD_SHADOW
+    paddingVertical: 10
   },
   statValue: {
-    color: ENT.text,
+    color: Colors.text1,
     fontSize: 22,
     fontWeight: "800"
   },
   statLabel: {
-    color: ENT.textSecondary,
+    color: Colors.text3,
     fontSize: 9.5,
     fontWeight: "500",
     marginTop: 2,
     textAlign: "center"
   },
   menuSection: {
-    backgroundColor: ENT.bg,
+    backgroundColor: Colors.bg,
     flex: 1,
     paddingBottom: 8
   },
@@ -587,8 +602,8 @@ const styles = StyleSheet.create({
   },
   menuItem: {
     alignItems: "center",
-    backgroundColor: ENT.card,
-    borderColor: ENT.border,
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
@@ -596,19 +611,18 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginHorizontal: 16,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    ...ENT_CARD_SHADOW
+    paddingVertical: 12
   },
   menuIconBox: {
     alignItems: "center",
-    backgroundColor: ENT.bg,
+    backgroundColor: Colors.bg,
     borderRadius: 11,
     height: 36,
     justifyContent: "center",
     width: 36
   },
   menuLabel: {
-    color: ENT.text,
+    color: Colors.text1,
     flex: 1,
     fontSize: 12.5,
     fontWeight: "600"
@@ -651,17 +665,16 @@ const styles = StyleSheet.create({
     color: "#fff"
   },
   syncCard: {
-    backgroundColor: ENT.card,
-    borderColor: ENT.border,
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     marginHorizontal: 16,
     marginTop: 4,
-    padding: 14,
-    ...ENT_CARD_SHADOW
+    padding: 14
   },
   syncRow: {
-    borderBottomColor: ENT.border,
+    borderBottomColor: Colors.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
     justifyContent: "space-between",
@@ -671,24 +684,24 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0
   },
   syncKey: {
-    color: ENT.textSecondary,
+    color: Colors.text3,
     fontSize: 11,
     fontWeight: "500"
   },
   syncValue: {
-    color: ENT.text,
+    color: Colors.text1,
     fontSize: 11,
     fontWeight: "700"
   },
   syncValueWarn: {
-    color: ENT.warning
+    color: Colors.amber
   },
   syncValueNever: {
-    color: ENT.danger
+    color: Colors.red
   },
   syncBtn: {
     alignItems: "center",
-    backgroundColor: ENT.primary,
+    backgroundColor: Colors.brand700,
     borderRadius: 14,
     flexDirection: "row",
     gap: 8,
@@ -707,8 +720,8 @@ const styles = StyleSheet.create({
   },
   signOutBtn: {
     alignItems: "center",
-    backgroundColor: ENT.card,
-    borderColor: ENT.border,
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
     borderRadius: 14,
     borderWidth: 1,
     flexDirection: "row",
@@ -716,8 +729,7 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: "center",
     marginHorizontal: 16,
-    marginTop: 8,
-    ...ENT_CARD_SHADOW
+    marginTop: 8
   },
   signOutText: {
     color: PROFILE_DS.danger,

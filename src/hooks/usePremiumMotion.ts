@@ -11,6 +11,11 @@ export type PremiumMotionState = {
 
 let cachedState: PremiumMotionState | null = null;
 
+const BATTERY_SUPPORTED =
+  Platform.OS !== "web" &&
+  typeof Battery.isLowPowerModeEnabledAsync === "function" &&
+  typeof Battery.addLowPowerModeListener === "function";
+
 function isLowEndDevice(): boolean {
   if (Platform.OS === "android") {
     const version = typeof Platform.Version === "number" ? Platform.Version : parseInt(String(Platform.Version), 10);
@@ -28,10 +33,12 @@ async function resolveMotionState(): Promise<PremiumMotionState> {
   }
 
   let batterySaver = false;
-  try {
-    batterySaver = await Battery.isLowPowerModeEnabledAsync();
-  } catch {
-    batterySaver = false;
+  if (BATTERY_SUPPORTED) {
+    try {
+      batterySaver = await Battery.isLowPowerModeEnabledAsync();
+    } catch {
+      batterySaver = false;
+    }
   }
 
   const lowEnd = isLowEndDevice();
@@ -43,7 +50,7 @@ async function resolveMotionState(): Promise<PremiumMotionState> {
 /** Gates premium animations — never blocks GPS, sync, or form logic. */
 export function usePremiumMotion(): PremiumMotionState {
   const [state, setState] = useState<PremiumMotionState>(
-    cachedState ?? { enabled: true, reduced: false }
+    cachedState ?? { enabled: Platform.OS !== "web", reduced: false }
   );
 
   useEffect(() => {
@@ -62,21 +69,23 @@ export function usePremiumMotion(): PremiumMotionState {
       });
     });
 
-    const batterySub = Battery.addLowPowerModeListener(({ lowPowerMode }) => {
-      setState((prev) => {
-        const next = {
-          ...prev,
-          enabled: !prev.reduced && !lowPowerMode && !isLowEndDevice()
-        };
-        cachedState = next;
-        return next;
-      });
-    });
+    const batterySub = BATTERY_SUPPORTED
+      ? Battery.addLowPowerModeListener(({ lowPowerMode }) => {
+          setState((prev) => {
+            const next = {
+              ...prev,
+              enabled: !prev.reduced && !lowPowerMode && !isLowEndDevice()
+            };
+            cachedState = next;
+            return next;
+          });
+        })
+      : null;
 
     return () => {
       mounted = false;
       reduceSub.remove();
-      batterySub.remove();
+      batterySub?.remove();
     };
   }, []);
 
@@ -84,5 +93,5 @@ export function usePremiumMotion(): PremiumMotionState {
 }
 
 export function getPremiumMotionEnabled(): boolean {
-  return cachedState?.enabled ?? true;
+  return cachedState?.enabled ?? Platform.OS !== "web";
 }

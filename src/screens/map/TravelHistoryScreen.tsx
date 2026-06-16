@@ -149,11 +149,11 @@ export function TravelHistoryScreen({ navigation }: Props) {
         {!loading && points.length === 0 ? (
           <EmptyState
             title="No route history yet"
-            message="Start your workday from Tracking. Your path appears here as GPS check-ins are saved."
+            message="Start your workday from the Day tab. Your path appears here as GPS check-ins are saved."
             illustration="map"
-            actionLabel="Open tracking"
+            actionLabel="Open Day"
             onAction={() => {
-              navigation.navigate("Main", { screen: "Profile", params: { screen: "TrackingWorkspace" } });
+              navigation.navigate("Main", { screen: "Day" });
             }}
           />
         ) : (

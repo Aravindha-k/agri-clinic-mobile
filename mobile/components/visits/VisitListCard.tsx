@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Visit } from "../../../src/api/visits";
 import { FONTS } from "../../../src/theme/fonts";
-import { ENT, ENT_CARD_SHADOW } from "../../../src/theme/enterprise";
+import { Colors } from "../../lib/theme";
 import type { PendingVisitRecord } from "../../lib/pendingVisitsQueue";
 import { avatarInitials, getAvatarColors } from "../../lib/avatarColor";
 import { resolveVisitFarmer } from "../../../src/utils/visitFarmer";
@@ -81,7 +81,7 @@ export function VisitListCard({ visit, pending, onPress }: Props) {
         </View>
         {gpsOk ? (
           <View style={styles.gpsBadge}>
-            <Ionicons name="location" size={10} color={ENT.primary} />
+            <Ionicons name="location" size={10} color={Colors.brand700} />
             <Text style={styles.gpsText}>GPS ✓</Text>
           </View>
         ) : null}
@@ -106,7 +106,7 @@ export function VisitListCard({ visit, pending, onPress }: Props) {
       </View>
 
       <View style={styles.locationRow}>
-        <Ionicons name="location-outline" size={11} color={ENT.textSecondary} />
+        <Ionicons name="location-outline" size={11} color={Colors.text3} />
         <Text style={styles.locationText} numberOfLines={1}>
           {village !== "—" ? village : "Village not set"}
         </Text>
@@ -120,7 +120,7 @@ export function VisitListCard({ visit, pending, onPress }: Props) {
           }}
           style={({ pressed }) => [styles.callBtn, pressed && { opacity: 0.88 }]}
         >
-          <Ionicons name="call-outline" size={14} color={ENT.textSecondary} />
+          <Ionicons name="call-outline" size={14} color={Colors.text3} />
           <Text style={styles.callBtnText}>Call farmer</Text>
         </Pressable>
       ) : null}
@@ -130,17 +130,16 @@ export function VisitListCard({ visit, pending, onPress }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: ENT.card,
-    borderColor: ENT.border,
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     marginBottom: 10,
     marginHorizontal: 16,
-    padding: 14,
-    ...ENT_CARD_SHADOW
+    padding: 14
   },
   cardPending: {
-    borderLeftColor: ENT.warning,
+    borderLeftColor: Colors.amber,
     borderLeftWidth: 3
   },
   topRow: {
@@ -173,13 +172,13 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   farmerName: {
-    color: ENT.text,
+    color: Colors.text1,
     fontFamily: FONTS.bold,
     fontSize: 13,
     fontWeight: "700"
   },
   time: {
-    color: ENT.textSecondary,
+    color: Colors.text3,
     fontFamily: FONTS.medium,
     fontSize: 10,
     fontWeight: "500"
@@ -190,7 +189,7 @@ const styles = StyleSheet.create({
     gap: 3
   },
   gpsText: {
-    color: ENT.primary,
+    color: Colors.brand700,
     fontFamily: FONTS.bold,
     fontSize: 9.5,
     fontWeight: "700"
@@ -202,21 +201,21 @@ const styles = StyleSheet.create({
     marginTop: 10
   },
   cropTag: {
-    backgroundColor: ENT.bg,
-    borderColor: ENT.border,
+    backgroundColor: Colors.bg,
+    borderColor: Colors.border,
     borderRadius: 7,
     borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 3
   },
   cropTagText: {
-    color: ENT.textSecondary,
+    color: Colors.text3,
     fontFamily: FONTS.semibold,
     fontSize: 10,
     fontWeight: "600"
   },
   pestTag: {
-    backgroundColor: ENT.dangerSoft,
+    backgroundColor: Colors.redBg,
     borderColor: "#FECACA",
     borderRadius: 7,
     borderWidth: 1,
@@ -224,19 +223,19 @@ const styles = StyleSheet.create({
     paddingVertical: 3
   },
   pestTagText: {
-    color: ENT.danger,
+    color: Colors.red,
     fontFamily: FONTS.semibold,
     fontSize: 10,
     fontWeight: "600"
   },
   pendingTag: {
-    backgroundColor: ENT.warningSoft,
+    backgroundColor: Colors.amberBg,
     borderRadius: 7,
     paddingHorizontal: 8,
     paddingVertical: 3
   },
   pendingTagText: {
-    color: ENT.warning,
+    color: Colors.amber,
     fontFamily: FONTS.semibold,
     fontSize: 9,
     fontWeight: "600"
@@ -248,7 +247,7 @@ const styles = StyleSheet.create({
     marginTop: 8
   },
   locationText: {
-    color: ENT.textSecondary,
+    color: Colors.text3,
     flex: 1,
     fontFamily: FONTS.medium,
     fontSize: 10.5,
@@ -256,8 +255,8 @@ const styles = StyleSheet.create({
   },
   callBtn: {
     alignItems: "center",
-    backgroundColor: ENT.bg,
-    borderColor: ENT.border,
+    backgroundColor: Colors.bg,
+    borderColor: Colors.border,
     borderRadius: 10,
     borderWidth: 1,
     flexDirection: "row",
@@ -268,7 +267,7 @@ const styles = StyleSheet.create({
     width: "100%"
   },
   callBtnText: {
-    color: ENT.textSecondary,
+    color: Colors.text3,
     fontFamily: FONTS.semibold,
     fontSize: 11,
     fontWeight: "600"

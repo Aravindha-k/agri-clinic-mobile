@@ -1,6 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { StepIndicator } from "../../components/visit/StepIndicator";
+import { EntranceBlocks } from "../../components/ui/EntranceBlocks";
+import { FadeInSection, entranceStagger } from "../../components/ui/FadeInSection";
+import { ScreenEntranceShell } from "../../components/layout";
 import { useVisitFormStore } from "../../store/visitFormStore";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 
@@ -16,32 +19,43 @@ export default function VisitDetailsStep({ onBack }: Props) {
   const label = farmer?.name || newFarmer?.name || "Farmer";
 
   return (
-    <View style={styles.screen}>
-      <View style={styles.header}>
-        <Pressable onPress={onBack} style={styles.iconBtn}>
-          <Ionicons name="arrow-back" size={18} color={Colors.text1} />
-        </Pressable>
-        <View style={styles.headerCopy}>
-          <Text style={styles.headerTitle}>New visit</Text>
-          <Text style={styles.headerSub}>Step 2 of 3 — Visit details</Text>
-        </View>
-        <View style={styles.iconBtn} />
-      </View>
+    <ScreenEntranceShell style={styles.screen}>
+      {(replayKey) => (
+        <>
+          <FadeInSection replayKey={replayKey} delay={entranceStagger(0)}>
+            <View style={styles.header}>
+              <Pressable onPress={onBack} style={styles.iconBtn}>
+                <Ionicons name="arrow-back" size={18} color={Colors.text1} />
+              </Pressable>
+              <View style={styles.headerCopy}>
+                <Text style={styles.headerTitle}>New visit</Text>
+                <Text style={styles.headerSub}>Step 2 of 3 — Visit details</Text>
+              </View>
+              <View style={styles.iconBtn} />
+            </View>
+          </FadeInSection>
 
-      <View style={styles.stepWrap}>
-        <StepIndicator step={2} />
-      </View>
+          <FadeInSection replayKey={replayKey} delay={entranceStagger(1)}>
+            <View style={styles.stepWrap}>
+              <StepIndicator step={2} />
+            </View>
+          </FadeInSection>
 
-      <View style={styles.body}>
-        <Text style={styles.placeholderTitle}>Visit details</Text>
-        <Text style={styles.placeholderSub}>
-          Farmer selected: {label}. Step 2 UI will be built next.
-        </Text>
-        <Pressable onPress={() => setStep(3)} style={styles.nextBtn}>
-          <Text style={styles.nextBtnText}>Continue to summary →</Text>
-        </Pressable>
-      </View>
-    </View>
+          <EntranceBlocks replayKey={replayKey} startStep={2} variant="card">
+            <View style={styles.body}>
+              <Text style={styles.placeholderTitle}>Visit details</Text>
+              <Text style={styles.placeholderSub}>
+                Farmer selected: {label}. Step 2 UI will be built next.
+              </Text>
+            </View>
+
+            <Pressable onPress={() => setStep(3)} style={styles.nextBtn}>
+              <Text style={styles.nextBtnText}>Continue to summary →</Text>
+            </Pressable>
+          </EntranceBlocks>
+        </>
+      )}
+    </ScreenEntranceShell>
   );
 }
 
@@ -104,6 +118,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     backgroundColor: Colors.brand700,
     borderRadius: Radius.lg,
+    marginHorizontal: Spacing.screen,
     marginTop: 8,
     paddingHorizontal: 16,
     paddingVertical: 12

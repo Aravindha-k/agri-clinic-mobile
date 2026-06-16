@@ -1,8 +1,9 @@
+/** @deprecated Not mounted in V2 — use requestGpsForFieldWork() on workday/visit actions instead. */
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Colors } from "../../mobile/lib/theme";
 import { useSafeAreaInsetsCompat } from "../hooks/useSafeAreaInsetsCompat";
 import { useGpsCompliance } from "../storage/GpsComplianceContext";
-import { ENT } from "../theme/enterprise";
 
 export function GpsComplianceBanner() {
   const { status, bannerTitle, bannerSubtitle, permissionDenied, showPermissionHelp } = useGpsCompliance();
@@ -21,7 +22,7 @@ export function GpsComplianceBanner() {
 
   return (
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) }]}>
-      <Ionicons name={icon} size={18} color={blocked ? ENT.danger : ENT.warning} />
+      <Ionicons name={icon} size={18} color={blocked ? Colors.red : Colors.amber} />
       <View style={styles.textCol}>
         <Text style={styles.title}>{bannerTitle}</Text>
         <Text style={styles.sub}>{bannerSubtitle}</Text>
@@ -38,8 +39,8 @@ export function GpsComplianceBanner() {
 const styles = StyleSheet.create({
   wrap: {
     alignItems: "center",
-    backgroundColor: ENT.warningSoft,
-    borderBottomColor: ENT.border,
+    backgroundColor: Colors.amberBg,
+    borderBottomColor: Colors.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
     gap: 10,
@@ -47,14 +48,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14
   },
   textCol: { flex: 1, minWidth: 0 },
-  title: { color: ENT.text, fontSize: 13, fontWeight: "800" },
-  sub: { color: ENT.textSecondary, fontSize: 11, fontWeight: "600", lineHeight: 15, marginTop: 2 },
+  title: { color: Colors.text1, fontSize: 13, fontWeight: "800" },
+  sub: { color: Colors.text3, fontSize: 11, fontWeight: "600", lineHeight: 15, marginTop: 2 },
   btn: {
-    borderColor: ENT.borderStrong,
+    borderColor: Colors.border2,
     borderRadius: 8,
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 6
   },
-  btnText: { color: ENT.primary, fontSize: 11, fontWeight: "800" }
+  btnText: { color: Colors.brand700, fontSize: 11, fontWeight: "800" }
 });

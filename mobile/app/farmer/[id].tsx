@@ -12,16 +12,18 @@ import {
   View
 } from "react-native";
 import type { Visit } from "../../../src/api/visits";
-import { useGpsWorkGuard } from "../../../src/hooks/useGpsWorkGuard";
 import { useRefreshControlProps } from "../../../src/hooks/useRefreshControlProps";
 import { useSafeAreaInsetsCompat } from "../../../src/hooks/useSafeAreaInsetsCompat";
 import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
 import { navigateFarmerMap } from "../../../src/navigation/navigateFarmerMap";
+import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal";
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
 import { getVisitDisplayDateTime } from "../../../src/utils/format";
 import { prefillFromFarmer } from "../../../src/utils/farmerPrefill";
 import { FarmerPhotoAvatar } from "../../components/farmers/FarmerPhotoAvatar";
 import { EmptyState, GhostButton, PrimaryButton, SectionHeader, Skeleton, StatusChip } from "../../components/ui";
+import { FadeInSection, entranceListStagger, entranceStagger } from "../../components/ui/FadeInSection";
+import { ScreenEntranceShell } from "../../components/layout";
 import {
   cropFromVisit,
   fetchMobileFarmerProfile,
@@ -152,7 +154,6 @@ export default function FarmerProfileScreen() {
   const farmerId = Number(route.params?.id);
   const { top: safeTop, bottom: safeBottom } = useSafeAreaInsetsCompat();
   const refreshControlProps = useRefreshControlProps();
-  const { canRunWorkAction } = useGpsWorkGuard();
   const { bumpAfterFarmerPhotoChange } = useFieldDataRefresh();
 
   const [profile, setProfile] = useState<MobileFarmerProfile | null>(null);
@@ -235,11 +236,14 @@ export default function FarmerProfileScreen() {
 
   function openNewVisit() {
     if (!profile) return;
-    if (!canRunWorkAction()) return;
-    rootNav?.navigate("VisitFlow", {
-      screen: "NewVisitFarmer",
-      params: { prefill: prefillFromFarmer(profile.farmer), fastRevisit: true }
-    });
+    void (async () => {
+      const allowed = await requestGpsForFieldWork();
+      if (!allowed) return;
+      rootNav?.navigate("VisitFlow", {
+        screen: "NewVisitFarmer",
+        params: { prefill: prefillFromFarmer(profile.farmer), fastRevisit: true }
+      });
+    })();
   }
 
   function openCall() {
@@ -302,7 +306,10 @@ export default function FarmerProfileScreen() {
   const phone = farmer.phone?.trim() || "—";
 
   return (
-    <View style={[styles.screen, { paddingTop: safeTop }]}>
+    <ScreenEntranceShell style={[styles.screen, { paddingTop: safeTop }]}>
+      {(entranceTick) => (
+        <>
+      <FadeInSection replayKey={entranceTick} delay={entranceStagger(0)}>
       <View style={styles.topBar}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={18} color={Colors.text1} />
@@ -312,6 +319,7 @@ export default function FarmerProfileScreen() {
           <Ionicons name="ellipsis-vertical" size={18} color={Colors.text1} />
         </Pressable>
       </View>
+      </FadeInSection>
 
       <ScrollView
         style={styles.scrollView}
@@ -328,6 +336,7 @@ export default function FarmerProfileScreen() {
           />
         }
       >
+        <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)} variant="card">
         <View style={styles.heroCard}>
           <View style={styles.heroRow}>
             <FarmerPhotoAvatar
@@ -363,7 +372,9 @@ export default function FarmerProfileScreen() {
             <StatChip label="Soil type" value={profile.soil_type || "—"} />
           </View>
         </View>
+        </FadeInSection>
 
+        <FadeInSection replayKey={entranceTick} delay={entranceStagger(2)} variant="card">
         <View style={styles.kpiStrip}>
           <KpiCell value={profile.total_visits} label="Total visits" />
           <KpiCell value={profile.last_visit_label} label="Last visit" />
@@ -394,7 +405,9 @@ export default function FarmerProfileScreen() {
             </View>
           </View>
         ) : null}
+        </FadeInSection>
 
+        <FadeInSection replayKey={entranceTick} delay={entranceStagger(3)} variant="card">
         <View style={styles.section}>
           <SectionHeader title="CURRENT CROPS" />
           {profile.current_crops.length === 0 ? (
@@ -407,19 +420,27 @@ export default function FarmerProfileScreen() {
             </ScrollView>
           )}
         </View>
+        </FadeInSection>
 
+        <FadeInSection replayKey={entranceTick} delay={entranceStagger(4)} variant="card">
         <View style={styles.section}>
           <SectionHeader title="FIELDS & LAND" />
           {profile.fields.length === 0 ? (
             <Text style={styles.emptyLine}>No fields registered for this farmer.</Text>
           ) : (
-            profile.fields.map((field) => (
-              <FieldAccordionItem
+            profile.fields.map((field, index) => (
+              <FadeInSection
                 key={field.id}
-                field={field}
-                expanded={expandedFields.has(field.id)}
-                onToggle={() => toggleField(field.id)}
-              />
+                replayKey={entranceTick}
+                delay={entranceListStagger(4, index)}
+                variant="card"
+              >
+                <FieldAccordionItem
+                  field={field}
+                  expanded={expandedFields.has(field.id)}
+                  onToggle={() => toggleField(field.id)}
+                />
+              </FadeInSection>
             ))
           )}
         </View>
@@ -434,20 +455,27 @@ export default function FarmerProfileScreen() {
             <Text style={styles.emptyLine}>No visits logged yet.</Text>
           ) : (
             visitsPreview.map((visit, index) => (
-              <Pressable
+              <FadeInSection
                 key={visit.id}
+                replayKey={entranceTick}
+                delay={entranceListStagger(5, index)}
+                variant="card"
+              >
+              <Pressable
                 onPress={() =>
-                  rootNav?.navigate("Visits", {
-                    screen: "VisitDetail",
-                    params: { id: visit.id }
+                  rootNav?.navigate("Main", {
+                    screen: "Work",
+                    params: { screen: "VisitDetail", params: { id: visit.id } }
                   })
                 }
               >
                 <TimelineItem visit={visit} isLast={index === visitsPreview.length - 1} />
               </Pressable>
+              </FadeInSection>
             ))
           )}
         </View>
+        </FadeInSection>
       </ScrollView>
 
       <View style={[styles.bottomBar, { paddingBottom: Math.max(safeBottom, 12) }]}>
@@ -470,7 +498,9 @@ export default function FarmerProfileScreen() {
           icon={<Ionicons name="arrow-forward" size={16} color={Colors.surface} />}
         />
       </View>
-    </View>
+        </>
+      )}
+    </ScreenEntranceShell>
   );
 }
 

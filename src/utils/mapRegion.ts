@@ -1,14 +1,16 @@
-import { Region } from "react-native-maps";
+import type { MapRegion } from "../types/map";
 import { hasValidMapCoords } from "./mapCoords";
 
-export const DEFAULT_MAP_REGION: Region = {
+export type { MapRegion };
+
+export const DEFAULT_MAP_REGION: MapRegion = {
   latitude: 11.1271,
   longitude: 78.6569,
   latitudeDelta: 0.08,
   longitudeDelta: 0.08
 };
 
-export function sanitizeRegion(region: Region): Region {
+export function sanitizeRegion(region: MapRegion): MapRegion {
   const lat = Number(region.latitude);
   const lng = Number(region.longitude);
   const latDelta = Number(region.latitudeDelta);
@@ -26,7 +28,7 @@ export function sanitizeRegion(region: Region): Region {
   };
 }
 
-export function fitMapRegion(points: { lat: number; lng: number }[], fallback?: Region): Region {
+export function fitMapRegion(points: { lat: number; lng: number }[], fallback?: MapRegion): MapRegion {
   const valid = points.filter((p) => hasValidMapCoords(p.lat, p.lng));
   if (!valid.length) {
     return sanitizeRegion(fallback ?? DEFAULT_MAP_REGION);

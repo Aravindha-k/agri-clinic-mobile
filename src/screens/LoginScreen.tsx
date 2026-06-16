@@ -23,8 +23,8 @@ import { useSecureScreen } from "../hooks/useSecureScreen";
 import { useAuth } from "../storage/AuthContext";
 import { LOGO_SIZES } from "../brand/logoSizing";
 import { FONTS } from "../theme/fonts";
+import { Colors } from "../../mobile/lib/theme";
 import { ApiRequestError, getNetworkMessage, isNetworkError } from "../utils/apiError";
-import GradientBackground from "../components/glass/GradientBackground";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const { height: SH } = Dimensions.get("window");
@@ -396,7 +396,9 @@ export function LoginScreen() {
 
       {/* ── DARK TOP ZONE ── */}
       <View style={[styles.topZone, { height: TOP_H }]}>
-        <GradientBackground />
+        <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+          <View style={{ flex: 1, backgroundColor: DARK }} />
+        </View>
         <LeafIcon size={52} style={styles.leaf1} />
         <LeafIcon size={64} style={styles.leaf2} />
         <LeafIcon size={44} style={styles.leaf3} />
@@ -479,14 +481,14 @@ export function LoginScreen() {
 
           {loginError ? (
             <View style={styles.errorBox}>
-              <Ionicons name="alert-circle" size={16} color="#dc2626" />
+              <Ionicons name="alert-circle" size={16} color={Colors.red} />
               <Text style={styles.errorText}>{loginError}</Text>
             </View>
           ) : null}
 
           <Text style={styles.fieldLabel}>Employee ID</Text>
           <View style={[styles.inputBox, loading && styles.inputDisabled]}>
-            <Ionicons name="id-card-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
+            <Ionicons name="id-card-outline" size={18} color={Colors.text4} style={styles.inputIcon} />
             <TextInput
               value={empId}
               onChangeText={(t) => {
@@ -494,11 +496,12 @@ export function LoginScreen() {
                 if (loginError) setLoginError("");
               }}
               placeholder="e.g. AG-8821"
-              placeholderTextColor="#cbd5e1"
+              placeholderTextColor={Colors.text4}
               autoCapitalize="none"
               autoCorrect={false}
               editable={!loading}
               style={styles.input}
+              returnKeyType="next"
             />
             {empId.length > 2 && !loading ? (
               <Ionicons name="checkmark-circle" size={18} color={ACCENT_DARK} />
@@ -507,7 +510,7 @@ export function LoginScreen() {
 
           <Text style={styles.fieldLabel}>Password</Text>
           <View style={[styles.inputBox, loading && styles.inputDisabled]}>
-            <Ionicons name="lock-closed-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
+            <Ionicons name="lock-closed-outline" size={18} color={Colors.text4} style={styles.inputIcon} />
             <TextInput
               value={password}
               onChangeText={(t) => {
@@ -515,18 +518,21 @@ export function LoginScreen() {
                 if (loginError) setLoginError("");
               }}
               placeholder="Enter password"
-              placeholderTextColor="#cbd5e1"
+              placeholderTextColor={Colors.text4}
               secureTextEntry={!showPw}
               editable={!loading}
               style={styles.input}
               onSubmitEditing={() => void handleLogin()}
+              returnKeyType="go"
             />
             <TouchableOpacity
               onPress={() => setShowPw((p) => !p)}
               style={styles.eyeBtn}
               disabled={loading}
+              accessibilityRole="button"
+              accessibilityLabel={showPw ? "Hide password" : "Show password"}
             >
-              <Ionicons name={showPw ? "eye-off-outline" : "eye-outline"} size={18} color="#64748b" />
+              <Ionicons name={showPw ? "eye-off-outline" : "eye-outline"} size={18} color={Colors.text3} />
             </TouchableOpacity>
           </View>
 
@@ -548,7 +554,7 @@ export function LoginScreen() {
             ) : (
               <>
                 <Text style={styles.signInBtnText}>Sign In</Text>
-                <Ionicons name="arrow-forward" size={16} color="#fff" />
+                <Ionicons name="arrow-forward" size={16} color={Colors.surface} />
               </>
             )}
           </TouchableOpacity>
@@ -699,14 +705,14 @@ const styles = StyleSheet.create({
     width: 6
   },
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: Colors.surface,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     flex: 1,
     overflow: "hidden"
   },
   cardGreenLine: {
-    backgroundColor: ACCENT_DARK,
+    backgroundColor: Colors.brand700,
     height: 3,
     width: "100%"
   },
@@ -717,13 +723,13 @@ const styles = StyleSheet.create({
     paddingTop: 20
   },
   welcomeTitle: {
-    color: "#0f172a",
+    color: Colors.text1,
     fontFamily: FONTS.extrabold,
     fontSize: 22,
     fontWeight: "800"
   },
   welcomeSub: {
-    color: "#94a3b8",
+    color: Colors.text4,
     fontFamily: FONTS.regular,
     fontSize: 12,
     fontWeight: "400",
@@ -732,8 +738,8 @@ const styles = StyleSheet.create({
   },
   errorBox: {
     alignItems: "center",
-    backgroundColor: "#fef2f2",
-    borderColor: "#fecaca",
+    backgroundColor: Colors.redBg,
+    borderColor: "#FECACA",
     borderRadius: 12,
     borderWidth: 1,
     flexDirection: "row",
@@ -742,13 +748,13 @@ const styles = StyleSheet.create({
     padding: 10
   },
   errorText: {
-    color: "#dc2626",
+    color: Colors.red,
     flex: 1,
     fontFamily: FONTS.medium,
     fontSize: 12
   },
   fieldLabel: {
-    color: "#64748b",
+    color: Colors.text3,
     fontFamily: FONTS.semibold,
     fontSize: 11,
     fontWeight: "600",
@@ -756,8 +762,8 @@ const styles = StyleSheet.create({
   },
   inputBox: {
     alignItems: "center",
-    backgroundColor: "#fff",
-    borderColor: "#e2e8f0",
+    backgroundColor: Colors.bg,
+    borderColor: Colors.border,
     borderRadius: 14,
     borderWidth: 1.5,
     flexDirection: "row",
@@ -772,7 +778,7 @@ const styles = StyleSheet.create({
     marginRight: 8
   },
   input: {
-    color: "#0f172a",
+    color: Colors.text1,
     flex: 1,
     fontFamily: FONTS.regular,
     fontSize: 14,
@@ -787,14 +793,14 @@ const styles = StyleSheet.create({
     marginTop: -2
   },
   forgotText: {
-    color: ACCENT_DARK,
+    color: Colors.brand700,
     fontFamily: FONTS.semibold,
     fontSize: 11,
     fontWeight: "600"
   },
   signInBtn: {
     alignItems: "center",
-    backgroundColor: ACCENT_DARK,
+    backgroundColor: Colors.brand700,
     borderRadius: 14,
     flexDirection: "row",
     gap: 8,
@@ -805,7 +811,7 @@ const styles = StyleSheet.create({
     opacity: 0.9
   },
   signInBtnText: {
-    color: "#fff",
+    color: Colors.surface,
     fontFamily: FONTS.bold,
     fontSize: 14,
     fontWeight: "700"
@@ -821,12 +827,12 @@ const styles = StyleSheet.create({
     marginBottom: 14
   },
   servicesLine: {
-    backgroundColor: "#e2e8f0",
+    backgroundColor: Colors.border,
     flex: 1,
     height: 1
   },
   servicesTitle: {
-    color: "#64748b",
+    color: Colors.text3,
     fontFamily: FONTS.semibold,
     fontSize: 11,
     fontWeight: "600",
@@ -841,8 +847,8 @@ const styles = StyleSheet.create({
   },
   serviceCard: {
     alignItems: "center",
-    backgroundColor: "#f8fafc",
-    borderColor: "#e2e8f0",
+    backgroundColor: Colors.bg,
+    borderColor: Colors.border,
     borderRadius: 14,
     borderWidth: 1,
     flex: 1,
@@ -859,7 +865,7 @@ const styles = StyleSheet.create({
     width: 36
   },
   serviceLabel: {
-    color: "#334155",
+    color: Colors.text1,
     fontFamily: FONTS.semibold,
     fontSize: 10,
     fontWeight: "600",
@@ -867,8 +873,8 @@ const styles = StyleSheet.create({
     textAlign: "center"
   },
   statsBar: {
-    backgroundColor: BRAND_COLORS.primarySoft,
-    borderColor: BRAND_COLORS.primarySoftBorder,
+    backgroundColor: Colors.brand50,
+    borderColor: Colors.brand100,
     borderRadius: 14,
     borderWidth: 1,
     flexDirection: "row",
@@ -881,30 +887,30 @@ const styles = StyleSheet.create({
     paddingVertical: 12
   },
   statItemBorder: {
-    borderLeftColor: BRAND_COLORS.primarySoftBorder,
+    borderLeftColor: Colors.brand100,
     borderLeftWidth: 1
   },
   statValue: {
-    color: ACCENT_DARK,
+    color: Colors.brand700,
     fontFamily: FONTS.bold,
     fontSize: 15,
     fontWeight: "700"
   },
   statLabel: {
-    color: "#64748b",
+    color: Colors.text3,
     fontFamily: FONTS.medium,
     fontSize: 10,
     marginTop: 2
   },
   trustCopy: {
-    color: "#94a3b8",
+    color: Colors.text4,
     fontFamily: FONTS.regular,
     fontSize: 11,
     lineHeight: 16,
     textAlign: "center"
   },
   footer: {
-    color: "#94a3b8",
+    color: Colors.text4,
     fontFamily: FONTS.regular,
     fontSize: 10,
     paddingBottom: 6,

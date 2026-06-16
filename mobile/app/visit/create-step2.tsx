@@ -36,6 +36,9 @@ import {
   type VisitFormOptions
 } from "../../lib/visitFormOptionsApi";
 import { useVisitFormStore } from "../../store/visitFormStore";
+import { EntranceBlocks } from "../../components/ui/EntranceBlocks";
+import { FadeInSection, entranceStagger } from "../../components/ui/FadeInSection";
+import { useVisitEntranceKey } from "../../context/VisitEntranceContext";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 
 const CATALOG_DEBOUNCE_MS = 250;
@@ -46,6 +49,7 @@ type Props = {
 
 export function VisitCreateStep2({ onBack }: Props) {
   const { t } = useI18n();
+  const replayKey = useVisitEntranceKey();
   const farmer = useVisitFormStore((s) => s.farmer);
   const newFarmer = useVisitFormStore((s) => s.newFarmer);
   const cropId = useVisitFormStore((s) => s.cropId);
@@ -328,17 +332,19 @@ export function VisitCreateStep2({ onBack }: Props) {
         </Pressable>
         <View style={styles.topBarCopy}>
           <Text style={styles.topBarTitle}>{t("visitFlow.cropAndProblem")}</Text>
-          <Text style={styles.topBarSub}>{t("visitFlow.step2of3")}</Text>
+          <Text style={styles.topBarSub}>{t("visitFlow.step2of4")}</Text>
         </View>
         <View style={styles.iconBtn} />
       </View>
 
+      <FadeInSection replayKey={replayKey} delay={entranceStagger(0)} variant="card">
       <VisitFarmerSummaryCard farmer={farmer} newFarmer={newFarmer} />
       {revisitContext ? (
         <View style={styles.revisitContextWrap}>
           <VisitRevisitContextCard context={revisitContext} />
         </View>
       ) : null}
+      </FadeInSection>
 
       <View style={styles.stepWrap}>
         <StepIndicator step={2} />
@@ -351,6 +357,7 @@ export function VisitCreateStep2({ onBack }: Props) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        <FadeInSection replayKey={replayKey} delay={entranceStagger(1)} variant="card">
         <View onLayout={sectionLayoutHandler(sectionOffsets, "crop")}>
           <CropSelectionCard
             cropId={cropId}
@@ -450,7 +457,9 @@ export function VisitCreateStep2({ onBack }: Props) {
             </>
           )}
         </View>
+        </FadeInSection>
 
+        <FadeInSection replayKey={replayKey} delay={entranceStagger(2)} variant="card">
         <View onLayout={sectionLayoutHandler(sectionOffsets, "other")}>
           {cropId ? (
             <OtherProblemSection
@@ -462,6 +471,7 @@ export function VisitCreateStep2({ onBack }: Props) {
             />
           ) : null}
         </View>
+        </FadeInSection>
 
         <View onLayout={sectionLayoutHandler(sectionOffsets, "continue")} style={styles.footerSpacer} />
       </ScrollView>

@@ -32,6 +32,7 @@ import {
 } from "../tracking/locationSyncService";
 import { trackingDevLog } from "../tracking/trackingDevLog";
 import { getForegroundLocation, toTrackingPayload } from "../utils/location";
+import { showLocationRequiredModal } from "../utils/locationRequiredModal";
 import { subscribeConnectivity } from "../utils/connectivityBus";
 import { useAuth, useAuthSessionReady } from "./AuthContext";
 import { useGpsCompliance } from "./GpsComplianceContext";
@@ -46,6 +47,7 @@ import {
   startGpsTrackingService,
   stopGpsTrackingService
 } from "../../mobile/lib/gps/trackingService";
+import { refreshSyncStoreCounts } from "../../mobile/lib/sync/offlineSyncManager";
 import { startWorkday } from "../../mobile/lib/workday";
 import { getWorkdayStartTimestamp, resolveWorkdayStartedAt } from "../utils/workdayStartedAt";
 import { workdayRestoreLog } from "../utils/workdayRestoreLog";
@@ -415,11 +417,13 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
         setPendingSyncCount(0);
         applyLastQueuedLocation(last);
       }
+      refreshSyncStoreCounts();
     } catch {
       const remaining = await readLocationPushQueue();
       if (mountedRef.current) {
         setPendingSyncCount(remaining.length);
       }
+      refreshSyncStoreCounts();
     }
   }, [applyLastQueuedLocation, workday]);
 
@@ -555,7 +559,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       if (!started.ok) {
         if (started.reason === "permissions" || started.reason === "location") {
           setGpsState("denied");
-          Alert.alert("Location unavailable", started.message || "Location permission is required.");
+          showLocationRequiredModal();
         } else if (started.reason === "api") {
           const message = started.message || TRACKING_SYNC_ERROR;
           setError(message);

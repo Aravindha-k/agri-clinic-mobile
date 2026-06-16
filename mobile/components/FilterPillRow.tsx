@@ -1,6 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Text, ViewStyle } from "react-native";
 import { FONTS } from "../../src/theme/fonts";
-import { ENT } from "../../src/theme/enterprise";
+import { Colors } from "../lib/theme";
 
 export type FilterPill = {
   id: string;
@@ -73,23 +73,23 @@ const styles = StyleSheet.create({
     paddingVertical: 7
   },
   pillInactive: {
-    backgroundColor: ENT.card,
-    borderColor: ENT.border,
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
     borderWidth: 1
   },
   pillActive: {
-    backgroundColor: ENT.primary,
-    borderColor: ENT.primary,
+    backgroundColor: Colors.brand700,
+    borderColor: Colors.brand700,
     borderWidth: 1
   },
   pillText: {
-    color: ENT.textSecondary,
+    color: Colors.text3,
     fontFamily: FONTS.medium,
     fontSize: 11,
     fontWeight: "500"
   },
   pillTextActive: {
-    color: ENT.white,
+    color: Colors.surface,
     fontFamily: FONTS.bold,
     fontWeight: "700"
   }

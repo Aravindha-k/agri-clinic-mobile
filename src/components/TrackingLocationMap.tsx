@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import { Region } from "react-native-maps";
+import type { MapRegion } from "../types/map";
 import { FieldMapView } from "./map/FieldMapView";
 import { MapErrorBoundary } from "./map/MapErrorBoundary";
 import { colors } from "../theme/colors";
@@ -92,7 +92,7 @@ export function TrackingLocationMap({ isActive, serverLatitude, serverLongitude,
     }, [hasServerPin])
   );
 
-  const region: Region = useMemo(() => {
+  const region: MapRegion = useMemo(() => {
     const lat = slat ?? liveLat ?? DEFAULT_MAP_REGION.latitude;
     const lng = slng ?? liveLng ?? DEFAULT_MAP_REGION.longitude;
     return sanitizeRegion({

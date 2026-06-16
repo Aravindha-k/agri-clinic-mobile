@@ -6,7 +6,6 @@ import { EmptyState } from "../components/EmptyState";
 import { AppHeader, PremiumCard, PrimaryButton } from "../components/ui";
 import { formatRelativeTime } from "../utils/formatRelativeTime";
 import { RootStackParamList } from "../navigation/types";
-import { useGpsWorkGuard } from "../hooks/useGpsWorkGuard";
 import { useOfflineSync } from "../storage/OfflineSyncContext";
 import { useTheme } from "../theme";
 import { refreshControlProps } from "../theme/refresh";
@@ -18,7 +17,6 @@ export function OfflineSyncScreen({ navigation }: Props) {
   const { theme } = useTheme();
   const c = theme.colors;
   const { queue, syncing, syncAll, refreshQueue, lastSyncAt } = useOfflineSync();
-  const { canRunWorkAction } = useGpsWorkGuard();
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = useCallback(async () => {
@@ -52,10 +50,7 @@ export function OfflineSyncScreen({ navigation }: Props) {
       <View style={styles.actions}>
         <PrimaryButton
           title={syncing ? "Syncing…" : "Sync now"}
-          onPress={() => {
-            if (!canRunWorkAction()) return;
-            void syncAll();
-          }}
+          onPress={() => void syncAll()}
           loading={syncing}
           disabled={!count}
         />

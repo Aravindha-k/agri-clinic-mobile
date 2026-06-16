@@ -57,6 +57,7 @@ export function hasValidGps(values: VisitFormValues): boolean {
 export function hasObservation(values: VisitFormValues): boolean {
   return (
     Boolean(coerceStr(values.observation)) ||
+    Boolean(coerceStr(values.recommendation)) ||
     Boolean(coerceStr(values.field_notes)) ||
     Boolean(coerceStr(values.problem_seen)) ||
     Boolean(coerceStr(values.problem_description)) ||
@@ -72,6 +73,11 @@ export function hasObservation(values: VisitFormValues): boolean {
     Boolean(coerceStr(values.pesticide_advice)) ||
     Boolean(coerceStr(values.irrigation_advice))
   );
+}
+
+/** Step 3 UI: at least one of observation or recommendation/advice. */
+export function hasVisitObservationOrAdvice(observation: string, recommendation: string): boolean {
+  return Boolean(coerceStr(observation) || coerceStr(recommendation));
 }
 
 export function issuesToFieldErrors(issues: VisitValidationIssue[]): VisitFieldErrors {
@@ -124,7 +130,7 @@ export function getDetailsStepIssues(values: VisitFormValues): VisitValidationIs
   if (!hasObservation(normalized)) {
     issues.push({
       field: "observation",
-      message: "Add observation / field notes, problem seen, or action taken",
+      message: "Add an observation or recommendation (at least one)",
       step: "details"
     });
   }
@@ -177,7 +183,7 @@ export function getSubmitIssues(values: VisitFormValues): VisitValidationIssue[]
   if (!hasObservation(normalized)) {
     issues.push({
       field: "observation",
-      message: "Observation / field notes or action details are required",
+      message: "Add an observation or recommendation (at least one)",
       step: "details"
     });
   }
@@ -204,7 +210,7 @@ export function getSubmitSummaryLines(issues: VisitValidationIssue[]): string[] 
         lines.push("GPS location is required");
         break;
       case "observation":
-        lines.push("Observation / field notes or action details are required");
+        lines.push("Add an observation or recommendation (at least one)");
         break;
       default:
         lines.push(issue.message);

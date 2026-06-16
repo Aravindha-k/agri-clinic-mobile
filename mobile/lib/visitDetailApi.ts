@@ -22,9 +22,33 @@ export type ParsedFieldNotes = {
 export type VisitPatchBody = {
   observation?: string;
   field_notes?: string;
+  recommendation?: string;
+  action_taken?: string;
+  general_advice?: string;
   next_visit_date?: string | null;
   follow_up_date?: string | null;
 };
+
+export function visitObservationText(visit: Visit): string {
+  return visit.observation?.trim() || "";
+}
+
+export function visitRecommendationText(visit: Visit): string {
+  const combined =
+    visit.recommendation?.trim() ||
+    visit.action_taken?.trim() ||
+    visit.general_advice?.trim() ||
+    "";
+  if (combined) return combined;
+  const parts = [
+    visit.fertilizer_advice,
+    visit.pesticide_advice,
+    visit.irrigation_advice
+  ]
+    .map((row) => row?.trim())
+    .filter(Boolean);
+  return parts.join("\n");
+}
 
 export function resolveMediaUrl(url: string | null | undefined): string | null {
   if (!url?.trim()) return null;

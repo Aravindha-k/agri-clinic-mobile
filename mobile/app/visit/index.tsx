@@ -6,8 +6,12 @@ import { useSafeAreaInsetsCompat } from "../../../src/hooks/useSafeAreaInsetsCom
 import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
 import { useMasterData } from "../../../src/storage/MasterDataContext";
 import { loadRevisitPrefill } from "../../../src/utils/farmerPrefill";
+import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal";
+import { ScreenCanvas, ScreenEntranceWash } from "../../components/layout";
+import { VisitEntranceProvider } from "../../context/VisitEntranceContext";
+import { useScreenEntrance } from "../../hooks/useScreenEntrance";
 import { useVisitFormStore } from "../../store/visitFormStore";
-import VisitCreateStep, { VisitCreateStep2, VisitCreateStep3 } from "./create";
+import VisitCreateStep, { VisitCreateStep2, VisitCreateStep3, VisitCreateStep4 } from "./create";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
@@ -60,15 +64,23 @@ export default function VisitFlowShell() {
     fastRevisitStarted.current = true;
     const stub: Farmer = { id: Number(farmerId), name: route.params.prefill.farmer_name || "" };
 
-    void loadRevisitPrefill(stub, { districts, villages })
-      .then((loaded) => {
+    void (async () => {
+      const allowed = await requestGpsForFieldWork();
+      if (!allowed) {
+        fastRevisitStarted.current = false;
+        navigation.setParams({ fastRevisit: undefined });
+        return;
+      }
+
+      try {
+        const loaded = await loadRevisitPrefill(stub, { districts, villages });
         applyRevisitPrefill(loaded);
         setStep(2);
         navigation.setParams({ fastRevisit: undefined });
-      })
-      .catch(() => {
+      } catch {
         fastRevisitStarted.current = false;
-      });
+      }
+    })();
   }, [
     applyRevisitPrefill,
     districts,
@@ -79,6 +91,9 @@ export default function VisitFlowShell() {
     villages
   ]);
 
+  const entranceTick = useScreenEntrance();
+  const entranceKey = `${entranceTick}-${displayedStep}`;
+
   function closeFlow() {
     reset();
     navigation.goBack();
@@ -86,13 +101,25 @@ export default function VisitFlowShell() {
 
   return (
     <View style={[styles.shell, { paddingTop: safeTop }]}>
-      <Animated.View style={[styles.stepPane, { transform: [{ translateX: slideAnim }] }]}>
-        {displayedStep === 1 ? <VisitCreateStep onClose={closeFlow} /> : null}
-        {displayedStep === 2 ? <VisitCreateStep2 onBack={() => setStep(1)} /> : null}
-        {displayedStep === 3 ? (
-          <VisitCreateStep3 onBack={() => setStep(2)} onEditStep2={() => setStep(2)} />
-        ) : null}
-      </Animated.View>
+      <ScreenCanvas />
+      <ScreenEntranceWash replayKey={entranceKey} />
+      <VisitEntranceProvider replayKey={entranceKey}>
+        <Animated.View style={[styles.stepPane, { transform: [{ translateX: slideAnim }] }]}>
+          {displayedStep === 1 ? <VisitCreateStep onClose={closeFlow} /> : null}
+          {displayedStep === 2 ? <VisitCreateStep2 onBack={() => setStep(1)} /> : null}
+          {displayedStep === 3 ? (
+            <VisitCreateStep3 onBack={() => setStep(2)} />
+          ) : null}
+          {displayedStep === 4 ? (
+            <VisitCreateStep4
+              onBack={() => setStep(3)}
+              onEditStep1={() => setStep(1)}
+              onEditStep2={() => setStep(2)}
+              onEditStep3={() => setStep(3)}
+            />
+          ) : null}
+        </Animated.View>
+      </VisitEntranceProvider>
     </View>
   );
 }

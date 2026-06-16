@@ -1,123 +1,111 @@
 import { useEffect, useRef, useState } from "react";
-import { Animated, Easing, Image, StyleSheet, Text, View } from "react-native";
-import Svg, { Circle } from "react-native-svg";
-import { LOGO_IMAGE, BRAND_COLORS } from "../../src/config/brand";
+import { Animated, Easing, Image, StyleSheet, Text, View, type ViewStyle } from "react-native";
+import Svg, { Ellipse, Path } from "react-native-svg";
+import { LOGO_SIZES } from "../../src/brand/logoSizing";
+import { BRAND, LOGO_IMAGE, BRAND_COLORS } from "../../src/config/brand";
+import { Colors } from "../lib/theme";
 import { FONTS } from "../../src/theme/fonts";
 
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const LOGO_DIM = LOGO_SIZES.homeHeader;
+const MESSAGES = ["Loading…", "Preparing your field day…", "Syncing records…", "Almost ready…"];
 
-const MESSAGES = ["Loading…", "Please wait…", "Syncing data…", "Almost ready…"];
-const CIRCUMFERENCE = 239;
-const RING_R = 38;
-const RING_SIZE = 88;
+type Props = {
+  fullScreen?: boolean;
+  style?: ViewStyle;
+};
 
-export function KavyaLoader() {
-  const scale = useRef(new Animated.Value(1)).current;
-  const opacity = useRef(new Animated.Value(0.7)).current;
-  const rotation = useRef(new Animated.Value(0)).current;
-  const dashOffset = useRef(new Animated.Value(CIRCUMFERENCE)).current;
-  const dot1 = useRef(new Animated.Value(0.3)).current;
-  const dot2 = useRef(new Animated.Value(0.3)).current;
-  const dot3 = useRef(new Animated.Value(0.3)).current;
+export function KavyaLoader({ fullScreen = false, style }: Props) {
+  const seedPulse = useRef(new Animated.Value(1)).current;
+  const sproutGrow = useRef(new Animated.Value(0)).current;
+  const sproutSway = useRef(new Animated.Value(0)).current;
+  const soilGlow = useRef(new Animated.Value(0.35)).current;
   const textOpacity = useRef(new Animated.Value(1)).current;
   const [msgIndex, setMsgIndex] = useState(0);
 
   useEffect(() => {
     Animated.loop(
-      Animated.parallel([
-        Animated.sequence([
-          Animated.timing(scale, { toValue: 1.07, duration: 900, useNativeDriver: true }),
-          Animated.timing(scale, { toValue: 1, duration: 900, useNativeDriver: true })
-        ]),
-        Animated.sequence([
-          Animated.timing(opacity, { toValue: 1, duration: 900, useNativeDriver: true }),
-          Animated.timing(opacity, { toValue: 0.7, duration: 900, useNativeDriver: true })
-        ])
+      Animated.sequence([
+        Animated.timing(seedPulse, { toValue: 1.06, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(seedPulse, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
       ])
-    ).start();
-
-    Animated.loop(
-      Animated.timing(rotation, {
-        toValue: 1,
-        duration: 1800,
-        easing: Easing.linear,
-        useNativeDriver: true
-      })
     ).start();
 
     Animated.loop(
       Animated.sequence([
-        Animated.timing(dashOffset, {
-          toValue: 0,
-          duration: 1200,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false
-        }),
-        Animated.timing(dashOffset, {
-          toValue: CIRCUMFERENCE,
-          duration: 1200,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false
-        })
+        Animated.timing(sproutGrow, { toValue: 1, duration: 1400, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(sproutGrow, { toValue: 0.15, duration: 1100, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
       ])
     ).start();
 
-    const dotAnim = (dot: Animated.Value, delay: number) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(delay),
-          Animated.timing(dot, { toValue: 1, duration: 400, useNativeDriver: true }),
-          Animated.timing(dot, { toValue: 0.3, duration: 400, useNativeDriver: true })
-        ])
-      );
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(sproutSway, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(sproutSway, { toValue: -1, duration: 1600, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
+      ])
+    ).start();
 
-    dotAnim(dot1, 0).start();
-    dotAnim(dot2, 200).start();
-    dotAnim(dot3, 400).start();
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(soilGlow, { toValue: 0.7, duration: 1200, useNativeDriver: true }),
+        Animated.timing(soilGlow, { toValue: 0.35, duration: 1200, useNativeDriver: true })
+      ])
+    ).start();
 
     const interval = setInterval(() => {
-      Animated.timing(textOpacity, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+      Animated.timing(textOpacity, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => {
         setMsgIndex((i) => (i + 1) % MESSAGES.length);
-        Animated.timing(textOpacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+        Animated.timing(textOpacity, { toValue: 1, duration: 180, useNativeDriver: true }).start();
       });
-    }, 900);
+    }, 2400);
 
     return () => clearInterval(interval);
-  }, [dashOffset, dot1, dot2, dot3, opacity, rotation, scale, textOpacity]);
+  }, [seedPulse, soilGlow, sproutGrow, sproutSway, textOpacity]);
 
-  const spin = rotation.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
+  const sproutScale = sproutGrow.interpolate({ inputRange: [0, 1], outputRange: [0.2, 1] });
+  const sproutRotate = sproutSway.interpolate({ inputRange: [-1, 1], outputRange: ["-8deg", "8deg"] });
 
   return (
-    <View style={styles.wrap}>
-      <Animated.View style={{ transform: [{ scale }, { rotate: spin }], opacity }}>
-        <View style={styles.ringBox}>
-          <Svg width={RING_SIZE} height={RING_SIZE} style={StyleSheet.absoluteFill}>
-            <AnimatedCircle
-              cx={RING_SIZE / 2}
-              cy={RING_SIZE / 2}
-              r={RING_R}
-              stroke={BRAND_COLORS.primary}
-              strokeWidth={2}
-              strokeLinecap="round"
-              fill="none"
-              strokeDasharray={`${CIRCUMFERENCE} ${CIRCUMFERENCE}`}
-              strokeDashoffset={dashOffset}
-              rotation={-90}
-              origin={`${RING_SIZE / 2}, ${RING_SIZE / 2}`}
+    <View style={[styles.wrap, fullScreen && styles.wrapFull, style]}>
+      {LOGO_IMAGE ? (
+        <Image source={LOGO_IMAGE} style={styles.logo} resizeMode="contain" accessibilityLabel="Clinic logo" />
+      ) : null}
+
+      <Text style={styles.appName} numberOfLines={1}>
+        {BRAND.appName}
+      </Text>
+
+      <View style={styles.seedStage}>
+        <Animated.View style={[styles.soilRing, { opacity: soilGlow }]} />
+        <Animated.View style={{ transform: [{ scale: seedPulse }] }}>
+          <Svg width={72} height={56} viewBox="0 0 72 56">
+            <Ellipse cx={36} cy={38} rx={22} ry={14} fill="#8B6914" opacity={0.92} />
+            <Ellipse cx={36} cy={36} rx={20} ry={12} fill="#A67C00" />
+            <Ellipse cx={30} cy={34} rx={6} ry={3} fill="#C9A227" opacity={0.45} />
+          </Svg>
+        </Animated.View>
+        <Animated.View
+          style={[
+            styles.sprout,
+            {
+              opacity: sproutGrow,
+              transform: [{ scaleY: sproutScale }, { rotate: sproutRotate }]
+            }
+          ]}
+        >
+          <Svg width={40} height={48} viewBox="0 0 40 48">
+            <Path d="M20 44V22" stroke={BRAND_COLORS.primary} strokeWidth={2.5} strokeLinecap="round" />
+            <Path
+              d="M20 26C14 22 8 18 6 12C12 16 17 20 20 26Z"
+              fill={BRAND_COLORS.primary}
+              opacity={0.9}
+            />
+            <Path
+              d="M20 20C26 16 32 12 34 8C28 14 23 17 20 20Z"
+              fill={BRAND_COLORS.secondary}
+              opacity={0.85}
             />
           </Svg>
-          <View style={styles.logoCircle}>
-            {LOGO_IMAGE ? (
-              <Image source={LOGO_IMAGE} style={styles.logo} resizeMode="contain" />
-            ) : null}
-          </View>
-        </View>
-      </Animated.View>
-
-      <View style={styles.dots}>
-        {[dot1, dot2, dot3].map((dot, i) => (
-          <Animated.View key={i} style={[styles.dot, { opacity: dot, backgroundColor: BRAND_COLORS.primary }]} />
-        ))}
+        </Animated.View>
       </View>
 
       <Animated.Text style={[styles.message, { opacity: textOpacity }]}>{MESSAGES[msgIndex]}</Animated.Text>
@@ -128,40 +116,50 @@ export function KavyaLoader() {
 const styles = StyleSheet.create({
   wrap: {
     alignItems: "center",
-    gap: 14,
-    paddingVertical: 48
+    gap: 10,
+    paddingVertical: 40
   },
-  ringBox: {
-    alignItems: "center",
-    height: RING_SIZE,
+  wrapFull: {
+    flex: 1,
     justifyContent: "center",
-    width: RING_SIZE
-  },
-  logoCircle: {
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 28,
-    height: 56,
-    justifyContent: "center",
-    width: 56
+    paddingVertical: 0
   },
   logo: {
-    height: 36,
-    width: 36
+    height: LOGO_DIM,
+    width: LOGO_DIM
   },
-  dots: {
-    flexDirection: "row",
-    gap: 6
+  appName: {
+    color: Colors.text1,
+    fontFamily: FONTS.bold,
+    fontSize: 17,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+    marginTop: 4
   },
-  dot: {
-    borderRadius: 3,
-    height: 6,
-    width: 6
+  seedStage: {
+    alignItems: "center",
+    height: 88,
+    justifyContent: "flex-end",
+    marginTop: 8,
+    width: 88
+  },
+  soilRing: {
+    backgroundColor: BRAND_COLORS.primarySoft,
+    borderRadius: 44,
+    bottom: 0,
+    height: 72,
+    position: "absolute",
+    width: 72
+  },
+  sprout: {
+    bottom: 18,
+    position: "absolute"
   },
   message: {
-    color: "#94a3b8",
+    color: Colors.text3,
     fontFamily: FONTS.medium,
-    fontSize: 12,
-    fontWeight: "500"
+    fontSize: 13,
+    fontWeight: "500",
+    marginTop: 4
   }
 });

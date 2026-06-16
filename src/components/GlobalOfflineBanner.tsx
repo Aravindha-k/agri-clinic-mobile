@@ -2,7 +2,7 @@ import NetInfo from "@react-native-community/netinfo";
 import { useEffect, useRef, useState } from "react";
 import { Animated, StyleSheet, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ENT } from "../theme/enterprise";
+import { Colors } from "../../mobile/lib/theme";
 
 export function GlobalOfflineBanner() {
   const insets = useSafeAreaInsets();
@@ -37,8 +37,8 @@ export function GlobalOfflineBanner() {
 
 const styles = StyleSheet.create({
   banner: {
-    backgroundColor: ENT.warningSoft,
-    borderBottomColor: ENT.border,
+    backgroundColor: Colors.amberBg,
+    borderBottomColor: Colors.border,
     borderBottomWidth: 1,
     left: 0,
     paddingBottom: 10,
@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
     zIndex: 9998
   },
   text: {
-    color: ENT.text,
+    color: Colors.text1,
     fontSize: 12,
     fontWeight: "600",
     textAlign: "center"

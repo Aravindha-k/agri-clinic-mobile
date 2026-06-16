@@ -11,16 +11,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 import { BRAND, LOGO_IMAGE, BRAND_COLORS } from "../../config/brand";
-import GradientBackground from "../glass/GradientBackground";
-import DualRings from "../cinematic/DualRings";
-import ScanLine from "../cinematic/ScanLine";
-import { NeonProgressBar } from "../cinematic/NeonProgressBar";
-import { GE } from "../../theme/glassEmerald";
+import { FlatProgressBar } from "../../../mobile/components/ui/FlatProgressBar";
+import { Colors } from "../../../mobile/lib/theme";
 import { SplashExtraEffects } from "./SplashExtraEffects";
 
 export const SPLASH_INTRO_MS = BRAND.splashDurationMs ?? 7500;
 
-const BG = GE.g1;
+const BG = Colors.brand700;
 const ACCENT = BRAND_COLORS.primary;
 const ACCENT_SOFT = BRAND_COLORS.primarySoft;
 const LOGO_CIRCLE = 148;
@@ -411,7 +408,6 @@ export function AnimatedSplashScreen({ onFinish, onReady }: Props) {
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }} onLayout={() => onReady?.()}>
-      <GradientBackground />
       <StatusBar hidden />
 
       <View style={{ ...StyleSheetAbsolute, backgroundColor: BG }} pointerEvents="none">
@@ -438,10 +434,6 @@ export function AnimatedSplashScreen({ onFinish, onReady }: Props) {
                 transform: [{ scaleX: morphScaleX }, { scaleY: morphScaleY }]
               }}
             />
-            <View style={{ position: "absolute" }}>
-              <DualRings size={170} />
-            </View>
-
             <Animated.View
               style={{
                 alignItems: "center",
@@ -465,7 +457,6 @@ export function AnimatedSplashScreen({ onFinish, onReady }: Props) {
                   width: LOGO_CIRCLE
                 }}
               >
-                <ScanLine />
                 {LOGO_IMAGE ? (
                   <Animated.View
                     style={{
@@ -560,7 +551,7 @@ export function AnimatedSplashScreen({ onFinish, onReady }: Props) {
           }}
         >
           <View style={{ width: 120, marginTop: 0 }}>
-            <NeonProgressBar progress={loadProgress} height={2} trackColor="rgba(255,255,255,0.1)" />
+            <FlatProgressBar progress={loadProgress} height={2} trackColor="rgba(255,255,255,0.1)" color={ACCENT} />
           </View>
 
           <View style={{ alignItems: "center", flexDirection: "row", gap: 6, marginTop: 14 }}>

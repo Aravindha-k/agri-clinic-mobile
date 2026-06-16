@@ -1,4 +1,4 @@
-import type { Region } from "react-native-maps";
+import type { MapRegion } from "../types/map";
 
 type MapDiagnosticPayload = {
   permissionResolved?: boolean;
@@ -8,7 +8,7 @@ type MapDiagnosticPayload = {
   rawLongitude?: string | number | null;
   sanitizedLatitude?: number | null;
   sanitizedLongitude?: number | null;
-  region?: Region | null;
+  region?: MapRegion | null;
   mapReady?: boolean;
   canRenderMap?: boolean;
   markerCount?: number;

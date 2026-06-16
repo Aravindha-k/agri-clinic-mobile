@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
-import { ENT_SECTION_LABEL } from "../../src/theme/enterprise";
+import { SECTION_LABEL } from "../lib/sectionLabel";
 
 type Props = {
   title: string;
@@ -9,7 +9,7 @@ type Props = {
 export function SectionLabel({ title, first }: Props) {
   return (
     <View style={[styles.wrap, first && styles.wrapFirst]}>
-      <Text style={[styles.label, ENT_SECTION_LABEL]}>{title.toUpperCase()}</Text>
+      <Text style={[styles.label, SECTION_LABEL]}>{title.toUpperCase()}</Text>
     </View>
   );
 }

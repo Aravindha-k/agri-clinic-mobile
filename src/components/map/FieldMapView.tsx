@@ -1,43 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type MapViewType from "react-native-maps";
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
-import MapView, { Circle, Marker, Polyline, Region } from "react-native-maps";
+import MapView, { Circle, Marker, Polyline } from "react-native-maps";
 import { useTheme } from "../../theme";
+import type { MapRegion } from "../../types/map";
 import { hasValidMapCoords, parseMapCoord } from "../../utils/mapCoords";
 import { logMapDiagnostics } from "../../utils/mapDebug";
 import { safeMarkerPinColor } from "../../utils/mapMarker";
 import { sanitizeRegion } from "../../utils/mapRegion";
 import { MapErrorBoundary } from "./MapErrorBoundary";
+import type { FieldMapViewProps, MapCoordinate, MapPin } from "./FieldMapView.types";
 
-export type MapPin = {
-  id: string;
-  lat: number;
-  lng: number;
-  title?: string;
-  description?: string;
-  pinColor?: string;
-};
+export type { MapCoordinate, MapPin } from "./FieldMapView.types";
 
-export type MapCoordinate = { latitude: number; longitude: number };
-
-type Props = {
-  screenName?: string;
-  height: number;
-  width: number;
-  region: Region;
-  markers?: MapPin[];
-  route?: MapCoordinate[];
-  fitCoordinates?: MapCoordinate[];
-  fitEdgePadding?: { top: number; right: number; bottom: number; left: number };
-  showsUserLocation?: boolean;
-  followsUserLocation?: boolean;
-  loading?: boolean;
-  permissionResolved?: boolean;
-  locationDenied?: boolean;
-  /** Required when showsUserLocation is true. */
-  locationGranted?: boolean;
-  emptyMessage?: string;
-  accuracyCircle?: { center: MapCoordinate; radiusMeters: number };
+type Props = FieldMapViewProps & {
   mapRef?: RefObject<MapViewType | null>;
 };
 
@@ -241,14 +217,6 @@ export function FieldMapView({
       : loading || !permissionResolved
         ? "Loading map…"
         : MAP_FALLBACK_MESSAGE);
-
-  if (Platform.OS === "web") {
-    return (
-      <View style={[styles.shell, { height: mapHeight, width: shellWidth, backgroundColor: theme.colors.cardMuted }]}>
-        <Text style={styles.placeholderText}>Map available on Android/iOS app</Text>
-      </View>
-    );
-  }
 
   return (
     <MapErrorBoundary height={mapHeight} screenName={screenName} fallbackMessage={placeholderMessage}>

@@ -2,15 +2,15 @@ import { StyleSheet, View } from "react-native";
 import { Colors, Radius } from "../../lib/theme";
 
 type Props = {
-  step: 1 | 2 | 3;
-  /** Final step submit view — all pills complete. */
+  step: 1 | 2 | 3 | 4;
+  /** Review step — all segments complete. */
   allComplete?: boolean;
 };
 
 export function StepIndicator({ step, allComplete }: Props) {
   return (
     <View style={styles.row}>
-      {[1, 2, 3].map((index) => {
+      {[1, 2, 3, 4].map((index) => {
         const done = allComplete || index < step;
         const active = !allComplete && index === step;
         const backgroundColor = done || allComplete ? Colors.brand700 : active ? Colors.brand300 : Colors.border2;

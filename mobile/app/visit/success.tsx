@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -9,14 +9,13 @@ import Animated, {
   withTiming
 } from "react-native-reanimated";
 import { VisitFlowParamList } from "../../../src/navigation/types";
-import { getQueuedVisits } from "../../../src/storage/offlineVisitQueue";
+import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useVisitFormStore } from "../../store/visitFormStore";
 import { GhostButton, PrimaryButton } from "../../components/ui";
-import { ScreenBackground } from "../../../src/components/glass";
-import GlassCard from "../../../src/components/glass/GlassCard";
-import { ENT } from "../../../src/theme/enterprise";
-import { FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
+import { EntranceBlocks } from "../../components/ui/EntranceBlocks";
+import { FlatCard, ScreenEntranceShell } from "../../components/layout";
+import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 
 type Props = NativeStackScreenProps<VisitFlowParamList, "VisitSuccess">;
 
@@ -36,13 +35,13 @@ function AnimatedHeroIcon({ queued }: { queued: boolean }) {
       <View
         style={[
           styles.heroCircle,
-          { backgroundColor: queued ? ENT.warningSoft : ENT.primarySoft }
+          { backgroundColor: queued ? Colors.amberBg : Colors.brand50 }
         ]}
       >
         <Ionicons
           name={queued ? "time-outline" : "checkmark"}
           size={44}
-          color={queued ? ENT.warning : ENT.primary}
+          color={queued ? Colors.amber : Colors.brand700}
         />
       </View>
     </Animated.View>
@@ -75,12 +74,12 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
   } = route.params;
 
   const reset = useVisitFormStore((s) => s.reset);
-  const [pendingCount, setPendingCount] = useState(queued ? 1 : 0);
+  const { pendingCount, refreshQueue } = useOfflineSync();
 
   useEffect(() => {
     if (!queued) return;
-    void getQueuedVisits().then((items) => setPendingCount(items.length));
-  }, [queued]);
+    void refreshQueue();
+  }, [queued, refreshQueue]);
 
   function exitToMain() {
     const root = navigation.getParent();
@@ -88,14 +87,14 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
   }
 
   function goHome() {
-    navigation.getParent()?.navigate("Main", { screen: "Home" });
+    navigation.getParent()?.navigate("Main", { screen: "Today" });
     exitToMain();
   }
 
   function viewVisit() {
     if (!visitId || visitId <= 0) return;
     navigation.getParent()?.navigate("Main", {
-      screen: "Visits",
+      screen: "Work",
       params: { screen: "VisitDetail", params: { id: visitId, fromSubmit: true } }
     });
     exitToMain();
@@ -103,8 +102,8 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
 
   function viewPendingVisits() {
     navigation.getParent()?.navigate("Main", {
-      screen: "Visits",
-      params: { screen: "VisitsList" }
+      screen: "Work",
+      params: { screen: "WorkHome", params: { segment: "visits" } }
     });
     exitToMain();
   }
@@ -124,14 +123,15 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
   const gpsLabel = gpsConfirmed ? t("visitFlow.gpsConfirmed") : t("visitFlow.gpsNotCaptured");
 
   return (
-    <View style={styles.screen}>
-      <ScreenBackground />
+    <ScreenEntranceShell style={styles.screen}>
+      {(entranceTick) => (
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.body}
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
+        <EntranceBlocks replayKey={entranceTick} startStep={0} variant="card">
         <AnimatedHeroIcon queued={Boolean(queued)} />
 
         {queued ? (
@@ -150,7 +150,7 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
             {visitId > 0 ? (
               <Text style={styles.visitId}>{t("visitFlow.visitNumber", { id: visitId })}</Text>
             ) : null}
-            <GlassCard style={styles.summaryGlow}>
+            <FlatCard style={styles.summaryGlow}>
             <View style={styles.summaryCard}>
               <SummaryLine label={t("visitFlow.farmerSummary")} value={farmerLabel} />
               <SummaryLine label={t("visitFlow.cropSummary")} value={cropLabel} />
@@ -158,7 +158,7 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
               {adviceLabel ? <SummaryLine label={t("visitFlow.adviceSummary")} value={adviceLabel} /> : null}
               <SummaryLine label={t("visitFlow.gpsSummary")} value={gpsLabel} />
             </View>
-            </GlassCard>
+            </FlatCard>
             {evidenceWarning ? <Text style={styles.evidenceWarn}>{evidenceWarning}</Text> : null}
           </>
         )}
@@ -176,14 +176,16 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
             </Pressable>
           ) : null}
         </View>
+        </EntranceBlocks>
       </ScrollView>
-    </View>
+      )}
+    </ScreenEntranceShell>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: ENT.bg,
+    backgroundColor: Colors.bg,
     flex: 1
   },
   scrollView: {
@@ -211,27 +213,27 @@ const styles = StyleSheet.create({
     width: 80
   },
   title: {
-    color: ENT.text,
+    color: Colors.text1,
     fontSize: FontSize.h1,
     fontWeight: FontWeight.bold,
     marginTop: 16,
     textAlign: "center"
   },
   subtitle: {
-    color: ENT.textSecondary,
+    color: Colors.text3,
     fontSize: FontSize.md,
     marginTop: 8,
     textAlign: "center"
   },
   pendingCount: {
-    color: ENT.warning,
+    color: Colors.amber,
     fontSize: FontSize.md,
     fontWeight: FontWeight.semibold,
     marginTop: 12,
     textAlign: "center"
   },
   visitId: {
-    color: ENT.textMuted,
+    color: Colors.text4,
     fontSize: FontSize.sm,
     marginTop: 6,
     textAlign: "center"
@@ -250,23 +252,23 @@ const styles = StyleSheet.create({
     gap: 10
   },
   summaryLabel: {
-    color: ENT.textSecondary,
+    color: Colors.text3,
     fontSize: FontSize.sm,
     minWidth: 64
   },
   summaryValue: {
-    color: ENT.text,
+    color: Colors.text1,
     flex: 1,
     fontSize: FontSize.md,
     fontWeight: FontWeight.semibold
   },
   evidenceWarn: {
     alignSelf: "stretch",
-    backgroundColor: ENT.warningSoft,
-    borderColor: ENT.border,
+    backgroundColor: Colors.amberBg,
+    borderColor: Colors.border,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    color: ENT.warning,
+    color: Colors.amber,
     fontSize: FontSize.sm,
     marginTop: 12,
     padding: 12,
@@ -285,7 +287,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10
   },
   homeLinkText: {
-    color: ENT.primary,
+    color: Colors.brand700,
     fontSize: FontSize.md,
     fontWeight: FontWeight.semibold
   }

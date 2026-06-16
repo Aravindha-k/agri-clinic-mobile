@@ -31,7 +31,7 @@ module.exports = () => ({
   },
   android: {
     package: "com.kavya.agriclinic",
-    versionCode: 1,
+    versionCode: 2,
     permissions: [
       "ACCESS_COARSE_LOCATION",
       "ACCESS_FINE_LOCATION",

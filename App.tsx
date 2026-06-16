@@ -15,6 +15,7 @@ import { initOfflineSync } from "./mobile/lib/offlineSyncManager";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import { AppErrorBoundary } from "./src/components/AppErrorBoundary";
+import { WebMobileFrame } from "./src/components/WebMobileFrame";
 import type { Metrics } from "react-native-safe-area-context";
 import { AuthProvider } from "./src/storage/AuthContext";
 import { EmployeeProvider } from "./src/storage/EmployeeContext";
@@ -28,11 +29,9 @@ import { TrackingProvider } from "./src/storage/TrackingContext";
 import { GpsComplianceProvider } from "./src/storage/GpsComplianceContext";
 import { GpsComplianceShell } from "./src/components/GpsComplianceShell";
 import { GpsWorkdayGate } from "./src/components/GpsWorkdayGate";
-import { WorkdayInactiveBanner } from "./src/components/WorkdayInactiveBanner";
 import { NotificationBridge } from "./src/components/NotificationBridge";
 import { NotificationsProvider } from "./src/storage/NotificationsContext";
 import { LanOfflineToast } from "./mobile/components/ui/LanOfflineToast";
-import { GlobalOfflineBanner } from "./src/components/GlobalOfflineBanner";
 import { ToastHost } from "./src/components/ui/ToastHost";
 import { ToastProvider } from "./src/storage/ToastContext";
 import { ThemeProvider } from "./src/theme";
@@ -67,7 +66,6 @@ function AppShell() {
   return (
     <>
       <AppStatusBar />
-      <GlobalOfflineBanner />
       <LanOfflineToast />
       <ToastHost />
       <RootNavigator />
@@ -95,8 +93,9 @@ export default function App() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider initialMetrics={initialWindowMetrics ?? FALLBACK_METRICS}>
+    <WebMobileFrame>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider initialMetrics={initialWindowMetrics ?? FALLBACK_METRICS}>
         <AppErrorBoundary>
           <ThemeProvider>
             <AuthProvider>
@@ -113,7 +112,6 @@ export default function App() {
                                   <ToastProvider>
                                     <NotificationBridge />
                                     <GpsComplianceShell>
-                                      <WorkdayInactiveBanner />
                                       <GpsWorkdayGate>
                                         <AppShell />
                                       </GpsWorkdayGate>
@@ -132,7 +130,8 @@ export default function App() {
             </AuthProvider>
           </ThemeProvider>
         </AppErrorBoundary>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </WebMobileFrame>
   );
 }

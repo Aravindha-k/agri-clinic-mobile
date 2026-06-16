@@ -48,7 +48,9 @@ export type VisitSyncProgress = {
 const VISIT_FLUSH_CONCURRENCY = 3;
 const BATCH_DELAY_MS = 500;
 const MAX_VISIT_ATTEMPTS = 3;
-const GPS_FLUSH_THRESHOLD = 50;
+const GPS_FLUSH_THRESHOLD = 1;
+const GPS_AUTO_FLUSH_DEBOUNCE_MS = 1500;
+const GPS_BACKGROUND_FLUSH_INTERVAL_MS = 45_000;
 
 const LEGACY_VISITS_KEY = "pending_visits";
 const LEGACY_GPS_KEY = "pending_gps_v1";
@@ -60,6 +62,8 @@ type SyncAllResult = {
 };
 
 let syncAllInFlight: Promise<SyncAllResult> | null = null;
+let gpsAutoFlushTimer: ReturnType<typeof setTimeout> | null = null;
+let gpsBackgroundFlushTimer: ReturnType<typeof setInterval> | null = null;
 
 type FailedVisitNotifier = (visit: PendingVisit) => void;
 let notifyFailedVisit: FailedVisitNotifier = (visit) => {
@@ -110,6 +114,36 @@ export function refreshSyncStoreCounts() {
   const gps = readGpsQueue();
   const { pending, failed } = countVisitStates(visits);
   useSyncStore.getState().setPending(pending, gps.length, failed);
+}
+
+async function isDeviceOnline(): Promise<boolean> {
+  const state = await NetInfo.fetch();
+  return Boolean(state.isConnected && state.isInternetReachable !== false);
+}
+
+function scheduleGpsAutoFlush() {
+  if (gpsAutoFlushTimer) {
+    clearTimeout(gpsAutoFlushTimer);
+  }
+  gpsAutoFlushTimer = setTimeout(() => {
+    gpsAutoFlushTimer = null;
+    void (async () => {
+      if (!(await isDeviceOnline())) return;
+      const pending = readGpsQueue().length;
+      if (pending > 0) {
+        await flushGPSQueue();
+      }
+    })();
+  }, GPS_AUTO_FLUSH_DEBOUNCE_MS);
+}
+
+/** Flush queued route points when online — no employee action required. */
+export async function autoFlushPendingGps(): Promise<{ synced: number }> {
+  if (!(await isDeviceOnline())) {
+    refreshSyncStoreCounts();
+    return { synced: 0 };
+  }
+  return flushGPSQueue();
 }
 
 async function migrateLegacyQueues() {
@@ -263,9 +297,7 @@ export function addGPSPoint(point: PendingGPSPoint) {
   queue.push(point);
   writeGpsQueue(queue);
   refreshSyncStoreCounts();
-  if (queue.length >= GPS_FLUSH_THRESHOLD) {
-    void flushGPSQueue().catch(() => undefined);
-  }
+  scheduleGpsAutoFlush();
 }
 
 export function getPendingVisits(): PendingVisit[] {
@@ -437,7 +469,10 @@ export async function syncAll(): Promise<SyncAllResult> {
 export function initOfflineSync() {
   if (netInfoUnsubscribe) return netInfoUnsubscribe;
 
-  void migrateLegacyQueues().then(() => refreshSyncStoreCounts());
+  void migrateLegacyQueues().then(() => {
+    refreshSyncStoreCounts();
+    void autoFlushPendingGps();
+  });
 
   netInfoUnsubscribe = NetInfo.addEventListener((state) => {
     const online = Boolean(state.isConnected && state.isInternetReachable !== false);
@@ -446,8 +481,24 @@ export function initOfflineSync() {
     }
   });
 
+  if (!gpsBackgroundFlushTimer) {
+    gpsBackgroundFlushTimer = setInterval(() => {
+      if (readGpsQueue().length > 0) {
+        void autoFlushPendingGps();
+      }
+    }, GPS_BACKGROUND_FLUSH_INTERVAL_MS);
+  }
+
   return () => {
     netInfoUnsubscribe?.();
     netInfoUnsubscribe = null;
+    if (gpsBackgroundFlushTimer) {
+      clearInterval(gpsBackgroundFlushTimer);
+      gpsBackgroundFlushTimer = null;
+    }
+    if (gpsAutoFlushTimer) {
+      clearTimeout(gpsAutoFlushTimer);
+      gpsAutoFlushTimer = null;
+    }
   };
 }

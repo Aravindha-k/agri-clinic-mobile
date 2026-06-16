@@ -1,21 +1,11 @@
 import { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
-import { useAuth } from "../storage/AuthContext";
-import { GpsComplianceBanner } from "./GpsComplianceBanner";
 
-/** Global GPS status banner (does not block navigation). */
+/** Pass-through shell — GPS prompts only when starting workday or submitting visits. */
 export function GpsComplianceShell({ children }: { children: ReactNode }) {
-  const { isAuthenticated } = useAuth();
-
-  return (
-    <View style={styles.root}>
-      {isAuthenticated ? <GpsComplianceBanner /> : null}
-      <View style={styles.body}>{children}</View>
-    </View>
-  );
+  return <View style={styles.root}>{children}</View>;
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  body: { flex: 1 }
+  root: { flex: 1 }
 });

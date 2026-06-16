@@ -1,6 +1,7 @@
 export {
   addGPSPoint,
   addToVisitQueue,
+  autoFlushPendingGps,
   flushGPSQueue,
   flushVisitQueue,
   getPendingVisits,

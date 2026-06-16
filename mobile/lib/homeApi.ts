@@ -142,6 +142,23 @@ function buildFollowUpsFromVisits(visits: Visit[]): DashboardFollowUp[] {
   return items.sort((a, b) => b.days_overdue - a.days_overdue);
 }
 
+export function countVillagesFromVisitsToday(visits: Visit[]): number {
+  const today = new Date();
+  const villages = new Set<string>();
+  for (const visit of visits) {
+    if (!isSameVisitLocalDay(visit, today)) continue;
+    const name =
+      visit.village_name?.trim() ||
+      visit.farmer_village?.trim() ||
+      (visit.farmer && typeof visit.farmer === "object"
+        ? String((visit.farmer as { village_name?: string }).village_name ?? "").trim()
+        : "") ||
+      String(visit.village ?? "").trim();
+    if (name) villages.add(name.toLowerCase());
+  }
+  return villages.size;
+}
+
 function buildDashboardFromVisits(visits: Visit[]): DashboardData {
   const today = new Date();
   const todayVisits = visits.filter((v) => isSameVisitLocalDay(v, today));

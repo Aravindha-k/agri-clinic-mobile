@@ -1,20 +1,37 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { useI18n } from "../../../src/i18n/I18nContext";
-import { FONTS } from "../../../src/theme/fonts";
-import { ENT, ENT_CARD_SHADOW } from "../../../src/theme/enterprise";
-import type { FarmerWorkflowMeta } from "../../lib/workQueue";
+import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
+import type { FarmerWorkflowMeta, VisitPriorityLabel } from "../../lib/workQueue";
 import type { MobileFarmer } from "../../lib/farmersApi";
-import { avatarInitials } from "../../lib/avatarColor";
 import { farmerVisitCount } from "../../lib/farmerStatus";
 import { buildFarmerWorkflowMeta } from "../../lib/workQueue";
+import { FlatCard } from "../layout/FlatCard";
 
-function FarmerAvatar({ name }: { name: string }) {
-  return (
-    <View style={styles.avatar}>
-      <Text style={styles.avatarText}>{avatarInitials(name)}</Text>
-    </View>
-  );
+function priorityStyles(label: VisitPriorityLabel) {
+  switch (label) {
+    case "Overdue":
+      return { bg: Colors.redBg, text: Colors.redText, border: Colors.red };
+    case "Today":
+      return { bg: Colors.amberBg, text: Colors.amberText, border: Colors.amber };
+    default:
+      return { bg: Colors.blueBg, text: Colors.blueText, border: Colors.blue };
+  }
+}
+
+function priorityLabelKey(label: VisitPriorityLabel) {
+  switch (label) {
+    case "Overdue":
+      return "work.priorityUrgent";
+    case "Today":
+      return "work.priorityToday";
+    default:
+      return "work.priorityRoutine";
+  }
+}
+
+function farmerCropLabel(farmer: MobileFarmer) {
+  return farmer.list_crop_name?.trim() || farmer.crop_name?.trim() || "";
 }
 
 type Props = {
@@ -30,10 +47,13 @@ export function FarmerDirectoryCard({ farmer, workflow, onPress, onCall, onMap, 
   const { t } = useI18n();
   const meta = workflow ?? buildFarmerWorkflowMeta(farmer);
   const village = farmer.village_name || farmer.village;
+  const crop = farmerCropLabel(farmer);
   const phone = farmer.phone?.trim() || "";
   const neverVisited = farmerVisitCount(farmer) === 0;
   const canCall = Boolean(phone);
   const displayName = farmer.name || t("visitFlow.farmer");
+  const priority = priorityStyles(meta.priorityLabel);
+  const lastVisitLabel = meta.lastVisitDateLabel || t("work.neverVisited");
 
   function handleCall() {
     if (onCall) {
@@ -49,169 +69,171 @@ export function FarmerDirectoryCard({ farmer, workflow, onPress, onCall, onMap, 
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      style={({ pressed }) => [styles.card, pressed && { opacity: 0.98 }]}
+      style={({ pressed }) => [styles.wrap, pressed && { opacity: 0.98 }]}
     >
-      <View style={styles.topRow}>
-        <FarmerAvatar name={displayName} />
-        <View style={styles.info}>
-          <Text style={styles.name} numberOfLines={1}>
-            {displayName}
-          </Text>
-          {village ? (
-            <View style={styles.locationRow}>
-              <Ionicons name="location-outline" size={10} color={ENT.textSecondary} />
-              <Text style={styles.location} numberOfLines={1}>
-                {village}
+      <FlatCard style={styles.card}>
+        <View style={styles.topBlock}>
+          <View style={styles.nameRow}>
+            <Text style={styles.name} numberOfLines={1}>
+              {displayName}
+            </Text>
+            <View style={[styles.priorityBadge, { backgroundColor: priority.bg, borderColor: priority.border }]}>
+              <Text style={[styles.priorityText, { color: priority.text }]}>
+                {t(priorityLabelKey(meta.priorityLabel))}
               </Text>
             </View>
-          ) : null}
-          {meta.lastVisitDateLabel ? (
-            <Text style={styles.lastVisit} numberOfLines={1}>
-              {t("visitFlow.lastVisit", { date: meta.lastVisitDateLabel })}
+          </View>
+
+          {village ? (
+            <Text style={styles.village} numberOfLines={1}>
+              {village}
             </Text>
           ) : null}
-        </View>
-      </View>
 
-      <View style={styles.buttonRow}>
-        <Pressable
-          onPress={(e) => {
-            e.stopPropagation?.();
-            handleCall();
-          }}
-          disabled={!canCall}
-          style={({ pressed }) => [styles.outlineBtn, !canCall && styles.btnDisabled, pressed && canCall && { opacity: 0.88 }]}
-        >
-          <Ionicons name="call-outline" size={13} color={ENT.textSecondary} />
-          <Text style={styles.outlineBtnText}>{t("farmers.call")}</Text>
-        </Pressable>
+          {crop ? (
+            <Text style={styles.crop} numberOfLines={1}>
+              {crop}
+            </Text>
+          ) : null}
 
-        <Pressable
-          onPress={(e) => {
-            e.stopPropagation?.();
-            onMap();
-          }}
-          style={({ pressed }) => [styles.outlineBtn, pressed && { opacity: 0.88 }]}
-        >
-          <Ionicons name="map-outline" size={13} color={ENT.textSecondary} />
-          <Text style={styles.outlineBtnText}>{t("farmers.map")}</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={(e) => {
-            e.stopPropagation?.();
-            onVisit();
-          }}
-          style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.92 }]}
-        >
-          <Ionicons name="add-circle-outline" size={13} color="#fff" />
-          <Text style={styles.primaryBtnText}>
-            {neverVisited ? t("farmers.firstVisit") : t("farmers.startRevisit")}
+          <Text style={styles.lastVisit} numberOfLines={1}>
+            {t("work.lastVisitLabel", { date: lastVisitLabel })}
           </Text>
-        </Pressable>
-      </View>
+        </View>
+
+        <View style={styles.buttonRow}>
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation?.();
+              handleCall();
+            }}
+            disabled={!canCall}
+            style={({ pressed }) => [
+              styles.outlineBtn,
+              !canCall && styles.btnDisabled,
+              pressed && canCall && { opacity: 0.88 }
+            ]}
+          >
+            <Ionicons name="call-outline" size={12} color={Colors.text3} />
+            <Text style={styles.outlineBtnText}>{t("farmers.call")}</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation?.();
+              onMap();
+            }}
+            style={({ pressed }) => [styles.outlineBtn, pressed && { opacity: 0.88 }]}
+          >
+            <Ionicons name="map-outline" size={12} color={Colors.text3} />
+            <Text style={styles.outlineBtnText}>{t("farmers.map")}</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation?.();
+              onVisit();
+            }}
+            style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.92 }]}
+          >
+            <Ionicons name="add-circle-outline" size={12} color={Colors.surface} />
+            <Text style={styles.primaryBtnText}>
+              {neverVisited ? t("farmers.firstVisit") : t("work.startVisit")}
+            </Text>
+          </Pressable>
+        </View>
+      </FlatCard>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  wrap: {
+    marginBottom: 8,
+    marginHorizontal: Spacing.lg
+  },
   card: {
-    backgroundColor: ENT.card,
-    borderColor: ENT.border,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: 10,
-    marginHorizontal: 16,
-    padding: 14,
-    ...ENT_CARD_SHADOW
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10
   },
-  topRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 12
-  },
-  avatar: {
-    alignItems: "center",
-    backgroundColor: ENT.primarySoft,
-    borderRadius: 20,
-    height: 40,
-    justifyContent: "center",
-    width: 40
-  },
-  avatarText: {
-    color: ENT.primary,
-    fontFamily: FONTS.extrabold,
-    fontSize: 12,
-    fontWeight: "800"
-  },
-  info: {
-    flex: 1,
+  topBlock: {
     gap: 2,
     minWidth: 0
   },
-  name: {
-    color: ENT.text,
-    fontFamily: FONTS.bold,
-    fontSize: 14,
-    fontWeight: "700"
-  },
-  locationRow: {
+  nameRow: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 4
+    gap: 8
   },
-  location: {
-    color: ENT.textSecondary,
+  name: {
+    color: Colors.text1,
     flex: 1,
-    fontFamily: FONTS.regular,
-    fontSize: 11
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.bold
+  },
+  priorityBadge: {
+    borderRadius: Radius.chip,
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 1
+  },
+  priorityText: {
+    fontSize: 10,
+    fontWeight: FontWeight.semibold
+  },
+  village: {
+    color: Colors.text2,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.medium
+  },
+  crop: {
+    color: Colors.text3,
+    fontSize: FontSize.sm
   },
   lastVisit: {
-    color: ENT.textMuted,
-    fontFamily: FONTS.regular,
-    fontSize: 10.5,
+    color: Colors.text4,
+    fontSize: FontSize.xs,
     marginTop: 2
   },
   buttonRow: {
+    alignItems: "center",
     flexDirection: "row",
-    gap: 8,
-    marginTop: 12
+    gap: 6
   },
   outlineBtn: {
     alignItems: "center",
-    backgroundColor: ENT.bg,
-    borderColor: ENT.border,
-    borderRadius: 9,
+    backgroundColor: Colors.bg,
+    borderColor: Colors.border,
+    borderRadius: Radius.inner,
     borderWidth: 1,
     flex: 1,
     flexDirection: "row",
-    gap: 4,
-    height: 32,
+    gap: 3,
+    height: 28,
     justifyContent: "center"
   },
   outlineBtnText: {
-    color: ENT.textSecondary,
-    fontFamily: FONTS.semibold,
+    color: Colors.text3,
     fontSize: 11,
-    fontWeight: "600"
+    fontWeight: FontWeight.semibold
   },
   btnDisabled: {
     opacity: 0.45
   },
   primaryBtn: {
     alignItems: "center",
-    backgroundColor: ENT.primary,
-    borderRadius: 9,
-    flex: 1.8,
+    backgroundColor: Colors.brand700,
+    borderRadius: Radius.inner,
+    flex: 1.35,
     flexDirection: "row",
-    gap: 4,
-    height: 32,
+    gap: 3,
+    height: 28,
     justifyContent: "center"
   },
   primaryBtnText: {
-    color: ENT.white,
-    fontFamily: FONTS.bold,
+    color: Colors.surface,
     fontSize: 11,
-    fontWeight: "700"
+    fontWeight: FontWeight.bold
   }
 });

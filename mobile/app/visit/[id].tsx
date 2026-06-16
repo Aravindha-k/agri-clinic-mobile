@@ -28,7 +28,10 @@ import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContex
 import { formatDisplayDateTime, visitDisplayIso } from "../../../src/utils/format";
 import { formatVisitPlaceLine } from "../../../src/utils/visitStatus";
 import { resolveVisitFarmer } from "../../../src/utils/visitFarmer";
-import { Avatar, EmptyState, GhostButton, PrimaryButton, SectionHeader, Skeleton, StatusChip } from "../../components/ui";
+import { useI18n } from "../../../src/i18n/I18nContext";
+import { ScreenLoader } from "../../components/layout/ScreenLoader";
+import { ScreenEntranceShell } from "../../components/layout";
+import { FadeInSection, entranceStagger } from "../../components/ui/FadeInSection";
 import {
   cropFromVisit,
   problemCategoryFromVisit
@@ -45,8 +48,11 @@ import {
   resolveMediaUrl,
   severityLabel,
   severityVariant,
-  uploadVisitPhoto
+  uploadVisitPhoto,
+  visitObservationText,
+  visitRecommendationText
 } from "../../lib/visitDetailApi";
+import { Avatar, EmptyState, GhostButton, PrimaryButton, SectionHeader, StatusChip } from "../../components/ui";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 
 type Props = NativeStackScreenProps<VisitsStackParamList, "VisitDetail">;
@@ -73,6 +79,7 @@ function openMaps(lat: string | number, lng: string | number) {
 
 export default function VisitDetailScreen({ route, navigation }: Props) {
   useSecureScreen();
+  const { t } = useI18n();
   const visitId = route.params.id;
   const fromSubmit = route.params.fromSubmit === true;
   const { width } = useWindowDimensions();
@@ -94,6 +101,8 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   const [draftFieldNotes, setDraftFieldNotes] = useState("");
+  const [draftObservation, setDraftObservation] = useState("");
+  const [draftRecommendation, setDraftRecommendation] = useState("");
 
   const photoWidth = (width - Spacing.screen * 2 - 10) / 2;
   const imageUrls = useMemo(
@@ -112,6 +121,8 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
         setVisit(row);
         const parsed = parseFieldNotes(row.field_notes);
         setDraftFieldNotes(parsed.fieldNotes);
+        setDraftObservation(visitObservationText(row));
+        setDraftRecommendation(visitRecommendationText(row));
 
         const atts = await fetchVisitAttachments(visitId).catch(() => [] as VisitAttachment[]);
         setAttachments(atts);
@@ -165,16 +176,28 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
     if (!visit) return;
     const parsed = parseFieldNotes(visit.field_notes);
     setDraftFieldNotes(parsed.fieldNotes);
+    setDraftObservation(visitObservationText(visit));
+    setDraftRecommendation(visitRecommendationText(visit));
     setEditMode(false);
   }
 
   async function handleSave() {
     if (!visit) return;
+    const observation = draftObservation.trim();
+    const recommendation = draftRecommendation.trim();
+    if (!observation && !recommendation) {
+      Alert.alert(t("visitFlow.editVisit"), t("visitFlow.errObservationOrAdvice"));
+      return;
+    }
     setSaving(true);
     try {
       const severityLine = `Severity: ${severityLabel(severity)}`;
       const mergedNotes = [draftFieldNotes.trim(), severityLine].filter(Boolean).join("\n");
       const updated = await patchMobileVisit(visit.id, {
+        observation,
+        recommendation: recommendation || undefined,
+        action_taken: recommendation || undefined,
+        general_advice: recommendation || undefined,
         field_notes: mergedNotes
       });
       setVisit(updated);
@@ -227,51 +250,61 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
 
   if (loading) {
     return (
-      <View style={[styles.screen, { paddingTop: safeTop }]}>
-        <View style={styles.header}>
-          <Pressable onPress={() => navigation.goBack()} style={styles.iconBtn}>
-            <Ionicons name="arrow-back" size={18} color={Colors.text1} />
-          </Pressable>
-          <Skeleton width={140} height={20} />
-          <View style={styles.iconBtn} />
-        </View>
-        <View style={styles.loadingWrap}>
-          <Skeleton width="100%" height={140} borderRadius={Radius.card} />
-          <Skeleton width="100%" height={120} borderRadius={Radius.card} />
-          <Skeleton width="100%" height={100} borderRadius={Radius.card} />
-        </View>
-      </View>
+      <ScreenEntranceShell style={[styles.screen, { paddingTop: safeTop }]}>
+        {() => (
+          <>
+            <View style={styles.header}>
+              <Pressable onPress={() => navigation.goBack()} style={styles.iconBtn}>
+                <Ionicons name="arrow-back" size={18} color={Colors.text1} />
+              </Pressable>
+              <Text style={styles.headerDate}>{t("visitFlow.visitDetail")}</Text>
+              <View style={styles.iconBtn} />
+            </View>
+            <ScreenLoader />
+          </>
+        )}
+      </ScreenEntranceShell>
     );
   }
 
   if (error || !visit || !farmer) {
     return (
-      <View style={[styles.screen, { paddingTop: safeTop }]}>
-        <View style={styles.header}>
-          <Pressable onPress={() => navigation.goBack()} style={styles.iconBtn}>
-            <Ionicons name="arrow-back" size={18} color={Colors.text1} />
-          </Pressable>
-          <Text style={styles.headerDate}>Visit</Text>
-          <View style={styles.iconBtn} />
-        </View>
-        <EmptyState
-          icon="document-text-outline"
-          title="Could not load visit"
-          subtitle={error || "Try again."}
-          action="Retry"
-          onAction={() => void load(false)}
-        />
-      </View>
+      <ScreenEntranceShell style={[styles.screen, { paddingTop: safeTop }]}>
+        {(entranceTick) => (
+          <>
+            <View style={styles.header}>
+              <Pressable onPress={() => navigation.goBack()} style={styles.iconBtn}>
+                <Ionicons name="arrow-back" size={18} color={Colors.text1} />
+              </Pressable>
+              <Text style={styles.headerDate}>Visit</Text>
+              <View style={styles.iconBtn} />
+            </View>
+            <FadeInSection replayKey={entranceTick} delay={entranceStagger(0)}>
+              <EmptyState
+                icon="document-text-outline"
+                title="Could not load visit"
+                subtitle={error || "Try again."}
+                action="Retry"
+                onAction={() => void load(false)}
+              />
+            </FadeInSection>
+          </>
+        )}
+      </ScreenEntranceShell>
     );
   }
 
   const fieldNotesText = editMode ? draftFieldNotes : parsedNotes.fieldNotes;
+  const observationText = editMode ? draftObservation : visitObservationText(visit);
+  const recommendationText = editMode ? draftRecommendation : visitRecommendationText(visit);
   const statusLabel = "Submitted";
   const statusVariant = "green" as const;
   const scrollBottomPad = editMode ? tabBarInset + editFooterHeight + 16 : tabBarInset + 16;
 
   return (
-    <View style={[styles.screen, { paddingTop: safeTop }]}>
+    <ScreenEntranceShell style={[styles.screen, { paddingTop: safeTop }]}>
+      {(entranceTick) => (
+        <>
       <View style={styles.header}>
         <Pressable onPress={() => navigation.goBack()} style={styles.iconBtn}>
           <Ionicons name="arrow-back" size={18} color={Colors.text1} />
@@ -323,6 +356,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
           />
         }
       >
+        <FadeInSection replayKey={entranceTick} delay={entranceStagger(0)} variant="card">
         <View style={styles.heroCard}>
           <View style={styles.heroRow}>
             <Avatar name={farmer.name !== "—" ? farmer.name : "Farmer"} size="lg" />
@@ -358,7 +392,9 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
             ) : null}
           </View>
         </View>
+        </FadeInSection>
 
+        <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)} variant="card">
         <View style={styles.card}>
           <View style={styles.problemTop}>
             <View style={[styles.categoryIcon, { backgroundColor: tone.bg }]}>
@@ -379,9 +415,49 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
             {visit.disease_issue ? <StatusChip label="Disease issue" variant="red" /> : null}
           </View>
         </View>
+        </FadeInSection>
+
+        <FadeInSection replayKey={entranceTick} delay={entranceStagger(2)} variant="card">
+        <View style={styles.card}>
+          <Text style={styles.sectionLabel}>{t("visitFlow.observation")}</Text>
+          {editMode ? (
+            <TextInput
+              value={draftObservation}
+              onChangeText={setDraftObservation}
+              multiline
+              style={styles.editInput}
+              placeholder={t("visitFlow.observationPlaceholder")}
+              placeholderTextColor={Colors.text4}
+              textAlignVertical="top"
+            />
+          ) : (
+            <Text style={observationText ? styles.bodyText : styles.mutedText}>
+              {observationText || t("visitFlow.noObservation")}
+            </Text>
+          )}
+        </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionLabel}>FIELD NOTES</Text>
+          <Text style={styles.sectionLabel}>{t("visitFlow.recommendation")}</Text>
+          {editMode ? (
+            <TextInput
+              value={draftRecommendation}
+              onChangeText={setDraftRecommendation}
+              multiline
+              style={styles.editInput}
+              placeholder={t("visitFlow.recommendationPlaceholder")}
+              placeholderTextColor={Colors.text4}
+              textAlignVertical="top"
+            />
+          ) : (
+            <Text style={recommendationText ? styles.bodyText : styles.mutedText}>
+              {recommendationText || t("visitFlow.noRecommendation")}
+            </Text>
+          )}
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionLabel}>{t("visitFlow.fieldNotes")}</Text>
           {editMode ? (
             <TextInput
               value={draftFieldNotes}
@@ -398,8 +474,10 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
             </Text>
           )}
         </View>
+        </FadeInSection>
 
-        {adviceBlocks.length > 0 ? (
+        <FadeInSection replayKey={entranceTick} delay={entranceStagger(3)} variant="card">
+        {!editMode && adviceBlocks.length > 0 ? (
           <View style={styles.card}>
             <SectionHeader title="ADVICE" />
             {adviceBlocks.map((block) => (
@@ -469,13 +547,14 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
             />
           </View>
         ) : null}
+        </FadeInSection>
       </ScrollView>
 
       {editMode ? (
         <View style={[styles.editFooter, { bottom: tabBarInset }]}>
           <GhostButton label="Cancel" onPress={cancelEdit} style={styles.editFooterBtn} />
           <PrimaryButton
-            label={saving ? "Saving…" : "Save changes"}
+            label={saving ? t("common.saving") : t("visitFlow.saveChanges")}
             onPress={() => void handleSave()}
             loading={saving}
             disabled={saving}
@@ -494,7 +573,9 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
           </Pressable>
         </Pressable>
       </Modal>
-    </View>
+        </>
+      )}
+    </ScreenEntranceShell>
   );
 }
 
@@ -580,12 +661,9 @@ const styles = StyleSheet.create({
     borderColor: Colors.brand700
   },
   scroll: {
-    gap: 12,
-    paddingHorizontal: Spacing.screen
-  },
-  loadingWrap: {
-    gap: 12,
-    paddingHorizontal: Spacing.screen
+    gap: 14,
+    paddingHorizontal: Spacing.screen,
+    paddingTop: 4
   },
   heroCard: {
     backgroundColor: Colors.brand700,

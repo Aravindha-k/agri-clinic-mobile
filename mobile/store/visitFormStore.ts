@@ -15,6 +15,7 @@ import {
   type AdviceFieldKey,
   type AdviceSuggestions
 } from "../lib/visitAdvice";
+import type { PendingVisitAttachment } from "../../src/visit/pendingAttachments";
 import type { VisitPhotoAsset } from "../lib/visitPhotos";
 
 export type VisitGpsCoords = {
@@ -40,7 +41,7 @@ export type RevisitContext = {
 };
 
 type VisitFormState = {
-  step: 1 | 2 | 3;
+  step: 1 | 2 | 3 | 4;
   farmer: Farmer | null;
   newFarmer: NewFarmerDraft | null;
   visitKind: VisitKind;
@@ -69,8 +70,9 @@ type VisitFormState = {
   adviceSuggestions: AdviceSuggestions;
   revisitContext: RevisitContext | null;
   photos: VisitPhotoAsset[];
+  extraAttachments: PendingVisitAttachment[];
   nextVisitDate: string | null;
-  setStep: (step: 1 | 2 | 3) => void;
+  setStep: (step: 1 | 2 | 3 | 4) => void;
   setFarmer: (farmer: Farmer | null) => void;
   setNewFarmer: (patch: Partial<NewFarmerDraft>) => void;
   clearNewFarmer: () => void;
@@ -94,6 +96,9 @@ type VisitFormState = {
   setCombinedAdvice: (value: string) => void;
   addPhoto: (photo: VisitPhotoAsset) => void;
   removePhoto: (id: string) => void;
+  addExtraAttachment: (attachment: PendingVisitAttachment) => void;
+  removeExtraAttachment: (id: string) => void;
+  clearExtraAttachments: () => void;
   setNextVisitDate: (value: string | null) => void;
   applyRevisitPrefill: (loaded: LoadedRevisitPrefill) => void;
   hasFormData: () => boolean;
@@ -132,6 +137,7 @@ const initialStep2 = {
   adviceSuggestions: { ...EMPTY_ADVICE_SUGGESTIONS },
   revisitContext: null as RevisitContext | null,
   photos: [] as VisitPhotoAsset[],
+  extraAttachments: [] as PendingVisitAttachment[],
   nextVisitDate: null as string | null
 };
 
@@ -242,6 +248,15 @@ export const useVisitFormStore = create<VisitFormState>((set, get) => ({
       photos: state.photos.length >= 5 ? state.photos : [...state.photos, photo]
     })),
   removePhoto: (id) => set((state) => ({ photos: state.photos.filter((p) => p.id !== id) })),
+  addExtraAttachment: (attachment) =>
+    set((state) => ({
+      extraAttachments: [...state.extraAttachments, attachment]
+    })),
+  removeExtraAttachment: (id) =>
+    set((state) => ({
+      extraAttachments: state.extraAttachments.filter((a) => a.id !== id)
+    })),
+  clearExtraAttachments: () => set({ extraAttachments: [] }),
   setNextVisitDate: (nextVisitDate) => set({ nextVisitDate, followUpDate: nextVisitDate }),
   applyRevisitPrefill: (loaded) => {
     const values = loaded.values;
@@ -304,7 +319,9 @@ export const useVisitFormStore = create<VisitFormState>((set, get) => ({
     if (state.cropId || state.problemCategoryId || state.problemMasterId || state.otherProblemDescription.trim()) {
       return true;
     }
-    if (state.observation.trim() || state.fieldNotes.trim() || state.photos.length) return true;
+    if (state.observation.trim() || state.fieldNotes.trim() || state.photos.length || state.extraAttachments.length) {
+      return true;
+    }
     if (hasAnyAdvice(state)) return true;
     return false;
   },

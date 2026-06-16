@@ -6,8 +6,6 @@ import { FONTS } from "../../theme/fonts";
 import { space } from "../../theme/layout";
 import { PrimaryButton } from "../ui/PrimaryButton";
 import { ClinicCard } from "../brand/ClinicCard";
-import BorderGlow from "../cinematic/BorderGlow";
-import TripleSonarRipple from "../cinematic/TripleSonarRipple";
 
 type Props = {
   isActive: boolean;
@@ -61,11 +59,10 @@ export function WorkdayStatusCard({
   }
 
   return (
-    <BorderGlow active>
     <ClinicCard style={styles.card}>
       <View style={styles.activeTop}>
         <View style={[styles.statusPill, { backgroundColor: c.successSoft }]}>
-          <TripleSonarRipple active size={8} />
+          <View style={[styles.pulseDot, { backgroundColor: c.success }]} />
           <Text style={[styles.statusText, { color: c.success }]}>On duty</Text>
         </View>
         <Pressable
@@ -103,7 +100,6 @@ export function WorkdayStatusCard({
         Workday ends automatically — no manual sign-off needed.
       </Text>
     </ClinicCard>
-    </BorderGlow>
   );
 }
 

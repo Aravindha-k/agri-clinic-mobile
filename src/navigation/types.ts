@@ -16,6 +16,14 @@ export type FarmersStackParamList = {
   FarmerMap: FarmerMapParams;
 };
 
+/** V2 Work tab — queue + visits with shared detail routes. */
+export type WorkStackParamList = {
+  WorkHome: { segment?: "queue" | "visits" } | undefined;
+  FarmerDetail: { id: number };
+  FarmerMap: FarmerMapParams;
+  VisitDetail: { id: number; fromSubmit?: boolean };
+};
+
 export type VisitFlowParamList = {
   NewVisitFarmer: { prefill?: VisitFormPrefill; fresh?: boolean; fastRevisit?: boolean } | undefined;
   VisitSuccess: {
@@ -37,22 +45,36 @@ export type VisitFlowParamList = {
   };
 };
 
-export type ProfileStackParamList = {
+export type MeStackParamList = {
   ProfileMain: undefined;
-  TrackingWorkspace: undefined;
   ProblemsCatalog: undefined;
+  Diagnostics: undefined;
   Settings: undefined;
   Help: undefined;
 };
 
-/** @deprecated Use ProfileStackParamList — kept for deep-link compatibility */
-export type MoreStackParamList = ProfileStackParamList & {
+/** @deprecated Use MeStackParamList */
+export type ProfileStackParamList = MeStackParamList & {
+  TrackingWorkspace?: undefined;
+};
+
+/** @deprecated Use MeStackParamList — kept for deep-link compatibility */
+export type MoreStackParamList = MeStackParamList & {
   MoreMenu?: undefined;
   Profile?: undefined;
   Visits?: NavigatorScreenParams<VisitsStackParamList>;
 };
 
 export type MainTabParamList = {
+  Today: undefined;
+  Work: NavigatorScreenParams<WorkStackParamList>;
+  StartVisit: undefined;
+  Day: undefined;
+  Me: NavigatorScreenParams<MeStackParamList>;
+};
+
+/** @deprecated V1 tab names — use MainTabParamList */
+export type LegacyMainTabParamList = {
   Home: undefined;
   Farmers: NavigatorScreenParams<FarmersStackParamList>;
   StartVisit: undefined;

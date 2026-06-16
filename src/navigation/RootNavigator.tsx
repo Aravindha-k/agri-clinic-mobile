@@ -3,19 +3,20 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useCallback, useState } from "react";
 import { View } from "react-native";
+import { GlobalStatusStrip } from "../../mobile/components/layout/GlobalStatusStrip";
 import { AnimatedSplashScreen } from "../components/brand/AnimatedSplashScreen";
-import { GlassTabBar } from "../components/glass";
+import MainTabBar from "../../mobile/components/navigation/MainTabBar";
+import { VisitFabTabButton } from "../components/ui/VisitFabTabButton";
 import { useAppSplash } from "../hooks/useAppSplash";
 import { useI18n } from "../i18n/I18nContext";
 import { useAuth } from "../storage/AuthContext";
 import { useTheme } from "../theme";
-import { DS } from "../theme/globalStyles";
+import { Colors } from "../../mobile/lib/theme";
 import { useSyncStore } from "../../mobile/lib/store/syncStore";
 import { StartupScreen } from "../screens/StartupScreen";
 import { AuthStartScreen } from "../screens/AuthStartScreen";
 import HomeTabScreen from "../../mobile/app/(tabs)/index";
-import VisitsTabScreen from "../../mobile/app/(tabs)/visits";
-import FarmersTabScreen from "../../mobile/app/(tabs)/farmers";
+import WorkTabScreen from "../../mobile/app/(tabs)/work";
 import FarmerProfileScreen from "../../mobile/app/farmer/[id]";
 import ProfileTabScreen from "../../mobile/app/(tabs)/profile";
 import ProblemsCatalogScreen from "../../mobile/app/problems";
@@ -23,6 +24,7 @@ import { FarmerMapScreen } from "../screens/map/FarmerMapScreen";
 import { LiveMapScreen } from "../screens/map/LiveMapScreen";
 import { TravelHistoryScreen } from "../screens/map/TravelHistoryScreen";
 import { OfflineSyncScreen } from "../screens/OfflineSyncScreen";
+import DiagnosticsScreen from "../../mobile/app/me/diagnostics";
 import NotificationsScreen from "../../mobile/app/notifications";
 import { SettingsScreen } from "../screens/SettingsScreen";
 import { HelpScreen } from "../screens/HelpScreen";
@@ -37,19 +39,17 @@ import {
 } from "./transitions";
 import {
   AuthStackParamList,
-  FarmersStackParamList,
   MainTabParamList,
-  ProfileStackParamList,
+  MeStackParamList,
   RootStackParamList,
-  VisitsStackParamList
+  WorkStackParamList
 } from "./types";
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
-const VisitsStack = createNativeStackNavigator<VisitsStackParamList>();
-const FarmersStack = createNativeStackNavigator<FarmersStackParamList>();
-const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
+const WorkStack = createNativeStackNavigator<WorkStackParamList>();
+const MeStack = createNativeStackNavigator<MeStackParamList>();
 
 function AuthNavigator() {
   return (
@@ -59,58 +59,40 @@ function AuthNavigator() {
   );
 }
 
-function VisitsNavigator() {
+function WorkNavigator() {
   const { theme } = useTheme();
   return (
-    <VisitsStack.Navigator
+    <WorkStack.Navigator
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: theme.colors.background },
         ...stackScreenOptions
       }}
     >
-      <VisitsStack.Screen name="VisitsList" component={VisitsTabScreen} />
-      <VisitsStack.Screen name="VisitDetail" component={VisitDetailScreen} />
-    </VisitsStack.Navigator>
+      <WorkStack.Screen name="WorkHome" component={WorkTabScreen} />
+      <WorkStack.Screen name="FarmerDetail" component={FarmerProfileScreen} />
+      <WorkStack.Screen name="FarmerMap" component={FarmerMapScreen} />
+      <WorkStack.Screen name="VisitDetail" component={VisitDetailScreen} />
+    </WorkStack.Navigator>
   );
 }
 
-function FarmersNavigator() {
+function MeNavigator() {
   const { theme } = useTheme();
   return (
-    <FarmersStack.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: theme.colors.primaryDark },
-        headerTintColor: "#FFFFFF",
-        headerTitleStyle: { fontWeight: "700" as const },
-        headerShadowVisible: false,
-        contentStyle: { backgroundColor: theme.colors.background },
-        ...stackScreenOptions
-      }}
-    >
-      <FarmersStack.Screen name="FarmersList" component={FarmersTabScreen} options={{ headerShown: false }} />
-      <FarmersStack.Screen name="FarmerDetail" component={FarmerProfileScreen} options={{ headerShown: false }} />
-      <FarmersStack.Screen name="FarmerMap" component={FarmerMapScreen} options={{ headerShown: false }} />
-    </FarmersStack.Navigator>
-  );
-}
-
-function ProfileNavigator() {
-  const { theme } = useTheme();
-  return (
-    <ProfileStack.Navigator
+    <MeStack.Navigator
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: theme.colors.background },
         ...stackScreenOptions
       }}
     >
-      <ProfileStack.Screen name="ProfileMain" component={ProfileTabScreen} />
-      <ProfileStack.Screen name="TrackingWorkspace" component={TrackingWorkspaceScreen} />
-      <ProfileStack.Screen name="ProblemsCatalog" component={ProblemsCatalogScreen} />
-      <ProfileStack.Screen name="Settings" component={SettingsScreen} />
-      <ProfileStack.Screen name="Help" component={HelpScreen} />
-    </ProfileStack.Navigator>
+      <MeStack.Screen name="ProfileMain" component={ProfileTabScreen} />
+      <MeStack.Screen name="ProblemsCatalog" component={ProblemsCatalogScreen} />
+      <MeStack.Screen name="Diagnostics" component={DiagnosticsScreen} />
+      <MeStack.Screen name="Settings" component={SettingsScreen} />
+      <MeStack.Screen name="Help" component={HelpScreen} />
+    </MeStack.Navigator>
   );
 }
 
@@ -124,8 +106,8 @@ function MainTabs() {
 
   return (
     <Tab.Navigator
-      tabBar={(props) => <GlassTabBar {...props} />}
-      sceneContainerStyle={{ flex: 1, backgroundColor: "transparent" }}
+      tabBar={(props) => <MainTabBar {...props} />}
+      sceneContainerStyle={{ flex: 1, backgroundColor: Colors.bg }}
       screenOptions={{
         ...tabScreenOptions,
         headerShown: false,
@@ -133,41 +115,37 @@ function MainTabs() {
       }}
     >
       <Tab.Screen
-        name="Home"
+        name="Today"
         component={HomeTabScreen}
-        options={{ tabBarLabel: t("tabs.home") }}
+        options={{ tabBarLabel: t("tabs.today") }}
       />
       <Tab.Screen
-        name="Farmers"
-        component={FarmersNavigator}
-        options={{ tabBarLabel: t("tabs.farmers") }}
+        name="Work"
+        component={WorkNavigator}
+        options={{
+          tabBarLabel: t("tabs.work"),
+          tabBarBadge:
+            pendingVisitsCount > 0 ? (pendingVisitsCount > 99 ? "99+" : pendingVisitsCount) : undefined
+        }}
       />
       <Tab.Screen
         name="StartVisit"
         component={StartVisitPlaceholder}
         options={{
-          tabBarLabel: ""
+          tabBarLabel: () => null,
+          tabBarAccessibilityLabel: t("tabs.newVisit"),
+          tabBarButton: (props) => <VisitFabTabButton {...props} />
         }}
       />
       <Tab.Screen
-        name="Visits"
-        component={VisitsNavigator}
-        options={{
-          tabBarLabel: t("tabs.visits"),
-          tabBarBadge:
-            pendingVisitsCount > 0 ? (pendingVisitsCount > 99 ? "99+" : pendingVisitsCount) : undefined,
-          tabBarBadgeStyle: {
-            backgroundColor: DS.danger,
-            fontSize: 9,
-            fontWeight: "700",
-            lineHeight: 14
-          }
-        }}
+        name="Day"
+        component={TrackingWorkspaceScreen}
+        options={{ tabBarLabel: t("tabs.day") }}
       />
       <Tab.Screen
-        name="Profile"
-        component={ProfileNavigator}
-        options={{ tabBarLabel: t("tabs.profile") }}
+        name="Me"
+        component={MeNavigator}
+        options={{ tabBarLabel: t("tabs.me") }}
       />
     </Tab.Navigator>
   );
@@ -247,7 +225,12 @@ export function RootNavigator() {
 
   return (
     <NavigationContainer theme={navTheme}>
-      <AppRoutes />
+      <View style={{ flex: 1 }}>
+        <GlobalStatusStrip />
+        <View style={{ flex: 1 }}>
+          <AppRoutes />
+        </View>
+      </View>
     </NavigationContainer>
   );
 }

@@ -7,8 +7,15 @@ import { normalizeMobileVisitSubmitPayload } from "../../src/utils/format";
 import { isLanOnlyError, isNetworkError } from "../../src/utils/apiError";
 import { unwrapSuccessEnvelope } from "../../src/utils/apiUnwrap";
 import { getAccessToken } from "../../src/storage/tokenStorage";
+import { validateVisitSubmitValues } from "../../src/visit/visitValidation";
 import type { VisitPhotoAsset } from "./visitPhotos";
 import { useVisitFormStore, type VisitSeverity } from "../store/visitFormStore";
+import {
+  getVisitDutyFields,
+  visitCaptureTimestamps,
+  type VisitDutyFields
+} from "./visitDutyContext";
+import { isDuplicateVisitResponse } from "./visitDuplicate";
 
 function severityNote(severity: VisitSeverity) {
   if (severity === "low") return "Severity: Low";
@@ -16,9 +23,18 @@ function severityNote(severity: VisitSeverity) {
   return "Severity: Medium";
 }
 
+export type VisitSubmitExtras = {
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number | null;
+  capturedAt?: Date;
+  duty?: VisitDutyFields;
+};
+
 export function buildVisitFormValuesFromStore(
   state: ReturnType<typeof useVisitFormStore.getState>,
-  localSyncId: string
+  localSyncId: string,
+  extras?: VisitSubmitExtras
 ): VisitFormValues {
   const farmer = state.farmer;
   const nf = state.newFarmer;
@@ -29,6 +45,10 @@ export function buildVisitFormValuesFromStore(
     : problem?.tamil_name || problem?.name || "";
 
   const advice = state.recommendation.trim() || state.actionTaken.trim();
+  const lat = extras?.latitude ?? state.gpsCoords?.latitude;
+  const lng = extras?.longitude ?? state.gpsCoords?.longitude;
+  const accuracy = extras?.accuracy ?? state.gpsCoords?.accuracy ?? null;
+  const capture = visitCaptureTimestamps(extras?.capturedAt ?? new Date());
 
   return {
     farmer_id: farmer?.id != null ? String(farmer.id) : undefined,
@@ -40,9 +60,15 @@ export function buildVisitFormValuesFromStore(
     crop_name: state.cropName,
     land_name: "",
     land_area: "",
-    latitude: state.gpsCoords?.latitude != null ? String(state.gpsCoords.latitude) : undefined,
-    longitude: state.gpsCoords?.longitude != null ? String(state.gpsCoords.longitude) : undefined,
+    latitude: lat != null ? String(lat) : undefined,
+    longitude: lng != null ? String(lng) : undefined,
+    accuracy: accuracy != null ? accuracy : undefined,
     local_sync_id: localSyncId,
+    duty_session_id: extras?.duty?.duty_session_id,
+    workday_id: extras?.duty?.workday_id,
+    captured_at: capture.captured_at,
+    visit_date: capture.visit_date,
+    visit_time: capture.visit_time,
     observation: state.observation.trim(),
     field_notes: [state.fieldNotes.trim(), severityNote(state.severity)].filter(Boolean).join("\n"),
     problem_category_id: isOther ? undefined : state.problemCategoryId || undefined,
@@ -98,8 +124,20 @@ async function postVisitMultipart(fields: Record<string, string>): Promise<{ vis
             visit_id?: number;
             visit?: Visit;
             id?: number;
+            duplicate?: boolean;
           }>(data);
-          const row = (unwrapped && typeof unwrapped === "object" ? unwrapped : data) as Record<string, unknown>;
+          const row = (unwrapped && typeof unwrapped === "object" ? unwrapped : data) as Record<
+            string,
+            unknown
+          >;
+          if (isDuplicateVisitResponse(row)) {
+            const visitId = Number(row.visit_id ?? row.id ?? 0);
+            resolve({
+              visit_id: visitId,
+              visit: { id: visitId } as Visit
+            });
+            return;
+          }
           const visit = (row.visit ?? row) as Visit;
           const visit_id = Number(row.visit_id ?? visit?.id ?? row.id);
           resolve({ visit_id, visit: { ...visit, id: visit_id } });
@@ -187,9 +225,16 @@ export async function uploadVisitPhotos(visitId: number, photos: VisitPhotoAsset
 
 export async function submitVisitFromStore(
   state: ReturnType<typeof useVisitFormStore.getState>,
-  localSyncId: string
+  localSyncId: string,
+  extras?: VisitSubmitExtras
 ): Promise<{ visit: Visit; evidenceFailed: string[] }> {
-  const values = buildVisitFormValuesFromStore(state, localSyncId);
+  const duty = extras?.duty ?? (await getVisitDutyFields());
+  const values = buildVisitFormValuesFromStore(state, localSyncId, { ...extras, duty });
+  const validationError = validateVisitSubmitValues(values);
+  if (validationError) {
+    throw new Error(validationError);
+  }
+
   let visit: Visit;
 
   try {

@@ -1,17 +1,18 @@
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useCallback, useMemo, useState } from "react";
 import {
-  Linking,
-  Pressable,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  View
+  useWindowDimensions,
+  View,
+  Pressable,
+  Linking,
+  RefreshControl
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { getExpoBuildUrl, shouldShowExpoGoDevWarning } from "../../src/utils/expoRuntime";
 import { useRefreshControlProps } from "../../src/hooks/useRefreshControlProps";
+import { useSafeAreaInsetsCompat } from "../../src/hooks/useSafeAreaInsetsCompat";
 import { useWorkdayTimer } from "../../src/hooks/useLiveClock";
 import { useSecureScreen } from "../../src/hooks/useSecureScreen";
 import { useTabBarBottomInset } from "../../src/hooks/useTabBarBottomInset";
@@ -19,11 +20,13 @@ import { useI18n } from "../../src/i18n/I18nContext";
 import { useOfflineSync } from "../../src/storage/OfflineSyncContext";
 import { useTracking } from "../../src/storage/TrackingContext";
 import { requestGpsForFieldWork } from "../../src/utils/locationRequiredModal";
+import { autoFlushPendingGps } from "../lib/sync/offlineSyncManager";
+import { readPendingVisits } from "../lib/pendingVisitsQueue";
 import { isSameVisitLocalDay } from "../../src/utils/format";
 import { getHomeVisits } from "../../src/utils/visitsCache";
 import { resolveWorkdayStartedAt } from "../../src/utils/workdayStartedAt";
 import { DaySummaryRouteCard } from "../components/daySummary/DaySummaryRouteCard";
-import { ScreenCanvas, ScreenEntranceWash } from "../components/layout";
+import { HeaderHero, ScreenCanvas, ScreenEntranceBloom } from "../components/layout";
 import { FadeInSection, entranceStagger } from "../components/ui/FadeInSection";
 import { RecentActivitySection } from "../components/today/RecentActivitySection";
 import { TodayKpiRow } from "../components/today/TodayKpiRow";
@@ -35,6 +38,11 @@ import {
   fetchWorkStatus
 } from "../lib/homeApi";
 import { formatDistanceKm, formatShortTime } from "../lib/format";
+import {
+  HEADER_IMAGE_POSITION,
+  resolveScreenHeaderHeight,
+  SCREEN_HEADER_IMAGES
+} from "../lib/screenHeaderImages";
 import type { DashboardRecentVisit } from "../lib/types";
 import { Colors, FontSize, FontWeight, Spacing } from "../lib/theme";
 
@@ -62,6 +70,9 @@ export default function TrackingWorkspaceScreen() {
   const { t } = useI18n();
   const navigation = useNavigation<any>();
   const rootNav = navigation.getParent();
+  const { top: safeTop } = useSafeAreaInsetsCompat();
+  const { height: screenH } = useWindowDimensions();
+  const headerHeroHeight = resolveScreenHeaderHeight(screenH);
   const { pendingCount } = useOfflineSync();
   const tabInset = useTabBarBottomInset();
   const refreshControlProps = useRefreshControlProps();
@@ -71,7 +82,8 @@ export default function TrackingWorkspaceScreen() {
     busy,
     startDay,
     workday,
-    refreshTracking
+    refreshTracking,
+    lastSyncTime
   } = useTracking();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -101,7 +113,10 @@ export default function TrackingWorkspaceScreen() {
 
     const today = new Date();
     const todayVisits = visits.visits.filter((v) => isSameVisitLocalDay(v, today));
-    setVisitsToday(dashboard?.visits_today ?? todayVisits.length);
+    const pendingToday = (await readPendingVisits()).filter((row: { createdAt: string }) =>
+      isSameVisitLocalDay({ visit_date: row.createdAt, created_at: row.createdAt }, today)
+    ).length;
+    setVisitsToday((dashboard?.visits_today ?? todayVisits.length) + pendingToday);
     setFarmersCovered(dashboard?.farmers_covered ?? new Set(todayVisits.map((v) => v.farmer?.id ?? v.farmer_name)).size);
     setVillagesCovered(countVillagesFromVisitsToday(visits.visits));
 
@@ -125,6 +140,7 @@ export default function TrackingWorkspaceScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      void autoFlushPendingGps();
       void loadSummary();
       void refreshTracking().catch(() => undefined);
     }, [loadSummary, refreshTracking])
@@ -149,23 +165,18 @@ export default function TrackingWorkspaceScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.screen} edges={["top"]}>
+    <View style={styles.screen}>
       <ScreenCanvas />
-      <ScreenEntranceWash replayKey={entranceTick} />
-      <FadeInSection replayKey={entranceTick} delay={entranceStagger(0)}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>{t("daySummary.title")}</Text>
-          <Text style={styles.headerSubtitle}>{t("daySummary.reflectSubtitle")}</Text>
-          {pendingCount > 0 ? (
-            <Text style={styles.pendingHint}>
-              {t(pendingCount === 1 ? "visitFlow.visitsInQueue" : "visitFlow.visitsInQueue_plural", {
-                count: pendingCount
-              })}
-            </Text>
-          ) : null}
-        </View>
-      </FadeInSection>
-
+      <ScreenEntranceBloom replayKey={entranceTick} />
+      <HeaderHero
+        imageSource={SCREEN_HEADER_IMAGES.summary}
+        height={headerHeroHeight}
+        contentPosition={HEADER_IMAGE_POSITION.summary}
+        title={t("daySummary.title")}
+        subtitle={t("daySummary.reflectSubtitle")}
+        showLogo
+        safeTop={safeTop}
+      />
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
@@ -174,6 +185,16 @@ export default function TrackingWorkspaceScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} {...refreshControlProps} />
         }
       >
+        {pendingCount > 0 ? (
+          <FadeInSection replayKey={entranceTick} delay={entranceStagger(0)}>
+            <Text style={styles.pendingHint}>
+              {t(pendingCount === 1 ? "visitFlow.visitsInQueue" : "visitFlow.visitsInQueue_plural", {
+                count: pendingCount
+              })}
+            </Text>
+          </FadeInSection>
+        ) : null}
+
         {shouldShowExpoGoDevWarning() ? <ExpoGoDevBanner onBuildApk={openBuildApkPage} /> : null}
 
         <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
@@ -238,6 +259,7 @@ export default function TrackingWorkspaceScreen() {
           distanceLabel={t("daySummary.totalRouteDistance")}
           distanceValue={`${formatDistanceKm(distanceKm)} km`}
           workdayId={workdayId}
+          refreshToken={lastSyncTime}
           onPress={() => rootNav?.navigate("TravelHistory")}
         />
         </FadeInSection>
@@ -258,7 +280,7 @@ export default function TrackingWorkspaceScreen() {
         </FadeInSection>
 
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -267,26 +289,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bg,
     flex: 1
   },
-  header: {
-    gap: 4,
-    paddingBottom: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md
-  },
-  headerTitle: {
-    color: Colors.text1,
-    fontSize: FontSize.hero,
-    fontWeight: FontWeight.bold
-  },
-  headerSubtitle: {
-    color: Colors.text3,
-    fontSize: FontSize.sm
-  },
   pendingHint: {
     color: Colors.amberText,
     fontSize: FontSize.xs,
     fontWeight: FontWeight.medium,
-    marginTop: 2
+    marginBottom: Spacing.sm,
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.md
   },
   scroll: {
     flex: 1

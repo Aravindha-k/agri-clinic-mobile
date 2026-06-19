@@ -1,8 +1,7 @@
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AppState, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { AppState, RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LogoRefreshIndicator } from "../../../src/components/ui/LogoRefreshIndicator";
 import { useLanOnlyMode } from "../../../src/hooks/useLanOnlyMode";
 import { useRefreshControlProps } from "../../../src/hooks/useRefreshControlProps";
 import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
@@ -13,19 +12,20 @@ import { useEmployee } from "../../../src/storage/EmployeeContext";
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
 import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
 import { useTracking } from "../../../src/storage/TrackingContext";
+import { autoFlushPendingGps } from "../../lib/sync/offlineSyncManager";
 import { updateCachedWorkdayMetrics } from "../../../src/storage/workdaySessionStorage";
 import { resolveWorkdayStartedAt } from "../../../src/utils/workdayStartedAt";
 import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal";
 import { FadeInSection, entranceStagger } from "../../components/ui/FadeInSection";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
-import { KavyaLoader } from "../../components/KavyaLoader";
-import { ScreenCanvas, ScreenEntranceWash } from "../../components/layout";
+import { ScreenCanvas, ScreenEntranceBloom, HeaderHero } from "../../components/layout";
 import {
   RecentActivitySection,
   TodayHeader,
   TodayQuickActions,
   type TodayQuickAction
 } from "../../components/today";
+import { WorkdayInactiveBanner } from "../../../src/components/WorkdayInactiveBanner";
 import { OfflineBanner } from "../../components/ui";
 import { WorkdayHero } from "../../components/workday/WorkdayHero";
 import { readDashboardCache } from "../../lib/dashboardCache";
@@ -34,6 +34,13 @@ import { fetchDashboard, fetchWorkStatus } from "../../lib/homeApi";
 import { getBadgeCount } from "../../lib/notificationsApi";
 import { useSyncStore } from "../../lib/store/syncStore";
 import { Colors, Spacing } from "../../lib/theme";
+import {
+  HEADER_IMAGE_POSITION,
+  resolveScreenHeaderHeight,
+  SCREEN_HEADER_IMAGE_BLEED,
+  SCREEN_HEADER_IMAGES,
+  SCREEN_HEADER_OVERLAY
+} from "../../lib/screenHeaderImages";
 import type { DashboardData, MobileWorkStatus } from "../../lib/types";
 
 function greetingKey(hour: number) {
@@ -47,12 +54,16 @@ export default function TodayTabScreen() {
   const { t } = useI18n();
   const navigation = useNavigation<any>();
   const rootNav = navigation.getParent();
+  const { height: screenH } = useWindowDimensions();
+  const headerHeroHeight = resolveScreenHeaderHeight(screenH);
+  /** Push workday card below the photo — keep greeting/logo on the image only. */
+  const workdayTopGap = Math.max(Spacing.xl, headerHeroHeight - 148);
   const scrollRef = useRef<ScrollView>(null);
   const tabInset = useTabBarBottomInset();
   const refreshControlProps = useRefreshControlProps();
   const lanOnly = useLanOnlyMode();
   const { employee } = useEmployee();
-  const { pendingCount, syncAll, lastSyncAt } = useOfflineSync();
+  const { pendingCount, lastSyncAt, syncing } = useOfflineSync();
   const { visitsVersion } = useFieldDataRefresh();
   const {
     isActive,
@@ -126,6 +137,7 @@ export default function TodayTabScreen() {
   useFocusEffect(
     useCallback(() => {
       scrollRef.current?.scrollTo({ y: 0, animated: false });
+      void autoFlushPendingGps();
       void refreshTracking().catch(() => undefined);
       void fetchWorkStatus().then(applyWorkStatus).catch(() => undefined);
       void getBadgeCount(true);
@@ -136,6 +148,7 @@ export default function TodayTabScreen() {
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
       if (state !== "active") return;
+      void autoFlushPendingGps();
       void refreshTracking().catch(() => undefined);
       void fetchWorkStatus().then(applyWorkStatus).catch(() => undefined);
     });
@@ -203,20 +216,18 @@ export default function TodayTabScreen() {
   const recentVisits = dashboard?.recent_visits ?? [];
   const lastSyncDate = lastSyncAt ? new Date(lastSyncAt) : null;
 
-  if (loading && !dashboard && !workActive) {
-    return (
-      <SafeAreaView style={styles.screen} edges={["top"]}>
-        <ScreenCanvas />
-        <KavyaLoader fullScreen />
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
       <ScreenCanvas />
-      <ScreenEntranceWash replayKey={entranceTick} />
-      <LogoRefreshIndicator refreshing={refreshing} />
+      <ScreenEntranceBloom replayKey={entranceTick} />
+      <HeaderHero
+        absolute
+        imageSource={SCREEN_HEADER_IMAGES.home}
+        height={headerHeroHeight}
+        overlayStyle={SCREEN_HEADER_OVERLAY}
+        contentPosition={HEADER_IMAGE_POSITION.home}
+        imageBleed={SCREEN_HEADER_IMAGE_BLEED}
+      />
       <ScrollView
         ref={scrollRef}
         style={styles.scroll}
@@ -229,26 +240,27 @@ export default function TodayTabScreen() {
             <OfflineBanner
               pendingCount={pendingCount}
               lastSyncedAt={lastSyncDate}
-              onSync={() => void syncAll()}
+              syncing={syncing}
               lanOnly={lanOnly}
               offline={lanOnly}
             />
           </FadeInSection>
         ) : null}
 
-        <FadeInSection replayKey={entranceTick} delay={entranceStagger(headerStep)}>
-          <TodayHeader
-            greeting={greeting}
-            name={employeeName}
-            dateLabel={dateLabel}
-            subtitle={t("today.planSubtitle")}
-            notificationCount={unreadNotifCount}
-            onNotifications={() => rootNav?.navigate("Notifications")}
-          />
-        </FadeInSection>
+        <TodayHeader
+          greeting={greeting}
+          name={employeeName}
+          dateLabel={dateLabel}
+          subtitle={t("today.planSubtitle")}
+          notificationCount={unreadNotifCount}
+          onNotifications={() => rootNav?.navigate("Notifications")}
+          onMedia
+        />
+
+        <WorkdayInactiveBanner />
 
         <FadeInSection replayKey={entranceTick} delay={entranceStagger(heroStep)}>
-          <View style={styles.heroWrap}>
+          <View style={{ marginTop: workdayTopGap }}>
             <WorkdayHero
             active={workActive}
             timerDisplay={workdayTimer.display}
@@ -292,14 +304,12 @@ const styles = StyleSheet.create({
     flex: 1
   },
   scroll: {
-    flex: 1
+    flex: 1,
+    zIndex: 1
   },
   content: {
     flexGrow: 1,
     gap: 0,
     paddingBottom: Spacing.lg
-  },
-  heroWrap: {
-    marginTop: Spacing.lg
   }
 });

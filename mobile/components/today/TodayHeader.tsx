@@ -10,22 +10,41 @@ type Props = {
   subtitle?: string;
   notificationCount: number;
   onNotifications: () => void;
+  onMedia?: boolean;
 };
 
-export function TodayHeader({ greeting, name, dateLabel, subtitle, notificationCount, onNotifications }: Props) {
+export function TodayHeader({
+  greeting,
+  name,
+  dateLabel,
+  subtitle,
+  notificationCount,
+  onNotifications,
+  onMedia = false
+}: Props) {
   const title = name?.trim() ? `${greeting}, ${name.trim().split(/\s+/)[0]}` : greeting;
 
   return (
     <View style={styles.wrap}>
       <View style={styles.topRow}>
-        <AppLogo size="md" showWordmark layout="horizontal" compactWordmark bare style={styles.brand} />
+        <View style={[styles.brandShell, onMedia && styles.brandShellOnMedia]}>
+          <AppLogo
+            size="lg"
+            showWordmark
+            layout="horizontal"
+            compactWordmark
+            bare
+            variant={onMedia ? "light" : "dark"}
+            style={styles.brand}
+          />
+        </View>
         <Pressable
           onPress={onNotifications}
           accessibilityRole="button"
           accessibilityLabel="Notifications"
-          style={({ pressed }) => [styles.bell, pressed && { opacity: 0.88 }]}
+          style={({ pressed }) => [styles.bell, onMedia && styles.bellOnMedia, pressed && { opacity: 0.88 }]}
         >
-          <Ionicons name="notifications-outline" size={20} color={Colors.text2} />
+          <Ionicons name="notifications-outline" size={20} color={onMedia ? "#FFFFFF" : Colors.text2} />
           {notificationCount > 0 ? (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{notificationCount > 9 ? "9+" : notificationCount}</Text>
@@ -35,11 +54,11 @@ export function TodayHeader({ greeting, name, dateLabel, subtitle, notificationC
       </View>
 
       <View style={styles.copy}>
-        <Text style={styles.greeting} numberOfLines={1}>
+        <Text style={[styles.greeting, onMedia && styles.greetingOnMedia]} numberOfLines={1}>
           {title}
         </Text>
-        <Text style={styles.date}>{dateLabel}</Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+        <Text style={[styles.date, onMedia && styles.metaOnMedia]}>{dateLabel}</Text>
+        {subtitle ? <Text style={[styles.subtitle, onMedia && styles.metaOnMedia]}>{subtitle}</Text> : null}
       </View>
     </View>
   );
@@ -55,6 +74,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     gap: Spacing.md
+  },
+  brandShell: {
+    flex: 1,
+    minWidth: 0
+  },
+  brandShellOnMedia: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(0,0,0,0.25)",
+    borderRadius: 999,
+    maxWidth: "100%",
+    paddingHorizontal: 14,
+    paddingVertical: 10
   },
   brand: {
     flex: 1,
@@ -91,6 +122,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 40
   },
+  bellOnMedia: {
+    backgroundColor: "rgba(0,0,0,0.25)",
+    borderColor: "rgba(255,255,255,0.2)"
+  },
   badge: {
     alignItems: "center",
     backgroundColor: Colors.red,
@@ -107,5 +142,17 @@ const styles = StyleSheet.create({
     color: Colors.surface,
     fontSize: 8,
     fontWeight: FontWeight.bold
+  },
+  greetingOnMedia: {
+    color: "#FFFFFF",
+    textShadowColor: "rgba(0,0,0,0.45)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4
+  },
+  metaOnMedia: {
+    color: "rgba(255,255,255,0.94)",
+    textShadowColor: "rgba(0,0,0,0.4)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3
   }
 });

@@ -11,9 +11,10 @@ import { useI18n } from "../../../src/i18n/I18nContext";
 import { formatRelativeTimeLocalized } from "../../../src/i18n";
 import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
 import { useTracking } from "../../../src/storage/TrackingContext";
+import { getGpsStateReport } from "../../../src/utils/gpsStateReport";
 import { formatRelativeTime } from "../../../src/utils/formatRelativeTime";
 import { GpsHealthPanel } from "../../components/daySummary/GpsHealthPanel";
-import { ScreenCanvas, ScreenEntranceWash } from "../../components/layout";
+import { ScreenCanvas, ScreenEntranceBloom, BrandPageHeader } from "../../components/layout";
 import { FadeInSection, entranceStagger } from "../../components/ui/FadeInSection";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
 import {
@@ -43,6 +44,7 @@ export default function DiagnosticsScreen() {
   const entranceTick = useScreenEntrance();
   const [bufferStatus, setBufferStatus] = useState(getGpsBufferStatus());
   const [batteryPercent, setBatteryPercent] = useState<number | null>(null);
+  const [gpsReport, setGpsReport] = useState<Awaited<ReturnType<typeof getGpsStateReport>> | null>(null);
 
   const pendingPoints = pendingGpsCount;
 
@@ -59,6 +61,7 @@ export default function DiagnosticsScreen() {
     }
     setBufferStatus(getGpsBufferStatus());
     setBatteryPercent(await getBatteryPercent());
+    setGpsReport(await getGpsStateReport());
     await refreshQueue().catch(() => undefined);
   }, [refreshQueue]);
 
@@ -96,7 +99,8 @@ export default function DiagnosticsScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
       <ScreenCanvas />
-      <ScreenEntranceWash replayKey={entranceTick} />
+      <ScreenEntranceBloom replayKey={entranceTick} />
+      <BrandPageHeader showWordmark style={styles.brandHeader} />
       <AppHeader
         title={t("diagnostics.title")}
         subtitle={t("diagnostics.subtitle")}
@@ -112,7 +116,9 @@ export default function DiagnosticsScreen() {
         <FadeInSection replayKey={entranceTick} delay={entranceStagger(0)}>
           <GpsHealthPanel
             title={t("daySummary.gpsHealth")}
-            gpsActive={isActive}
+            gpsActive={gpsReport?.gps_enabled ?? isActive}
+            permissionStatus={gpsReport?.location_permission_status ?? null}
+            backgroundTracking={gpsReport?.background_tracking_enabled ?? null}
             lastSyncLabel={lastSyncLabel}
             pendingPoints={pendingPoints}
             batteryPercent={batteryPercent}
@@ -166,6 +172,10 @@ const styles = StyleSheet.create({
   screen: {
     backgroundColor: Colors.bg,
     flex: 1
+  },
+  brandHeader: {
+    paddingTop: 0,
+    zIndex: 2
   },
   scroll: {
     flex: 1

@@ -13,7 +13,7 @@ Used for:
 
 ## Production checklist
 
-1. **Production API:** `https://agri-clinic-backend.onrender.com/api/v1/` (see `src/api/config.ts`).
+1. **Production API:** `http://13.207.17.117/api/v1/` (see `src/api/config.ts`).
 2. **Verify API:** `npm run verify:api`
 3. **EAS project:** `npx eas-cli login` → `npx eas init` (links project id in `app.json`).
 4. **Client APK:** `npx eas-cli build -p android --profile preview` → download from Expo dashboard.

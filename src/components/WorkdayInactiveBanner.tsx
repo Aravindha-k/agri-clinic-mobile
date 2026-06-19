@@ -1,4 +1,4 @@
-/** @deprecated Not mounted in V2 — workday expiry uses NotificationBridge instead. */
+/** Home-only banner when the workday has ended or expired. */
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Colors } from "../../mobile/lib/theme";

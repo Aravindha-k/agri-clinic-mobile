@@ -34,6 +34,14 @@ export default function ProblemsCatalogScreen() {
     void load();
   }, [load]);
 
+  if (loading) {
+    return (
+      <ScreenEntranceShell style={[styles.screen, { paddingTop: safeTop }]}>
+        <ScreenLoader />
+      </ScreenEntranceShell>
+    );
+  }
+
   const filtered = categories.filter((row) => {
     if (!query.trim()) return true;
     const hay = `${row.code} ${row.name}`.toLowerCase();
@@ -63,9 +71,7 @@ export default function ProblemsCatalogScreen() {
               <SearchBar value={query} onChangeText={setQuery} placeholder="Search categories…" />
             </FadeInSection>
 
-            {loading ? (
-              <ScreenLoader style={{ minHeight: 240 }} />
-            ) : error ? (
+            {error ? (
               <EntranceBlocks replayKey={entranceTick} startStep={2}>
                 <EmptyState
                   icon="alert-circle-outline"

@@ -31,6 +31,8 @@ type ApiOptions = RequestInit & {
   source?: string;
   /** When false, skip in-flight dedupe (default: true for GET). */
   dedupe?: boolean;
+  /** Override API root (must end with `/`, e.g. https://host/api/). */
+  baseUrl?: string;
 };
 
 function shouldRethrowWithoutLogout(error: unknown): boolean {
@@ -70,9 +72,15 @@ async function readResponseBody(response: Response) {
   try {
     return JSON.parse(text) as unknown;
   } catch {
-    throw new ApiRequestError("Server returned an unexpected response. Please try again.", {
-      code: "INVALID_RESPONSE"
-    });
+    throw new ApiRequestError(
+      response.ok
+        ? "Server returned an unexpected response. Please try again."
+        : formatApiErrorMessage(null, "Request failed", response.status),
+      {
+        code: "INVALID_RESPONSE",
+        status: response.status
+      }
+    );
   }
 }
 
@@ -135,7 +143,8 @@ async function handleAuth401AfterRefresh(response: Response, auth: boolean): Pro
 }
 
 async function executeApiClient<T>(path: string, options: ApiOptions = {}): Promise<T> {
-  const { auth = true, headers, body, source, signal, ...rest } = options;
+  const { auth = true, headers, body, source, signal, baseUrl, ...rest } = options;
+  const apiRoot = baseUrl ?? API_BASE_URL;
   const requestHeaders = new Headers(headers);
   requestHeaders.set("Accept", "application/json");
 
@@ -156,16 +165,22 @@ async function executeApiClient<T>(path: string, options: ApiOptions = {}): Prom
   }
 
   const request = () =>
-    fetch(`${API_BASE_URL}${path}`, {
+    fetch(`${apiRoot}${path}`, {
       ...rest,
       signal,
       headers: requestHeaders,
       body
     });
 
+  const fullUrl = `${apiRoot}${path}`;
+
   try {
     let response = await request();
     devLogApi(path, { auth, hasToken, hasDeviceSession, status: response.status, source });
+
+    if (!response.ok) {
+      console.warn(`[API] HTTP ${response.status} ${fullUrl}`);
+    }
 
     if (response.status === 401 && auth) {
       try {
@@ -198,8 +213,9 @@ async function executeApiClient<T>(path: string, options: ApiOptions = {}): Prom
       throw err;
     }
     if (isNetworkError(err)) {
+      const detail = err instanceof Error ? err.message : String(err);
+      console.warn(`[API] Network error ${fullUrl} (${detail})`);
       if (__DEV__) {
-        const detail = err instanceof Error ? err.message : String(err);
         console.warn(`[API] Cannot reach ${API_BASE_URL} (${detail})`);
       }
       if (isLanUrl(API_BASE_URL)) {

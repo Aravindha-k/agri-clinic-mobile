@@ -13,6 +13,8 @@ type Props = {
   batteryPercent: number | null;
   online: boolean;
   title?: string;
+  permissionStatus?: string | null;
+  backgroundTracking?: boolean | null;
 };
 
 export function GpsHealthPanel({
@@ -21,7 +23,9 @@ export function GpsHealthPanel({
   pendingPoints,
   batteryPercent,
   online,
-  title
+  title,
+  permissionStatus,
+  backgroundTracking
 }: Props) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
@@ -49,6 +53,15 @@ export function GpsHealthPanel({
       {expanded ? (
         <FlatCard style={styles.panel}>
           <HealthRow label={t("daySummary.gpsActive")} value={gpsActive ? t("daySummary.yes") : t("daySummary.no")} />
+          {permissionStatus ? (
+            <HealthRow label="Permission" value={permissionStatus.replace(/_/g, " ")} />
+          ) : null}
+          {backgroundTracking != null ? (
+            <HealthRow
+              label="Background route"
+              value={backgroundTracking ? t("daySummary.yes") : t("daySummary.no")}
+            />
+          ) : null}
           <HealthRow label={t("daySummary.lastSync")} value={lastSyncLabel} />
           <HealthRow label={t("daySummary.pendingGps")} value={String(pendingPoints)} />
           <HealthRow

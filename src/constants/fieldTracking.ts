@@ -1,6 +1,13 @@
+import {
+  ROUTE_MIN_MOVE_METERS,
+  ROUTE_MOVING_INTERVAL_MS,
+  ROUTE_STOPPED_INTERVAL_MS
+} from "../tracking/trackingConfig";
+
 /** Shared workday / foreground fallback sync timing for mobile UI and TrackingProvider. */
-export const FIELD_TRACKING_DISTANCE_METERS = 50;
-export const FIELD_TRACKING_INTERVAL_MINUTES = 1;
+export const FIELD_TRACKING_DISTANCE_METERS = ROUTE_MIN_MOVE_METERS;
+export const FIELD_TRACKING_INTERVAL_MS = ROUTE_MOVING_INTERVAL_MS;
+export const FIELD_TRACKING_STOPPED_INTERVAL_MS = ROUTE_STOPPED_INTERVAL_MS;
+export const FIELD_TRACKING_INTERVAL_MINUTES = Math.max(1, Math.round(ROUTE_MOVING_INTERVAL_MS / 60_000));
 export const FIELD_MAX_WORKDAY_HOURS = 9;
-export const FIELD_TRACKING_INTERVAL_MS = 60_000;
 export const FIELD_MAX_WORKDAY_MS = FIELD_MAX_WORKDAY_HOURS * 60 * 60 * 1000;

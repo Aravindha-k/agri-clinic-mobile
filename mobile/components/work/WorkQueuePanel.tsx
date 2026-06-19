@@ -23,6 +23,7 @@ import { FarmerDirectoryCard } from "../farmers/FarmerDirectoryCard";
 import { VillageFilterSheet, type VillageFilterSheetRef } from "../farmers/VillageFilterSheet";
 import { FlatProgressBar } from "../ui/FlatProgressBar";
 import { ScreenLoader } from "../layout/ScreenLoader";
+import { InlineSeedLoader } from "../layout/InlineSeedLoader";
 import {
   FadeInSection,
   entranceListStagger,
@@ -57,7 +58,6 @@ export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
 
   const emptyMessage = useCallback(
     (sectionId: FarmerWorkSectionId) => {
-      if (sectionId === "follow_ups_today") return t("work.emptyFollowUps");
       if (sectionId === "recently_visited") return t("work.emptyRecentlyVisited");
       return null;
     },
@@ -151,28 +151,22 @@ export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
   );
 
   const ListEmptyComponent = useMemo(
-    () =>
-      directory.isInitialLoading ? (
-        <ScreenLoader />
-      ) : (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>
-            {directory.searchQuery.trim() || directory.villageLabel
-              ? t("farmers.tryDifferentSearch")
-              : t("farmers.noFarmers")}
-          </Text>
-        </View>
-      ),
-    [directory.isInitialLoading, directory.searchQuery, directory.villageLabel, t]
+    () => (
+      <View style={styles.emptyState}>
+        <Text style={styles.emptyStateText}>
+          {directory.searchQuery.trim() || directory.villageLabel
+            ? t("farmers.tryDifferentSearch")
+            : t("farmers.noFarmers")}
+        </Text>
+      </View>
+    ),
+    [directory.searchQuery, directory.villageLabel, t]
   );
 
   const ListFooterComponent = useMemo(
     () =>
       directory.isLoadingMore ? (
-        <View style={styles.footerLoader}>
-          <ActivityIndicator color={DS.accent} />
-          <Text style={styles.footerLoaderText}>{t("work.loadingMore")}</Text>
-        </View>
+        <InlineSeedLoader label={t("work.loadingMore")} />
       ) : null,
     [directory.isLoadingMore, t]
   );
@@ -287,25 +281,31 @@ export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
         </View>
       ) : null}
 
-      <FlashList
-        data={directory.listData}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        stickyHeaderIndices={stickyIndices}
-        style={styles.list}
-        contentContainerStyle={{ paddingBottom: tabInset + 16, paddingTop: 4 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={directory.isRefreshing}
-            onRefresh={directory.onRefresh}
-            {...refreshControlProps}
+      <View style={styles.listArea}>
+        {directory.isInitialLoading ? (
+          <ScreenLoader />
+        ) : (
+          <FlashList
+            data={directory.listData}
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
+            stickyHeaderIndices={stickyIndices}
+            style={styles.list}
+            contentContainerStyle={{ paddingBottom: tabInset + 16, paddingTop: 4 }}
+            refreshControl={
+              <RefreshControl
+                refreshing={directory.isRefreshing}
+                onRefresh={directory.onRefresh}
+                {...refreshControlProps}
+              />
+            }
+            onEndReached={directory.onEndReached}
+            onEndReachedThreshold={0.2}
+            ListFooterComponent={ListFooterComponent}
+            ListEmptyComponent={ListEmptyComponent}
           />
-        }
-        onEndReached={directory.onEndReached}
-        onEndReachedThreshold={0.2}
-        ListFooterComponent={ListFooterComponent}
-        ListEmptyComponent={ListEmptyComponent}
-      />
+        )}
+      </View>
 
       <VillageFilterSheet
         ref={villageSheetRef}
@@ -321,6 +321,10 @@ export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
 
 const styles = StyleSheet.create({
   shell: {
+    flex: 1,
+    minHeight: 0
+  },
+  listArea: {
     flex: 1,
     minHeight: 0
   },

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View, ViewStyle } from "react-native";
 import { useTheme } from "../theme";
 import { cacheBustPhotoUrl, initialsFromName } from "../utils/profilePhotoUrl";
+import { logFailedMediaUrl } from "../utils/resolveMediaUrl";
 
 export type ProfileAvatarSize = "xs" | "sm" | "md" | "lg" | "xl" | "xxl";
 
@@ -70,7 +71,10 @@ export function ProfileAvatar({
           source={{ uri }}
           style={{ width: dim, height: dim, borderRadius: dim / 2 }}
           resizeMode="cover"
-          onError={() => setImgFailed(true)}
+          onError={() => {
+            logFailedMediaUrl(photoUrl, "ProfileAvatar");
+            setImgFailed(true);
+          }}
         />
       ) : (
         <Text

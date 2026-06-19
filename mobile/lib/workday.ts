@@ -2,10 +2,12 @@ import {
   ensureActiveWorkday,
   type WorkdayStatus
 } from "../../src/api/tracking";
+import { saveDutySessionFromWorkday } from "../../src/storage/workdaySessionStorage";
 import {
   startBackgroundLocationTracking,
   type StartBackgroundTrackingResult
 } from "../../src/tracking/backgroundLocationService";
+import { markDutyTrackingSessionActive } from "../../src/tracking/trackingSession";
 import { ensureTrackingPermissions, getForegroundLocation } from "../../src/utils/location";
 import type { LocationObject } from "expo-location";
 
@@ -36,7 +38,7 @@ export type StartWorkdayOptions = {
 };
 
 /**
- * Shared workday start: permissions → GPS fix → POST workday start → background tracking.
+ * Shared duty start: permissions → GPS fix → POST duty/start → background tracking.
  * TrackingContext applies UI state and foreground sync loops after this returns.
  */
 export async function startWorkday(options: StartWorkdayOptions): Promise<StartWorkdayResult> {
@@ -76,6 +78,8 @@ export async function startWorkday(options: StartWorkdayOptions): Promise<StartW
 
   try {
     const workday = await ensureActiveWorkday(coords);
+    await saveDutySessionFromWorkday(workday);
+    markDutyTrackingSessionActive(true);
     const background = await startBackgroundLocationTracking();
     return {
       ok: true,

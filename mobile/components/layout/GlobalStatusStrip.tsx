@@ -1,8 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import NetInfo from "@react-native-community/netinfo";
-import { useNavigation } from "@react-navigation/native";
-import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useConnectivityOnline } from "../../../src/hooks/useConnectivityOnline";
 import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
@@ -10,21 +9,21 @@ import { autoFlushPendingGps } from "../../lib/sync/offlineSyncManager";
 import { useSyncStore } from "../../lib/store/syncStore";
 import { Colors, FontSize, FontWeight, Layout, Spacing } from "../../lib/theme";
 
-type StripMode = "hidden" | "offline" | "sync";
+type StripMode = "hidden" | "offline" | "syncing";
 
-function resolveMode(input: { offline: boolean; pendingVisits: number }): StripMode {
-  if (input.offline) return "offline";
-  if (input.pendingVisits > 0) return "sync";
+function resolveMode(input: { offline: boolean; pendingVisits: number; syncing: boolean }): StripMode {
+  if (input.offline && input.pendingVisits > 0) return "offline";
+  if (input.pendingVisits > 0) return "syncing";
   return "hidden";
 }
 
 export function GlobalStatusStrip() {
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation<any>();
   const apiOnline = useConnectivityOnline();
   const [netOffline, setNetOffline] = useState(false);
-  const { pendingCount, syncAll } = useOfflineSync();
+  const { pendingCount, syncAll, syncing } = useOfflineSync();
   const pendingGps = useSyncStore((s) => s.pendingGPSCount);
+  const autoSyncStarted = useRef(false);
 
   useEffect(() => {
     const unsub = NetInfo.addEventListener((state) => {
@@ -34,7 +33,7 @@ export function GlobalStatusStrip() {
     return unsub;
   }, []);
 
-  // Route GPS uploads happen automatically — employees never tap Sync for this.
+  // GPS route uploads — fully automatic, never shown to employee.
   useEffect(() => {
     if (pendingGps <= 0 || netOffline || !apiOnline) return;
     const timer = setTimeout(() => {
@@ -43,14 +42,28 @@ export function GlobalStatusStrip() {
     return () => clearTimeout(timer);
   }, [apiOnline, netOffline, pendingGps]);
 
+  // Pending visits sync automatically when back online.
+  useEffect(() => {
+    if (pendingCount <= 0 || netOffline || !apiOnline || syncing) {
+      autoSyncStarted.current = false;
+      return;
+    }
+    if (autoSyncStarted.current) return;
+    autoSyncStarted.current = true;
+    void syncAll().finally(() => {
+      autoSyncStarted.current = false;
+    });
+  }, [apiOnline, netOffline, pendingCount, syncAll, syncing]);
+
   const offline = netOffline || !apiOnline;
   const mode = useMemo(
     () =>
       resolveMode({
         offline,
-        pendingVisits: pendingCount
+        pendingVisits: pendingCount,
+        syncing
       }),
-    [offline, pendingCount]
+    [offline, pendingCount, syncing]
   );
 
   if (mode === "hidden") {
@@ -60,25 +73,14 @@ export function GlobalStatusStrip() {
   const bg = Colors.amberBg;
   const iconColor = Colors.amberText;
 
-  let message = "";
-  if (mode === "offline") {
-    const parts = ["Offline"];
-    if (pendingCount > 0) parts.push(`${pendingCount} visit${pendingCount === 1 ? "" : "s"} pending`);
-    message = parts.join(" · ");
-  } else {
-    message = `${pendingCount} visit${pendingCount === 1 ? "" : "s"} pending sync`;
-  }
+  const message =
+    mode === "offline"
+      ? `Offline · ${pendingCount} visit${pendingCount === 1 ? "" : "s"} will sync when online`
+      : syncing
+        ? `Syncing ${pendingCount} visit${pendingCount === 1 ? "" : "s"}…`
+        : `${pendingCount} visit${pendingCount === 1 ? "" : "s"} syncing automatically`;
 
-  const iconName = mode === "offline" ? "cloud-offline-outline" : "cloud-upload-outline";
-
-  function onSyncPress() {
-    const root = navigation.getParent();
-    if (pendingCount > 0) {
-      void syncAll();
-      return;
-    }
-    root?.navigate("OfflineSync");
-  }
+  const iconName = mode === "offline" ? "cloud-offline-outline" : "sync-outline";
 
   return (
     <View style={[styles.wrap, { paddingTop: insets.top + Spacing.xs, backgroundColor: bg }]}>
@@ -86,11 +88,6 @@ export function GlobalStatusStrip() {
       <Text style={styles.message} numberOfLines={2}>
         {message}
       </Text>
-      {pendingCount > 0 ? (
-        <Pressable onPress={onSyncPress} hitSlop={8} accessibilityRole="button">
-          <Text style={styles.action}>Sync</Text>
-        </Pressable>
-      ) : null}
     </View>
   );
 }
@@ -113,10 +110,5 @@ const styles = StyleSheet.create({
     fontSize: FontSize.base,
     fontWeight: FontWeight.medium,
     lineHeight: 18
-  },
-  action: {
-    color: Colors.brand700,
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.semibold
   }
 });

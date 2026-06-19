@@ -1,5 +1,5 @@
 import { Alert, Linking } from "react-native";
-import { ensureTrackingPermissions } from "./location";
+import { ensureForegroundPermission } from "./location";
 import { isGpsAvailable, probeGpsAvailability } from "./gpsStatus";
 
 const TITLE = "Location Required";
@@ -24,16 +24,29 @@ export function showLocationRequiredModal(onEnable?: () => void) {
   ]);
 }
 
-/** Prompts for permission when needed; shows the location modal when GPS is unavailable. */
+const GPS_OFF_MESSAGE =
+  "Turn on device location (GPS) in your phone settings to continue field work.";
+
+/** Foreground GPS only — never re-prompts for background permission on visits. */
 export async function requestGpsForFieldWork(): Promise<boolean> {
   const availability = await probeGpsAvailability();
   if (isGpsAvailable(availability)) {
     return true;
   }
 
-  const permissions = await ensureTrackingPermissions();
-  if (permissions.foreground) {
+  if (availability === "services_off") {
+    Alert.alert(TITLE, GPS_OFF_MESSAGE);
+    return false;
+  }
+
+  const permission = await ensureForegroundPermission();
+  if (permission.granted) {
     return true;
+  }
+
+  if (permission.message?.includes("GPS is turned off")) {
+    Alert.alert(TITLE, GPS_OFF_MESSAGE);
+    return false;
   }
 
   showLocationRequiredModal();

@@ -1,7 +1,13 @@
 import * as Location from "expo-location";
 
 /** Device GPS / permission probe result (no permission prompt). */
-export type GpsAvailability = "active" | "services_off" | "permission_denied" | "permission_undetermined";
+export type GpsAvailability =
+  | "active"
+  | "services_off"
+  | "permission_denied"
+  | "permission_undetermined"
+  | "foreground_only"
+  | "background_denied";
 
 export async function probeGpsAvailability(): Promise<GpsAvailability> {
   try {
@@ -11,21 +17,26 @@ export async function probeGpsAvailability(): Promise<GpsAvailability> {
     }
 
     const permission = await Location.getForegroundPermissionsAsync();
-    if (permission.status === "granted") {
+    if (permission.status !== "granted") {
+      if (permission.status === "denied" && !permission.canAskAgain) {
+        return "permission_denied";
+      }
+      return "permission_undetermined";
+    }
+
+    const background = await Location.getBackgroundPermissionsAsync();
+    if (background.status === "granted") {
       return "active";
     }
-    if (permission.status === "denied" && !permission.canAskAgain) {
-      return "permission_denied";
+    if (background.status === "denied" && !background.canAskAgain) {
+      return "background_denied";
     }
-    if (permission.status === "denied") {
-      return "permission_denied";
-    }
-    return "permission_undetermined";
+    return "foreground_only";
   } catch {
     return "services_off";
   }
 }
 
 export function isGpsAvailable(availability: GpsAvailability) {
-  return availability === "active";
+  return availability === "active" || availability === "foreground_only";
 }

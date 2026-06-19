@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
 import { StyleSheet, View, type ViewStyle } from "react-native";
-import { Colors, Layout, Radius } from "../../lib/theme";
+import { Colors, Layout, Radius, Shadow } from "../../lib/theme";
 
 type Props = {
   children: ReactNode;
@@ -18,6 +18,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderRadius: Radius.card,
     borderWidth: Layout.cardBorderWidth,
-    overflow: "hidden"
+    overflow: "hidden",
+    ...Shadow.card
   }
 });

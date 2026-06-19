@@ -1,9 +1,22 @@
 /** @type {import('expo/config').ExpoConfig} */
 const brand = require("./src/config/brand.config.js");
-const PRODUCTION_API_URL = "https://agri-clinic-backend.onrender.com/api/v1/";
+const PRODUCTION_API_HOST = "13.207.17.117";
+const PRODUCTION_API_ORIGIN = `http://${PRODUCTION_API_HOST}`;
+const PRODUCTION_API_BASE_URL = `${PRODUCTION_API_ORIGIN}/api/v1/`;
 
-const resolvedApiUrl = process.env.EXPO_PUBLIC_API_URL || PRODUCTION_API_URL;
-const isProductionApi = resolvedApiUrl.includes("agri-clinic-backend.onrender.com");
+function normalizeApiUrl(raw) {
+  const trimmed = String(raw || "").trim();
+  if (!trimmed) return PRODUCTION_API_BASE_URL;
+  let url = trimmed.replace(/\/+$/, "");
+  url = url.replace(/(\/api\/v1)+$/i, "/api/v1");
+  if (!/\/api\/v1$/i.test(url)) {
+    url = /\/api$/i.test(url) ? `${url}/v1` : `${url}/api/v1`;
+  }
+  return `${url}/`;
+}
+
+const resolvedApiUrl = normalizeApiUrl(process.env.EXPO_PUBLIC_API_URL || PRODUCTION_API_ORIGIN);
+const isProductionApi = resolvedApiUrl.includes(PRODUCTION_API_HOST);
 
 module.exports = () => ({
   name: brand.appName,
@@ -26,12 +39,15 @@ module.exports = () => ({
       UIBackgroundModes: ["location"],
       NSLocationWhenInUseUsageDescription: `Allow ${brand.appName} to use your location while you are working in the field.`,
       NSLocationAlwaysAndWhenInUseUsageDescription:
-        "Allow location all the time for route tracking during your workday."
+        "Allow location all the time for route tracking during your workday.",
+      NSUserNotificationsUsageDescription:
+        "Send hydration, heat, and low-battery reminders during your field workday."
     }
   },
   android: {
     package: "com.kavya.agriclinic",
-    versionCode: 2,
+    versionCode: 3,
+    usesCleartextTraffic: true,
     permissions: [
       "ACCESS_COARSE_LOCATION",
       "ACCESS_FINE_LOCATION",
@@ -102,7 +118,13 @@ module.exports = () => ({
       }
     ],
     "@react-native-community/datetimepicker",
-    "expo-secure-store"
+    "expo-secure-store",
+    [
+      "expo-notifications",
+      {
+        sounds: ["./assets/sounds/water_pour.wav", "./assets/sounds/heat.wav"]
+      }
+    ]
   ],
   extra: {
     eas: {

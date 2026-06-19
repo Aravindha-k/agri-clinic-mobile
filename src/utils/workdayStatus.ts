@@ -1,5 +1,6 @@
 import type { WorkdayStatus } from "../api/tracking";
 import { WORKDAY_EXPIRED_ALERT_MESSAGE } from "../constants/workdayMessages";
+import { ApiRequestError } from "./apiError";
 
 export type WorkdayFetchResult =
   | { kind: "active"; workday: WorkdayStatus }
@@ -44,6 +45,9 @@ export function normalizeWorkdayRow(raw: unknown): WorkdayStatus | null {
     return null;
   }
 
+  const dutySessionRaw = row.duty_session_id ?? row.session_id ?? row.duty_id;
+  const dutySessionId = dutySessionRaw != null ? Number(dutySessionRaw) : undefined;
+
   const startedAt =
     typeof row.started_at === "string"
       ? row.started_at
@@ -54,6 +58,10 @@ export function normalizeWorkdayRow(raw: unknown): WorkdayStatus | null {
   return {
     id: typeof row.id === "number" ? row.id : workdayId,
     workday_id: workdayId,
+    duty_session_id:
+      dutySessionId != null && Number.isFinite(dutySessionId) && dutySessionId > 0
+        ? dutySessionId
+        : workdayId,
     date: typeof row.date === "string" ? row.date : undefined,
     start_time: typeof row.start_time === "string" ? row.start_time : startedAt,
     started_at: startedAt,
@@ -75,10 +83,19 @@ export function normalizeActiveWorkday(raw: WorkdayStatus | null | undefined): W
 }
 
 export function isWorkdayAlreadyActiveMessage(message: string): boolean {
-  return /already.*(active|started)|workday.*(active|started)|duplicate.*workday/i.test(message);
+  return /already.*(active|started)|workday.*(active|started)|duty.*(active|started)|duplicate.*(workday|duty)/i.test(
+    message
+  );
+}
+
+export function isDutyCurrentNotFoundError(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.status === 404;
 }
 
 export function workdayFetchFromError(error: unknown): WorkdayFetchResult | null {
+  if (isDutyCurrentNotFoundError(error)) {
+    return { kind: "none" };
+  }
   const message = error instanceof Error ? error.message : String(error ?? "");
   if (isWorkdayExpiredMessage(message)) {
     return { kind: "expired", message: WORKDAY_EXPIRED_ALERT_MESSAGE };

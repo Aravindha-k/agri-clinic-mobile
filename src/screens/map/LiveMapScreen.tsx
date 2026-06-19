@@ -112,7 +112,8 @@ export function LiveMapScreen({ navigation }: Props) {
               lat: serverPin.lat,
               lng: serverPin.lng,
               title: "Last check-in",
-              description: lastSyncTime ? formatShortDateTime(lastSyncTime) : undefined
+              description: lastSyncTime ? formatShortDateTime(lastSyncTime) : undefined,
+              kind: "checkin" as const
             }
           ]
         : [],

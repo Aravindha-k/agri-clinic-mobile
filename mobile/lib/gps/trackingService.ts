@@ -1,6 +1,7 @@
+import * as Battery from "expo-battery";
 import * as SecureStore from "expo-secure-store";
 import type { LocationPushPayload } from "../../../src/api/tracking";
-import { pushLocationsBulk, sendHeartbeat, syncLocationQueue } from "../../../src/api/tracking";
+import { pushLocationsBulk, sendTrackingHeartbeat as postTrackingHeartbeat, syncLocationQueue } from "../../../src/api/tracking";
 import {
   addGPSPoint,
   flushGPSQueue,
@@ -8,12 +9,13 @@ import {
   type PendingGPSPoint
 } from "../sync/offlineSyncManager";
 import { getJson, setJson, storage } from "../storage";
+import { GPS_QUEUE_MAX_POINTS } from "../../../src/tracking/trackingConfig";
 
 const LEGACY_QUEUE_KEY = "agri_pending_location_push_v2";
 
 export const PENDING_GPS_KEY = "pending_gps_v1";
 export const LAST_GPS_SYNC_KEY = "last_gps_sync_v1";
-export const MAX_GPS_BUFFER = 200;
+export const MAX_GPS_BUFFER = GPS_QUEUE_MAX_POINTS;
 export const GPS_FLUSH_THRESHOLD = 1;
 export const GPS_FLUSH_INTERVAL_MS = 45_000;
 export const GPS_HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
@@ -47,11 +49,13 @@ function pendingToGpsBufferPoint(point: PendingGPSPoint): GpsBufferPoint {
     heading: point.heading ?? undefined,
     captured_at: point.recorded_at,
     recorded_at: point.recorded_at,
-    battery_level: point.battery_level
+    battery_level: point.battery_level,
+    duty_session_id: point.duty_session_id,
+    workday_id: point.duty_session_id
   };
 }
 
-function toPendingPoint(payload: GpsBufferPoint): PendingGPSPoint {
+export function toPendingPoint(payload: GpsBufferPoint): PendingGPSPoint {
   return {
     latitude: payload.latitude,
     longitude: payload.longitude,
@@ -59,6 +63,7 @@ function toPendingPoint(payload: GpsBufferPoint): PendingGPSPoint {
     speed: payload.speed ?? null,
     heading: payload.heading ?? null,
     battery_level: payload.battery_level ?? 0,
+    duty_session_id: payload.duty_session_id ?? payload.workday_id,
     recorded_at: payload.recorded_at || payload.captured_at || new Date().toISOString(),
     network_type: (payload as { network_type?: string }).network_type || "unknown"
   };
@@ -129,7 +134,7 @@ export function getLastBufferedPointTime(): string | null {
 
 export async function sendTrackingHeartbeat() {
   const gpsEnabled = gpsEnabledProbe?.() ?? true;
-  await sendHeartbeat(gpsEnabled);
+  await postTrackingHeartbeat({ gpsEnabledHint: gpsEnabled });
 }
 
 export function startGpsTrackingService(options?: { isGpsEnabled?: () => boolean }) {
@@ -163,7 +168,15 @@ export function stopGpsTrackingService() {
 }
 
 export async function getBatteryPercent(): Promise<number | null> {
-  return null;
+  try {
+    const level = await Battery.getBatteryLevelAsync();
+    if (!Number.isFinite(level) || level < 0) {
+      return null;
+    }
+    return Math.round(level * 100);
+  } catch {
+    return null;
+  }
 }
 
 export function toGpsBufferPoint(

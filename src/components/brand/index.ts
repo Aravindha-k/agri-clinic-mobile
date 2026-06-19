@@ -1,7 +1,9 @@
 export { BRAND } from "../../config/brand";
 export { AppLogo, type AppLogoSize } from "./AppLogo";
+export { AnimatedBrandLogo } from "./AnimatedBrandLogo";
+export { AppLoadingLogo } from "./AppLoadingLogo";
 export { BrandLogo, type BrandLogoSize, type BrandLogoVariant } from "./BrandLogo";
-export { AnimatedSplashScreen, SPLASH_INTRO_MS } from "./AnimatedSplashScreen";
+export { KavyaSplashScreen, SPLASH_INTRO_MS, SPLASH_REDUCE_MOTION_MS } from "./KavyaSplashScreen";
 export { BrandedLoader } from "./BrandedLoader";
 export { BrandedSplash } from "./BrandedSplash";
 export { AppScreen } from "./AppScreen";

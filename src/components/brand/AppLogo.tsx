@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image, StyleSheet, Text, View, ViewStyle } from "react-native";
-import { BRAND, LOGO_IMAGE } from "../../config/brand";
+import { BRAND, BRAND_COLORS, LOGO_IMAGE } from "../../config/brand";
 import { LOGO_SIZES } from "../../brand/logoSizing";
 import { useTheme } from "../../theme";
 
@@ -38,7 +38,13 @@ export function AppLogo({
   const titleColor = onPrimary ? "#FFFFFF" : c.primaryDark;
   const subColor = onPrimary ? "rgba(255,255,255,0.82)" : c.muted;
   const titleSize = compactWordmark && horizontal
-    ? 11
+    ? size === "xl"
+      ? 16
+      : size === "lg"
+        ? 14
+        : size === "md"
+          ? 12
+          : 11
     : horizontal
       ? size === "xs"
         ? 13
@@ -51,17 +57,28 @@ export function AppLogo({
         ? 20
         : 15;
   const tagSize =
-    compactWordmark && horizontal ? 9 : horizontal && size === "xs" ? 10 : 11;
+    compactWordmark && horizontal
+      ? size === "lg" || size === "xl"
+        ? 10
+        : 9
+      : horizontal && size === "xs"
+        ? 10
+        : 11;
   const ringPad =
     size === "xs" ? 8 : size === "sm" ? 12 : size === "lg" ? 14 : size === "xl" ? 12 : 16;
 
   const subline = BRAND.name === BRAND.appName ? BRAND.tagline : BRAND.name;
+  const roundBareMark = bare && Boolean(LOGO_IMAGE);
 
   const mark = LOGO_IMAGE ? (
     <Image
       source={LOGO_IMAGE}
-      style={{ width: dim, height: dim, aspectRatio: 1 }}
-      resizeMode="contain"
+      style={
+        roundBareMark
+          ? { width: dim * 1.12, height: dim * 1.12 }
+          : { width: dim, height: dim, aspectRatio: 1 }
+      }
+      resizeMode={roundBareMark ? "cover" : "contain"}
       accessibilityLabel="Clinic logo"
     />
   ) : (
@@ -71,7 +88,22 @@ export function AppLogo({
   return (
     <View style={[styles.wrap, horizontal && styles.wrapHorizontal, bare && styles.wrapBare, style]}>
       {bare ? (
-        <View style={styles.bareMark}>{mark}</View>
+        <View
+          style={[
+            styles.bareMark,
+            roundBareMark && {
+              width: dim,
+              height: dim,
+              borderRadius: dim / 2,
+              backgroundColor: onPrimary ? "#FFFFFF" : c.primarySoft,
+              borderColor: onPrimary ? "rgba(255,255,255,0.45)" : BRAND_COLORS.primarySoftBorder,
+              borderWidth: onPrimary ? 2 : StyleSheet.hairlineWidth,
+              overflow: "hidden"
+            }
+          ]}
+        >
+          {mark}
+        </View>
       ) : (
         <View style={[styles.ring, { width: dim + ringPad, height: dim + ringPad, backgroundColor: ringBg }]}>
           {mark}
@@ -113,7 +145,8 @@ const styles = StyleSheet.create({
     width: "100%"
   },
   bareMark: {
-    alignItems: "flex-start",
+    alignItems: "center",
+    flexShrink: 0,
     justifyContent: "center"
   },
   wrapHorizontal: {

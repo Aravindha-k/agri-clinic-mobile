@@ -8,9 +8,9 @@ module.exports = {
   portalSubtitle: "Field Officer App",
   loaderSubtitle: "Diagnostics • Solutions • Growth",
   employeeHint: "For field employees only",
-  splashBackgroundColor: "#FFFFFF",
+  splashBackgroundColor: "#142818",
   /** Branded intro duration before login/home (ms). */
-  splashDurationMs: 7500,
+  splashDurationMs: 5500,
   iconBackgroundColor: "#0F5132",
   logoAsset: "./assets/brand/logo.png",
   iconAsset: "./assets/brand/app-icon.png",

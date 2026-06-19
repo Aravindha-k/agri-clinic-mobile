@@ -202,6 +202,9 @@ export function buildFarmerWorkQueueRows(
   for (const sectionId of SECTION_ORDER) {
     const sectionFarmers = [...buckets[sectionId]].sort((a, b) => sortFarmersByPriority(a, b, ref));
     const count = sectionFarmers.length;
+    if (sectionId === "follow_ups_today" && count === 0) {
+      continue;
+    }
     const collapsed = options?.collapsedSections?.has(sectionId) ?? false;
     const title = options?.sectionTitle
       ? options.sectionTitle(sectionId, count)

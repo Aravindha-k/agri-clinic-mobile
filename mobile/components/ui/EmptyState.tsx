@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, Text, View } from "react-native";
-import { Colors, FontSize, FontWeight, Radius } from "../../lib/theme";
+import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from "../../lib/theme";
 import { PrimaryButton } from "./PrimaryButton";
 
 type Props = {
@@ -14,7 +14,7 @@ type Props = {
 export function EmptyState({ icon, title, subtitle, action, onAction }: Props) {
   return (
     <View style={styles.wrap}>
-      <View style={[styles.iconWrap, { backgroundColor: Colors.brand100, borderRadius: Radius.xxl }]}>
+      <View style={[styles.iconWrap, { backgroundColor: Colors.brand50 }]}>
         <Ionicons name={icon} size={48} color={Colors.brand700} />
       </View>
       <Text style={[styles.title, { color: Colors.text1 }]}>{title}</Text>
@@ -29,29 +29,35 @@ export function EmptyState({ icon, title, subtitle, action, onAction }: Props) {
 const styles = StyleSheet.create({
   wrap: {
     alignItems: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 32
+    paddingHorizontal: Spacing.xxl,
+    paddingVertical: 40
   },
   iconWrap: {
     alignItems: "center",
-    height: 80,
+    backgroundColor: Colors.brand50,
+    borderColor: Colors.brand100,
+    borderRadius: Radius.card,
+    borderWidth: 1,
+    height: 84,
     justifyContent: "center",
-    marginBottom: 16,
-    width: 80
+    marginBottom: Spacing.lg,
+    width: 84,
+    ...Shadow.card
   },
   title: {
-    fontSize: FontSize.lg,
+    fontSize: FontSize.xl,
     fontWeight: FontWeight.semibold,
     textAlign: "center"
   },
   subtitle: {
     fontSize: FontSize.base,
-    lineHeight: 20,
-    marginTop: 8,
+    lineHeight: 21,
+    marginTop: Spacing.sm,
+    maxWidth: 280,
     textAlign: "center"
   },
   action: {
-    marginTop: 20,
-    minWidth: 180
+    marginTop: Spacing.xl,
+    minWidth: 200
   }
 });

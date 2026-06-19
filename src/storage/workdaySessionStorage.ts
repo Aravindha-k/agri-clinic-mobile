@@ -2,6 +2,7 @@ import * as SecureStore from "expo-secure-store";
 
 export type CachedActiveWorkday = {
   workday_id: number;
+  duty_session_id: number;
   started_at: string;
   status: "working";
   last_known_distance: number;
@@ -20,8 +21,11 @@ function parseCache(raw: string | null): CachedActiveWorkday | null {
     const workdayId = Number(parsed.workday_id);
     if (!Number.isFinite(workdayId) || workdayId <= 0) return null;
     if (typeof parsed.started_at !== "string" || !parsed.started_at.trim()) return null;
+    const dutySessionId = Number(parsed.duty_session_id ?? workdayId);
     return {
       workday_id: workdayId,
+      duty_session_id:
+        Number.isFinite(dutySessionId) && dutySessionId > 0 ? dutySessionId : workdayId,
       started_at: parsed.started_at.trim(),
       status: "working",
       last_known_distance: Number(parsed.last_known_distance) || 0,
@@ -47,6 +51,7 @@ export async function readCachedActiveWorkday(): Promise<CachedActiveWorkday | n
 
     const migrated: CachedActiveWorkday = {
       workday_id: id,
+      duty_session_id: id,
       started_at: startedRaw.trim(),
       status: "working",
       last_known_distance: 0,
@@ -90,6 +95,34 @@ export async function updateCachedWorkdayMetrics(
 export async function getActiveWorkdayId(): Promise<number | null> {
   const cached = await readCachedActiveWorkday();
   return cached?.workday_id ?? null;
+}
+
+export async function getActiveDutySessionId(): Promise<number | null> {
+  const cached = await readCachedActiveWorkday();
+  return cached?.duty_session_id ?? cached?.workday_id ?? null;
+}
+
+export async function saveDutySessionFromWorkday(workday: {
+  workday_id: number;
+  duty_session_id?: number;
+  started_at?: string;
+  start_time?: string;
+}): Promise<void> {
+  const startedAt =
+    typeof workday.started_at === "string" && workday.started_at.trim()
+      ? workday.started_at.trim()
+      : typeof workday.start_time === "string" && workday.start_time.trim()
+        ? workday.start_time.trim()
+        : new Date().toISOString();
+  const dutySessionId = workday.duty_session_id ?? workday.workday_id;
+  await saveCachedActiveWorkday({
+    workday_id: workday.workday_id,
+    duty_session_id: dutySessionId,
+    started_at: startedAt,
+    status: "working",
+    last_known_distance: 0,
+    last_known_points: 0
+  });
 }
 
 export async function setActiveWorkdayId(workdayId: number | null): Promise<void> {

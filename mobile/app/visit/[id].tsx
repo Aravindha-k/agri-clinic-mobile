@@ -53,6 +53,7 @@ import {
   visitRecommendationText
 } from "../../lib/visitDetailApi";
 import { Avatar, EmptyState, GhostButton, PrimaryButton, SectionHeader, StatusChip } from "../../components/ui";
+import { LocationPreviewMap } from "../../../src/components/map/LocationPreviewMap";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 
 type Props = NativeStackScreenProps<VisitsStackParamList, "VisitDetail">;
@@ -505,6 +506,20 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
           ) : null}
         </View>
 
+        {hasGps ? (
+          <View style={styles.mapPreviewWrap}>
+            <SectionHeader title="FIELD LOCATION" />
+            <LocationPreviewMap
+              height={200}
+              latitude={visit.latitude}
+              longitude={visit.longitude}
+              title={farmer?.name ?? "Visit location"}
+              description={address}
+              markerKind="visit"
+            />
+          </View>
+        ) : null}
+
         <View style={styles.section}>
           <SectionHeader title="PHOTOS" />
           <View style={styles.photoGrid}>
@@ -818,6 +833,9 @@ const styles = StyleSheet.create({
   },
   mapsBtn: {
     minWidth: 118
+  },
+  mapPreviewWrap: {
+    gap: 8
   },
   section: {
     gap: 10

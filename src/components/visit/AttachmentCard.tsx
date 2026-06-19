@@ -7,6 +7,7 @@ import { useTheme } from "../../theme";
 import { listCardType } from "../../theme/listCard";
 import { formatBytes } from "../../utils/visitAttachmentFiles";
 import { formatDisplayDateTime } from "../../utils/format";
+import { resolveMediaUrl, logFailedMediaUrl } from "../../utils/resolveMediaUrl";
 
 type Props = {
   attachment: VisitAttachment;
@@ -27,7 +28,7 @@ export function AttachmentCard({ attachment, deleting, onDelete }: Props) {
   }, []);
 
   async function toggleAudio() {
-    if (!attachment.file_url) return;
+    if (!mediaUri) return;
     try {
       if (playing && soundRef.current) {
         await soundRef.current.stopAsync();
@@ -36,7 +37,7 @@ export function AttachmentCard({ attachment, deleting, onDelete }: Props) {
         setPlaying(false);
         return;
       }
-      const { sound } = await Audio.Sound.createAsync({ uri: attachment.file_url });
+      const { sound } = await Audio.Sound.createAsync({ uri: mediaUri });
       soundRef.current = sound;
       setPlaying(true);
       sound.setOnPlaybackStatusUpdate((status) => {
@@ -54,11 +55,17 @@ export function AttachmentCard({ attachment, deleting, onDelete }: Props) {
 
   const when = attachment.uploaded_at ? formatDisplayDateTime(attachment.uploaded_at) : "—";
   const type = attachment.attachment_type;
+  const mediaUri = resolveMediaUrl(attachment.file_url);
 
   return (
     <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
-      {type === "image" && attachment.file_url ? (
-        <Image source={{ uri: attachment.file_url }} style={styles.thumb} resizeMode="cover" />
+      {type === "image" && mediaUri ? (
+        <Image
+          source={{ uri: mediaUri }}
+          style={styles.thumb}
+          resizeMode="cover"
+          onError={() => logFailedMediaUrl(attachment.file_url, "AttachmentCard")}
+        />
       ) : (
         <View style={[styles.iconBox, { backgroundColor: c.primarySoft }]}>
           <Ionicons
@@ -95,7 +102,7 @@ export function AttachmentCard({ attachment, deleting, onDelete }: Props) {
           </Text>
         )}
 
-        {type === "audio" && attachment.file_url ? (
+        {type === "audio" && mediaUri ? (
           <Pressable
             onPress={() => void toggleAudio()}
             style={[styles.playBtn, { backgroundColor: c.primarySoft }]}

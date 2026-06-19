@@ -11,7 +11,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://agri-clinic-backend.onrender.com/api/v1/"
+        "EXPO_PUBLIC_API_URL": "http://13.207.17.117"
       }
     },
     "preview": {
@@ -20,7 +20,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://agri-clinic-backend.onrender.com/api/v1/"
+        "EXPO_PUBLIC_API_URL": "http://13.207.17.117"
       }
     },
     "production": {
@@ -29,7 +29,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://agri-clinic-backend.onrender.com/api/v1/"
+        "EXPO_PUBLIC_API_URL": "http://13.207.17.117"
       }
     },
     "production-aab": {

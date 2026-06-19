@@ -1,17 +1,22 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, useWindowDimensions, View } from "react-native";
 import type { WorkStackParamList } from "../../../src/navigation/types";
 import { useSafeAreaInsetsCompat } from "../../../src/hooks/useSafeAreaInsetsCompat";
 import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
 import { useI18n } from "../../../src/i18n/I18nContext";
-import { ScreenCanvas, ScreenEntranceWash } from "../../components/layout";
+import { HeaderHero, ScreenCanvas, ScreenEntranceBloom } from "../../components/layout";
 import { FadeInSection, entranceStagger } from "../../components/ui/FadeInSection";
 import { WorkQueuePanel } from "../../components/work/WorkQueuePanel";
 import { WorkSegmentBar, type WorkSegment } from "../../components/work/WorkSegmentBar";
 import { WorkVisitsPanel } from "../../components/work/WorkVisitsPanel";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
-import { Colors, FontSize, FontWeight, Spacing } from "../../lib/theme";
+import {
+  HEADER_IMAGE_POSITION,
+  resolveScreenHeaderHeight,
+  SCREEN_HEADER_IMAGES
+} from "../../lib/screenHeaderImages";
+import { Colors, Spacing } from "../../lib/theme";
 
 type Props = NativeStackScreenProps<WorkStackParamList, "WorkHome">;
 
@@ -19,6 +24,8 @@ export default function WorkTabScreen({ route }: Props) {
   useSecureScreen();
   const { t } = useI18n();
   const { top: safeTop } = useSafeAreaInsetsCompat();
+  const { height: screenH } = useWindowDimensions();
+  const headerHeroHeight = resolveScreenHeaderHeight(screenH);
   const entranceTick = useScreenEntrance();
   const initialSegment = route.params?.segment ?? "queue";
   const [segment, setSegment] = useState<WorkSegment>(initialSegment);
@@ -30,16 +37,18 @@ export default function WorkTabScreen({ route }: Props) {
   }, [route.params?.segment]);
 
   return (
-    <View style={[styles.screen, { paddingTop: safeTop }]}>
+    <View style={styles.screen}>
       <ScreenCanvas />
-      <ScreenEntranceWash replayKey={entranceTick} />
-      <FadeInSection replayKey={entranceTick} delay={entranceStagger(0)}>
-        <View style={styles.header}>
-          <Text style={styles.title}>{t("work.title")}</Text>
-          {segment === "queue" ? <Text style={styles.subtitle}>{t("work.farmersListSubtitle")}</Text> : null}
-        </View>
-      </FadeInSection>
-
+      <ScreenEntranceBloom replayKey={entranceTick} />
+      <HeaderHero
+        imageSource={SCREEN_HEADER_IMAGES.work}
+        height={headerHeroHeight}
+        contentPosition={HEADER_IMAGE_POSITION.work}
+        title={t("work.title")}
+        subtitle={segment === "queue" ? t("work.farmersListSubtitle") : undefined}
+        showLogo
+        safeTop={safeTop}
+      />
       <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
         <WorkSegmentBar
           segment={segment}
@@ -64,21 +73,6 @@ const styles = StyleSheet.create({
   screen: {
     backgroundColor: Colors.bg,
     flex: 1
-  },
-  header: {
-    gap: 2,
-    paddingBottom: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md
-  },
-  title: {
-    color: Colors.text1,
-    fontSize: FontSize.hero,
-    fontWeight: FontWeight.bold
-  },
-  subtitle: {
-    color: Colors.text3,
-    fontSize: FontSize.sm
   },
   body: {
     flex: 1,

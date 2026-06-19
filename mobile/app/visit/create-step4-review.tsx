@@ -1,18 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { uploadVisitAttachmentFile } from "../../../src/api/visitAttachments";
 import { useConnectivityOnline } from "../../../src/hooks/useConnectivityOnline";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
+import { useTracking } from "../../../src/storage/TrackingContext";
+import { getForegroundLocation } from "../../../src/utils/location";
 import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal";
-import { hasVisitObservationOrAdvice } from "../../../src/visit/visitValidation";
+import { hasValidGps, hasVisitObservationOrAdvice } from "../../../src/visit/visitValidation";
 import { FlatCard } from "../../components/layout/FlatCard";
+import { LocationPreviewMap } from "../../../src/components/map/LocationPreviewMap";
 import { PrimaryButton, StatusChip } from "../../components/ui";
 import { StepIndicator } from "../../components/visit/StepIndicator";
 import { VisitFlowHeader } from "../../components/visit/VisitFlowHeader";
 import { enqueuePendingVisit, generateLocalSyncId } from "../../lib/pendingVisitsQueue";
+import { getVisitDutyFields } from "../../lib/visitDutyContext";
 import {
   buildVisitFormValuesFromStore,
   isOfflineSubmitError,
@@ -46,7 +50,12 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
   const replayKey = useVisitEntranceKey();
   const online = useConnectivityOnline();
   const { bumpAfterVisitChange } = useFieldDataRefresh();
+  const { isActive, startDay, busy: workdayBusy } = useTracking();
   const reset = useVisitFormStore((s) => s.reset);
+  const setGpsCoords = useVisitFormStore((s) => s.setGpsCoords);
+
+  const submitInFlightRef = useRef(false);
+  const localSyncIdRef = useRef<string | null>(null);
 
   const farmer = useVisitFormStore((s) => s.farmer);
   const newFarmer = useVisitFormStore((s) => s.newFarmer);
@@ -103,23 +112,72 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
   }
 
   async function handleSubmit() {
+    if (submitInFlightRef.current) return;
     if (!validateSubmit()) return;
+
+    if (!isActive) {
+      const started = await startDay();
+      if (!started) {
+        setSubmitHint(t("visitFlow.workdayFirstBody"));
+        return;
+      }
+    }
 
     const allowed = await requestGpsForFieldWork();
     if (!allowed) return;
 
-    const localSyncId = generateLocalSyncId();
-    const state = useVisitFormStore.getState();
-    const values = buildVisitFormValuesFromStore(state, localSyncId);
-    const gpsConfirmed =
-      state.gpsCoords != null && state.gpsCoords.accuracy != null && state.gpsCoords.accuracy <= 35;
+    submitInFlightRef.current = true;
     setSubmitting(true);
+    setSubmitHint("");
+
+    const localSyncId = localSyncIdRef.current ?? generateLocalSyncId();
+    localSyncIdRef.current = localSyncId;
+
+    let capturedExtras:
+      | {
+          latitude: number;
+          longitude: number;
+          accuracy: number | null;
+          capturedAt: Date;
+          duty: Awaited<ReturnType<typeof getVisitDutyFields>>;
+        }
+      | undefined;
 
     try {
+      const locationResult = await getForegroundLocation();
+      if (!locationResult.granted) {
+        setSubmitHint(locationResult.message || t("visitFlow.gpsNotCaptured"));
+        return;
+      }
+
+      const { latitude, longitude, accuracy } = locationResult.location.coords;
+      setGpsCoords({ latitude, longitude, accuracy: accuracy ?? null });
+      const capturedAt = new Date(locationResult.location.timestamp);
+      const duty = await getVisitDutyFields();
+      capturedExtras = {
+        latitude,
+        longitude,
+        accuracy: accuracy ?? null,
+        capturedAt,
+        duty
+      };
+
+      const state = useVisitFormStore.getState();
+      const values = buildVisitFormValuesFromStore(state, localSyncId, capturedExtras);
+
+      if (!hasValidGps(values)) {
+        setSubmitHint(t("visitFlow.gpsNotCaptured"));
+        return;
+      }
+
+      const gpsConfirmed = accuracy != null && Number.isFinite(accuracy) && accuracy <= 100;
+
       if (!online) {
         throw new Error("offline");
       }
-      const { visit, evidenceFailed } = await submitVisitFromStore(state, localSyncId);
+
+      const { visit, evidenceFailed } = await submitVisitFromStore(state, localSyncId, capturedExtras);
+      localSyncIdRef.current = null;
       const uploadFailures = [...evidenceFailed, ...(await uploadExtraAttachments(visit.id))];
       bumpAfterVisitChange();
       reset();
@@ -134,15 +192,21 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
         savedProblemSeen: values.problem_seen,
         savedRecommendation: values.recommendation,
         savedActionTaken: values.action_taken,
-        submittedAt: new Date().toISOString(),
+        submittedAt: capturedAt.toISOString(),
         gpsConfirmed
       });
     } catch (err) {
       if (!isOfflineSubmitError(err) && (err as Error)?.message !== "offline") {
         setSubmitHint(err instanceof Error ? err.message : t("visitFlow.submitFailed"));
-        setSubmitting(false);
         return;
       }
+
+      const state = useVisitFormStore.getState();
+      const duty = capturedExtras?.duty ?? (await getVisitDutyFields());
+      const values = buildVisitFormValuesFromStore(state, localSyncId, {
+        ...capturedExtras,
+        duty
+      });
 
       await enqueuePendingVisit(
         {
@@ -154,6 +218,7 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
         },
         extraAttachments
       );
+      localSyncIdRef.current = null;
 
       bumpAfterVisitChange();
       reset();
@@ -168,10 +233,11 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
         savedProblemSeen: values.problem_seen,
         savedRecommendation: values.recommendation,
         savedActionTaken: values.action_taken,
-        submittedAt: new Date().toISOString(),
-        gpsConfirmed
+        submittedAt: values.captured_at ?? new Date().toISOString(),
+        gpsConfirmed: hasValidGps(values)
       });
     } finally {
+      submitInFlightRef.current = false;
       setSubmitting(false);
     }
   }
@@ -244,6 +310,20 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
             <Text style={styles.gpsText}>{gpsStatusText(gpsCoords?.accuracy, t)}</Text>
           </View>
         </View>
+
+        <View style={styles.mapPreviewWrap}>
+          <Text style={styles.reviewLabel}>Field location</Text>
+          <LocationPreviewMap
+            height={180}
+            latitude={gpsCoords?.latitude ?? farmer?.latitude}
+            longitude={gpsCoords?.longitude ?? farmer?.longitude}
+            title={farmerName}
+            description={farmerVillage}
+            markerKind="visit"
+            showLiveLocation
+            emptyMessage={t("visitFlow.gpsNotCaptured")}
+          />
+        </View>
         </EntranceBlocks>
       </ScrollView>
 
@@ -252,8 +332,8 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
         <PrimaryButton
           label={online ? t("visitFlow.submitVisit") : t("visitFlow.saveOffline")}
           onPress={() => void handleSubmit()}
-          loading={submitting}
-          disabled={submitting}
+          loading={submitting || workdayBusy}
+          disabled={submitting || workdayBusy}
           icon={
             <Ionicons
               name={online ? "send-outline" : "cloud-upload-outline"}
@@ -350,6 +430,10 @@ const styles = StyleSheet.create({
   gpsText: {
     color: Colors.text3,
     fontSize: FontSize.sm
+  },
+  mapPreviewWrap: {
+    gap: 8,
+    paddingVertical: 4
   },
   footer: {
     backgroundColor: Colors.surface,

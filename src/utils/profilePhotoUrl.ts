@@ -1,4 +1,6 @@
 /** Extract profile photo URL from API entities (supports common field names). */
+import { resolveMediaUrl } from "./resolveMediaUrl";
+
 export function extractPhotoUrl(entity: unknown): string | null {
   if (!entity || typeof entity !== "object") {
     return null;
@@ -17,7 +19,7 @@ export function extractPhotoUrl(entity: unknown): string | null {
   ];
   for (const value of candidates) {
     if (typeof value === "string" && value.trim()) {
-      return value.trim();
+      return resolveMediaUrl(value.trim());
     }
   }
   return null;
@@ -54,8 +56,9 @@ export function initialsFromName(name?: string | null, fallback = "?") {
 
 /** Append cache-buster so Image reloads after upload. */
 export function cacheBustPhotoUrl(url: string, version?: string | number | null) {
-  if (!url) return url;
+  const resolved = resolveMediaUrl(url) ?? url;
+  if (!resolved) return resolved;
   const token = version ?? Date.now();
-  const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}v=${encodeURIComponent(String(token))}`;
+  const sep = resolved.includes("?") ? "&" : "?";
+  return `${resolved}${sep}v=${encodeURIComponent(String(token))}`;
 }

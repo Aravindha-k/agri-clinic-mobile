@@ -1,12 +1,10 @@
 import { useEffect, useRef } from "react";
 import { SESSION_EXPIRED_MESSAGE } from "../constants/authMessages";
 import { SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
-import { WORKDAY_INACTIVE_BANNER_MESSAGE } from "../constants/workdayMessages";
 import { useAuth } from "../storage/AuthContext";
 import { useGpsCompliance } from "../storage/GpsComplianceContext";
 import { useNotifications } from "../storage/NotificationsContext";
 import { useOfflineSync } from "../storage/OfflineSyncContext";
-import { useTracking } from "../storage/TrackingContext";
 
 function SyncFailReporter() {
   const { lastSyncFailed } = useOfflineSync();
@@ -29,10 +27,8 @@ function SyncFailReporter() {
 export function NotificationBridge() {
   const { loginNotice } = useAuth();
   const { status: gpsStatus } = useGpsCompliance();
-  const { workdayInactiveBanner } = useTracking();
   const { push } = useNotifications();
   const lastGps = useRef(gpsStatus);
-  const lastWorkdayBanner = useRef<string | null>(null);
   const lastLoginNotice = useRef<string | null>(null);
 
   useEffect(() => {
@@ -58,16 +54,6 @@ export function NotificationBridge() {
       });
     }
   }, [gpsStatus, push]);
-
-  useEffect(() => {
-    if (!workdayInactiveBanner || workdayInactiveBanner === lastWorkdayBanner.current) return;
-    lastWorkdayBanner.current = workdayInactiveBanner;
-    push({
-      type: "workday_expired",
-      title: "Workday ended",
-      message: WORKDAY_INACTIVE_BANNER_MESSAGE
-    });
-  }, [push, workdayInactiveBanner]);
 
   return <SyncFailReporter />;
 }

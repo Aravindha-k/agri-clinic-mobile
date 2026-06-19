@@ -2,6 +2,7 @@
  * Agri Clinic mobile design tokens.
  * Flat design — no drop shadows. System font only.
  */
+import { Platform, type ViewStyle } from "react-native";
 import { BRAND_COLORS } from "../../src/config/brand";
 
 export const Colors = {
@@ -100,9 +101,27 @@ export const FontWeight = {
   bold: "700" as const
 };
 
-/** Flat design only — use borders instead of elevation. */
+/** Subtle elevation for premium cards — used sparingly on light screens. */
 export const Shadow = {
-  none: {}
+  none: {},
+  card: Platform.select<ViewStyle>({
+    ios: {
+      shadowColor: "#0f1a14",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.07,
+      shadowRadius: 10
+    },
+    default: { elevation: 2 }
+  }),
+  cardRaised: Platform.select<ViewStyle>({
+    ios: {
+      shadowColor: "#0f1a14",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 14
+    },
+    default: { elevation: 4 }
+  })
 } as const;
 
 /** Layout constants from design system */

@@ -10,7 +10,10 @@ type Props = {
 export function SectionHeader({ title, action, onAction }: Props) {
   return (
     <View style={styles.row}>
-      <Text style={styles.title}>{title}</Text>
+      <View style={styles.titleWrap}>
+        <View style={styles.accent} />
+        <Text style={styles.title}>{title}</Text>
+      </View>
       {action && onAction ? (
         <Pressable onPress={onAction} hitSlop={8}>
           <Text style={styles.action}>{action}</Text>
@@ -26,8 +29,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between"
   },
+  titleWrap: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8
+  },
+  accent: {
+    backgroundColor: Colors.brand700,
+    borderRadius: 2,
+    height: 14,
+    width: 3
+  },
   title: {
-    color: Colors.text4,
+    color: Colors.text3,
     fontSize: FontSize.sm,
     fontWeight: FontWeight.semibold,
     letterSpacing: 0.06 * FontSize.sm,

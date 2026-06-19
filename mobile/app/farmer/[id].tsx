@@ -9,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View
 } from "react-native";
 import type { Visit } from "../../../src/api/visits";
@@ -23,7 +24,12 @@ import { prefillFromFarmer } from "../../../src/utils/farmerPrefill";
 import { FarmerPhotoAvatar } from "../../components/farmers/FarmerPhotoAvatar";
 import { EmptyState, GhostButton, PrimaryButton, SectionHeader, Skeleton, StatusChip } from "../../components/ui";
 import { FadeInSection, entranceListStagger, entranceStagger } from "../../components/ui/FadeInSection";
-import { ScreenEntranceShell } from "../../components/layout";
+import { ScreenEntranceShell, HeaderHero } from "../../components/layout";
+import {
+  HEADER_IMAGE_POSITION,
+  resolveScreenHeaderHeight,
+  SCREEN_HEADER_IMAGES
+} from "../../lib/screenHeaderImages";
 import {
   cropFromVisit,
   fetchMobileFarmerProfile,
@@ -153,6 +159,8 @@ export default function FarmerProfileScreen() {
   const route = useRoute<any>();
   const farmerId = Number(route.params?.id);
   const { top: safeTop, bottom: safeBottom } = useSafeAreaInsetsCompat();
+  const { height: screenH } = useWindowDimensions();
+  const headerHeroHeight = resolveScreenHeaderHeight(screenH);
   const refreshControlProps = useRefreshControlProps();
   const { bumpAfterFarmerPhotoChange } = useFieldDataRefresh();
 
@@ -306,20 +314,29 @@ export default function FarmerProfileScreen() {
   const phone = farmer.phone?.trim() || "—";
 
   return (
-    <ScreenEntranceShell style={[styles.screen, { paddingTop: safeTop }]}>
+    <ScreenEntranceShell style={styles.screen}>
       {(entranceTick) => (
         <>
-      <FadeInSection replayKey={entranceTick} delay={entranceStagger(0)}>
-      <View style={styles.topBar}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={18} color={Colors.text1} />
-        </Pressable>
-        <Text style={styles.topTitle}>Farmer profile</Text>
-        <Pressable onPress={openOptionsMenu} style={styles.backBtn}>
-          <Ionicons name="ellipsis-vertical" size={18} color={Colors.text1} />
-        </Pressable>
-      </View>
-      </FadeInSection>
+      <HeaderHero
+        imageSource={SCREEN_HEADER_IMAGES.visit}
+        height={headerHeroHeight}
+        contentPosition={HEADER_IMAGE_POSITION.visit}
+        showLogo
+        alignContent="top"
+        safeTop={safeTop}
+      >
+        <View style={styles.heroNav}>
+          <Pressable onPress={() => navigation.goBack()} style={styles.heroNavBtn}>
+            <Ionicons name="arrow-back" size={18} color="#FFFFFF" />
+          </Pressable>
+          <Text style={styles.heroNavTitle} numberOfLines={1}>
+            Farmer profile
+          </Text>
+          <Pressable onPress={openOptionsMenu} style={styles.heroNavBtn}>
+            <Ionicons name="ellipsis-vertical" size={18} color="#FFFFFF" />
+          </Pressable>
+        </View>
+      </HeaderHero>
 
       <ScrollView
         style={styles.scrollView}
@@ -518,6 +535,32 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: Spacing.screen,
     paddingVertical: 10
+  },
+  heroNav: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: Spacing.sm,
+    width: "100%"
+  },
+  heroNavBtn: {
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.22)",
+    borderColor: "rgba(255,255,255,0.2)",
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    height: 32,
+    justifyContent: "center",
+    width: 32
+  },
+  heroNavTitle: {
+    color: "#FFFFFF",
+    flex: 1,
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.bold,
+    textAlign: "center",
+    textShadowColor: "rgba(0,0,0,0.45)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4
   },
   backBtn: {
     alignItems: "center",

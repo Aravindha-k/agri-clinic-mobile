@@ -1,23 +1,20 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, AppState, type AppStateStatus } from "react-native";
-import { FIELD_MAX_WORKDAY_MS, FIELD_TRACKING_INTERVAL_MS, FIELD_TRACKING_INTERVAL_MINUTES } from "../constants/fieldTracking";
+import { FIELD_MAX_WORKDAY_MS, FIELD_TRACKING_INTERVAL_MINUTES } from "../constants/fieldTracking";
 import {
-  WORKDAY_EXPIRED_ALERT_MESSAGE,
   WORKDAY_INACTIVE_BANNER_MESSAGE,
   WORKDAY_REQUIRED_MESSAGE
 } from "../constants/workdayMessages";
 import { TRACKING_LOAD_ERROR, TRACKING_SYNC_ERROR } from "../constants/trackingMessages";
 import {
-  endWorkday,
+  endDutySession,
   fetchCurrentWorkday,
   isWorkdayActive,
-  syncLocationQueue,
-  sendHeartbeat,
+  sendTrackingHeartbeat,
   type LocationPushPayload,
   WorkdayStatus
 } from "../api/tracking";
 import { clearLocationPushQueue, readLocationPushQueue } from "./locationPushQueue";
-import { setLastSentRoutePoint } from "./lastSentRouteStorage";
 import { ApiRequestError, getNetworkMessage, isNetworkError } from "../utils/apiError";
 import { isWorkdayInactiveMessage } from "../utils/workdayStatus";
 import { hasValidMapCoords } from "../utils/mapCoords";
@@ -26,10 +23,17 @@ import {
   stopBackgroundLocationTracking
 } from "../tracking/backgroundLocationService";
 import {
+  flushOfflineLocationQueue,
   handleForcedLocationUpdate,
   handleLocationUpdate,
   resetRouteTrackingState
 } from "../tracking/locationSyncService";
+import {
+  markDutyTrackingSessionActive,
+  markForegroundPollActive,
+  restoreDutySessionFromStorage,
+  setTrackingMotionState
+} from "../tracking/trackingSession";
 import { trackingDevLog } from "../tracking/trackingDevLog";
 import { getForegroundLocation, toTrackingPayload } from "../utils/location";
 import { showLocationRequiredModal } from "../utils/locationRequiredModal";
@@ -38,11 +42,14 @@ import { useAuth, useAuthSessionReady } from "./AuthContext";
 import { useGpsCompliance } from "./GpsComplianceContext";
 import {
   clearCachedActiveWorkday,
+  getActiveDutySessionId,
   readCachedActiveWorkday,
-  saveCachedActiveWorkday
+  saveCachedActiveWorkday,
+  saveDutySessionFromWorkday
 } from "./workdaySessionStorage";
 import { registerSessionExpiredTeardown } from "./sessionExpired";
 import { registerSessionTeardown } from "./sessionConflict";
+import { registerPreSignOut } from "./preSignOut";
 import {
   startGpsTrackingService,
   stopGpsTrackingService
@@ -51,8 +58,14 @@ import { refreshSyncStoreCounts } from "../../mobile/lib/sync/offlineSyncManager
 import { startWorkday } from "../../mobile/lib/workday";
 import { getWorkdayStartTimestamp, resolveWorkdayStartedAt } from "../utils/workdayStartedAt";
 import { workdayRestoreLog } from "../utils/workdayRestoreLog";
+import { useAppPreferences } from "./AppPreferencesContext";
+import {
+  getForegroundPollIntervalMs,
+  isLocationMoving,
+  setTrackingBatterySaverEnabled
+} from "../tracking/trackingConfig";
+import { getBatteryPercent } from "../../mobile/lib/gps/trackingService";
 
-const TRACKING_INTERVAL_MS = FIELD_TRACKING_INTERVAL_MS;
 const MAX_WORKDAY_DURATION_MS = FIELD_MAX_WORKDAY_MS;
 const ELAPSED_TICK_MS = 60 * 1000;
 const WORKDAY_SYNC_RETRY_MS = [2000, 5000, 10000] as const;
@@ -114,6 +127,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   const trackingReady = sessionReady;
   const workdayApiReady = isReady && isAuthenticated;
   const { ensureWorkAllowed, isWorkBlocked, notifyGpsGranted, refreshGpsStatus } = useGpsCompliance();
+  const { trackingBatterySaver } = useAppPreferences();
   const [workday, setWorkday] = useState<WorkdayStatus | null>(null);
   const [currentLocation, setCurrentLocation] = useState<CurrentLocation | null>(null);
   const [gpsState, setGpsState] = useState<GpsState>("unknown");
@@ -130,12 +144,13 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   const [usingCachedWorkday, setUsingCachedWorkday] = useState(false);
   const [cachedDistanceKm, setCachedDistanceKm] = useState(0);
   const [cachedRoutePoints, setCachedRoutePoints] = useState(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const elapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const syncInFlightRef = useRef(false);
   const workdaySyncInFlightRef = useRef(false);
   const autoEndInFlightRef = useRef(false);
-  const expiredAlertShownRef = useRef(false);
+  const trackingShutdownRef = useRef(false);
+  const lastMotionRef = useRef(false);
   const workdayRef = useRef<WorkdayStatus | null>(null);
   const workdayStartedAtRef = useRef<number | null>(null);
 
@@ -155,9 +170,10 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
 
   const stopForegroundLoop = useCallback(() => {
     if (intervalRef.current) {
-      clearInterval(intervalRef.current);
+      clearTimeout(intervalRef.current);
       intervalRef.current = null;
     }
+    markForegroundPollActive(false);
   }, []);
 
   const stopElapsedLoop = useCallback(() => {
@@ -181,15 +197,18 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       void readCachedActiveWorkday().then((existing) => {
         void saveCachedActiveWorkday({
           workday_id: status.workday_id,
+          duty_session_id: status.duty_session_id ?? status.workday_id,
           started_at: resolvedStart,
           status: "working",
           last_known_distance: existing?.last_known_distance ?? 0,
           last_known_points: existing?.last_known_points ?? 0
         });
       });
+      markDutyTrackingSessionActive(true);
       setUsingCachedWorkday(false);
     } else if (!status) {
       void clearCachedActiveWorkday();
+      markDutyTrackingSessionActive(false);
       setUsingCachedWorkday(false);
       setCachedDistanceKm(0);
       setCachedRoutePoints(0);
@@ -209,8 +228,10 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const clearWorkdayState = useCallback(
-    (options?: { showExpiredAlert?: boolean; showInactiveBanner?: boolean }) => {
+    (options?: { showInactiveBanner?: boolean }) => {
       stopAllTrackingLoops();
+      markForegroundPollActive(false);
+      markDutyTrackingSessionActive(false);
       void stopBackgroundLocationTracking();
       applyWorkday(null);
       setCurrentLocation(null);
@@ -224,16 +245,14 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       if (options?.showInactiveBanner) {
         setWorkdayInactiveBanner(WORKDAY_INACTIVE_BANNER_MESSAGE);
       }
-      if (options?.showExpiredAlert && !expiredAlertShownRef.current) {
-        expiredAlertShownRef.current = true;
-        Alert.alert("Workday ended", WORKDAY_EXPIRED_ALERT_MESSAGE);
-      }
     },
     [applyWorkday, stopAllTrackingLoops]
   );
 
   const teardownTracking = useCallback(() => {
     stopAllTrackingLoops();
+    markForegroundPollActive(false);
+    markDutyTrackingSessionActive(false);
     void stopBackgroundLocationTracking();
     applyWorkday(null);
     setCurrentLocation(null);
@@ -246,15 +265,8 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     void clearLocationPushQueue();
     void resetRouteTrackingState();
     stopGpsTrackingService();
+    lastMotionRef.current = false;
   }, [applyWorkday, stopAllTrackingLoops]);
-
-  useEffect(() => {
-    return registerSessionTeardown(teardownTracking);
-  }, [teardownTracking]);
-
-  useEffect(() => {
-    return registerSessionExpiredTeardown(teardownTracking);
-  }, [teardownTracking]);
 
   const autoEndWorkday = useCallback(async () => {
     if (autoEndInFlightRef.current) {
@@ -265,16 +277,16 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     try {
       stopAllTrackingLoops();
       try {
-        await endWorkday();
+        await endDutySession(await getActiveDutySessionId());
       } catch (err) {
         const message = err instanceof Error ? err.message : "";
         if (!isWorkdayInactiveMessage(message)) {
           throw err;
         }
       }
-      clearWorkdayState({ showExpiredAlert: true });
+      clearWorkdayState({ showInactiveBanner: true });
     } catch {
-      clearWorkdayState({ showExpiredAlert: true });
+      clearWorkdayState({ showInactiveBanner: true });
     } finally {
       autoEndInFlightRef.current = false;
     }
@@ -298,8 +310,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     return false;
   }, [autoEndWorkday, startedAt, workday]);
 
-  const syncWorkdayFromServer = useCallback(
-    async (options?: { showExpiredAlert?: boolean }) => {
+  const syncWorkdayFromServer = useCallback(async () => {
       if (workdaySyncInFlightRef.current) {
         return;
       }
@@ -335,7 +346,6 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (result.kind === "active") {
-          expiredAlertShownRef.current = false;
           setWorkdayInactiveBanner(null);
           workdayStartedAtRef.current = null;
           applyWorkday(result.workday);
@@ -345,7 +355,6 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
 
         const hadCached = Boolean(await readCachedActiveWorkday());
         clearWorkdayState({
-          showExpiredAlert: Boolean(options?.showExpiredAlert && result.kind === "expired"),
           showInactiveBanner: result.kind === "expired"
         });
         if (hadCached) {
@@ -359,24 +368,21 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     [applyWorkday, clearWorkdayState]
   );
 
-  const refreshTracking = useCallback(
-    async (options?: { showExpiredAlert?: boolean }) => {
-      if (!workdayApiReady) {
-        return;
-      }
+  const refreshTracking = useCallback(async () => {
+    if (!workdayApiReady) {
+      return;
+    }
 
-      try {
-        setError("");
-        await syncWorkdayFromServer(options);
-      } catch {
-        setError(TRACKING_LOAD_ERROR);
-        if (isWorkdayActive(workdayRef.current)) {
-          setWorkdaySyncStatus("connecting");
-        }
+    try {
+      setError("");
+      await syncWorkdayFromServer();
+    } catch {
+      setError(TRACKING_LOAD_ERROR);
+      if (isWorkdayActive(workdayRef.current)) {
+        setWorkdaySyncStatus("connecting");
       }
-    },
-    [syncWorkdayFromServer, workdayApiReady]
-  );
+    }
+  }, [syncWorkdayFromServer, workdayApiReady]);
 
   const applyLastQueuedLocation = useCallback((payload: LocationPushPayload) => {
     if (!mountedRef.current) return;
@@ -391,7 +397,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const flushPendingLocationQueue = useCallback(async () => {
-    if (!isWorkdayActive(workday)) {
+    if (!isWorkdayActive(workdayRef.current) && !isWorkdayActive(workday)) {
       return;
     }
     try {
@@ -402,20 +408,14 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
         }
         return;
       }
-      await syncLocationQueue(queue);
-      await clearLocationPushQueue();
-      const last = queue[queue.length - 1];
-      const lastTs = Date.parse(last.captured_at);
-      await setLastSentRoutePoint({
-        latitude: last.latitude,
-        longitude: last.longitude,
-        accuracy: last.accuracy ?? null,
-        speed: last.speed ?? null,
-        timestamp: Number.isFinite(lastTs) ? lastTs : Date.now()
-      });
+      const lastBeforeFlush = queue[queue.length - 1];
+      const synced = await flushOfflineLocationQueue();
+      const remaining = await readLocationPushQueue();
       if (mountedRef.current) {
-        setPendingSyncCount(0);
-        applyLastQueuedLocation(last);
+        setPendingSyncCount(remaining.length);
+        if (synced > 0) {
+          applyLastQueuedLocation(lastBeforeFlush);
+        }
       }
       refreshSyncStoreCounts();
     } catch {
@@ -427,14 +427,80 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     }
   }, [applyLastQueuedLocation, workday]);
 
+  const endActiveWorkdayOnServer = useCallback(async () => {
+    try {
+      await flushPendingLocationQueue();
+    } catch {
+      /* queued GPS points remain */
+    }
+    try {
+      const { flushVisitQueue } = await import("../../mobile/lib/sync/offlineSyncManager");
+      await flushVisitQueue();
+    } catch {
+      /* pending visits remain for next session */
+    }
+
+    if (!isWorkdayActive(workdayRef.current)) {
+      return;
+    }
+    stopAllTrackingLoops();
+    await stopBackgroundLocationTracking();
+    try {
+      await endDutySession(await getActiveDutySessionId());
+    } catch {
+      /* server may already have ended */
+    }
+  }, [flushPendingLocationQueue, stopAllTrackingLoops]);
+
+  useEffect(() => {
+    return registerPreSignOut(() => endActiveWorkdayOnServer());
+  }, [endActiveWorkdayOnServer]);
+
+  const gracefulTrackingShutdown = useCallback(async () => {
+    if (trackingShutdownRef.current) {
+      return;
+    }
+    trackingShutdownRef.current = true;
+    try {
+      teardownTracking();
+    } finally {
+      trackingShutdownRef.current = false;
+    }
+  }, [teardownTracking]);
+
+  useEffect(() => {
+    return registerSessionTeardown(async () => {
+      await endActiveWorkdayOnServer();
+      await gracefulTrackingShutdown();
+    });
+  }, [endActiveWorkdayOnServer, gracefulTrackingShutdown]);
+
+  useEffect(() => {
+    return registerSessionExpiredTeardown(async () => {
+      await endActiveWorkdayOnServer();
+      await gracefulTrackingShutdown();
+    });
+  }, [endActiveWorkdayOnServer, gracefulTrackingShutdown]);
+
   const pushCapturedLocation = useCallback(
     async (location: Parameters<typeof toTrackingPayload>[0]) => {
+      const moving = isLocationMoving(location.coords.speed);
+      lastMotionRef.current = moving;
+      setTrackingMotionState(moving);
       try {
         const result = await handleLocationUpdate(location);
         if (result === "skipped") {
           return;
         }
-        const payload = toTrackingPayload(location, workday?.workday_id);
+        const batteryLevel = await getBatteryPercent();
+        const payload = toTrackingPayload(
+          location,
+          {
+            workdayId: workday?.workday_id,
+            dutySessionId: workday?.duty_session_id ?? workday?.workday_id
+          },
+          batteryLevel
+        );
         if (mountedRef.current) {
           if (result === "sent") {
             setPendingSyncCount(0);
@@ -447,7 +513,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
         if (result === "queued") {
           throw new Error(TRACKING_SYNC_ERROR);
         }
-        await sendHeartbeat(true).catch(() => undefined);
+        await sendTrackingHeartbeat({ gpsEnabledHint: true }).catch(() => undefined);
       } catch (err) {
         const queue = await readLocationPushQueue();
         if (mountedRef.current) {
@@ -459,7 +525,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
         throw err;
       }
     },
-    [applyLastQueuedLocation, workday?.workday_id]
+    [applyLastQueuedLocation, workday?.duty_session_id, workday?.workday_id]
   );
 
   const syncForegroundLocation = useCallback(async () => {
@@ -489,7 +555,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
 
       if (!result.granted) {
         setGpsState("denied");
-        await sendHeartbeat(false).catch(() => undefined);
+        await sendTrackingHeartbeat({ gpsEnabledHint: false }).catch(() => undefined);
         setError(result.message);
         return;
       }
@@ -500,7 +566,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       } catch (err) {
         const message = err instanceof Error ? err.message : "";
         if (isWorkdayInactiveMessage(message)) {
-          clearWorkdayState({ showExpiredAlert: /auto-ended|9 hours/i.test(message) });
+          clearWorkdayState({ showInactiveBanner: /auto-ended|9 hours/i.test(message) });
           return;
         }
         setError(TRACKING_SYNC_ERROR);
@@ -508,7 +574,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
       if (isWorkdayInactiveMessage(message)) {
-        clearWorkdayState({ showExpiredAlert: /auto-ended|9 hours/i.test(message) });
+        clearWorkdayState({ showInactiveBanner: /auto-ended|9 hours/i.test(message) });
         return;
       }
       setError(TRACKING_SYNC_ERROR);
@@ -517,14 +583,39 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     }
   }, [clearWorkdayState, enforceMaxWorkdayDuration, flushPendingLocationQueue, isWorkBlocked, pushCapturedLocation, workday]);
 
+  const scheduleForegroundSync = useCallback(() => {
+    stopForegroundLoop();
+    if (!isWorkdayActive(workdayRef.current)) {
+      return;
+    }
+    const delay = getForegroundPollIntervalMs(lastMotionRef.current);
+    intervalRef.current = setTimeout(() => {
+      intervalRef.current = null;
+      runSafe(
+        syncForegroundLocation().finally(() => {
+          if (isWorkdayActive(workdayRef.current)) {
+            scheduleForegroundSync();
+          }
+        })
+      );
+    }, delay);
+  }, [stopForegroundLoop, syncForegroundLocation]);
+
   const startForegroundLoop = useCallback(() => {
     if (intervalRef.current) {
       return;
     }
-    intervalRef.current = setInterval(() => {
-      runSafe(syncForegroundLocation());
-    }, TRACKING_INTERVAL_MS);
-  }, [syncForegroundLocation]);
+    markForegroundPollActive(true);
+    runSafe(
+      syncForegroundLocation().finally(() => {
+        if (isWorkdayActive(workdayRef.current)) {
+          scheduleForegroundSync();
+        } else {
+          markForegroundPollActive(false);
+        }
+      })
+    );
+  }, [scheduleForegroundSync, syncForegroundLocation]);
 
   const startElapsedLoop = useCallback(() => {
     if (elapsedIntervalRef.current) {
@@ -537,6 +628,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   }, [enforceMaxWorkdayDuration]);
 
   const resumeActiveWorkdayTracking = useCallback(async () => {
+    await restoreDutySessionFromStorage();
     const bg = await startBackgroundLocationTracking();
     if (bg.ok || bg.alreadyRunning) {
       stopForegroundLoop();
@@ -549,6 +641,17 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     setBusy(true);
     try {
       setError("");
+
+      if (isWorkdayActive(workdayRef.current)) {
+        markDutyTrackingSessionActive(true);
+        await resumeActiveWorkdayTracking();
+        startElapsedLoop();
+        startGpsTrackingService({
+          isGpsEnabled: () => gpsState !== "denied"
+        });
+        return true;
+      }
+
       const started = await startWorkday({
         ensureWorkAllowed,
         onBackgroundPermissionWarning: (message) => {
@@ -557,9 +660,15 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (!started.ok) {
-        if (started.reason === "permissions" || started.reason === "location") {
+        if (started.reason === "permissions") {
           setGpsState("denied");
           showLocationRequiredModal();
+        } else if (started.reason === "location") {
+          setGpsState("denied");
+          Alert.alert(
+            "GPS signal",
+            started.message || "Waiting for a GPS fix. Try again in an open area."
+          );
         } else if (started.reason === "api") {
           const message = started.message || TRACKING_SYNC_ERROR;
           setError(message);
@@ -573,16 +682,27 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       notifyGpsGranted();
       void refreshGpsStatus();
 
-      expiredAlertShownRef.current = false;
       setWorkdayInactiveBanner(null);
       workdayStartedAtRef.current = Date.now();
+      await saveDutySessionFromWorkday(activeWorkday);
+      markDutyTrackingSessionActive(true);
       applyWorkday(activeWorkday);
       setCachedDistanceKm(0);
       setCachedRoutePoints(0);
       setGpsState("granted");
-      trackingDevLog("workday_started", `workday_id=${activeWorkday.workday_id}`);
+      trackingDevLog(
+        "workday_started",
+        `duty_session_id=${activeWorkday.duty_session_id ?? activeWorkday.workday_id}`
+      );
 
-      const payload = toTrackingPayload(foregroundLocation, activeWorkday.workday_id);
+      const payload = toTrackingPayload(
+        foregroundLocation,
+        {
+          workdayId: activeWorkday.workday_id,
+          dutySessionId: activeWorkday.duty_session_id ?? activeWorkday.workday_id
+        },
+        await getBatteryPercent()
+      );
       applyLastQueuedLocation(payload);
 
       try {
@@ -604,13 +724,18 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
 
       if (bg.expoGoLimited) {
         // Expo Go cannot run background location tasks — foreground tracking still works.
-      } else if (bg.message && !bg.ok && !bg.alreadyRunning) {
+      } else if (
+        bg.message &&
+        !bg.ok &&
+        !bg.alreadyRunning &&
+        bg.message !== "No active duty session."
+      ) {
         Alert.alert("Route tracking", bg.message);
       }
       if (bg.ok || bg.alreadyRunning) {
         stopForegroundLoop();
       } else {
-        startForegroundLoop();
+        await resumeActiveWorkdayTracking();
       }
       startElapsedLoop();
       startGpsTrackingService({
@@ -641,7 +766,8 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     startElapsedLoop,
     gpsState,
     startForegroundLoop,
-    stopForegroundLoop
+    stopForegroundLoop,
+    resumeActiveWorkdayTracking
   ]);
 
   const requireActiveWorkday = useCallback(() => {
@@ -662,7 +788,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       } catch {
         /* keep queued points for next session */
       }
-      await endWorkday();
+      await endDutySession(await getActiveDutySessionId());
       clearWorkdayState({ showInactiveBanner: true });
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
@@ -703,13 +829,16 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       setUsingCachedWorkday(true);
       setWorkdaySyncStatus("cached");
       setStartedAt(resolved);
+      markDutyTrackingSessionActive(true);
       setWorkday({
         workday_id: cached.workday_id,
+        duty_session_id: cached.duty_session_id ?? cached.workday_id,
         is_active: true,
         started_at: resolved,
         start_time: resolved
       });
       workdayRestoreLog("workday_timer_started", resolved);
+      void startBackgroundLocationTracking().catch(() => undefined);
     })();
 
     return () => {
@@ -719,15 +848,14 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (workdayApiReady) {
-      runSafe(syncWorkdayFromServer({ showExpiredAlert: true }));
+      runSafe(syncWorkdayFromServer());
       return;
     }
 
     if (!isAuthenticated) {
-      teardownTracking();
-      expiredAlertShownRef.current = false;
+      void gracefulTrackingShutdown();
     }
-  }, [isAuthenticated, syncWorkdayFromServer, teardownTracking, workdayApiReady]);
+  }, [gracefulTrackingShutdown, isAuthenticated, syncWorkdayFromServer, workdayApiReady]);
 
   useEffect(() => {
     if (!workdayApiReady) {
@@ -736,12 +864,20 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     const onAppState = (state: AppStateStatus) => {
       if (state === "active") {
         runSafe(flushPendingLocationQueue());
-        runSafe(syncWorkdayFromServer({ showExpiredAlert: true }));
+        runSafe(syncWorkdayFromServer());
+        if (isWorkdayActive(workdayRef.current)) {
+          runSafe(resumeActiveWorkdayTracking());
+        }
+        return;
+      }
+      if (state === "background" && isWorkdayActive(workdayRef.current)) {
+        markDutyTrackingSessionActive(true);
+        runSafe(startBackgroundLocationTracking());
       }
     };
     const sub = AppState.addEventListener("change", onAppState);
     return () => sub.remove();
-  }, [flushPendingLocationQueue, syncWorkdayFromServer, workdayApiReady]);
+  }, [flushPendingLocationQueue, resumeActiveWorkdayTracking, syncWorkdayFromServer, workdayApiReady]);
 
   useEffect(() => {
     if (!isWorkdayActive(workday)) {
@@ -773,9 +909,26 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     }
   }, [enforceMaxWorkdayDuration, workday]);
 
+  useEffect(() => {
+    setTrackingBatterySaverEnabled(trackingBatterySaver);
+    if (!isWorkdayActive(workday)) {
+      return;
+    }
+    void (async () => {
+      await stopBackgroundLocationTracking();
+      await resumeActiveWorkdayTracking();
+    })();
+  }, [resumeActiveWorkdayTracking, trackingBatterySaver, workday]);
+
   const nextSyncAt = useMemo(
-    () => computeNextSyncIso({ startedAt, lastSyncTime, intervalMs: TRACKING_INTERVAL_MS, isActive: isWorkdayActive(workday) }),
-    [lastSyncTime, startedAt, workday]
+    () =>
+      computeNextSyncIso({
+        startedAt,
+        lastSyncTime,
+        intervalMs: getForegroundPollIntervalMs(lastMotionRef.current),
+        isActive: isWorkdayActive(workday)
+      }),
+    [lastSyncTime, startedAt, workday, elapsedNow]
   );
 
   const value = useMemo(

@@ -135,6 +135,42 @@ export function normalizeMobileVisitSubmitPayload(
     payload.local_sync_id = syncId;
   }
 
+  const dutySessionId = normalizeId(values.duty_session_id);
+  if (dutySessionId != null && dutySessionId !== "") {
+    payload.duty_session_id = dutySessionId;
+  }
+  const workdayId = normalizeId(values.workday_id);
+  if (workdayId != null && workdayId !== "") {
+    payload.workday_id = workdayId;
+  }
+
+  const accuracyRaw = values.accuracy;
+  if (accuracyRaw != null && accuracyRaw !== "") {
+    const accuracy = Number(accuracyRaw);
+    if (Number.isFinite(accuracy)) {
+      payload.accuracy = accuracy;
+    }
+  }
+
+  const capturedAt =
+    typeof values.captured_at === "string" && values.captured_at.trim()
+      ? values.captured_at.trim()
+      : "";
+  if (capturedAt) {
+    const captured = new Date(capturedAt);
+    if (!Number.isNaN(captured.getTime())) {
+      payload.captured_at = captured.toISOString();
+      payload.visit_date =
+        typeof values.visit_date === "string" && values.visit_date.trim()
+          ? values.visit_date.trim().slice(0, 10)
+          : captured.toISOString().slice(0, 10);
+      payload.visit_time =
+        typeof values.visit_time === "string" && values.visit_time.trim()
+          ? values.visit_time.trim()
+          : captured.toISOString().slice(11, 19);
+    }
+  }
+
   delete payload.status;
   delete payload.employee_id;
   delete payload.employee;

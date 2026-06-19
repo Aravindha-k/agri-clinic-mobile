@@ -3,8 +3,9 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useCallback, useState } from "react";
 import { View } from "react-native";
+import { DeferredFieldReminderController } from "../components/DeferredFieldReminderController";
 import { GlobalStatusStrip } from "../../mobile/components/layout/GlobalStatusStrip";
-import { AnimatedSplashScreen } from "../components/brand/AnimatedSplashScreen";
+import { KavyaSplashScreen } from "../components/brand/KavyaSplashScreen";
 import MainTabBar from "../../mobile/components/navigation/MainTabBar";
 import { VisitFabTabButton } from "../components/ui/VisitFabTabButton";
 import { useAppSplash } from "../hooks/useAppSplash";
@@ -162,21 +163,26 @@ function AppRoutes() {
 
   if (showIntro) {
     return (
-      <AnimatedSplashScreen onFinish={handleIntroFinish} onReady={hideNativeSplash} />
+      <KavyaSplashScreen onFinish={handleIntroFinish} onReady={hideNativeSplash} />
     );
   }
 
   if (bootstrapIssue !== "none") {
     return (
-      <RootStack.Navigator screenOptions={{ headerShown: false }}>
-        <RootStack.Screen name="Splash" component={StartupScreen} />
-      </RootStack.Navigator>
+      <>
+        <DeferredFieldReminderController />
+        <RootStack.Navigator screenOptions={{ headerShown: false }}>
+          <RootStack.Screen name="Splash" component={StartupScreen} />
+        </RootStack.Navigator>
+      </>
     );
   }
 
   if (isAuthenticated) {
     return (
-      <RootStack.Navigator screenOptions={{ headerShown: false, ...stackScreenOptions }}>
+      <>
+        <DeferredFieldReminderController />
+        <RootStack.Navigator screenOptions={{ headerShown: false, ...stackScreenOptions }}>
         <RootStack.Screen name="Main" component={MainTabs} />
         <RootStack.Screen
           name="VisitFlow"
@@ -197,13 +203,17 @@ function AppRoutes() {
           options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }}
         />
       </RootStack.Navigator>
+      </>
     );
   }
 
   return (
-    <RootStack.Navigator screenOptions={{ headerShown: false }}>
-      <RootStack.Screen name="Auth" component={AuthNavigator} />
-    </RootStack.Navigator>
+    <>
+      <DeferredFieldReminderController />
+      <RootStack.Navigator screenOptions={{ headerShown: false }}>
+        <RootStack.Screen name="Auth" component={AuthNavigator} />
+      </RootStack.Navigator>
+    </>
   );
 }
 

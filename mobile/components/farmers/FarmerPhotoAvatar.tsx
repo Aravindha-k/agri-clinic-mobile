@@ -13,6 +13,7 @@ import {
   pickProfileImage,
   showProfilePhotoSourcePicker
 } from "../../../src/utils/profileImagePick";
+import { logFailedMediaUrl } from "../../../src/utils/resolveMediaUrl";
 import { Colors, FontWeight, Radius } from "../../lib/theme";
 
 type Props = {
@@ -74,7 +75,10 @@ export function FarmerPhotoAvatar({ farmer, onFarmerUpdated, size = 52, style }:
             source={{ uri }}
             style={{ width: size, height: size, borderRadius: 18 }}
             resizeMode="cover"
-            onError={() => setImgFailed(true)}
+            onError={() => {
+              logFailedMediaUrl(previewUri, "FarmerPhotoAvatar");
+              setImgFailed(true);
+            }}
           />
         ) : (
           <Text style={styles.initials}>{initialsFromName(displayName)}</Text>

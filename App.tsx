@@ -10,8 +10,9 @@ import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
-import { Dimensions, Platform, StatusBar as RNStatusBar } from "react-native";
+import { Dimensions, LogBox, Platform, StatusBar as RNStatusBar } from "react-native";
 import { initOfflineSync } from "./mobile/lib/offlineSyncManager";
+import { logAppStartupDiagnostics } from "./src/utils/resolveMediaUrl";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import { AppErrorBoundary } from "./src/components/AppErrorBoundary";
@@ -38,6 +39,12 @@ import { ThemeProvider } from "./src/theme";
 import { applyGlobalFonts } from "./src/theme/applyGlobalFonts";
 import { STATUS_BAR } from "./src/theme/globalStyles";
 
+/** Remote push is unavailable in Expo Go SDK 53+; local reminders load after splash. */
+LogBox.ignoreLogs([
+  /expo-notifications: Android Push notifications/i,
+  /expo-notifications.*not fully supported in Expo Go/i
+]);
+
 const { width: winW, height: winH } = Dimensions.get("window");
 const FALLBACK_METRICS: Metrics = {
   frame: { x: 0, y: 0, width: winW, height: winH },
@@ -60,6 +67,7 @@ function AppStatusBar() {
 
 function AppShell() {
   useEffect(() => {
+    logAppStartupDiagnostics();
     return initOfflineSync();
   }, []);
 

@@ -15,6 +15,8 @@ type TrackingLogEvent =
   | "location_post_success"
   | "location_post_failed"
   | "queued_location_count"
+  | "offline_flush"
+  | "offline_flush_failed"
   | "task_error"
   | "expo_go_limited";
 

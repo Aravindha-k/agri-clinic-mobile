@@ -50,14 +50,9 @@ export function visitRecommendationText(visit: Visit): string {
   return parts.join("\n");
 }
 
-export function resolveMediaUrl(url: string | null | undefined): string | null {
-  if (!url?.trim()) return null;
-  const trimmed = url.trim();
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
-  const origin = API_BASE_URL.replace(/\/api\/v1\/?$/, "");
-  if (trimmed.startsWith("/")) return `${origin}${trimmed}`;
-  return `${API_BASE_URL.replace(/\/$/, "")}/${trimmed.replace(/^\//, "")}`;
-}
+import { resolveMediaUrl } from "../../src/utils/resolveMediaUrl";
+
+export { resolveMediaUrl } from "../../src/utils/resolveMediaUrl";
 
 export function parseFieldNotes(raw?: string | null): ParsedFieldNotes {
   const lines = (raw ?? "").split("\n");

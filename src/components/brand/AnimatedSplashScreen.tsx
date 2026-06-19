@@ -1,3 +1,4 @@
+/** @deprecated Replaced by KavyaSplashScreen — kept for rollback only. */
 import Constants from "expo-constants";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState } from "react";

@@ -19,6 +19,7 @@ import { EmptyState, FilterChipRow } from "../components/ui";
 import { EntranceBlocks } from "../components/ui/EntranceBlocks";
 import { FadeInSection, entranceListStagger, entranceStagger } from "../components/ui/FadeInSection";
 import { ScreenEntranceShell } from "../components/layout";
+import { InlineSeedLoader } from "../components/layout/InlineSeedLoader";
 import { ScreenLoader } from "../components/layout/ScreenLoader";
 import {
   fetchNotificationsPage,
@@ -298,9 +299,7 @@ export default function NotificationsScreen() {
               if (nextUrl && !loadingMore) void loadPage({ next: nextUrl });
             }}
             onEndReachedThreshold={0.25}
-            ListFooterComponent={
-              loadingMore ? <ActivityIndicator style={styles.footerSpinner} color={Colors.brand700} /> : null
-            }
+            ListFooterComponent={loadingMore ? <InlineSeedLoader /> : null}
             ListEmptyComponent={
               !loading ? (
                 <EntranceBlocks replayKey={entranceTick} startStep={1}>

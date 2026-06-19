@@ -1,20 +1,12 @@
-/** Minimum movement (meters) before sending a route point. */
-export const ROUTE_MIN_MOVE_METERS = 50;
-
-/** Minimum elapsed time (ms) before a speed-based send is allowed. */
-export const ROUTE_MIN_INTERVAL_MS = 60_000;
-
-/** Speed threshold (m/s) for time-based sends (~3.6 km/h). */
-export const ROUTE_MIN_SPEED_MPS = 1;
-
-/** Below this speed with small displacement = stationary GPS jitter. */
-export const ROUTE_STATIONARY_SPEED_MPS = 0.5;
-
-/** Ignore micro-movement when speed is near zero. */
-export const ROUTE_JITTER_DISTANCE_METERS = 30;
-
-/** Skip points worse than this unless it is the first point of the workday. */
-export const ROUTE_MAX_ACCURACY_METERS = 100;
+import {
+  ROUTE_JITTER_DISTANCE_METERS,
+  ROUTE_MIN_MOVE_METERS,
+  ROUTE_MOVING_INTERVAL_MS,
+  ROUTE_STATIONARY_SPEED_MPS,
+  ROUTE_STOPPED_INTERVAL_MS,
+  ROUTE_STOPPED_KEEPALIVE_MS,
+  isLocationMoving
+} from "./trackingConfig";
 
 export type RoutePoint = {
   latitude: number;
@@ -24,10 +16,10 @@ export type RoutePoint = {
   timestamp: number;
 };
 
-export type SkipReason = "poor_accuracy" | "stationary_jitter" | "no_movement";
+export type SkipReason = "stationary_jitter" | "no_movement";
 
 export type ShouldSendResult =
-  | { send: true; distanceMeters: number }
+  | { send: true; distanceMeters: number; heartbeat?: boolean }
   | { send: false; reason: SkipReason; distanceMeters: number };
 
 /** Haversine distance in meters between two WGS84 coordinates. */
@@ -48,38 +40,32 @@ export function distanceMeters(
 }
 
 /**
- * Decide whether a new GPS reading should be sent to the backend.
- * - First point (no previous): always send (even if accuracy is poor).
- * - Moved >= 50 m: send.
- * - >= 60 s elapsed AND speed > 1 m/s: send.
- * - Poor accuracy (> 100 m): skip (unless first point).
- * - Near-zero speed and < 30 m movement: skip (jitter).
+ * Decide whether a GPS reading should be uploaded.
+ * Poor accuracy is still sent (accuracy included in payload).
+ * Heartbeat allowed when stopped >= 120 s without 30–50 m move.
  */
 export function shouldSendLocation(
   previousPoint: RoutePoint | null,
   newPoint: RoutePoint,
-  options?: { force?: boolean }
+  options?: { force?: boolean; heartbeat?: boolean }
 ): ShouldSendResult {
-  const distanceM = previousPoint
-    ? distanceMeters(previousPoint, newPoint)
-    : 0;
+  const distanceM = previousPoint ? distanceMeters(previousPoint, newPoint) : 0;
 
-  if (options?.force || !previousPoint) {
-    return { send: true, distanceMeters: distanceM };
-  }
-
-  const accuracy = newPoint.accuracy;
-  if (accuracy != null && Number.isFinite(accuracy) && accuracy > ROUTE_MAX_ACCURACY_METERS) {
-    return { send: false, reason: "poor_accuracy", distanceMeters: distanceM };
+  if (options?.force || options?.heartbeat || !previousPoint) {
+    return { send: true, distanceMeters: distanceM, heartbeat: options?.heartbeat };
   }
 
   const speed = newPoint.speed;
   const elapsedMs = Math.max(0, newPoint.timestamp - previousPoint.timestamp);
+  const moving = isLocationMoving(speed);
 
   if (
     distanceM < ROUTE_JITTER_DISTANCE_METERS &&
     (speed == null || !Number.isFinite(speed) || Math.abs(speed) < ROUTE_STATIONARY_SPEED_MPS)
   ) {
+    if (!moving && elapsedMs >= ROUTE_STOPPED_KEEPALIVE_MS) {
+      return { send: true, distanceMeters: distanceM, heartbeat: true };
+    }
     return { send: false, reason: "stationary_jitter", distanceMeters: distanceM };
   }
 
@@ -87,8 +73,16 @@ export function shouldSendLocation(
     return { send: true, distanceMeters: distanceM };
   }
 
-  if (elapsedMs >= ROUTE_MIN_INTERVAL_MS && speed != null && Number.isFinite(speed) && speed > ROUTE_MIN_SPEED_MPS) {
+  if (moving && elapsedMs >= ROUTE_MOVING_INTERVAL_MS && distanceM >= ROUTE_JITTER_DISTANCE_METERS) {
     return { send: true, distanceMeters: distanceM };
+  }
+
+  if (!moving && elapsedMs >= ROUTE_STOPPED_INTERVAL_MS && distanceM >= ROUTE_JITTER_DISTANCE_METERS) {
+    return { send: true, distanceMeters: distanceM };
+  }
+
+  if (!moving && elapsedMs >= ROUTE_STOPPED_KEEPALIVE_MS) {
+    return { send: true, distanceMeters: distanceM, heartbeat: true };
   }
 
   return { send: false, reason: "no_movement", distanceMeters: distanceM };

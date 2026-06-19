@@ -1,3 +1,4 @@
+import { buildApiUrl } from "./config";
 import { apiClient } from "./client";
 import {
   DEVICE_SESSION_STORAGE_ERROR,
@@ -48,6 +49,8 @@ export async function loginRequest(identifier: string, password: string): Promis
   const loginBody = /^[A-Za-z]+-\d+$/i.test(trimmed)
     ? { employee_id: trimmed, password, device_id: deviceId, ...deviceInfo }
     : { username: trimmed, password, device_id: deviceId, ...deviceInfo };
+
+  console.warn("[Auth] Login URL:", buildApiUrl(MOBILE_AUTH_LOGIN));
 
   const raw = await apiClient<unknown>(MOBILE_AUTH_LOGIN, {
     method: "POST",

@@ -41,9 +41,7 @@ export type WorkdayHeroProps = {
   lastSyncLabel?: string | null;
   busy?: boolean;
   onStart: () => void;
-  onEnd?: () => void;
   startLabel?: string;
-  endLabel?: string;
   idleTitle?: string;
   idleSubtitle?: string;
   statItems?: { label: string; value: string }[];
@@ -57,9 +55,7 @@ export function WorkdayHero({
   lastSyncLabel,
   busy = false,
   onStart,
-  onEnd,
   startLabel = "Start workday",
-  endLabel = "End day",
   idleTitle = "Start your workday",
   idleSubtitle = "GPS activates when you start",
   statItems
@@ -104,15 +100,6 @@ export function WorkdayHero({
           <PulsingDot active />
           <Text style={styles.activeStatusText}>Workday active</Text>
         </View>
-        {onEnd ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={onEnd}
-            style={({ pressed }) => [styles.endBtn, pressed && { opacity: 0.9 }]}
-          >
-            <Text style={styles.endBtnText}>{endLabel}</Text>
-          </Pressable>
-        ) : null}
       </View>
       {statItems?.length ? (
         <View style={styles.statRow}>
@@ -192,8 +179,7 @@ const styles = StyleSheet.create({
   },
   activeTop: {
     alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between"
+    flexDirection: "row"
   },
   activeStatus: {
     alignItems: "center",
@@ -210,17 +196,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     fontWeight: FontWeight.semibold,
     letterSpacing: 0.3
-  },
-  endBtn: {
-    backgroundColor: Colors.red,
-    borderRadius: Radius.inner,
-    paddingHorizontal: 12,
-    paddingVertical: 8
-  },
-  endBtnText: {
-    color: Colors.surface,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold
   },
   timer: {
     color: Colors.surface,

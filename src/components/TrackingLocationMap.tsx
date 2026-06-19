@@ -153,7 +153,8 @@ export function TrackingLocationMap({ isActive, serverLatitude, serverLongitude,
                       lat: slat!,
                       lng: slng!,
                       title: "Last check-in",
-                      description: "Saved for your team"
+                      description: "Saved for your team",
+                      kind: "checkin" as const
                     }
                   ]
                 : []

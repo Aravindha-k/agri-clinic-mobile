@@ -1,40 +1,39 @@
 import { useEffect, useRef } from "react";
-import { Animated, Easing, Image, StyleSheet, View } from "react-native";
-import { LOGO_IMAGE } from "../../config/brand";
+import { Animated, Easing, StyleSheet, View } from "react-native";
+import { AppLoadingLogo } from "../brand/AppLoadingLogo";
+import { LOGO_SIZES } from "../../brand/logoSizing";
 
 type Props = {
   refreshing: boolean;
 };
 
 export function LogoRefreshIndicator({ refreshing }: Props) {
-  const spin = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
-  const loopRef = useRef<Animated.CompositeAnimation | null>(null);
+  const lift = useRef(new Animated.Value(6)).current;
 
   useEffect(() => {
     if (refreshing) {
-      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
-      loopRef.current = Animated.loop(
-        Animated.timing(spin, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: true })
-      );
-      loopRef.current.start();
+      Animated.parallel([
+        Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+        Animated.timing(lift, { toValue: 0, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true })
+      ]).start();
       return;
     }
 
-    loopRef.current?.stop();
-    Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }).start();
-    spin.setValue(0);
-  }, [opacity, refreshing, spin]);
-
-  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
-
-  if (!LOGO_IMAGE) return null;
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(lift, { toValue: 6, duration: 200, useNativeDriver: true })
+    ]).start();
+  }, [lift, opacity, refreshing]);
 
   return (
-    <Animated.View pointerEvents="none" style={[styles.wrap, { opacity }]}>
-      <Animated.View style={{ transform: [{ rotate }] }}>
-        <Image source={LOGO_IMAGE} style={styles.logo} resizeMode="contain" />
-      </Animated.View>
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.wrap, { opacity, transform: [{ translateY: lift }] }]}
+    >
+      <View style={styles.plate}>
+        <AppLoadingLogo size={LOGO_SIZES.appLogo.sm} loading />
+      </View>
     </Animated.View>
   );
 }
@@ -48,9 +47,13 @@ const styles = StyleSheet.create({
     top: 8,
     zIndex: 10
   },
-  logo: {
-    borderRadius: 8,
-    height: 28,
-    width: 28
+  plate: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.96)",
+    borderColor: "rgba(15, 107, 67, 0.12)",
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8
   }
 });

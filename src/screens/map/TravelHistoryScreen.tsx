@@ -6,6 +6,7 @@ import { getAllWorkdayLocations, getTodayWorkday, LocationLogPoint } from "../..
 import { ErrorState } from "../../components/ErrorState";
 import { EmptyState } from "../../components/EmptyState";
 import { FieldMapView } from "../../components/map/FieldMapView";
+import type { MapPin } from "../../components/map/FieldMapView.types";
 import { MapErrorBoundary } from "../../components/map/MapErrorBoundary";
 import { AppHeader, PrimaryButton } from "../../components/ui";
 import { useMapAreaHeight } from "../../hooks/useMapAreaHeight";
@@ -88,12 +89,13 @@ export function TravelHistoryScreen({ navigation }: Props) {
     if (route.length < 1) return [];
     const start = route[0];
     const latest = route[route.length - 1];
-    const items = [
+    const items: MapPin[] = [
       {
         id: "start",
         lat: start.latitude,
         lng: start.longitude,
-        title: "Start"
+        title: "Start",
+        kind: "route_start" as const
       }
     ];
     if (route.length > 1) {
@@ -101,7 +103,8 @@ export function TravelHistoryScreen({ navigation }: Props) {
         id: "latest",
         lat: latest.latitude,
         lng: latest.longitude,
-        title: "Latest"
+        title: "Latest",
+        kind: "route_end" as const
       });
     }
     return items;

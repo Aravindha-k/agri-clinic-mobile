@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { FilterPillRow } from "../FilterPillRow";
 import { ScreenLoader } from "../layout/ScreenLoader";
+import { InlineSeedLoader } from "../layout/InlineSeedLoader";
 import {
   FadeInSection,
   entranceListStagger,
@@ -223,25 +224,17 @@ export function WorkVisitsPanel({
   );
 
   const ListEmptyComponent = useMemo(
-    () =>
-      loading ? (
-        <ScreenLoader />
-      ) : (
-        <View style={styles.emptyState}>
-          <LogoWatermark size={48} opacity={0.1} />
-          <Text style={styles.emptyStateText}>{t("home.noVisitsYet")}</Text>
-        </View>
-      ),
-    [loading, t]
+    () => (
+      <View style={styles.emptyState}>
+        <LogoWatermark size={48} opacity={0.1} />
+        <Text style={styles.emptyStateText}>{t("home.noVisitsYet")}</Text>
+      </View>
+    ),
+    [t]
   );
 
   const ListFooterComponent = useMemo(
-    () =>
-      loadingMore ? (
-        <View style={styles.footerLoader}>
-          <ActivityIndicator color={DS.accent} />
-        </View>
-      ) : null,
+    () => (loadingMore ? <InlineSeedLoader /> : null),
     [loadingMore]
   );
 
@@ -308,27 +301,37 @@ export function WorkVisitsPanel({
         controls
       )}
 
-      <FlashList
-        data={listRows}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        stickyHeaderIndices={stickyIndices}
-        style={styles.list}
-        contentContainerStyle={{ paddingBottom: tabInset + 16, paddingTop: 8 }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlProps} />
-        }
-        onEndReached={() => void loadMore()}
-        onEndReachedThreshold={0.2}
-        ListFooterComponent={ListFooterComponent}
-        ListEmptyComponent={ListEmptyComponent}
-      />
+      <View style={styles.listArea}>
+        {loading ? (
+          <ScreenLoader />
+        ) : (
+          <FlashList
+            data={listRows}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.id}
+            stickyHeaderIndices={stickyIndices}
+            style={styles.list}
+            contentContainerStyle={{ paddingBottom: tabInset + 16, paddingTop: 8 }}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlProps} />
+            }
+            onEndReached={() => void loadMore()}
+            onEndReachedThreshold={0.2}
+            ListFooterComponent={ListFooterComponent}
+            ListEmptyComponent={ListEmptyComponent}
+          />
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   shell: {
+    flex: 1,
+    minHeight: 0
+  },
+  listArea: {
     flex: 1,
     minHeight: 0
   },

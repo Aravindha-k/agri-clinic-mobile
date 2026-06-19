@@ -1,17 +1,19 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type MapViewType from "react-native-maps";
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
-import MapView, { Circle, Marker, Polyline } from "react-native-maps";
+import MapView, { Circle, Polyline } from "react-native-maps";
 import { useTheme } from "../../theme";
+import { FIELD_MAP_TYPE } from "../../types/mapType";
 import type { MapRegion } from "../../types/map";
 import { hasValidMapCoords, parseMapCoord } from "../../utils/mapCoords";
 import { logMapDiagnostics } from "../../utils/mapDebug";
-import { safeMarkerPinColor } from "../../utils/mapMarker";
 import { sanitizeRegion } from "../../utils/mapRegion";
+import { FieldMapMarker } from "./FieldMapMarker";
 import { MapErrorBoundary } from "./MapErrorBoundary";
 import type { FieldMapViewProps, MapCoordinate, MapPin } from "./FieldMapView.types";
 
-export type { MapCoordinate, MapPin } from "./FieldMapView.types";
+export type { MapCoordinate, MapPin, MapPinKind } from "./FieldMapView.types";
 
 type Props = FieldMapViewProps & {
   mapRef?: RefObject<MapViewType | null>;
@@ -19,6 +21,41 @@ type Props = FieldMapViewProps & {
 
 const MIN_MAP_HEIGHT = 220;
 const MAP_FALLBACK_MESSAGE = "Map could not load. Please enable GPS and try again.";
+
+function RoutePolylines({
+  route,
+  strokePrimary,
+  strokeOutline
+}: {
+  route: MapCoordinate[];
+  strokePrimary: string;
+  strokeOutline: string;
+}) {
+  if (route.length < 2) return null;
+
+  return (
+    <>
+      <Polyline
+        coordinates={route}
+        strokeColor={strokeOutline}
+        strokeWidth={8}
+        lineCap="round"
+        lineJoin="round"
+        geodesic
+        zIndex={1}
+      />
+      <Polyline
+        coordinates={route}
+        strokeColor={strokePrimary}
+        strokeWidth={4}
+        lineCap="round"
+        lineJoin="round"
+        geodesic
+        zIndex={2}
+      />
+    </>
+  );
+}
 
 export function FieldMapView({
   screenName = "FieldMapView",
@@ -36,10 +73,12 @@ export function FieldMapView({
   locationDenied = false,
   locationGranted = false,
   emptyMessage,
+  errorMessage,
   accuracyCircle,
   mapRef: externalRef
 }: Props) {
   const { theme } = useTheme();
+
   const internalRef = useRef<MapView>(null);
   const mapRef = externalRef ?? internalRef;
   const [mapReady, setMapReady] = useState(false);
@@ -94,9 +133,18 @@ export function FieldMapView({
     if (safeFit && safeFit.length > 0) return true;
     if (showsUserLocation && locationGranted) return true;
     return false;
-  }, [locationGranted, safeFit, safeMarkers.length, safeRegion.latitude, safeRegion.longitude, safeRoute.length, showsUserLocation]);
+  }, [
+    locationGranted,
+    safeFit,
+    safeMarkers.length,
+    safeRegion.latitude,
+    safeRegion.longitude,
+    safeRoute.length,
+    showsUserLocation
+  ]);
 
   const canRenderMap = useMemo(() => {
+    if (errorMessage) return false;
     if (!permissionResolved || loading) return false;
     if (locationDenied) return false;
     if (!hasValidMapCoords(safeRegion.latitude, safeRegion.longitude)) return false;
@@ -104,6 +152,7 @@ export function FieldMapView({
     if (showsUserLocation && !locationGranted) return false;
     return true;
   }, [
+    errorMessage,
     hasRenderableCoordinates,
     loading,
     locationDenied,
@@ -149,7 +198,8 @@ export function FieldMapView({
       markerCount: safeMarkers.length,
       routePointCount: safeRoute.length,
       showsUserLocation,
-      followsUserLocation: allowFollowUser
+      followsUserLocation: allowFollowUser,
+      mapType: FIELD_MAP_TYPE
     });
   }, [
     allowFollowUser,
@@ -211,6 +261,7 @@ export function FieldMapView({
   const shellWidth = Math.max(width, 1);
 
   const placeholderMessage =
+    errorMessage ??
     emptyMessage ??
     (locationDenied
       ? "Location not available. Please enable GPS and try again."
@@ -218,15 +269,39 @@ export function FieldMapView({
         ? "Loading map…"
         : MAP_FALLBACK_MESSAGE);
 
+  const shellBg = theme.colors.cardMuted ?? "#e8f0ea";
+  const placeholderColor = theme.colors.muted ?? "#6B7F74";
+
   return (
     <MapErrorBoundary height={mapHeight} screenName={screenName} fallbackMessage={placeholderMessage}>
-      <View style={[styles.shell, { height: mapHeight, width: shellWidth, minHeight: MIN_MAP_HEIGHT }]}>
+      <View
+        style={[
+          styles.shell,
+          { height: mapHeight, width: shellWidth, minHeight: MIN_MAP_HEIGHT, backgroundColor: shellBg }
+        ]}
+      >
         {!canRenderMap ? (
           <View style={styles.placeholder}>
             {loading || !permissionResolved ? (
-              <ActivityIndicator size="large" color={theme.colors.primary} />
+              <>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text style={[styles.placeholderText, { color: placeholderColor }]}>{placeholderMessage}</Text>
+              </>
+            ) : errorMessage ? (
+              <>
+                <Ionicons name="alert-circle-outline" size={32} color={theme.colors.warning ?? "#C2410C"} />
+                <Text style={[styles.placeholderTitle, { color: theme.colors.text }]}>Map unavailable</Text>
+                <Text style={[styles.placeholderText, { color: placeholderColor }]}>{placeholderMessage}</Text>
+              </>
+            ) : !hasRenderableCoordinates ? (
+              <>
+                <Ionicons name="map-outline" size={32} color={placeholderColor} />
+                <Text style={[styles.placeholderText, { color: placeholderColor }]}>
+                  {emptyMessage ?? "No location to show yet."}
+                </Text>
+              </>
             ) : (
-              <Text style={styles.placeholderText}>{placeholderMessage}</Text>
+              <Text style={[styles.placeholderText, { color: placeholderColor }]}>{placeholderMessage}</Text>
             )}
           </View>
         ) : (
@@ -242,9 +317,9 @@ export function FieldMapView({
             showsUserLocation={showsUserLocation && locationGranted && !locationDenied}
             showsMyLocationButton={Platform.OS === "android" && showsUserLocation && locationGranted}
             followsUserLocation={allowFollowUser}
-            showsCompass
+            showsCompass={false}
             loadingEnabled
-            mapType="standard"
+            mapType={FIELD_MAP_TYPE}
             userInterfaceStyle="light"
             pitchEnabled={false}
             rotateEnabled={false}
@@ -261,25 +336,20 @@ export function FieldMapView({
                 strokeWidth={2}
               />
             ) : null}
-            {safeRoute.length >= 2 ? (
-              <Polyline
-                coordinates={safeRoute}
-                strokeColor={theme.colors.primaryDark}
-                strokeWidth={5}
-                lineCap="round"
-                lineJoin="round"
-                geodesic
-                zIndex={1}
-              />
-            ) : null}
+            <RoutePolylines
+              route={safeRoute}
+              strokePrimary={theme.colors.primaryDark}
+              strokeOutline="rgba(255,255,255,0.92)"
+            />
             {safeMarkers.map((m) => (
-              <Marker
+              <FieldMapMarker
                 key={m.id}
-                coordinate={{ latitude: m.lat, longitude: m.lng }}
+                id={m.id}
+                latitude={m.lat}
+                longitude={m.lng}
                 title={m.title}
                 description={m.description}
-                pinColor={safeMarkerPinColor(m.pinColor)}
-                zIndex={2}
+                kind={m.kind}
               />
             ))}
           </MapView>
@@ -292,7 +362,6 @@ export function FieldMapView({
 const styles = StyleSheet.create({
   shell: {
     alignSelf: "center",
-    backgroundColor: "#e8f0ea",
     borderRadius: 18,
     overflow: "hidden"
   },
@@ -303,12 +372,17 @@ const styles = StyleSheet.create({
   placeholder: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
+    gap: 10,
     justifyContent: "center",
     minHeight: MIN_MAP_HEIGHT,
     padding: 20
   },
+  placeholderTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    textAlign: "center"
+  },
   placeholderText: {
-    color: "#6B7F74",
     fontSize: 14,
     fontWeight: "600",
     lineHeight: 20,

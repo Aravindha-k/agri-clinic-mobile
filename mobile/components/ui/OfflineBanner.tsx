@@ -1,15 +1,18 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect } from "react";
+import { StyleSheet, Text, View } from "react-native";
+import { useConnectivityOnline } from "../../../src/hooks/useConnectivityOnline";
 import { LAN_OFFLINE_BANNER_MESSAGE } from "../../lib/api";
 import { Colors, FontSize, FontWeight, Radius } from "../../lib/theme";
 
 type Props = {
   pendingCount: number;
   lastSyncedAt: Date | null;
-  onSync: () => void;
+  /** Called automatically when visits are pending and device is online. */
+  onAutoSync?: () => void;
   offline?: boolean;
-  /** Office LAN API unreachable — show amber offline-mode copy instead of a red error. */
   lanOnly?: boolean;
+  syncing?: boolean;
 };
 
 function formatLastSync(date: Date | null): string {
@@ -26,33 +29,44 @@ function formatLastSync(date: Date | null): string {
 export function OfflineBanner({
   pendingCount,
   lastSyncedAt,
-  onSync,
+  onAutoSync,
   offline = false,
-  lanOnly = false
+  lanOnly = false,
+  syncing = false
 }: Props) {
-  if (pendingCount <= 0 && !offline && !lanOnly) {
+  const apiOnline = useConnectivityOnline();
+  const deviceOffline = offline || lanOnly || !apiOnline;
+
+  useEffect(() => {
+    if (!onAutoSync || pendingCount <= 0 || deviceOffline || syncing) return;
+    onAutoSync();
+  }, [deviceOffline, onAutoSync, pendingCount, syncing]);
+
+  if (pendingCount <= 0 && !deviceOffline) {
     return null;
   }
 
-  const pendingLine = lanOnly
+  const message = lanOnly
     ? LAN_OFFLINE_BANNER_MESSAGE
-    : pendingCount > 0
-      ? `${pendingCount} visit${pendingCount === 1 ? "" : "s"} pending`
-      : "Offline";
+    : deviceOffline
+      ? pendingCount > 0
+        ? `Offline · ${pendingCount} visit${pendingCount === 1 ? "" : "s"} will sync when online`
+        : "Offline"
+      : syncing
+        ? `Syncing ${pendingCount} visit${pendingCount === 1 ? "" : "s"}…`
+        : `${pendingCount} visit${pendingCount === 1 ? "" : "s"} syncing automatically`;
 
   return (
     <View style={[styles.wrap, { backgroundColor: Colors.amberBg, borderRadius: Radius.lg }]}>
-      <Ionicons name="cloud-offline-outline" size={18} color={Colors.amber} />
+      <Ionicons
+        name={deviceOffline ? "cloud-offline-outline" : syncing ? "sync-outline" : "cloud-upload-outline"}
+        size={18}
+        color={Colors.amber}
+      />
       <Text style={[styles.copy, { color: Colors.amberText }]} numberOfLines={2}>
-        {pendingLine} · Last sync {formatLastSync(lastSyncedAt)}
+        {message}
+        {lastSyncedAt ? ` · Last sync ${formatLastSync(lastSyncedAt)}` : ""}
       </Text>
-      <Pressable
-        onPress={onSync}
-        style={[styles.syncBtn, { backgroundColor: Colors.amber }]}
-        accessibilityRole="button"
-      >
-        <Text style={[styles.syncLabel, { color: Colors.surface }]}>Sync</Text>
-      </Pressable>
     </View>
   );
 }
@@ -69,14 +83,5 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: FontSize.sm,
     fontWeight: FontWeight.medium
-  },
-  syncBtn: {
-    borderRadius: Radius.sm,
-    paddingHorizontal: 12,
-    paddingVertical: 6
-  },
-  syncLabel: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold
   }
 });

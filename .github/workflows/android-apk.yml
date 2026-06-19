@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  EXPO_PUBLIC_API_URL: http://13.207.17.117/api/v1/
+  EXPO_PUBLIC_API_URL: http://13.207.17.117
 
 jobs:
   build-apk:
@@ -39,14 +39,22 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Write production env for Metro bundle
+        run: echo "EXPO_PUBLIC_API_URL=http://13.207.17.117" > .env.production
+
       - name: Install dependencies
         run: npm ci
+
+      - name: Verify production API config
+        run: node scripts/audit-deploy-config.mjs
 
       - name: Make Gradle wrapper executable
         run: chmod +x android/gradlew
 
       - name: Build release APK
         working-directory: android
+        env:
+          EXPO_PUBLIC_API_URL: http://13.207.17.117
         run: ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Upload APK artifact

@@ -22,6 +22,7 @@ export function WorkQueueSectionHeader({
 }: Props) {
   const content = (
     <>
+      <View style={styles.accent} />
       <Text style={styles.title}>{title}</Text>
       <View style={styles.countPill}>
         <Text style={styles.countText}>{count}</Text>
@@ -65,14 +66,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8
   },
+  accent: {
+    backgroundColor: Colors.brand700,
+    borderRadius: 2,
+    height: 12,
+    width: 3
+  },
   title: {
     ...SECTION_LABEL,
     flex: 1,
     marginBottom: 0
   },
   countPill: {
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
+    backgroundColor: Colors.brand50,
+    borderColor: Colors.brand100,
     borderRadius: 10,
     borderWidth: 1,
     minWidth: 26,

@@ -7,15 +7,22 @@ export const BACKGROUND_LOCATION_TASK = "KAVYA_BACKGROUND_LOCATION";
 
 if (!TaskManager.isTaskDefined(BACKGROUND_LOCATION_TASK)) {
   TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
-    if (error) {
-      trackingDevLog("task_error", error.message);
-      return;
-    }
-    if (data) {
-      const { locations } = data as { locations?: Location.LocationObject[] };
-      if (locations?.length) {
-        await processBackgroundLocations(locations);
+    try {
+      if (error) {
+        trackingDevLog("task_error", error.message);
+        return;
       }
+      if (data) {
+        const { locations } = data as { locations?: Location.LocationObject[] };
+        if (locations?.length) {
+          await processBackgroundLocations(locations);
+        }
+      }
+    } catch (err) {
+      trackingDevLog(
+        "task_error",
+        err instanceof Error ? err.message : "background task handler failed"
+      );
     }
   });
   trackingDevLog("task_registered", BACKGROUND_LOCATION_TASK);

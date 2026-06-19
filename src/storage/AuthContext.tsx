@@ -10,7 +10,9 @@ import { registerGoToLogin } from "./authRecovery";
 import { clearDeviceSessionId, DEVICE_SESSION_STORAGE_ERROR, ensureDeviceSessionLoaded, getDeviceSessionId } from "./deviceSessionStorage";
 import { registerSessionExpiredTeardown } from "./sessionExpired";
 import { registerSessionTeardown } from "./sessionConflict";
+import { runPreSignOutHandlers } from "./preSignOut";
 import { getAccessToken, saveTokens, clearTokens, type StoredTokens } from "./tokenStorage";
+import { saveBiometricLogin } from "./biometricLoginStorage";
 import { ApiRequestError, isAuthExpiredError, isNetworkError, isServerError } from "../utils/apiError";
 import { isDeviceSessionConflict } from "./sessionConflict";
 
@@ -231,11 +233,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const tokens = await loginRequest(username, password);
       await saveTokens(tokens);
       await establishAuthenticatedSession();
+      await saveBiometricLogin(username, password).catch(() => undefined);
     },
     [establishAuthenticatedSession]
   );
 
   const signOut = useCallback(async () => {
+    await runPreSignOutHandlers();
     try {
       await logoutRequest();
     } finally {

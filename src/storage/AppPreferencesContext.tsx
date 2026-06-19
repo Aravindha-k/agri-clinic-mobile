@@ -9,13 +9,16 @@ export type AppPreferences = {
   wifiOnlySync: boolean;
   trackingBatterySaver: boolean;
   appLanguage: AppLanguage;
+  /** When false, field reminders still notify but play no custom sound. */
+  reminderSoundsEnabled: boolean;
 };
 
 const DEFAULTS: AppPreferences = {
   autoSyncOnReconnect: true,
   wifiOnlySync: false,
   trackingBatterySaver: false,
-  appLanguage: "en"
+  appLanguage: "en",
+  reminderSoundsEnabled: true
 };
 
 type AppPreferencesContextValue = AppPreferences & {

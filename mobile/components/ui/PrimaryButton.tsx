@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, ViewStyle } from "react-native";
-import { Colors, FontSize, FontWeight, Radius } from "../../lib/theme";
+import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from "../../lib/theme";
 
 type Props = {
   label: string;
@@ -23,7 +23,7 @@ export function PrimaryButton({ label, onPress, loading, icon, disabled, style }
         styles.btn,
         {
           backgroundColor: Colors.brand700,
-          borderRadius: Radius.xl,
+          borderRadius: Radius.button,
           opacity: isDisabled ? 0.55 : pressed ? 0.92 : 1
         },
         style
@@ -46,9 +46,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     gap: 8,
-    height: 52,
+    height: 48,
     justifyContent: "center",
-    paddingHorizontal: 16
+    paddingHorizontal: Spacing.lg,
+    ...Shadow.cardRaised
   },
   label: {
     color: Colors.surface,

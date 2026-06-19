@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { getAllWorkdayLocations } from "../../../src/api/tracking";
 import { FieldMapView } from "../../../src/components/map/FieldMapView";
 import { MapErrorBoundary } from "../../../src/components/map/MapErrorBoundary";
+import { subscribeRouteSync } from "../../../src/utils/routeSyncBus";
 import { hasValidMapCoords, parseMapCoord } from "../../../src/utils/mapCoords";
 import { DEFAULT_MAP_REGION, fitMapRegion } from "../../../src/utils/mapRegion";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
@@ -11,12 +13,15 @@ import { FlatCard } from "../layout/FlatCard";
 import { SectionHeader } from "../ui/SectionHeader";
 
 const MAP_HEIGHT = 132;
+const ROUTE_AUTO_REFRESH_MS = 45_000;
 
 type Props = {
   title: string;
   distanceLabel: string;
   distanceValue: string;
   workdayId?: number;
+  /** Bumps when parent tracking sync completes — triggers reload. */
+  refreshToken?: string | null;
   onPress: () => void;
 };
 
@@ -25,6 +30,7 @@ export function DaySummaryRouteCard({
   distanceLabel,
   distanceValue,
   workdayId,
+  refreshToken,
   onPress
 }: Props) {
   const { width } = useWindowDimensions();
@@ -60,11 +66,34 @@ export function DaySummaryRouteCard({
 
   useEffect(() => {
     mountedRef.current = true;
-    void loadRoute();
     return () => {
       mountedRef.current = false;
     };
+  }, []);
+
+  useEffect(() => {
+    void loadRoute();
+  }, [loadRoute, refreshToken]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadRoute();
+    }, [loadRoute])
+  );
+
+  useEffect(() => {
+    return subscribeRouteSync(() => {
+      void loadRoute();
+    });
   }, [loadRoute]);
+
+  useEffect(() => {
+    if (!workdayId) return;
+    const timer = setInterval(() => {
+      void loadRoute();
+    }, ROUTE_AUTO_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [loadRoute, workdayId]);
 
   const region = useMemo(
     () =>
@@ -94,6 +123,26 @@ export function DaySummaryRouteCard({
                   width={width - Spacing.lg * 2 - 2}
                   region={region}
                   route={route}
+                  markers={[
+                    {
+                      id: "route-start",
+                      lat: route[0].latitude,
+                      lng: route[0].longitude,
+                      title: "Start",
+                      kind: "route_start"
+                    },
+                    ...(route.length > 1
+                      ? [
+                          {
+                            id: "route-end",
+                            lat: route[route.length - 1].latitude,
+                            lng: route[route.length - 1].longitude,
+                            title: "Latest",
+                            kind: "route_end" as const
+                          }
+                        ]
+                      : [])
+                  ]}
                   showsUserLocation={false}
                   followsUserLocation={false}
                   permissionResolved
@@ -104,7 +153,7 @@ export function DaySummaryRouteCard({
             ) : (
               <View style={styles.mapFallback}>
                 <Ionicons name="map-outline" size={28} color={Colors.text4} />
-                <Text style={styles.mapFallbackText}>Route appears after GPS points sync</Text>
+                <Text style={styles.mapFallbackText}>Route updates automatically while you work</Text>
               </View>
             )}
           </View>

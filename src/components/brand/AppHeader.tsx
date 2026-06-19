@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsetsCompat } from "../../hooks/useSafeAreaInsetsCompat";
 import { useDesignSystem } from "../../hooks/useDesignSystem";
 import { layout } from "../../theme/designSystem";
-import { AppLogo } from "./AppLogo";
+import { AnimatedBrandLogo } from "./AnimatedBrandLogo";
 
 type Props = {
   title: string;
@@ -60,7 +60,7 @@ export function AppHeader({ title, subtitle, onBack, right, showLogoMark = false
         ) : null}
         {showLogoMark ? (
           <View style={styles.logoSlot}>
-            <AppLogo size="sm" bare variant="dark" />
+            <AnimatedBrandLogo size={40} />
           </View>
         ) : null}
         <View style={styles.titles}>

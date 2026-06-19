@@ -6,6 +6,8 @@ import { AppHeader } from "../components/ui";
 import { useDesignSystem } from "../hooks/useDesignSystem";
 import { useSecureScreen } from "../hooks/useSecureScreen";
 import { useI18n } from "../i18n/I18nContext";
+import { scheduleReminderSoundTest } from "../notifications/fieldReminderNotifications";
+import { playFieldReminderSound } from "../notifications/playReminderSound";
 import { useAppPreferences } from "../storage/AppPreferencesContext";
 import { useTheme } from "../theme";
 import type { AppLanguage } from "../i18n";
@@ -15,8 +17,26 @@ export function SettingsScreen() {
   const navigation = useNavigation<any>();
   const { colors, type, shadows } = useDesignSystem();
   const { isDark, toggleTheme } = useTheme();
-  const { autoSyncOnReconnect, wifiOnlySync, trackingBatterySaver, setPreference } = useAppPreferences();
+  const { autoSyncOnReconnect, wifiOnlySync, trackingBatterySaver, reminderSoundsEnabled, setPreference } =
+    useAppPreferences();
   const { t, language, setLanguage } = useI18n();
+
+  async function testReminderSound(kind: "water" | "heat" | "battery") {
+    if (reminderSoundsEnabled && (kind === "water" || kind === "heat")) {
+      void playFieldReminderSound(kind);
+    }
+
+    const result = await scheduleReminderSoundTest(kind, reminderSoundsEnabled, 5);
+    if (result === "web") {
+      Alert.alert(t("settings.reminderTestTitle"), t("settings.reminderTestWeb"));
+      return;
+    }
+    if (result === "denied") {
+      Alert.alert(t("settings.reminderTestTitle"), t("settings.reminderTestDenied"));
+      return;
+    }
+    Alert.alert(t("settings.reminderTestTitle"), t("settings.reminderTestScheduled"));
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -82,6 +102,32 @@ export function SettingsScreen() {
           />
         </View>
 
+        <Text style={[type.label, styles.sectionGap]}>{t("settings.reminders")}</Text>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderSubtle }, shadows.card]}>
+          <SettingRow
+            icon="volume-high-outline"
+            title={t("settings.reminderSounds")}
+            subtitle={t("settings.reminderSoundsHint")}
+            right={
+              <Switch
+                value={reminderSoundsEnabled}
+                onValueChange={(v) => void setPreference("reminderSoundsEnabled", v)}
+                trackColor={{ true: colors.primary }}
+              />
+            }
+          />
+          <View style={[styles.divider, { backgroundColor: colors.borderSubtle }]} />
+          <Text style={[type.caption, styles.testHint]}>{t("settings.reminderTestHint")}</Text>
+          <View style={styles.testRow}>
+            <ReminderTestButton label={t("settings.reminderTestWater")} onPress={() => void testReminderSound("water")} />
+            <ReminderTestButton label={t("settings.reminderTestHeat")} onPress={() => void testReminderSound("heat")} />
+            <ReminderTestButton
+              label={t("settings.reminderTestBattery")}
+              onPress={() => void testReminderSound("battery")}
+            />
+          </View>
+        </View>
+
         <Pressable
           onPress={() =>
             Alert.alert(t("settings.resetTitle"), t("settings.resetBody"), [
@@ -93,6 +139,7 @@ export function SettingsScreen() {
                   void setPreference("autoSyncOnReconnect", true);
                   void setPreference("wifiOnlySync", false);
                   void setPreference("trackingBatterySaver", false);
+                  void setPreference("reminderSoundsEnabled", true);
                 }
               }
             ])
@@ -147,6 +194,22 @@ function LanguageRow({
   );
 }
 
+function ReminderTestButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const { colors, type } = useDesignSystem();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.testBtn,
+        { backgroundColor: colors.primarySoft, borderColor: colors.borderSubtle },
+        pressed && { opacity: 0.9 }
+      ]}
+    >
+      <Text style={[type.caption, styles.testBtnText, { color: colors.primary }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 function SettingRow({
   icon,
   title,
@@ -191,5 +254,14 @@ const styles = StyleSheet.create({
   icon: { alignItems: "center", borderRadius: 12, height: 42, justifyContent: "center", width: 42 },
   rowCopy: { flex: 1, gap: 2 },
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 14 },
+  testHint: { marginHorizontal: 14, marginTop: 4 },
+  testRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, padding: 14, paddingTop: 10 },
+  testBtn: {
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  testBtnText: { fontWeight: "700" },
   reset: { alignItems: "center", marginTop: 20, padding: 12 }
 });

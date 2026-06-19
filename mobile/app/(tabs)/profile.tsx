@@ -15,7 +15,6 @@ import {
 } from "react-native";
 import { Employee, getCurrentEmployee, mergeEmployeePhoto } from "../../../src/api/employees";
 import { uploadEmployeePhoto } from "../../../src/api/profilePhotos";
-import { BrandLogo } from "../../../src/components/brand/BrandLogo";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { formatRelativeTimeLocalized } from "../../../src/i18n";
 import { useRefreshControlProps } from "../../../src/hooks/useRefreshControlProps";
@@ -37,14 +36,13 @@ import { cacheBustPhotoUrl, extractPhotoUrl, photoCacheVersion } from "../../../
 import { getHomeVisits } from "../../../src/utils/visitsCache";
 import { EmptyState } from "../../components/ui";
 import { FadeInSection, entranceListStagger, entranceStagger } from "../../components/ui/FadeInSection";
-import { ScreenLoader } from "../../components/layout/ScreenLoader";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
 import { getBadgeCount } from "../../lib/notificationsApi";
-import { clearAppStorage } from "../../lib/mmkv";
 import { useSyncStore } from "../../lib/store/syncStore";
 import { DS } from "../../../src/theme/globalStyles";
-import { ScreenCanvas, ScreenEntranceWash } from "../../components/layout";
-import { Colors } from "../../lib/theme";
+import { LOGO_SIZES } from "../../../src/brand/logoSizing";
+import { ScreenCanvas, ScreenEntranceBloom } from "../../components/layout";
+import { Colors, FontSize, FontWeight, Spacing } from "../../lib/theme";
 import { SECTION_LABEL } from "../../lib/sectionLabel";
 import { BRAND_COLORS } from "../../../src/config/brand";
 
@@ -62,40 +60,54 @@ function SectionLabel({ title }: { title: string }) {
   return <Text style={[styles.sectionLabel, SECTION_LABEL]}>{title.toUpperCase()}</Text>;
 }
 
-/** Part 1 — PLACEMENT 2: compact logo + version on hero */
-function HeroBrandMark({ version }: { version: string }) {
+/** Version badge on profile hero */
+function HeroVersionMark({ version }: { version: string }) {
   return (
     <View style={styles.heroBrand}>
-      <View style={styles.heroLogoWrap}>
-        <BrandLogo variant="onPrimary" width={44} height={44} />
-      </View>
       <Text style={styles.heroVersion}>v{version}</Text>
     </View>
   );
 }
 
+const PROFILE_AVATAR_SIZE = LOGO_SIZES.appLogo.xl;
+
 function HeroAvatar({
   photoUrl,
   photoVersion,
   uploading,
+  size = PROFILE_AVATAR_SIZE,
   onPress
 }: {
   photoUrl: string | null;
   photoVersion: string | number;
   uploading: boolean;
+  size?: number;
   onPress: () => void;
 }) {
   const uri = photoUrl ? cacheBustPhotoUrl(photoUrl, photoVersion) : null;
 
   return (
-    <Pressable onPress={onPress} disabled={uploading} style={styles.heroAvatarWrap}>
+    <Pressable
+      onPress={onPress}
+      disabled={uploading}
+      accessibilityRole="button"
+      accessibilityLabel="Change profile photo"
+      style={[
+        styles.heroAvatarWrap,
+        { width: size, height: size, borderRadius: size / 2 }
+      ]}
+    >
       {uri ? (
-        <Image source={{ uri }} style={styles.heroAvatarImage} resizeMode="cover" />
+        <Image
+          source={{ uri }}
+          style={{ width: size, height: size, borderRadius: size / 2 }}
+          resizeMode="cover"
+        />
       ) : (
-        <Ionicons name="person" size={24} color="#fff" />
+        <Ionicons name="person" size={size * 0.4} color="#fff" />
       )}
       {uploading ? (
-        <View style={styles.heroAvatarOverlay}>
+        <View style={[styles.heroAvatarOverlay, { borderRadius: size / 2 }]}>
           <ActivityIndicator color="#fff" size="small" />
         </View>
       ) : null}
@@ -266,7 +278,11 @@ export default function ProfileTabScreen() {
         style: "destructive",
         onPress: () => {
           void (async () => {
-            clearAppStorage();
+            try {
+              await syncAll();
+            } catch {
+              /* pending visits remain locally until next sync */
+            }
             await signOut();
           })();
         }
@@ -315,14 +331,6 @@ export default function ProfileTabScreen() {
     [navigation, rootNav, t, unreadNotifications]
   );
 
-  if (loading && !profile) {
-    return (
-      <View style={[styles.screen, { paddingTop: safeTop }]}>
-        <ScreenLoader />
-      </View>
-    );
-  }
-
   if (error && !profile) {
     return (
       <View style={[styles.screen, { paddingTop: safeTop }]}>
@@ -340,7 +348,7 @@ export default function ProfileTabScreen() {
   return (
     <View style={styles.screen}>
       <ScreenCanvas />
-      <ScreenEntranceWash replayKey={entranceTick} />
+      <ScreenEntranceBloom replayKey={entranceTick} />
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -357,30 +365,29 @@ export default function ProfileTabScreen() {
         }
       >
         <FadeInSection replayKey={entranceTick} delay={entranceStagger(0)}>
-          <View style={[styles.hero, { paddingTop: safeTop + 20 }]}>
+          <View style={[styles.hero, { paddingTop: safeTop + Spacing.lg }]}>
             <View style={styles.heroTopRow}>
-              <HeroBrandMark version={appVersion} />
+              <Text style={styles.pageTitle}>{t("tabs.profile")}</Text>
+              <HeroVersionMark version={appVersion} />
             </View>
 
-            <View style={styles.userRow}>
+            <View style={styles.profileIdentity}>
               <HeroAvatar
                 photoUrl={photoUrl}
                 photoVersion={photoVersion}
                 uploading={uploadingPhoto}
                 onPress={() => showProfilePhotoSourcePicker((s) => void changePhoto(s))}
               />
-              <View style={styles.userCol}>
-                <Text style={styles.userName} numberOfLines={2}>
-                  {displayName}
-                </Text>
-                <View style={styles.roleBadge}>
-                  <Text style={styles.roleText}>{roleLabel}</Text>
-                </View>
-                <Text style={styles.userMeta} numberOfLines={1}>
-                  {employeeId !== "—" ? `EMP ${employeeId}` : "EMP —"}
-                  {phone !== "—" ? ` · ${phone}` : ""}
-                </Text>
+              <Text style={styles.userName} numberOfLines={2}>
+                {displayName}
+              </Text>
+              <View style={styles.roleBadge}>
+                <Text style={styles.roleText}>{roleLabel}</Text>
               </View>
+              <Text style={styles.userMeta} numberOfLines={2}>
+                {employeeId !== "—" ? `EMP ${employeeId}` : "EMP —"}
+                {phone !== "—" ? ` · ${phone}` : ""}
+              </Text>
             </View>
 
             <View style={styles.statsRow}>
@@ -488,47 +495,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20
   },
   heroTopRow: {
-    alignItems: "flex-start",
+    alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 16
+    marginBottom: Spacing.lg
+  },
+  pageTitle: {
+    color: "#FFFFFF",
+    fontSize: FontSize.hero,
+    fontWeight: FontWeight.bold,
+    letterSpacing: -0.3
   },
   heroBrand: {
     gap: 4
   },
-  heroLogoWrap: {
-    borderColor: "rgba(255,255,255,0.5)",
-    borderRadius: 12,
-    borderWidth: 2,
-    height: 48,
-    overflow: "hidden",
-    width: 48
+  profileIdentity: {
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 18
   },
   heroVersion: {
     color: "rgba(255,255,255,0.75)",
     fontSize: 10,
     fontWeight: "600"
   },
-  userRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 14,
-    marginBottom: 16
-  },
   heroAvatarWrap: {
     alignItems: "center",
     backgroundColor: "rgba(255,255,255,0.2)",
-    borderColor: "rgba(255,255,255,0.4)",
-    borderRadius: 26,
-    borderWidth: 2,
-    height: 52,
+    borderColor: "rgba(255,255,255,0.55)",
+    borderWidth: 3,
     justifyContent: "center",
-    overflow: "hidden",
-    width: 52
-  },
-  heroAvatarImage: {
-    height: 52,
-    width: 52
+    overflow: "hidden"
   },
   heroAvatarOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -536,19 +533,14 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.35)",
     justifyContent: "center"
   },
-  userCol: {
-    flex: 1,
-    gap: 4,
-    minWidth: 0
-  },
   userName: {
     color: "#fff",
-    fontSize: 17,
+    fontSize: 20,
     fontWeight: "800",
-    letterSpacing: -0.3
+    letterSpacing: -0.3,
+    textAlign: "center"
   },
   roleBadge: {
-    alignSelf: "flex-start",
     backgroundColor: "rgba(255,255,255,0.18)",
     borderRadius: 99,
     paddingHorizontal: 10,
@@ -561,8 +553,8 @@ const styles = StyleSheet.create({
   },
   userMeta: {
     color: "rgba(255,255,255,0.65)",
-    fontSize: 9.5,
-    marginTop: 4
+    fontSize: 10,
+    textAlign: "center"
   },
   statsRow: {
     flexDirection: "row",

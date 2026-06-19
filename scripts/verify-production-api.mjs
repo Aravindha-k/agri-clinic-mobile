@@ -2,7 +2,18 @@
  * Smoke-test production API reachability (no credentials required for most checks).
  * Run: node scripts/verify-production-api.mjs
  */
-const BASE = "https://agri-clinic-backend.onrender.com/api/v1/";
+const BASE = process.env.EXPO_PUBLIC_API_URL
+  ? normalizeEnvBase(process.env.EXPO_PUBLIC_API_URL)
+  : "http://13.207.17.117/api/v1/";
+
+function normalizeEnvBase(raw) {
+  let url = String(raw).trim().replace(/\/+$/, "");
+  url = url.replace(/(\/api\/v1)+$/i, "/api/v1");
+  if (!/\/api\/v1$/i.test(url)) {
+    url = /\/api$/i.test(url) ? `${url}/v1` : `${url}/api/v1`;
+  }
+  return `${url}/`;
+}
 
 async function check(name, url, options = {}) {
   const started = Date.now();
@@ -24,11 +35,11 @@ async function check(name, url, options = {}) {
 }
 
 const checks = [
-  ["Login endpoint", `${BASE}auth/login/`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }],
-  ["Employee me (auth required)", `${BASE}employees/me/`],
+  ["Login endpoint", `${BASE}mobile/auth/login/`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }],
+  ["Employee me (auth required)", `${BASE}mobile/auth/me/`],
   ["Farmers list (auth required)", `${BASE}farmers/?page=1&page_size=1`],
   ["Mobile visits (auth required)", `${BASE}mobile/visits/`],
-  ["Tracking workday (auth required)", `${BASE}tracking/workday/current/`],
+  ["Duty current (auth required)", `${BASE}tracking/duty/current/`],
   ["Masters districts (auth required)", `${BASE}masters/districts/`]
 ];
 

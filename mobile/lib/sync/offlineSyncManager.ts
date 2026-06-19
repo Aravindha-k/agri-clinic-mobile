@@ -1,7 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
 import * as SecureStore from "expo-secure-store";
-import { getDeviceInfo } from "../../../src/utils/deviceInfo";
 import {
   uploadAllPendingAttachments,
   type PendingVisitAttachment
@@ -9,8 +8,10 @@ import {
 import type { VisitFormValues } from "../../../src/api/visits";
 import { api, isNetworkError, unwrapApiData } from "../api";
 import { flattenVisitPayloadForMultipart } from "../visitSubmitApi";
+import { isDuplicateVisitResponse } from "../visitDuplicate";
 import { getJson, setJson, SYNC_STORAGE_KEYS } from "../storage";
 import { useSyncStore } from "../store/syncStore";
+import { GPS_QUEUE_MAX_POINTS } from "../../../src/tracking/trackingConfig";
 
 const LEGACY_SECURE_VISIT_QUEUE_KEY = "agri_offline_visit_queue";
 
@@ -33,6 +34,7 @@ export type PendingGPSPoint = {
   speed: number | null;
   heading: number | null;
   battery_level: number;
+  duty_session_id?: number;
   recorded_at: string;
   network_type: string;
 };
@@ -243,15 +245,17 @@ function buildVisitFormData(payload: Record<string, unknown>, localSyncId: strin
   return formData;
 }
 
-function isDuplicateVisitResponse(data: unknown) {
-  if (!data || typeof data !== "object") return false;
-  const row = data as Record<string, unknown>;
-  if (row.duplicate === true) return true;
-  const nested = row.data;
-  if (nested && typeof nested === "object" && (nested as Record<string, unknown>).duplicate === true) {
-    return true;
+function resetStuckSyncingVisits() {
+  const queue = readVisitQueue();
+  let changed = false;
+  const next = queue.map((row) => {
+    if (row.status !== "syncing") return row;
+    changed = true;
+    return { ...row, status: "pending" as PendingVisitStatus };
+  });
+  if (changed) {
+    writeVisitQueue(next);
   }
-  return false;
 }
 
 export async function addToVisitQueue(
@@ -272,6 +276,10 @@ export async function addToVisitQueue(
   await migrateLegacyQueues();
   const id = local_sync_id ?? generateLocalSyncId();
   const queue = readVisitQueue();
+  if (queue.some((row) => row.local_sync_id === id)) {
+    refreshSyncStoreCounts();
+    return id;
+  }
   queue.push({
     local_sync_id: id,
     payload: { ...payload, local_sync_id: id },
@@ -295,6 +303,9 @@ export function removeVisitFromQueue(local_sync_id: string) {
 export function addGPSPoint(point: PendingGPSPoint) {
   const queue = readGpsQueue();
   queue.push(point);
+  if (queue.length > GPS_QUEUE_MAX_POINTS) {
+    queue.splice(0, queue.length - GPS_QUEUE_MAX_POINTS);
+  }
   writeGpsQueue(queue);
   refreshSyncStoreCounts();
   scheduleGpsAutoFlush();
@@ -308,8 +319,11 @@ export async function flushVisitQueue(
   onProgress?: (progress: VisitSyncProgress) => void
 ): Promise<{ synced: number; failed: number }> {
   await migrateLegacyQueues();
+  resetStuckSyncingVisits();
   const queue = readVisitQueue();
-  const targets = queue.filter((v) => v.status === "pending" || v.status === "failed");
+  const targets = queue.filter(
+    (v) => v.status === "pending" || v.status === "failed" || v.status === "syncing"
+  );
   if (!targets.length) {
     refreshSyncStoreCounts();
     return { synced: 0, failed: 0 };
@@ -410,39 +424,13 @@ export async function flushVisitQueue(
 }
 
 export async function flushGPSQueue(): Promise<{ synced: number }> {
-  await migrateLegacyQueues();
-  const points = readGpsQueue();
-  if (!points.length) {
-    refreshSyncStoreCounts();
-    return { synced: 0 };
-  }
-
-  const device = getDeviceInfo();
-  const locations = points.map((point) => ({
-    latitude: point.latitude,
-    longitude: point.longitude,
-    accuracy: point.accuracy,
-    speed: point.speed ?? undefined,
-    heading: point.heading ?? undefined,
-    captured_at: point.recorded_at,
-    recorded_at: point.recorded_at
-  }));
-
-  try {
-    await api.post("tracking/location/bulk/", {
-      points,
-      locations,
-      device_model: device.device_model,
-      app_version: device.app_version
-    });
-    writeGpsQueue([]);
+  const { flushOfflineLocationQueue } = await import("../../../src/tracking/locationSyncService");
+  const synced = await flushOfflineLocationQueue();
+  if (synced > 0) {
     setJson("last_gps_sync_v1", new Date().toISOString());
-    refreshSyncStoreCounts();
-    return { synced: points.length };
-  } catch {
-    refreshSyncStoreCounts();
-    return { synced: 0 };
   }
+  refreshSyncStoreCounts();
+  return { synced };
 }
 
 export async function syncAll(): Promise<SyncAllResult> {
@@ -470,8 +458,15 @@ export function initOfflineSync() {
   if (netInfoUnsubscribe) return netInfoUnsubscribe;
 
   void migrateLegacyQueues().then(() => {
+    resetStuckSyncingVisits();
     refreshSyncStoreCounts();
     void autoFlushPendingGps();
+    void NetInfo.fetch().then((state) => {
+      const online = Boolean(state.isConnected && state.isInternetReachable !== false);
+      if (online) {
+        void syncAll();
+      }
+    });
   });
 
   netInfoUnsubscribe = NetInfo.addEventListener((state) => {

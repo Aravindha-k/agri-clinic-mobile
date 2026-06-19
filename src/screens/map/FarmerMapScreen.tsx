@@ -201,19 +201,8 @@ export function FarmerMapScreen({ navigation, route }: Props) {
                 locationGranted={locationGranted}
                 locationDenied={permissionResolved && !locationGranted && !farmerPin}
                 loading={loading}
-                showsUserLocation={false}
+                showsUserLocation={locationGranted}
                 markers={[
-                  ...(you
-                    ? [
-                        {
-                          id: "you",
-                          lat: you.lat,
-                          lng: you.lng,
-                          title: "You",
-                          description: "Your location"
-                        }
-                      ]
-                    : []),
                   ...(farmerPin
                     ? [
                         {
@@ -221,7 +210,8 @@ export function FarmerMapScreen({ navigation, route }: Props) {
                           lat: farmerPin.lat,
                           lng: farmerPin.lng,
                           title: displayName,
-                          description: place
+                          description: place,
+                          kind: "farmer" as const
                         }
                       ]
                     : [])

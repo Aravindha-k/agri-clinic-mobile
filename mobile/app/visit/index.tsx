@@ -1,13 +1,23 @@
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useEffect, useRef, useState } from "react";
-import { Animated, Dimensions, Easing, StyleSheet, View } from "react-native";
+import { Animated, Dimensions, Easing, StyleSheet, useWindowDimensions, View } from "react-native";
 import type { Farmer } from "../../../src/api/farmers";
 import { useSafeAreaInsetsCompat } from "../../../src/hooks/useSafeAreaInsetsCompat";
 import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
 import { useMasterData } from "../../../src/storage/MasterDataContext";
+import { useTracking } from "../../../src/storage/TrackingContext";
 import { loadRevisitPrefill } from "../../../src/utils/farmerPrefill";
 import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal";
-import { ScreenCanvas, ScreenEntranceWash } from "../../components/layout";
+import {
+  WorkdayRequiredSheet,
+  type WorkdayRequiredSheetRef
+} from "../../components/workday/WorkdayRequiredSheet";
+import { ScreenCanvas, ScreenEntranceBloom, HeaderHero } from "../../components/layout";
+import {
+  HEADER_IMAGE_POSITION,
+  resolveScreenHeaderHeight,
+  SCREEN_HEADER_IMAGES
+} from "../../lib/screenHeaderImages";
 import { VisitEntranceProvider } from "../../context/VisitEntranceContext";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
 import { useVisitFormStore } from "../../store/visitFormStore";
@@ -20,7 +30,12 @@ export default function VisitFlowShell() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { top: safeTop } = useSafeAreaInsetsCompat();
+  const { height: screenH } = useWindowDimensions();
+  const headerHeroHeight = resolveScreenHeaderHeight(screenH);
   const { districts, villages } = useMasterData();
+  const { isActive, startDay, busy: workdayBusy } = useTracking();
+  const workdaySheetRef = useRef<WorkdayRequiredSheetRef>(null);
+  const dutyGateShown = useRef(false);
   const step = useVisitFormStore((s) => s.step);
   const setStep = useVisitFormStore((s) => s.setStep);
   const applyRevisitPrefill = useVisitFormStore((s) => s.applyRevisitPrefill);
@@ -65,6 +80,16 @@ export default function VisitFlowShell() {
     const stub: Farmer = { id: Number(farmerId), name: route.params.prefill.farmer_name || "" };
 
     void (async () => {
+      if (!isActive) {
+        const started = await startDay();
+        if (!started) {
+          fastRevisitStarted.current = false;
+          navigation.setParams({ fastRevisit: undefined });
+          navigation.goBack();
+          return;
+        }
+      }
+
       const allowed = await requestGpsForFieldWork();
       if (!allowed) {
         fastRevisitStarted.current = false;
@@ -88,8 +113,16 @@ export default function VisitFlowShell() {
     route.params?.fastRevisit,
     route.params?.prefill,
     setStep,
-    villages
+    villages,
+    isActive,
+    startDay
   ]);
+
+  useEffect(() => {
+    if (isActive || dutyGateShown.current || route.params?.fastRevisit) return;
+    dutyGateShown.current = true;
+    workdaySheetRef.current?.open();
+  }, [isActive, route.params?.fastRevisit]);
 
   const entranceTick = useScreenEntrance();
   const entranceKey = `${entranceTick}-${displayedStep}`;
@@ -100,9 +133,16 @@ export default function VisitFlowShell() {
   }
 
   return (
-    <View style={[styles.shell, { paddingTop: safeTop }]}>
+    <View style={styles.shell}>
       <ScreenCanvas />
-      <ScreenEntranceWash replayKey={entranceKey} />
+      <ScreenEntranceBloom replayKey={entranceKey} />
+      <HeaderHero
+        imageSource={SCREEN_HEADER_IMAGES.visit}
+        height={headerHeroHeight}
+        contentPosition={HEADER_IMAGE_POSITION.visit}
+        showLogo
+        safeTop={safeTop}
+      />
       <VisitEntranceProvider replayKey={entranceKey}>
         <Animated.View style={[styles.stepPane, { transform: [{ translateX: slideAnim }] }]}>
           {displayedStep === 1 ? <VisitCreateStep onClose={closeFlow} /> : null}
@@ -120,13 +160,24 @@ export default function VisitFlowShell() {
           ) : null}
         </Animated.View>
       </VisitEntranceProvider>
+      <WorkdayRequiredSheet
+        ref={workdaySheetRef}
+        busy={workdayBusy}
+        onStart={async () => {
+          const started = await startDay();
+          if (started) {
+            workdaySheetRef.current?.close();
+          }
+        }}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   shell: {
-    flex: 1
+    flex: 1,
+    overflow: "hidden"
   },
   stepPane: {
     flex: 1

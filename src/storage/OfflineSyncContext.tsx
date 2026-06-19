@@ -1,7 +1,8 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { VisitFormValues } from "../api/visits";
 import type { PickedProfileImage } from "../utils/profileImagePick";
 import type { PendingVisitAttachment } from "../visit/pendingAttachments";
+import { useConnectivityOnline } from "../hooks/useConnectivityOnline";
 import {
   addToVisitQueue,
   getPendingVisits,
@@ -56,6 +57,8 @@ const OfflineSyncContext = createContext<OfflineSyncContextValue | undefined>(un
 
 export function OfflineSyncProvider({ children }: { children: React.ReactNode }) {
   const { bumpAfterVisitChange } = useFieldDataRefresh();
+  const online = useConnectivityOnline();
+  const autoSyncInFlight = useRef(false);
   const [queue, setQueue] = useState<QueuedVisit[]>([]);
   const [lastSyncFailed, setLastSyncFailed] = useState(0);
   const syncing = useSyncStore((state) => state.isSyncing);
@@ -117,6 +120,16 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
   }, [bumpAfterVisitChange, refreshQueue]);
 
   const pendingCount = pendingVisitsCount + failedVisitsCount;
+
+  useEffect(() => {
+    if (!online || pendingCount <= 0 || syncing || autoSyncInFlight.current) {
+      return;
+    }
+    autoSyncInFlight.current = true;
+    void syncAll().finally(() => {
+      autoSyncInFlight.current = false;
+    });
+  }, [online, pendingCount, syncAll, syncing]);
 
   const value = useMemo(
     () => ({

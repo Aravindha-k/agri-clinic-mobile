@@ -5,6 +5,7 @@ import { apiPathFromNextUrl } from "../utils/apiPath";
 import { normalizeVisitFromApi } from "../utils/visitFarmer";
 import { prepareVisitForSubmit } from "../visit/prepareVisitSubmit";
 import { validateVisitSubmitValues } from "../visit/visitValidation";
+import { isDuplicateVisitResponse } from "../../mobile/lib/visitDuplicate";
 
 export { validateVisitSubmitValues } from "../visit/visitValidation";
 
@@ -81,7 +82,16 @@ export type VisitFormValues = {
   farmer_phone: string;
   latitude?: string;
   longitude?: string;
+  /** GPS accuracy in meters at capture time. */
+  accuracy?: string | number | null;
   local_sync_id?: string;
+  /** Duty session from active workday — links visit to day report. */
+  duty_session_id?: string | number;
+  workday_id?: string | number;
+  /** Visit capture instant (ISO). */
+  captured_at?: string;
+  visit_date?: string;
+  visit_time?: string;
   next_visit_date?: string;
   notes?: string;
   crop_health?: string;
@@ -243,6 +253,17 @@ export async function submitMobileVisit(
     method: "POST",
     body: JSON.stringify(payload)
   });
+
+  if (isDuplicateVisitResponse(data)) {
+    const id = Number(data.visit_id ?? data.visit?.id ?? 0);
+    if (id > 0) {
+      try {
+        return normalizeVisitFromApi(await getVisit(id));
+      } catch {
+        return { id } as Visit;
+      }
+    }
+  }
 
   const visitRow = data.visit ?? (data as unknown as Visit);
   const normalized = normalizeVisitFromApi(visitRow);

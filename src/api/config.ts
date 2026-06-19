@@ -1,5 +1,6 @@
-/** Production API (Render) — baked into EAS/APK builds via eas.json env. */
-const PRODUCTION_API_BASE_URL = "https://agri-clinic-backend.onrender.com/api/v1/";
+/** Production API (AWS) — baked into EAS/APK builds via eas.json env. */
+export const PRODUCTION_API_HOST = "13.207.17.117";
+export const PRODUCTION_API_BASE_URL = `http://${PRODUCTION_API_HOST}/api/v1/`;
 
 /**
  * Local backend for `npx expo start` only (__DEV__).
@@ -16,8 +17,12 @@ function normalizeApiBaseUrl(raw: string): string {
   return trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
 }
 
+function isProductionApiUrl(url: string): boolean {
+  return url.includes(PRODUCTION_API_HOST);
+}
+
 function resolveApiBaseUrl(): string {
-  // EAS preview/production APK: EXPO_PUBLIC_API_URL is set at build time → Render
+  // EAS preview/production APK: EXPO_PUBLIC_API_URL is set at build time → AWS
   const fromEnv = process.env.EXPO_PUBLIC_API_URL?.trim();
   if (fromEnv) {
     return normalizeApiBaseUrl(fromEnv);
@@ -40,8 +45,8 @@ function resolveApiBaseUrl(): string {
 
 export const API_BASE_URL = resolveApiBaseUrl();
 
-/** True when app talks to Render (APK / release builds). */
-export const IS_PRODUCTION_API = API_BASE_URL.startsWith("https://agri-clinic-backend.onrender.com");
+/** True when app talks to AWS production (APK / release builds). */
+export const IS_PRODUCTION_API = isProductionApiUrl(API_BASE_URL);
 
 if (__DEV__) {
   console.log("[API] Using base URL:", API_BASE_URL);

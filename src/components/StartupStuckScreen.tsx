@@ -5,10 +5,11 @@ import { getStartupSnapshot } from "../utils/startupDiagnostics";
 type Props = {
   onContinueToLogin: () => void;
   onRetry?: () => void;
+  onResetLocalSession?: () => void;
 };
 
 /** Shown when splash/auth bootstrap exceeds the startup deadline (release APK). */
-export function StartupStuckScreen({ onContinueToLogin, onRetry }: Props) {
+export function StartupStuckScreen({ onContinueToLogin, onRetry, onResetLocalSession }: Props) {
   const snap = getStartupSnapshot();
 
   const statusLines = [
@@ -29,6 +30,8 @@ export function StartupStuckScreen({ onContinueToLogin, onRetry }: Props) {
         onPrimary={onContinueToLogin}
         secondaryLabel={onRetry ? "Retry" : undefined}
         onSecondary={onRetry}
+        tertiaryLabel={onResetLocalSession ? "Reset local session" : undefined}
+        onTertiary={onResetLocalSession}
       />
     </View>
   );

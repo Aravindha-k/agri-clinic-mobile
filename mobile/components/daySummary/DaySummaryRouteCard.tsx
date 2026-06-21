@@ -1,13 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { API_BASE_URL, buildApiUrl } from "../../../src/api/config";
 import { getAllWorkdayLocations } from "../../../src/api/tracking";
-import { FieldMapView } from "../../../src/components/map/FieldMapView";
-import { MapErrorBoundary } from "../../../src/components/map/MapErrorBoundary";
+import { logDayTabApi, logDayTabError } from "../../../src/utils/dayTabDiagnostics";
 import { subscribeRouteSync } from "../../../src/utils/routeSyncBus";
 import { hasValidMapCoords, parseMapCoord } from "../../../src/utils/mapCoords";
-import { DEFAULT_MAP_REGION, fitMapRegion } from "../../../src/utils/mapRegion";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 import { FlatCard } from "../layout/FlatCard";
 import { SectionHeader } from "../ui/SectionHeader";
@@ -25,6 +24,7 @@ type Props = {
   onPress: () => void;
 };
 
+/** Static route preview — no MapView (MapView inside ScrollView crashes on Android). */
 export function DaySummaryRouteCard({
   title,
   distanceLabel,
@@ -33,32 +33,35 @@ export function DaySummaryRouteCard({
   refreshToken,
   onPress
 }: Props) {
-  const { width } = useWindowDimensions();
   const mountedRef = useRef(true);
   const [loading, setLoading] = useState(Boolean(workdayId));
-  const [route, setRoute] = useState<{ latitude: number; longitude: number }[]>([]);
+  const [routePoints, setRoutePoints] = useState(0);
 
   const loadRoute = useCallback(async () => {
     if (!workdayId) {
-      setRoute([]);
+      setRoutePoints(0);
       setLoading(false);
       return;
     }
+    const url = buildApiUrl(
+      `tracking/workday/${workdayId}/locations/?page=1&page_size=200`,
+      API_BASE_URL
+    );
     setLoading(true);
     try {
       const logs = await getAllWorkdayLocations(workdayId);
       if (!mountedRef.current) return;
-      const coords = logs
-        .map((p) => {
-          const lat = parseMapCoord(p.latitude);
-          const lng = parseMapCoord(p.longitude);
-          if (lat == null || lng == null || !hasValidMapCoords(lat, lng)) return null;
-          return { latitude: lat, longitude: lng };
-        })
-        .filter(Boolean) as { latitude: number; longitude: number }[];
-      setRoute(coords);
-    } catch {
-      if (mountedRef.current) setRoute([]);
+      const count = logs.filter((p) => {
+        const lat = parseMapCoord(p.latitude);
+        const lng = parseMapCoord(p.longitude);
+        return lat != null && lng != null && hasValidMapCoords(lat, lng);
+      }).length;
+      setRoutePoints(count);
+      logDayTabApi("route", url, true, `points=${count}`);
+    } catch (err) {
+      logDayTabApi("route", url, false, err instanceof Error ? err.message : String(err));
+      logDayTabError("route_load", err);
+      if (mountedRef.current) setRoutePoints(0);
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -95,14 +98,6 @@ export function DaySummaryRouteCard({
     return () => clearInterval(timer);
   }, [loadRoute, workdayId]);
 
-  const region = useMemo(
-    () =>
-      route.length
-        ? fitMapRegion(route.map((p) => ({ lat: p.latitude, lng: p.longitude })))
-        : DEFAULT_MAP_REGION,
-    [route]
-  );
-
   return (
     <View style={styles.section}>
       <View style={styles.headerPad}>
@@ -110,50 +105,25 @@ export function DaySummaryRouteCard({
       </View>
       <Pressable onPress={onPress} style={({ pressed }) => [pressed && { opacity: 0.96 }]}>
         <FlatCard style={styles.card}>
-          <View style={[styles.mapWrap, { width: width - Spacing.lg * 2 - 2 }]}>
+          <View style={styles.previewWrap}>
             {loading ? (
-              <View style={styles.mapFallback}>
+              <View style={styles.previewBody}>
                 <ActivityIndicator color={Colors.brand700} />
               </View>
-            ) : route.length > 0 ? (
-              <MapErrorBoundary height={MAP_HEIGHT} screenName="DaySummaryRoute">
-                <FieldMapView
-                  screenName="DaySummaryRoute"
-                  height={MAP_HEIGHT}
-                  width={width - Spacing.lg * 2 - 2}
-                  region={region}
-                  route={route}
-                  markers={[
-                    {
-                      id: "route-start",
-                      lat: route[0].latitude,
-                      lng: route[0].longitude,
-                      title: "Start",
-                      kind: "route_start"
-                    },
-                    ...(route.length > 1
-                      ? [
-                          {
-                            id: "route-end",
-                            lat: route[route.length - 1].latitude,
-                            lng: route[route.length - 1].longitude,
-                            title: "Latest",
-                            kind: "route_end" as const
-                          }
-                        ]
-                      : [])
-                  ]}
-                  showsUserLocation={false}
-                  followsUserLocation={false}
-                  permissionResolved
-                  locationGranted
-                  emptyMessage=""
-                />
-              </MapErrorBoundary>
+            ) : routePoints > 0 ? (
+              <View style={styles.previewBody}>
+                <View style={styles.previewIconWrap}>
+                  <Ionicons name="navigate" size={28} color={Colors.brand700} />
+                </View>
+                <Text style={styles.previewTitle}>
+                  {routePoints} GPS point{routePoints === 1 ? "" : "s"} recorded
+                </Text>
+                <Text style={styles.previewHint}>Tap to open full route map</Text>
+              </View>
             ) : (
-              <View style={styles.mapFallback}>
+              <View style={styles.previewBody}>
                 <Ionicons name="map-outline" size={28} color={Colors.text4} />
-                <Text style={styles.mapFallbackText}>Route updates automatically while you work</Text>
+                <Text style={styles.previewHint}>Route updates automatically while you work</Text>
               </View>
             )}
           </View>
@@ -188,24 +158,35 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     padding: 0
   },
-  mapWrap: {
+  previewWrap: {
     backgroundColor: Colors.bg,
     borderBottomColor: Colors.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
     height: MAP_HEIGHT,
     overflow: "hidden"
   },
-  map: {
-    flex: 1
-  },
-  mapFallback: {
+  previewBody: {
     alignItems: "center",
     flex: 1,
     gap: 6,
     justifyContent: "center",
     paddingHorizontal: Spacing.lg
   },
-  mapFallbackText: {
+  previewIconWrap: {
+    alignItems: "center",
+    backgroundColor: Colors.brand50,
+    borderRadius: Radius.pill,
+    height: 52,
+    justifyContent: "center",
+    width: 52
+  },
+  previewTitle: {
+    color: Colors.text1,
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.semibold,
+    textAlign: "center"
+  },
+  previewHint: {
     color: Colors.text3,
     fontSize: FontSize.sm,
     textAlign: "center"

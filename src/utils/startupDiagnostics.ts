@@ -24,7 +24,9 @@ export type StartupPhase =
   | "nav_login"
   | "nav_home"
   | "nav_error"
-  | "nav_stuck_fallback";
+  | "nav_stuck_fallback"
+  | "session_restored"
+  | "session_cleared";
 
 export type StartupSnapshot = {
   releaseMode: boolean;

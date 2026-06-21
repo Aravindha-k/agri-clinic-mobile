@@ -11,6 +11,8 @@ type Props = {
   onPrimary?: () => void;
   secondaryLabel?: string;
   onSecondary?: () => void;
+  tertiaryLabel?: string;
+  onTertiary?: () => void;
 };
 
 export function AppFallbackScreen({
@@ -19,7 +21,9 @@ export function AppFallbackScreen({
   primaryLabel = "Try again",
   onPrimary,
   secondaryLabel,
-  onSecondary
+  onSecondary,
+  tertiaryLabel,
+  onTertiary
 }: Props) {
   return (
     <View style={styles.root}>
@@ -35,6 +39,11 @@ export function AppFallbackScreen({
       {onSecondary && secondaryLabel ? (
         <Pressable accessibilityRole="button" onPress={onSecondary} style={styles.secondaryBtn}>
           <Text style={styles.secondaryText}>{secondaryLabel}</Text>
+        </Pressable>
+      ) : null}
+      {onTertiary && tertiaryLabel ? (
+        <Pressable accessibilityRole="button" onPress={onTertiary} style={styles.tertiaryBtn}>
+          <Text style={styles.tertiaryText}>{tertiaryLabel}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -99,5 +108,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
     textAlign: "center"
+  },
+  tertiaryBtn: {
+    marginTop: space.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  tertiaryText: {
+    color: colors.muted,
+    fontSize: 14,
+    fontWeight: "700",
+    textAlign: "center",
+    textDecorationLine: "underline"
   }
 });

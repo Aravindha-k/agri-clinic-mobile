@@ -160,7 +160,7 @@ function MainTabs() {
 }
 
 function AppRoutes() {
-  const { isReady, isAuthenticated, authLoading, bootstrapIssue, retryBootstrap } = useAuth();
+  const { isReady, isAuthenticated, authLoading, bootstrapIssue, retryBootstrap, resetLocalSession } = useAuth();
   const { hideNativeSplash } = useAppSplash(true);
   const [introDone, setIntroDone] = useState(false);
   const [splashExpired, setSplashExpired] = useState(false);
@@ -242,13 +242,26 @@ function AppRoutes() {
     return (
       <StartupStuckScreen
         onContinueToLogin={() => {
-          setForceLogin(true);
-          setShowStuckFallback(false);
-          logStartup("nav_login", "forced after startup fallback");
+          void resetLocalSession("startup stuck — continue to login")
+            .catch(() => undefined)
+            .finally(() => {
+              setForceLogin(true);
+              setShowStuckFallback(false);
+              logStartup("nav_login", "forced after startup fallback");
+            });
         }}
         onRetry={() => {
           setShowStuckFallback(false);
           void retryBootstrap().catch(() => undefined);
+        }}
+        onResetLocalSession={() => {
+          void resetLocalSession("startup stuck — manual reset")
+            .catch(() => undefined)
+            .finally(() => {
+              setForceLogin(true);
+              setShowStuckFallback(false);
+              logStartup("nav_login", "reset local session after stuck");
+            });
         }}
       />
     );

@@ -12,6 +12,7 @@ import { registerSessionExpiredTeardown } from "./sessionExpired";
 import { registerSessionTeardown } from "./sessionConflict";
 import { runPreSignOutHandlers } from "./preSignOut";
 import { getAccessToken, saveTokens, clearTokens, type StoredTokens } from "./tokenStorage";
+import { clearCachedActiveWorkday } from "./workdaySessionStorage";
 import { saveBiometricLogin } from "./biometricLoginStorage";
 import { ApiRequestError, isAuthExpiredError, isNetworkError, isServerError } from "../utils/apiError";
 import { isDeviceSessionConflict } from "./sessionConflict";
@@ -31,6 +32,7 @@ type AuthContextValue = {
   employee: Employee | null;
   clearLoginNotice: () => void;
   retryBootstrap: () => Promise<void>;
+  resetLocalSession: (reason?: string) => Promise<void>;
   refreshUser: () => Promise<Employee | null>;
   signIn: (username: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -78,9 +80,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoginNotice(null);
   }, []);
 
-  const performLocalSignOut = useCallback(async (options?: { notice?: string | null }) => {
+  const performLocalSignOut = useCallback(async (options?: { notice?: string | null; reason?: string }) => {
     await clearTokens();
     await clearDeviceSessionId();
+    await clearCachedActiveWorkday().catch(() => undefined);
     await clearMasterDataCache().catch(() => undefined);
     clearInflightRequests();
     resetApiTelemetry();
@@ -88,6 +91,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsAuthenticated(false);
     setBootstrapIssue("none");
     setIsReady(true);
+    if (options?.reason) {
+      logStartup("session_cleared", options.reason);
+    }
     if (options?.notice) {
       setLoginNotice(options.notice);
     }
@@ -145,8 +151,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!token) {
         setIsAuthenticated(false);
         endedAuthenticated = false;
+        logStartup("session_cleared", "no saved token");
         return;
       }
+
+      logStartup("session_restored", "token present — validating");
 
       await ensureDeviceSessionLoaded();
 
@@ -176,13 +185,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setBootstrapIssue("none");
         endedAuthenticated = true;
         endedIssue = "none";
+        logStartup("session_restored", `employee=${profile.id}`);
       } catch (err) {
         if (isDeviceSessionConflict(err)) {
           return;
         }
         if (shouldForceReLoginOnBootstrap(err)) {
           await performLocalSignOut({
-            notice: "Session is not valid for this server. Please sign in again."
+            notice: "Session is not valid for this server. Please sign in again.",
+            reason: "invalid session for server"
           });
           endedAuthenticated = false;
           endedIssue = "none";
@@ -209,7 +220,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (err instanceof Error && err.message === "BOOTSTRAP_TIMEOUT") {
         logStartup("auth_bootstrap_timeout", `${BOOTSTRAP_TIMEOUT_MS}ms`);
         await performLocalSignOut({
-          notice: "Could not restore your session in time. Please sign in again."
+          notice: "Could not restore your session in time. Please sign in again.",
+          reason: "bootstrap timeout"
         });
         endedAuthenticated = false;
         endedIssue = "none";
@@ -243,6 +255,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setBootstrapIssue("none");
     await bootstrap();
   }, [bootstrap]);
+
+  const resetLocalSession = useCallback(
+    async (reason = "manual reset") => {
+      await runPreSignOutHandlers().catch(() => undefined);
+      await performLocalSignOut({ reason });
+    },
+    [performLocalSignOut]
+  );
 
   const establishAuthenticatedSession = useCallback(async () => {
     await ensureDeviceSessionLoaded();
@@ -306,6 +326,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       employee,
       clearLoginNotice,
       retryBootstrap,
+      resetLocalSession,
       refreshUser,
       signIn,
       signOut
@@ -319,6 +340,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       employee,
       clearLoginNotice,
       retryBootstrap,
+      resetLocalSession,
       refreshUser,
       signIn,
       signOut

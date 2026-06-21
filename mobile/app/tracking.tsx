@@ -10,7 +10,10 @@ import {
   Linking,
   RefreshControl
 } from "react-native";
+import { API_BASE_URL, buildApiUrl } from "../../src/api/config";
+import { AppErrorBoundary } from "../../src/components/AppErrorBoundary";
 import { getExpoBuildUrl, shouldShowExpoGoDevWarning } from "../../src/utils/expoRuntime";
+import { logDayTabApi, logDayTabError, logDayTabOpen } from "../../src/utils/dayTabDiagnostics";
 import { useRefreshControlProps } from "../../src/hooks/useRefreshControlProps";
 import { useSafeAreaInsetsCompat } from "../../src/hooks/useSafeAreaInsetsCompat";
 import { useWorkdayTimer } from "../../src/hooks/useLiveClock";
@@ -66,6 +69,14 @@ function ExpoGoDevBanner({ onBuildApk }: { onBuildApk: () => void }) {
 }
 
 export default function TrackingWorkspaceScreen() {
+  return (
+    <AppErrorBoundary>
+      <TrackingWorkspaceScreenInner />
+    </AppErrorBoundary>
+  );
+}
+
+function TrackingWorkspaceScreenInner() {
   useSecureScreen();
   const { t } = useI18n();
   const navigation = useNavigation<any>();
@@ -102,44 +113,93 @@ export default function TrackingWorkspaceScreen() {
   const workdayTimer = useWorkdayTimer(startedAt, isActive);
 
   const loadSummary = useCallback(async () => {
-    const [workStatus, visits, dashboard] = await Promise.all([
-      fetchWorkStatus().catch(() => ({ is_active: isActive, distance_km: 0 })),
-      getHomeVisits({ pageSize: 100 }).catch(() => ({ visits: [] })),
-      fetchDashboard().catch(() => null)
-    ]);
+    const workStatusUrl = buildApiUrl("mobile/work/status/", API_BASE_URL);
+    const dashboardUrl = buildApiUrl("mobile/dashboard/", API_BASE_URL);
 
-    setDistanceKm(workStatus.distance_km ?? 0);
-    setWorkdayId("workday_id" in workStatus ? workStatus.workday_id : undefined);
+    try {
+      const [workStatus, visits, dashboard] = await Promise.all([
+        fetchWorkStatus().catch((err) => {
+          logDayTabApi("work_status", workStatusUrl, false, err instanceof Error ? err.message : String(err));
+          return { is_active: isActive, distance_km: 0 };
+        }),
+        getHomeVisits({ pageSize: 100 }).catch((err) => {
+          logDayTabError("visits", err);
+          return { visits: [] };
+        }),
+        fetchDashboard().catch((err) => {
+          logDayTabApi("dashboard", dashboardUrl, false, err instanceof Error ? err.message : String(err));
+          return null;
+        })
+      ]);
 
-    const today = new Date();
-    const todayVisits = visits.visits.filter((v) => isSameVisitLocalDay(v, today));
-    const pendingToday = (await readPendingVisits()).filter((row: { createdAt: string }) =>
-      isSameVisitLocalDay({ visit_date: row.createdAt, created_at: row.createdAt }, today)
-    ).length;
-    setVisitsToday((dashboard?.visits_today ?? todayVisits.length) + pendingToday);
-    setFarmersCovered(dashboard?.farmers_covered ?? new Set(todayVisits.map((v) => v.farmer?.id ?? v.farmer_name)).size);
-    setVillagesCovered(countVillagesFromVisitsToday(visits.visits));
+      logDayTabApi(
+        "work_status",
+        workStatusUrl,
+        true,
+        `active=${workStatus.is_active} km=${workStatus.distance_km ?? 0}`
+      );
+      if (dashboard) {
+        logDayTabApi("dashboard", dashboardUrl, true, `visits_today=${dashboard.visits_today ?? 0}`);
+      }
 
-    const recent = (dashboard?.recent_visits?.length ? dashboard.recent_visits : visits.visits
-      .slice()
-      .sort((a, b) => {
-        const ta = a.visit_date || a.created_at || "";
-        const tb = b.visit_date || b.created_at || "";
-        return tb.localeCompare(ta);
-      })
-      .slice(0, 5)
-      .map((v) => ({
-        id: v.id,
-        farmer_name: v.farmer_name || v.farmer?.name || "Farmer",
-        crop: v.crop_name || v.crop,
-        visited_at: v.visit_date || v.created_at
-      }))) as DashboardRecentVisit[];
+      setDistanceKm(Number(workStatus.distance_km) || 0);
+      const nextWorkdayId =
+        "workday_id" in workStatus && typeof workStatus.workday_id === "number"
+          ? workStatus.workday_id
+          : undefined;
+      setWorkdayId(nextWorkdayId);
 
-    setRecentVisits(recent);
+      const today = new Date();
+      const todayVisits = (visits.visits ?? []).filter((v) => isSameVisitLocalDay(v, today));
+
+      let pendingToday = 0;
+      try {
+        pendingToday = (await readPendingVisits()).filter((row: { createdAt: string }) =>
+          isSameVisitLocalDay({ visit_date: row.createdAt, created_at: row.createdAt }, today)
+        ).length;
+      } catch (err) {
+        logDayTabError("pending_visits", err);
+      }
+
+      setVisitsToday((Number(dashboard?.visits_today) || todayVisits.length) + pendingToday);
+      setFarmersCovered(
+        Number(dashboard?.farmers_covered) ||
+          new Set(todayVisits.map((v) => v.farmer?.id ?? v.farmer_name)).size
+      );
+      setVillagesCovered(countVillagesFromVisitsToday(visits.visits ?? []));
+
+      const recent = (dashboard?.recent_visits?.length
+        ? dashboard.recent_visits
+        : todayVisits
+            .slice()
+            .sort((a, b) => {
+              const ta = a.visit_date || a.created_at || "";
+              const tb = b.visit_date || b.created_at || "";
+              return tb.localeCompare(ta);
+            })
+            .slice(0, 5)
+            .map((v) => ({
+              id: v.id,
+              farmer_name: v.farmer_name || v.farmer?.name || "Farmer",
+              crop: v.crop_name || v.crop,
+              visited_at: v.visit_date || v.created_at
+            }))) as DashboardRecentVisit[];
+
+      setRecentVisits(recent);
+    } catch (err) {
+      logDayTabError("loadSummary", err);
+      setDistanceKm(0);
+      setWorkdayId(undefined);
+      setVisitsToday(0);
+      setFarmersCovered(0);
+      setVillagesCovered(0);
+      setRecentVisits([]);
+    }
   }, [isActive]);
 
   useFocusEffect(
     useCallback(() => {
+      logDayTabOpen();
       void autoFlushPendingGps();
       void loadSummary();
       void refreshTracking().catch(() => undefined);

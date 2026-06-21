@@ -14,7 +14,7 @@ function issueCopy(issue: BootstrapIssue) {
 
 /** Bootstrap error screen — shown after intro when session restore fails. */
 export function StartupScreen() {
-  const { authLoading, bootstrapIssue, retryBootstrap } = useAuth();
+  const { authLoading, bootstrapIssue, retryBootstrap, resetLocalSession } = useAuth();
 
   if (authLoading || bootstrapIssue === "none") {
     return (
@@ -33,6 +33,10 @@ export function StartupScreen() {
       primaryLabel="Retry"
       onPrimary={() => {
         void retryBootstrap().catch(() => undefined);
+      }}
+      secondaryLabel="Reset local session"
+      onSecondary={() => {
+        void resetLocalSession("startup error screen").catch(() => undefined);
       }}
     />
   );

@@ -23,6 +23,19 @@ export type BackendSmokeResult = {
   detail: string;
 };
 
+/** Hermes on release APK may not expose AbortSignal.timeout — polyfill for diagnostics only. */
+function fetchAbortSignal(timeoutMs: number): AbortSignal {
+  if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
+    return AbortSignal.timeout(timeoutMs);
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const signal = controller.signal;
+  signal.addEventListener("abort", () => clearTimeout(timer), { once: true });
+  return signal;
+}
+
 let lastApiFailure: ApiFailureRecord | null = null;
 let lastSmokeResults: BackendSmokeResult[] | null = null;
 let lastSmokeAt: string | null = null;
@@ -72,7 +85,7 @@ async function probeUrl(url: string, timeoutMs = 15000): Promise<BackendSmokeRes
     const response = await fetch(url, {
       method: "GET",
       headers: { Accept: "application/json, text/plain, */*" },
-      signal: AbortSignal.timeout(timeoutMs)
+      signal: fetchAbortSignal(timeoutMs)
     });
     const ms = Date.now() - started;
     const text = (await response.text()).slice(0, 120);

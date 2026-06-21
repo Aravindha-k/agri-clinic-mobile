@@ -1,6 +1,5 @@
 import * as Location from "expo-location";
 import * as TaskManager from "expo-task-manager";
-import { processBackgroundLocations } from "./locationSyncService";
 import { trackingDevLog } from "./trackingDevLog";
 
 export const BACKGROUND_LOCATION_TASK = "KAVYA_BACKGROUND_LOCATION";
@@ -15,6 +14,7 @@ if (!TaskManager.isTaskDefined(BACKGROUND_LOCATION_TASK)) {
       if (data) {
         const { locations } = data as { locations?: Location.LocationObject[] };
         if (locations?.length) {
+          const { processBackgroundLocations } = await import("./locationSyncService");
           await processBackgroundLocations(locations);
         }
       }

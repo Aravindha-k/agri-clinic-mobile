@@ -24,7 +24,12 @@ import { setConnectivityOnline, setLanOnlyMode } from "../utils/connectivityBus"
 import { unwrapSuccessEnvelope } from "../utils/apiUnwrap";
 import { trackApiCall } from "./apiTelemetry";
 import { dedupeRequest } from "./requestDedupe";
-import { recordApiFailure } from "../utils/productionApiDiagnostics";
+
+function recordApiFailureSafe(input: { url: string; status?: number; message: string }) {
+  void import("../utils/productionApiDiagnostics")
+    .then(({ recordApiFailure }) => recordApiFailure(input))
+    .catch(() => undefined);
+}
 
 type ApiOptions = RequestInit & {
   auth?: boolean;
@@ -181,7 +186,7 @@ async function executeApiClient<T>(path: string, options: ApiOptions = {}): Prom
 
     if (!response.ok) {
       console.warn(`[API] HTTP ${response.status} ${fullUrl}`);
-      recordApiFailure({
+      recordApiFailureSafe({
         url: fullUrl,
         status: response.status,
         message: `HTTP ${response.status}`
@@ -221,7 +226,7 @@ async function executeApiClient<T>(path: string, options: ApiOptions = {}): Prom
     if (isNetworkError(err)) {
       const detail = err instanceof Error ? err.message : String(err);
       console.warn(`[API] Network error ${fullUrl} (${detail})`);
-      recordApiFailure({
+      recordApiFailureSafe({
         url: fullUrl,
         message: detail || "Network request failed"
       });

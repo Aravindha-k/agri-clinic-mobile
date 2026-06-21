@@ -15,7 +15,6 @@ import { toTrackingPayload } from "../utils/location";
 import { shouldSendLocation, type RoutePoint } from "./shouldSendLocation";
 import { trackingDevLog } from "./trackingDevLog";
 import { getBatteryPercent } from "../../mobile/lib/gps/trackingService";
-import { getGpsStateReport } from "../utils/gpsStateReport";
 import { isDutyTrackingSessionActive, restoreDutySessionFromStorage } from "./trackingSession";
 import { notifyRouteSynced } from "../utils/routeSyncBus";
 import { refreshSyncStoreCounts } from "../../mobile/lib/sync/offlineSyncManager";
@@ -56,6 +55,7 @@ async function buildPayload(
   location: Location.LocationObject,
   options?: { gpsEnabledHint?: boolean }
 ): Promise<LocationPushPayload> {
+  const { getGpsStateReport } = await import("../utils/gpsStateReport");
   const [workdayId, dutySessionId, batteryLevel, gpsState] = await Promise.all([
     getActiveWorkdayId(),
     getActiveDutySessionId(),

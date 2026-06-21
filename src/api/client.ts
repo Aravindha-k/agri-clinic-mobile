@@ -25,6 +25,33 @@ import { unwrapSuccessEnvelope } from "../utils/apiUnwrap";
 import { trackApiCall } from "./apiTelemetry";
 import { dedupeRequest } from "./requestDedupe";
 
+const DEFAULT_API_TIMEOUT_MS = __DEV__ ? 120_000 : 30_000;
+
+function createApiTimeoutSignal(timeoutMs: number, existing?: AbortSignal | null): {
+  signal: AbortSignal;
+  cleanup: () => void;
+} {
+  if (existing) {
+    return { signal: existing, cleanup: () => undefined };
+  }
+
+  if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
+    return { signal: AbortSignal.timeout(timeoutMs), cleanup: () => undefined };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const onAbort = () => clearTimeout(timer);
+  controller.signal.addEventListener("abort", onAbort, { once: true });
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timer);
+      controller.signal.removeEventListener("abort", onAbort);
+    }
+  };
+}
+
 function recordApiFailureSafe(input: { url: string; status?: number; message: string }) {
   void import("../utils/productionApiDiagnostics")
     .then(({ recordApiFailure }) => recordApiFailure(input))
@@ -151,6 +178,7 @@ async function handleAuth401AfterRefresh(response: Response, auth: boolean): Pro
 async function executeApiClient<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const { auth = true, headers, body, source, signal, baseUrl, ...rest } = options;
   const apiRoot = baseUrl ?? API_BASE_URL;
+  const { signal: requestSignal, cleanup } = createApiTimeoutSignal(DEFAULT_API_TIMEOUT_MS, signal);
   const requestHeaders = new Headers(headers);
   requestHeaders.set("Accept", "application/json");
 
@@ -173,7 +201,7 @@ async function executeApiClient<T>(path: string, options: ApiOptions = {}): Prom
   const request = () =>
     fetch(`${apiRoot}${path}`, {
       ...rest,
-      signal,
+      signal: requestSignal,
       headers: requestHeaders,
       body
     });
@@ -244,6 +272,8 @@ async function executeApiClient<T>(path: string, options: ApiOptions = {}): Prom
       throw err;
     }
     throw err;
+  } finally {
+    cleanup();
   }
 }
 

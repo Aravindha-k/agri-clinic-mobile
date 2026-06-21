@@ -1,10 +1,12 @@
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 import { DeferredFieldReminderController } from "../components/DeferredFieldReminderController";
+import { StartupStuckScreen } from "../components/StartupStuckScreen";
 import { GlobalStatusStrip } from "../../mobile/components/layout/GlobalStatusStrip";
+import { ScreenLoader } from "../../mobile/components/layout/ScreenLoader";
 import { KavyaSplashScreen } from "../components/brand/KavyaSplashScreen";
 import MainTabBar from "../../mobile/components/navigation/MainTabBar";
 import { VisitFabTabButton } from "../components/ui/VisitFabTabButton";
@@ -32,6 +34,7 @@ import { HelpScreen } from "../screens/HelpScreen";
 import TrackingWorkspaceScreen from "../../mobile/app/tracking";
 import VisitDetailScreen from "../../mobile/app/visit/[id]";
 import { VisitFlowNavigator } from "./VisitFlowNavigator";
+import { logStartup, patchStartupSnapshot } from "../utils/startupDiagnostics";
 import {
   stackScreenOptions,
   stackScreenOptionsModal,
@@ -51,6 +54,10 @@ const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const WorkStack = createNativeStackNavigator<WorkStackParamList>();
 const MeStack = createNativeStackNavigator<MeStackParamList>();
+
+/** Splash branding only — never wait for auth bootstrap (release APK can hang on auth/me). */
+const SPLASH_MAX_MS = 8_000;
+const STARTUP_STUCK_MS = 8_000;
 
 function AuthNavigator() {
   return (
@@ -153,13 +160,77 @@ function MainTabs() {
 }
 
 function AppRoutes() {
-  const { isReady, isAuthenticated, authLoading, bootstrapIssue } = useAuth();
+  const { isReady, isAuthenticated, authLoading, bootstrapIssue, retryBootstrap } = useAuth();
   const { hideNativeSplash } = useAppSplash(true);
   const [introDone, setIntroDone] = useState(false);
+  const [splashExpired, setSplashExpired] = useState(false);
+  const [showStuckFallback, setShowStuckFallback] = useState(false);
+  const [forceLogin, setForceLogin] = useState(false);
+  const splashLoggedRef = useRef(false);
+  const postSplashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const navLoggedRef = useRef<string | null>(null);
 
-  const handleIntroFinish = useCallback(() => setIntroDone(true), []);
-  const authSettled = isReady && !authLoading;
-  const showIntro = !introDone || !authSettled;
+  const logNavOnce = useCallback((phase: "nav_home" | "nav_login" | "nav_error", detail?: string) => {
+    const key = detail ? `${phase}:${detail}` : phase;
+    if (navLoggedRef.current === key) return;
+    navLoggedRef.current = key;
+    logStartup(phase, detail);
+  }, []);
+
+  const handleIntroFinish = useCallback(() => {
+    setIntroDone(true);
+    patchStartupSnapshot({ introDone: true });
+    logStartup("splash_end", "intro animation finished");
+  }, []);
+
+  useEffect(() => {
+    if (!splashLoggedRef.current) {
+      splashLoggedRef.current = true;
+      logStartup("splash_start");
+    }
+    const timer = setTimeout(() => {
+      setSplashExpired(true);
+      patchStartupSnapshot({ splashExpired: true });
+      logStartup("splash_timeout", `${SPLASH_MAX_MS}ms`);
+    }, SPLASH_MAX_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    patchStartupSnapshot({
+      authLoading,
+      isReady,
+      isAuthenticated,
+      bootstrapIssue
+    });
+  }, [authLoading, bootstrapIssue, isAuthenticated, isReady]);
+
+  const showIntro = !introDone && !splashExpired;
+
+  useEffect(() => {
+    if (showIntro) {
+      if (postSplashTimerRef.current) {
+        clearTimeout(postSplashTimerRef.current);
+        postSplashTimerRef.current = null;
+      }
+      setShowStuckFallback(false);
+      return;
+    }
+
+    postSplashTimerRef.current = setTimeout(() => {
+      if (authLoading) {
+        setShowStuckFallback(true);
+        logStartup("nav_stuck_fallback", "auth still loading after splash");
+      }
+    }, STARTUP_STUCK_MS);
+
+    return () => {
+      if (postSplashTimerRef.current) {
+        clearTimeout(postSplashTimerRef.current);
+        postSplashTimerRef.current = null;
+      }
+    };
+  }, [authLoading, showIntro]);
 
   if (showIntro) {
     return (
@@ -167,7 +238,40 @@ function AppRoutes() {
     );
   }
 
+  if (showStuckFallback && authLoading && !forceLogin) {
+    return (
+      <StartupStuckScreen
+        onContinueToLogin={() => {
+          setForceLogin(true);
+          setShowStuckFallback(false);
+          logStartup("nav_login", "forced after startup fallback");
+        }}
+        onRetry={() => {
+          setShowStuckFallback(false);
+          void retryBootstrap().catch(() => undefined);
+        }}
+      />
+    );
+  }
+
+  if (forceLogin) {
+    logNavOnce("nav_login", "forced");
+    return (
+      <>
+        <DeferredFieldReminderController />
+        <RootStack.Navigator screenOptions={{ headerShown: false }}>
+          <RootStack.Screen name="Auth" component={AuthNavigator} />
+        </RootStack.Navigator>
+      </>
+    );
+  }
+
+  if (!isReady || authLoading) {
+    return <ScreenLoader message="Starting…" />;
+  }
+
   if (bootstrapIssue !== "none") {
+    logNavOnce("nav_error", bootstrapIssue);
     return (
       <>
         <DeferredFieldReminderController />
@@ -179,6 +283,7 @@ function AppRoutes() {
   }
 
   if (isAuthenticated) {
+    logNavOnce("nav_home");
     return (
       <>
         <DeferredFieldReminderController />
@@ -207,6 +312,7 @@ function AppRoutes() {
     );
   }
 
+  logNavOnce("nav_login");
   return (
     <>
       <DeferredFieldReminderController />

@@ -1,9 +1,5 @@
 import { useEffect, useRef } from "react";
-import * as SplashScreen from "expo-splash-screen";
-
-SplashScreen.preventAutoHideAsync().catch(() => {
-  /* Expo Go / web may not support native splash control */
-});
+import { hideNativeSplashSafe } from "../bootstrap/nativeSplash";
 
 /** Hide native splash once the custom animated splash is mounted. */
 export function useAppSplash(hideWhenReady = false) {
@@ -12,13 +8,13 @@ export function useAppSplash(hideWhenReady = false) {
   useEffect(() => {
     if (hideWhenReady || hidden.current) return;
     hidden.current = true;
-    void SplashScreen.hideAsync();
+    void hideNativeSplashSafe("useAppSplash_effect");
   }, [hideWhenReady]);
 
   const hideNativeSplash = () => {
     if (hidden.current) return;
     hidden.current = true;
-    void SplashScreen.hideAsync();
+    void hideNativeSplashSafe("kavya_splash_ready");
   };
 
   return { hideNativeSplash };

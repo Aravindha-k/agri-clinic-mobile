@@ -15,8 +15,10 @@ import { getAccessToken, saveTokens, clearTokens, type StoredTokens } from "./to
 import { saveBiometricLogin } from "./biometricLoginStorage";
 import { ApiRequestError, isAuthExpiredError, isNetworkError, isServerError } from "../utils/apiError";
 import { isDeviceSessionConflict } from "./sessionConflict";
+import { logStartup, patchStartupSnapshot } from "../utils/startupDiagnostics";
 
 const FIELD_EMPLOYEE_ONLY_MESSAGE = "This app is only for field employees.";
+const BOOTSTRAP_TIMEOUT_MS = 12_000;
 
 export type BootstrapIssue = "none" | "network" | "server";
 
@@ -55,6 +57,12 @@ function shouldForceReLoginOnBootstrap(err: unknown): boolean {
     );
   }
   return false;
+}
+
+function bootstrapTimeout(): Promise<never> {
+  return new Promise((_, reject) => {
+    setTimeout(() => reject(new Error("BOOTSTRAP_TIMEOUT")), BOOTSTRAP_TIMEOUT_MS);
+  });
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -127,11 +135,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     bootstrapRunningRef.current = true;
     setAuthLoading(true);
     setBootstrapIssue("none");
+    logStartup("auth_bootstrap_start");
 
-    try {
+    let endedAuthenticated = false;
+    let endedIssue: BootstrapIssue = "none";
+
+    const runBootstrap = async () => {
       const token = await getAccessToken();
       if (!token) {
         setIsAuthenticated(false);
+        endedAuthenticated = false;
         return;
       }
 
@@ -141,6 +154,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await performLocalSignOut({
           notice: "This device needs a fresh sign-in. Please log in again."
         });
+        endedAuthenticated = false;
+        endedIssue = "none";
         return;
       }
 
@@ -152,11 +167,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } finally {
             await performLocalSignOut({ notice: FIELD_EMPLOYEE_ONLY_MESSAGE });
           }
+          endedAuthenticated = false;
+          endedIssue = "none";
           return;
         }
         setEmployee(profile);
         setIsAuthenticated(true);
         setBootstrapIssue("none");
+        endedAuthenticated = true;
+        endedIssue = "none";
       } catch (err) {
         if (isDeviceSessionConflict(err)) {
           return;
@@ -165,25 +184,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await performLocalSignOut({
             notice: "Session is not valid for this server. Please sign in again."
           });
+          endedAuthenticated = false;
+          endedIssue = "none";
           return;
         }
         if (isRetriableAuthError(err)) {
+          const issue = isNetworkError(err) ? "network" : "server";
           setIsAuthenticated(true);
-          setBootstrapIssue(isNetworkError(err) ? "network" : "server");
+          setBootstrapIssue(issue);
+          endedAuthenticated = true;
+          endedIssue = issue;
           return;
         }
         setIsAuthenticated(true);
         setBootstrapIssue("server");
+        endedAuthenticated = true;
+        endedIssue = "server";
+      }
+    };
+
+    try {
+      await Promise.race([runBootstrap(), bootstrapTimeout()]);
+    } catch (err) {
+      if (err instanceof Error && err.message === "BOOTSTRAP_TIMEOUT") {
+        logStartup("auth_bootstrap_timeout", `${BOOTSTRAP_TIMEOUT_MS}ms`);
+        await performLocalSignOut({
+          notice: "Could not restore your session in time. Please sign in again."
+        });
+        endedAuthenticated = false;
+        endedIssue = "none";
       }
     } finally {
       setAuthLoading(false);
       setIsReady(true);
       bootstrapRunningRef.current = false;
+      patchStartupSnapshot({
+        authLoading: false,
+        isReady: true,
+        isAuthenticated: endedAuthenticated,
+        bootstrapIssue: endedIssue
+      });
+      logStartup(
+        "auth_bootstrap_end",
+        `authenticated=${endedAuthenticated} issue=${endedIssue}`
+      );
       if (__DEV__) {
         setTimeout(() => logApiTelemetrySummary(), 2500);
       }
     }
-  }, [forceSessionExpiredLogout, performLocalSignOut]);
+  }, [performLocalSignOut]);
 
   useEffect(() => {
     void bootstrap();

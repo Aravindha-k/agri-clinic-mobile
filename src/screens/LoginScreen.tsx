@@ -41,6 +41,7 @@ import {
 import { FONTS } from "../theme/fonts";
 import { Colors, Radius, Shadow } from "../../mobile/lib/theme";
 import { LoginImagePanel } from "../../mobile/components/nature";
+import { ProductionApiDiagnosticsPanel } from "../../mobile/components/diagnostics/ProductionApiDiagnosticsPanel";
 import { ApiRequestError, getNetworkMessage, isNetworkError } from "../utils/apiError";
 
 const SPLASH_LOGO = require("../../assets/brand/logo-splash.png");
@@ -291,6 +292,12 @@ export function LoginScreen() {
               </View>
             ) : null}
 
+            {loginError ? (
+              <View style={styles.debugPanelWrap}>
+                <ProductionApiDiagnosticsPanel compact />
+              </View>
+            ) : null}
+
             <Text style={styles.fieldLabel}>Employee ID</Text>
             <View
               style={[
@@ -491,6 +498,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: FONTS.medium,
     fontSize: 12
+  },
+  debugPanelWrap: {
+    marginBottom: 10
   },
   fieldLabel: {
     color: TEXT_MAIN,

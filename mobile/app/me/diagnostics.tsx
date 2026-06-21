@@ -13,6 +13,7 @@ import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
 import { useTracking } from "../../../src/storage/TrackingContext";
 import { getGpsStateReport } from "../../../src/utils/gpsStateReport";
 import { formatRelativeTime } from "../../../src/utils/formatRelativeTime";
+import { ProductionApiDiagnosticsPanel } from "../../components/diagnostics/ProductionApiDiagnosticsPanel";
 import { GpsHealthPanel } from "../../components/daySummary/GpsHealthPanel";
 import { ScreenCanvas, ScreenEntranceBloom, BrandPageHeader } from "../../components/layout";
 import { FadeInSection, entranceStagger } from "../../components/ui/FadeInSection";
@@ -127,6 +128,10 @@ export default function DiagnosticsScreen() {
         </FadeInSection>
 
         <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
+          <ProductionApiDiagnosticsPanel />
+        </FadeInSection>
+
+        <FadeInSection replayKey={entranceTick} delay={entranceStagger(2)}>
           <View style={styles.syncSection}>
           <Text style={styles.sectionTitle}>{t("profile.syncOffline")}</Text>
           <View style={styles.statRow}>

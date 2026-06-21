@@ -1,4 +1,5 @@
 import { buildApiUrl, PRODUCTION_API_ENDPOINTS, PRODUCTION_API_HOST, PRODUCTION_API_ORIGIN, PRODUCTION_MEDIA_ORIGIN, API_BASE_URL } from "../api/config";
+import { runBackendSmokeTest } from "./productionApiDiagnostics";
 
 const DEV_HOST_PATTERN =
   /^(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2[0-9]|3[01])\.\d+\.\d+|.*\.onrender\.com)$/i;
@@ -78,4 +79,5 @@ export function logAppStartupDiagnostics() {
   console.warn("[App] Duty start URL:", buildApiUrl("tracking/duty/start/", API_BASE_URL));
   console.warn("[App] Media origin:", PRODUCTION_MEDIA_ORIGIN);
   console.warn("[App] Expected login URL:", PRODUCTION_API_ENDPOINTS.login);
+  void runBackendSmokeTest().catch(() => undefined);
 }

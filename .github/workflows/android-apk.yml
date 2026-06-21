@@ -66,8 +66,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify production API config
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Audit production API endpoints
+        run: node scripts/audit-api-endpoints.mjs
+
+      - name: Audit deploy config
         run: node scripts/audit-deploy-config.mjs
+
+      - name: Audit APK release (API, cleartext, assets)
+        run: node scripts/audit-apk-release.mjs
+
+      - name: Verify production API config
+        run: node scripts/verify-production-api.mjs
 
       - name: Make Gradle wrapper executable
         run: chmod +x android/gradlew

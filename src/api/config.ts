@@ -69,23 +69,24 @@ function isProductionApiUrl(url: string): boolean {
 }
 
 function resolveApiBaseUrl(): string {
+  // Release/APK: always AWS — never LAN/dev fallback even if env is wrong.
+  if (!__DEV__) {
+    return PRODUCTION_API_BASE_URL;
+  }
+
   const fromEnv = process.env.EXPO_PUBLIC_API_URL?.trim();
   if (fromEnv) {
     return normalizeApiBaseUrl(fromEnv);
   }
 
-  if (__DEV__) {
-    const useCloud =
-      process.env.EXPO_PUBLIC_USE_PRODUCTION_API === "1" ||
-      process.env.EXPO_PUBLIC_USE_PRODUCTION_API === "true";
-    if (useCloud) {
-      return PRODUCTION_API_BASE_URL;
-    }
-    const devOverride = process.env.EXPO_PUBLIC_DEV_API_URL?.trim();
-    return normalizeApiBaseUrl(devOverride || LOCAL_DEV_API_BASE_URL);
+  const useCloud =
+    process.env.EXPO_PUBLIC_USE_PRODUCTION_API === "1" ||
+    process.env.EXPO_PUBLIC_USE_PRODUCTION_API === "true";
+  if (useCloud) {
+    return PRODUCTION_API_BASE_URL;
   }
-
-  return PRODUCTION_API_BASE_URL;
+  const devOverride = process.env.EXPO_PUBLIC_DEV_API_URL?.trim();
+  return normalizeApiBaseUrl(devOverride || LOCAL_DEV_API_BASE_URL);
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();

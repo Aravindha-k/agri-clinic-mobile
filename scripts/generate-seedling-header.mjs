@@ -11,8 +11,8 @@ import sharp from "sharp";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const source = path.join(root, "mobile/assets/backgrounds/seedling-sunrise-source.jpg");
-const headerOut = path.join(root, "mobile/assets/backgrounds/seedling-sunrise-header.webp");
-const fullOut = path.join(root, "mobile/assets/backgrounds/seedling-sunrise-full.webp");
+const headerOut = path.join(root, "mobile/assets/backgrounds/seedling_sunrise_header.webp");
+const fullOut = path.join(root, "mobile/assets/backgrounds/seedling_sunrise_full.webp");
 const downloadUrl = "https://unsplash.com/photos/9J4A5INWb4I/download?force=true&w=1920";
 
 await fs.mkdir(path.dirname(headerOut), { recursive: true });

@@ -8,7 +8,7 @@ import sharp from "sharp";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
-const source = path.join(root, "assets/splash/rice-field.png");
+const source = path.join(root, "assets/splash/rice_field.png");
 const outDir = path.join(root, "assets/backgrounds");
 
 await fs.mkdir(outDir, { recursive: true });
@@ -16,11 +16,11 @@ await fs.mkdir(outDir, { recursive: true });
 await sharp(source)
   .resize(1600, 420, { fit: "cover", position: "centre" })
   .webp({ quality: 72 })
-  .toFile(path.join(outDir, "home-header.webp"));
+  .toFile(path.join(outDir, "home_header.webp"));
 
 await sharp(source)
   .resize(1440, 2560, { fit: "cover", position: "attention" })
   .webp({ quality: 74 })
-  .toFile(path.join(outDir, "login-forest.webp"));
+  .toFile(path.join(outDir, "login_forest.webp"));
 
 console.log("Generated header backgrounds");

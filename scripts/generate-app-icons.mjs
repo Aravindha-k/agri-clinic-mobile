@@ -1,5 +1,5 @@
 /**
- * Generates launcher icons from assets/brand/logo-icon.png (symbol-only, no text).
+ * Generates launcher icons from assets/brand/logo_icon.png (symbol-only, no text).
  * Outputs app-icon.png, adaptive-icon-foreground.png, and Android mipmap assets.
  */
 import fs from "node:fs/promises";
@@ -11,9 +11,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 
 const BRAND_GREEN = "#0F5132";
-const SOURCE = path.join(root, "assets/brand/logo-icon.png");
-const OUT_APP_ICON = path.join(root, "assets/brand/app-icon.png");
-const OUT_ADAPTIVE_FG = path.join(root, "assets/brand/adaptive-icon-foreground.png");
+const SOURCE = path.join(root, "assets/brand/logo_icon.png");
+const OUT_APP_ICON = path.join(root, "assets/brand/app_icon.png");
+const OUT_ADAPTIVE_FG = path.join(root, "assets/brand/adaptive_icon_foreground.png");
 const ANDROID_RES = path.join(root, "android/app/src/main/res");
 
 const LEGACY_SIZES = {

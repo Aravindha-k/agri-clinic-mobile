@@ -1,6 +1,6 @@
 import { Image, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 
-const LOGIN_BACKDROP = require("../../assets/backgrounds/login-backdrop.webp");
+const LOGIN_BACKDROP = require("../../assets/backgrounds/login_backdrop.webp");
 
 type Props = {
   style?: StyleProp<ViewStyle>;

@@ -111,16 +111,16 @@ else pass("network_security_config allows AWS host");
 // 3. Bundled assets
 const requiredAssets = [
   "assets/brand/logo.png",
-  "assets/brand/logo-splash.png",
-  "assets/brand/app-icon.png",
-  "assets/brand/adaptive-icon-foreground.png",
-  "mobile/assets/backgrounds/login-backdrop.webp",
-  "assets/backgrounds/login-forest.webp",
+  "assets/brand/logo_splash.png",
+  "assets/brand/app_icon.png",
+  "assets/brand/adaptive_icon_foreground.png",
+  "mobile/assets/backgrounds/login_backdrop.webp",
+  "assets/backgrounds/login_forest.webp",
   "mobile/assets/headers/home.jpg",
   "mobile/assets/headers/work.jpg",
   "mobile/assets/headers/visit.jpg",
   "mobile/assets/headers/summary.jpg",
-  "assets/splash/rice-field.png"
+  "assets/splash/rice_field.png"
 ];
 
 for (const asset of requiredAssets) {

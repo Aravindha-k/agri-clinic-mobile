@@ -30,8 +30,8 @@ function read(rel) {
 const brandConfig = read("src/config/brand.config.js") ?? "";
 const assetPaths = [
   ["logoAsset", "./assets/brand/logo.png"],
-  ["iconAsset", "./assets/brand/app-icon.png"],
-  ["adaptiveIconAsset", "./assets/brand/adaptive-icon-foreground.png"]
+  ["iconAsset", "./assets/brand/app_icon.png"],
+  ["adaptiveIconAsset", "./assets/brand/adaptive_icon_foreground.png"]
 ];
 
 for (const [name, fallback] of assetPaths) {
@@ -41,15 +41,15 @@ for (const [name, fallback] of assetPaths) {
   else fail(`Missing bundled asset: ${rel} (${name})`);
 }
 
-if (exists("assets/brand/logo-splash.png")) pass("Boot splash logo: assets/brand/logo-splash.png");
-else fail("Missing assets/brand/logo-splash.png (BootSplash)");
+if (exists("assets/brand/logo_splash.png")) pass("Boot splash logo: assets/brand/logo_splash.png");
+else fail("Missing assets/brand/logo_splash.png (BootSplash)");
 
-  if (exists("assets/splash/sky-background.jpg")) pass("Splash sky: assets/splash/sky-background.jpg");
-  else if (exists("assets/splash/rice-field.png")) pass("React splash poster: assets/splash/rice-field.png");
-  else fail("Missing assets/splash/sky-background.jpg or rice-field.png");
+  if (exists("assets/splash/sky_background.jpg")) pass("Splash sky: assets/splash/sky_background.jpg");
+  else if (exists("assets/splash/rice_field.png")) pass("React splash poster: assets/splash/rice_field.png");
+  else fail("Missing assets/splash/sky_background.jpg or rice_field.png");
 
-  if (exists("assets/splash/product-pile.png")) pass("Splash product pile: assets/splash/product-pile.png");
-  else fail("Missing assets/splash/product-pile.png");
+  if (exists("assets/splash/product_pile.png")) pass("Splash product pile: assets/splash/product_pile.png");
+  else fail("Missing assets/splash/product_pile.png");
 
 const splashDensities = ["mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"];
 for (const density of splashDensities) {

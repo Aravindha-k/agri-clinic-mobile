@@ -9,7 +9,7 @@ import sharp from "sharp";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const SOURCE = path.join(root, "assets/brand/logo.png");
-const OUT = path.join(root, "assets/brand/logo-splash.png");
+const OUT = path.join(root, "assets/brand/logo_splash.png");
 
 const size = 768;
 const circleMask = Buffer.from(

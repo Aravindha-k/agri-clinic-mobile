@@ -2,7 +2,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Image, StyleSheet, View } from "react-native";
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Path, Stop } from "react-native-svg";
 
-const FIELD = require("../../../assets/splash/rice-field.png");
+const FIELD = require("../../../assets/splash/rice_field.png");
 
 /** Rice-field photo panel — right third of greeting card (reference mock). */
 export function GreetingSceneIllustration() {

@@ -17,6 +17,6 @@ module.exports = {
   splashDurationMs: 4500,
   iconBackgroundColor: "#0F5132",
   logoAsset: "./assets/brand/logo.png",
-  iconAsset: "./assets/brand/app-icon.png",
-  adaptiveIconAsset: "./assets/brand/adaptive-icon-foreground.png"
+  iconAsset: "./assets/brand/app_icon.png",
+  adaptiveIconAsset: "./assets/brand/adaptive_icon_foreground.png"
 };

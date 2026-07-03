@@ -9,7 +9,7 @@ import sharp from "sharp";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const source = path.join(root, "login.jpg");
-const out = path.join(root, "mobile/assets/backgrounds/login-backdrop.webp");
+const out = path.join(root, "mobile/assets/backgrounds/login_backdrop.webp");
 
 await fs.mkdir(path.dirname(out), { recursive: true });
 

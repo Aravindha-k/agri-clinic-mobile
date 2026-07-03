@@ -3,7 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { ForestGradient } from "../../lib/forestDarkTheme";
 
-const LOGIN_FOREST = require("../../../assets/backgrounds/login-forest.webp");
+const LOGIN_FOREST = require("../../../assets/backgrounds/login_forest.webp");
 
 type Props = {
   style?: StyleProp<ViewStyle>;

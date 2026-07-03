@@ -4,7 +4,7 @@ import { StyleSheet, View } from "react-native";
 import { usePremiumMotion } from "../../../src/hooks/usePremiumMotion";
 import { AppIcon } from "./AppIcon";
 
-const LEAF_SWAY = require("../../../assets/lottie/leaf-sway.json");
+const LEAF_SWAY = require("../../../assets/lottie/leaf_sway.json");
 
 type Props = {
   size?: number;

@@ -65,6 +65,9 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      - name: Audit Android asset filenames
+        run: node scripts/audit-android-asset-names.mjs
+
       - name: Audit production API endpoints
         run: node scripts/audit-api-endpoints.mjs
 

@@ -1,7 +1,7 @@
 import { Image, StyleSheet, View } from "react-native";
 
 const LEAF_A = require("../../../assets/splash/items/leaf.png");
-const LEAF_B = require("../../../assets/splash/items/fall-leaf-a.png");
+const LEAF_B = require("../../../assets/splash/items/fall_leaf_a.png");
 
 /** Static decorative leaves scattered around the logo orbit — matches reference mock. */
 type LeafSpec = {

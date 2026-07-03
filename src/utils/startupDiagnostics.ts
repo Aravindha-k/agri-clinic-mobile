@@ -26,7 +26,10 @@ export type StartupPhase =
   | "nav_stuck_fallback"
   | "session_restored"
   | "session_cleared"
-  | "splash_replay";
+  | "splash_replay"
+  | "splash_start"
+  | "splash_end"
+  | "splash_timeout";
 
 export type StartupSnapshot = {
   releaseMode: boolean;

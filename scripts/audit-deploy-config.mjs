@@ -36,9 +36,9 @@ function normalizeApiBaseUrl(raw) {
 }
 
 function checkEasProfile(name, env) {
-  const url = env?.EXPO_PUBLIC_API_URL;
+  const url = env?.EXPO_PUBLIC_API_BASE_URL || env?.EXPO_PUBLIC_API_URL;
   if (!url) {
-    issues.push(`eas.json profile "${name}": missing EXPO_PUBLIC_API_URL`);
+    issues.push(`eas.json profile "${name}": missing EXPO_PUBLIC_API_BASE_URL or EXPO_PUBLIC_API_URL`);
     return;
   }
   if (!url.includes(PRODUCTION_HOST)) {
@@ -72,7 +72,8 @@ if (!prodEnv) {
 } else if (RENDER_PATTERN.test(prodEnv)) {
   issues.push(".env.production: still points at Render");
 } else {
-  const match = prodEnv.match(/EXPO_PUBLIC_API_URL=(.+)/);
+  const match =
+    prodEnv.match(/EXPO_PUBLIC_API_BASE_URL=(.+)/) || prodEnv.match(/EXPO_PUBLIC_API_URL=(.+)/);
   ok.push(`.env.production: AWS URL set → ${normalizeApiBaseUrl(match?.[1] ?? "")}`);
 }
 

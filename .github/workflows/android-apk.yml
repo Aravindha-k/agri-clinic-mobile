@@ -12,13 +12,14 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  EXPO_PUBLIC_API_URL: http://13.207.17.117
+  EXPO_PUBLIC_API_BASE_URL: http://13.207.17.117/api/v1/
+  EXPO_PUBLIC_ENV: production
 
 jobs:
   build-apk:
     name: Build release APK
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
@@ -51,23 +52,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Cache Android build cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.android/build-cache
-          key: ${{ runner.os }}-android-build-cache-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties', 'package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-android-build-cache-
-
       - name: Write production env for Metro bundle
-        run: echo "EXPO_PUBLIC_API_URL=http://13.207.17.117" > .env.production
+        run: |
+          cat > .env.production <<'EOF'
+          EXPO_PUBLIC_API_BASE_URL=http://13.207.17.117/api/v1/
+          EXPO_PUBLIC_ENV=production
+          EOF
 
       - name: Install dependencies
         run: npm ci
 
       - name: Typecheck
-        run: npm run typecheck
+        run: npx tsc --noEmit
 
       - name: Audit production API endpoints
         run: node scripts/audit-api-endpoints.mjs
@@ -81,20 +77,30 @@ jobs:
       - name: Verify production API config
         run: node scripts/verify-production-api.mjs
 
+      - name: Prebuild Android native project
+        run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Apply Android release config
+        run: node scripts/ensure-android-release-config.mjs
+
       - name: Make Gradle wrapper executable
         run: chmod +x android/gradlew
 
       - name: Build release APK
         working-directory: android
         env:
-          EXPO_PUBLIC_API_URL: http://13.207.17.117
+          EXPO_PUBLIC_API_BASE_URL: http://13.207.17.117/api/v1/
+          EXPO_PUBLIC_ENV: production
           GRADLE_OPTS: -Dorg.gradle.caching=true -Dorg.gradle.parallel=true
         run: ./gradlew assembleRelease --build-cache --no-daemon --stacktrace
+
+      - name: Rename APK for client delivery
+        run: cp android/app/build/outputs/apk/release/app-release.apk Kavya_Agri_Clinic_Client_Test_v1.0.0.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: agri-clinic-field-app-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
+          name: Kavya_Agri_Clinic_Client_Test_v1.0.0
+          path: Kavya_Agri_Clinic_Client_Test_v1.0.0.apk
           if-no-files-found: error
           retention-days: 30

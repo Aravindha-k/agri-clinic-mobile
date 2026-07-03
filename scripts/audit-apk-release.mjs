@@ -42,21 +42,33 @@ function normalizeApiBase(raw) {
 const configTs = read("src/api/config.ts") ?? "";
 if (!configTs.includes(AWS_HOST)) fail("src/api/config.ts missing AWS host");
 else pass("src/api/config.ts has AWS host");
-if (!configTs.includes("if (!__DEV__)")) fail("src/api/config.ts missing release hardcode guard");
-else pass("Release builds hardcode AWS API base");
+if (!configTs.includes("if (!__DEV__)")) fail("src/api/config.ts missing release guard");
+else if (!configTs.includes("EXPO_PUBLIC_API_BASE_URL")) fail("src/api/config.ts missing EXPO_PUBLIC_API_BASE_URL");
+else pass("Release builds use EXPO_PUBLIC_API_BASE_URL with AWS fallback");
 
 const envProd = read(".env.production") ?? "";
 if (!envProd.includes(`http://${AWS_HOST}`)) fail(".env.production missing AWS origin");
-else if (envProd.includes("/api/v1")) fail(".env.production should NOT include /api/v1");
-else pass(".env.production uses host-only EXPO_PUBLIC_API_URL");
+else if (!envProd.includes("EXPO_PUBLIC_API_BASE_URL=") && !envProd.includes("EXPO_PUBLIC_API_URL=")) {
+  fail(".env.production missing EXPO_PUBLIC_API_BASE_URL or EXPO_PUBLIC_API_URL");
+} else {
+  const baseMatch = envProd.match(/EXPO_PUBLIC_API_BASE_URL=(.+)/);
+  const urlMatch = envProd.match(/EXPO_PUBLIC_API_URL=(.+)/);
+  const raw = (baseMatch?.[1] ?? urlMatch?.[1] ?? "").trim();
+  if (normalizeApiBase(raw) !== API_BASE) fail(`.env.production API does not normalize to ${API_BASE}`);
+  else pass(`.env.production AWS API → ${normalizeApiBase(raw)}`);
+}
 
 const workflow = read(".github/workflows/android-apk.yml") ?? "";
-if (!workflow.includes(`EXPO_PUBLIC_API_URL: http://${AWS_HOST}`)) {
-  fail("GitHub workflow missing correct EXPO_PUBLIC_API_URL");
-} else if (workflow.includes("/api/v1")) {
-  fail("GitHub workflow must not pass /api/v1 in EXPO_PUBLIC_API_URL");
-} else {
+if (
+  workflow.includes("EXPO_PUBLIC_API_BASE_URL") &&
+  workflow.includes(AWS_HOST) &&
+  workflow.includes("assembleRelease")
+) {
+  pass("GitHub workflow EXPO_PUBLIC_API_BASE_URL + assembleRelease");
+} else if (workflow.includes(`EXPO_PUBLIC_API_URL: http://${AWS_HOST}`)) {
   pass("GitHub workflow EXPO_PUBLIC_API_URL is host-only");
+} else {
+  fail("GitHub workflow missing production API URL / assembleRelease");
 }
 
 const endpoints = {

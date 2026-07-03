@@ -33,32 +33,37 @@ const workflow = fs.existsSync(path.join(ROOT, ".github/workflows/android-apk.ym
 
 const checks = [];
 
-if (configTs.includes('if (!__DEV__)') && configTs.includes("return PRODUCTION_API_BASE_URL")) {
-  checks.push(["Release hardcodes AWS when __DEV__ is false", true]);
+if (
+  configTs.includes('if (!__DEV__)') &&
+  configTs.includes("EXPO_PUBLIC_API_BASE_URL") &&
+  configTs.includes("PRODUCTION_API_BASE_URL")
+) {
+  checks.push(["Release uses EXPO_PUBLIC_API_BASE_URL with AWS fallback", true]);
 } else {
-  checks.push(["Release hardcodes AWS when __DEV__ is false", false]);
+  checks.push(["Release uses EXPO_PUBLIC_API_BASE_URL with AWS fallback", false]);
 }
 
-if (configTs.includes(AWS_HOST)) {
-  checks.push(["config.ts contains AWS host", true]);
-} else {
-  checks.push(["config.ts contains AWS host", false]);
-}
-
-const envMatch = envProd.match(/EXPO_PUBLIC_API_URL=(.+)/);
-const envUrl = envMatch?.[1]?.trim() ?? "";
-if (envUrl && envUrl.includes(AWS_HOST) && !envUrl.includes("/api/v1")) {
-  checks.push([".env.production host-only EXPO_PUBLIC_API_URL", true]);
+const envBaseMatch = envProd.match(/EXPO_PUBLIC_API_BASE_URL=(.+)/);
+const envUrlMatch = envProd.match(/EXPO_PUBLIC_API_URL=(.+)/);
+const envUrl = (envBaseMatch?.[1] ?? envUrlMatch?.[1] ?? "").trim();
+if (envUrl && envUrl.includes(AWS_HOST)) {
+  checks.push([".env.production AWS API URL", true]);
 } else if (!envProd) {
-  checks.push([".env.production host-only EXPO_PUBLIC_API_URL", "missing file"]);
+  checks.push([".env.production AWS API URL", "missing file"]);
 } else {
-  checks.push([".env.production host-only EXPO_PUBLIC_API_URL", false]);
+  checks.push([".env.production AWS API URL", false]);
 }
 
-if (workflow.includes(`EXPO_PUBLIC_API_URL: http://${AWS_HOST}`)) {
+if (
+  workflow.includes("EXPO_PUBLIC_API_BASE_URL") &&
+  workflow.includes(AWS_HOST) &&
+  workflow.includes("assembleRelease")
+) {
+  checks.push(["GHA workflow production APK build", true]);
+} else if (workflow.includes(`EXPO_PUBLIC_API_URL: http://${AWS_HOST}`)) {
   checks.push(["GHA workflow EXPO_PUBLIC_API_URL", true]);
 } else {
-  checks.push(["GHA workflow EXPO_PUBLIC_API_URL", false]);
+  checks.push(["GHA workflow production APK build", false]);
 }
 
 const normalizedFromEnv = normalizeApiBase(envUrl || `http://${AWS_HOST}`);
@@ -74,7 +79,8 @@ console.log(`  Login URL    → ${EXPECTED_LOGIN}`);
 console.log(`  Never uses LAN (192.168.x) in release\n`);
 
 console.log("Build-time env:");
-console.log(`  EXPO_PUBLIC_API_URL (production): ${envUrl || "(unset)"}`);
+console.log(`  EXPO_PUBLIC_API_BASE_URL (production): ${envBaseMatch?.[1]?.trim() || "(unset)"}`);
+console.log(`  EXPO_PUBLIC_API_URL (production): ${envUrlMatch?.[1]?.trim() || "(unset)"}`);
 console.log(`  Normalized runtime base: ${normalizedFromEnv}\n`);
 
 console.log("Checks:");

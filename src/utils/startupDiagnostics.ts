@@ -17,16 +17,16 @@ export type StartupPhase =
   | "tracking_task_deferred"
   | "auth_bootstrap_start"
   | "auth_bootstrap_end"
+  | "auth_validate_background_start"
+  | "auth_validate_background_end"
   | "auth_bootstrap_timeout"
-  | "splash_start"
-  | "splash_end"
-  | "splash_timeout"
   | "nav_login"
   | "nav_home"
   | "nav_error"
   | "nav_stuck_fallback"
   | "session_restored"
-  | "session_cleared";
+  | "session_cleared"
+  | "splash_replay";
 
 export type StartupSnapshot = {
   releaseMode: boolean;
@@ -125,5 +125,6 @@ export function logReleaseStartupConstants() {
   console.warn("[Startup] release mode:", !__DEV__);
   console.warn("[Startup] API base URL:", API_BASE_URL);
   console.warn("[Startup] Login URL:", PRODUCTION_API_ENDPOINTS.login);
+  console.warn("[Startup] Build env EXPO_PUBLIC_API_BASE_URL:", process.env.EXPO_PUBLIC_API_BASE_URL ?? "(unset)");
   console.warn("[Startup] Build env EXPO_PUBLIC_API_URL:", process.env.EXPO_PUBLIC_API_URL ?? "(unset)");
 }

@@ -15,7 +15,11 @@ function normalizeApiUrl(raw) {
   return `${url}/`;
 }
 
-const resolvedApiUrl = normalizeApiUrl(process.env.EXPO_PUBLIC_API_URL || PRODUCTION_API_ORIGIN);
+const resolvedApiUrl = normalizeApiUrl(
+  process.env.EXPO_PUBLIC_API_BASE_URL ||
+    process.env.EXPO_PUBLIC_API_URL ||
+    PRODUCTION_API_ORIGIN
+);
 const isProductionApi = resolvedApiUrl.includes(PRODUCTION_API_HOST);
 
 module.exports = () => ({
@@ -27,7 +31,7 @@ module.exports = () => ({
   scheme: "agriclinicfield",
   icon: brand.iconAsset,
   splash: {
-    image: brand.logoAsset,
+    image: brand.iconAsset,
     resizeMode: "contain",
     backgroundColor: brand.splashBackgroundColor
   },
@@ -52,6 +56,7 @@ module.exports = () => ({
       "ACCESS_COARSE_LOCATION",
       "ACCESS_FINE_LOCATION",
       "ACCESS_BACKGROUND_LOCATION",
+      "ACCESS_NETWORK_STATE",
       "FOREGROUND_SERVICE",
       "FOREGROUND_SERVICE_LOCATION",
       "CAMERA",
@@ -97,8 +102,8 @@ module.exports = () => ({
     [
       "expo-splash-screen",
       {
-        image: brand.logoAsset,
-        imageWidth: 160,
+        image: brand.iconAsset,
+        imageWidth: 120,
         resizeMode: "contain",
         backgroundColor: brand.splashBackgroundColor
       }

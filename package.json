@@ -22,7 +22,10 @@
     "verify:apk": "node scripts/audit-apk-release.mjs",
     "verify:release": "node scripts/verify-release-constants.mjs",
     "verify:native-assets": "node scripts/audit-native-assets.mjs",
+    "verify:mobile": "node scripts/verify-mobile-readiness.mjs",
+    "ensure:android-release": "node scripts/ensure-android-release-config.mjs",
     "icons:generate": "node scripts/generate-app-icons.mjs && node scripts/generate-splash-logo.mjs",
+    "splash:import": "node scripts/import-splash-storyboard.mjs",
     "download:splash-video": "curl -L \"https://www.pexels.com/download/video/6592618/\" -o assets/splash/rice-paddy.mp4",
     "import:water-pour-sound": "node scripts/import-water-pour-sound.mjs",
     "import:heat-sound": "node scripts/import-heat-sound.mjs",
@@ -31,7 +34,7 @@
     "verify:api:local": "powershell -ExecutionPolicy Bypass -File ./scripts/verify-local-api.ps1",
     "prebuild:android": "expo prebuild --platform android --clean",
     "build:apk": "eas build --platform android --profile preview --non-interactive",
-    "build:apk:prod": "eas build --platform android --profile production --non-interactive",
+    "build:apk:prod": "eas build --platform android --profile production-apk --non-interactive",
     "build:aab": "eas build --platform android --profile production-aab --non-interactive"
   },
   "dependencies": {
@@ -68,6 +71,8 @@
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
     "expo-task-manager": "~14.0.9",
+    "lottie-react-native": "~7.3.1",
+    "lucide-react-native": "^1.23.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",

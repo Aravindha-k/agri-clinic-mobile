@@ -2,7 +2,7 @@
 export const PRODUCTION_API_HOST = "13.207.17.117";
 
 /**
- * Production server origin — set EXPO_PUBLIC_API_URL to this in builds.
+ * Production server origin — set EXPO_PUBLIC_API_BASE_URL or EXPO_PUBLIC_API_URL in builds.
  * Example: http://13.207.17.117
  */
 export const PRODUCTION_API_ORIGIN = `http://${PRODUCTION_API_HOST}`;
@@ -68,13 +68,25 @@ function isProductionApiUrl(url: string): boolean {
   return url.includes(PRODUCTION_API_HOST);
 }
 
+/** Read API URL from EAS / .env.production — full /api/v1/ base or host origin. */
+function readBuildApiEnv(): string | undefined {
+  const base = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+  if (base) return base;
+  const origin = process.env.EXPO_PUBLIC_API_URL?.trim();
+  return origin || undefined;
+}
+
 function resolveApiBaseUrl(): string {
-  // Release/APK: always AWS — never LAN/dev fallback even if env is wrong.
+  const fromEnv = readBuildApiEnv();
+
+  // Release/APK: env first, then AWS fallback — never LAN/dev.
   if (!__DEV__) {
+    if (fromEnv) {
+      return normalizeApiBaseUrl(fromEnv);
+    }
     return PRODUCTION_API_BASE_URL;
   }
 
-  const fromEnv = process.env.EXPO_PUBLIC_API_URL?.trim();
   if (fromEnv) {
     return normalizeApiBaseUrl(fromEnv);
   }

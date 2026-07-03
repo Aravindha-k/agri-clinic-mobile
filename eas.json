@@ -37,6 +37,15 @@
       "android": {
         "buildType": "app-bundle"
       }
+    },
+    "production-apk": {
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "http://13.207.17.117/api/v1/",
+        "EXPO_PUBLIC_ENV": "production"
+      }
     }
   },
   "submit": {

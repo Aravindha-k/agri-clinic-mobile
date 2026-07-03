@@ -4,6 +4,7 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View, ViewStyle 
 import { useTheme } from "../theme";
 import { cacheBustPhotoUrl, initialsFromName } from "../utils/profilePhotoUrl";
 import { logFailedMediaUrl } from "../utils/resolveMediaUrl";
+import { ProfilePhotoFallback } from "./ProfilePhotoFallback";
 
 export type ProfileAvatarSize = "xs" | "sm" | "md" | "lg" | "xl" | "xxl";
 
@@ -26,6 +27,8 @@ type Props = {
   uploadProgress?: number;
   onPress?: () => void;
   variant?: "default" | "onPrimary";
+  /** When no photo: show initials (farmers) or icon placeholder (employees). */
+  fallback?: "initials" | "icon";
   style?: ViewStyle;
 };
 
@@ -39,6 +42,7 @@ export function ProfileAvatar({
   uploadProgress,
   onPress,
   variant = "default",
+  fallback = "initials",
   style
 }: Props) {
   const { theme } = useTheme();
@@ -76,6 +80,8 @@ export function ProfileAvatar({
             setImgFailed(true);
           }}
         />
+      ) : fallback === "icon" ? (
+        <ProfilePhotoFallback size={dim} />
       ) : (
         <Text
           style={{

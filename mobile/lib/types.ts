@@ -14,7 +14,9 @@ export type DashboardRecentVisit = {
   id: number;
   farmer_name: string;
   crop?: string;
+  village_name?: string;
   visited_at?: string | null;
+  has_gps?: boolean;
 };
 
 export type DashboardData = {

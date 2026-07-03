@@ -1,5 +1,5 @@
 /** Tab bar content row height (excluding safe area). */
-export const TAB_BAR_CONTENT_HEIGHT = 64;
+export const TAB_BAR_CONTENT_HEIGHT = 58;
 
 /** Center FAB size — compact for tab bar balance. */
 export const FAB_SIZE = 50;

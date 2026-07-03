@@ -1,63 +1,61 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { memo } from "react";
+import { StyleSheet, Text, View } from "react-native";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import type { MobileFarmer } from "../../lib/farmersApi";
 import { buildFarmerWorkflowMeta } from "../../lib/workQueue";
-import { Avatar } from "../ui/Avatar";
-import { StatusChip } from "../ui/StatusChip";
-import { Colors, FontSize, FontWeight, Radius } from "../../lib/theme";
+import { Colors, FontSize, FontWeight, Spacing } from "../../lib/theme";
+import { FlatCard } from "../layout/FlatCard";
+import { Avatar, PressableCard, StatusChip } from "../ui";
 
 type Props = {
   farmer: MobileFarmer;
   onPress: () => void;
 };
 
-export function FarmerPickCard({ farmer, onPress }: Props) {
+export const FarmerPickCard = memo(function FarmerPickCard({ farmer, onPress }: Props) {
   const { t } = useI18n();
   const meta = buildFarmerWorkflowMeta(farmer);
   const village = farmer.village_name || farmer.village || t("visitFlow.villageNotSet");
   const crop = farmer.crop_name || farmer.list_crop_name;
 
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => [styles.card, pressed && { opacity: 0.94 }]}
-    >
-      <Avatar name={farmer.name || t("visitFlow.farmer")} size="sm" />
-      <View style={styles.copy}>
-        <Text style={styles.name} numberOfLines={1}>
-          {farmer.name || t("visitFlow.farmer")}
-        </Text>
-        <Text style={styles.village} numberOfLines={1}>
-          {String(village)}
-        </Text>
-        {meta.lastVisitDateLabel ? (
-          <Text style={styles.metaLine} numberOfLines={1}>
-            {t("visitFlow.lastVisit", { date: meta.lastVisitDateLabel })}
+    <PressableCard onPress={onPress} accessibilityRole="button" style={styles.wrap}>
+      <FlatCard style={styles.card}>
+        <Avatar name={farmer.name || t("visitFlow.farmer")} size="sm" />
+        <View style={styles.copy}>
+          <Text style={styles.name} numberOfLines={1}>
+            {farmer.name || t("visitFlow.farmer")}
           </Text>
-        ) : null}
-        {crop ? (
-          <View style={styles.chipRow}>
-            <StatusChip label={crop} variant="gray" />
-          </View>
-        ) : null}
-      </View>
-      <Ionicons name="chevron-forward" size={18} color={Colors.text4} />
-    </Pressable>
+          <Text style={styles.village} numberOfLines={1}>
+            {String(village)}
+          </Text>
+          {meta.lastVisitDateLabel ? (
+            <Text style={styles.metaLine} numberOfLines={1}>
+              {t("visitFlow.lastVisit", { date: meta.lastVisitDateLabel })}
+            </Text>
+          ) : null}
+          {crop ? (
+            <View style={styles.chipRow}>
+              <StatusChip label={crop} variant="gray" />
+            </View>
+          ) : null}
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={Colors.text4} />
+      </FlatCard>
+    </PressableCard>
   );
-}
+});
 
 const styles = StyleSheet.create({
+  wrap: {
+    marginBottom: Spacing.sm
+  },
   card: {
     alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
     flexDirection: "row",
-    gap: 10,
-    padding: 12
+    gap: Spacing.md,
+    padding: Spacing.lg
   },
   copy: {
     flex: 1,
@@ -66,21 +64,21 @@ const styles = StyleSheet.create({
   },
   name: {
     color: Colors.text1,
-    fontSize: FontSize.md,
+    fontSize: FontSize.body,
     fontWeight: FontWeight.bold
   },
   village: {
     color: Colors.text3,
-    fontSize: FontSize.sm
+    fontSize: FontSize.caption
   },
   metaLine: {
     color: Colors.text4,
-    fontSize: FontSize.sm
+    fontSize: FontSize.caption
   },
   chipRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 6,
-    marginTop: 2
+    gap: Spacing.sm,
+    marginTop: Spacing.xs
   }
 });

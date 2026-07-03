@@ -4,18 +4,17 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
   Pressable,
   Linking,
   RefreshControl
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { API_BASE_URL, buildApiUrl } from "../../src/api/config";
 import { AppErrorBoundary } from "../../src/components/AppErrorBoundary";
 import { getExpoBuildUrl, shouldShowExpoGoDevWarning } from "../../src/utils/expoRuntime";
 import { logDayTabApi, logDayTabError, logDayTabOpen } from "../../src/utils/dayTabDiagnostics";
 import { useRefreshControlProps } from "../../src/hooks/useRefreshControlProps";
-import { useSafeAreaInsetsCompat } from "../../src/hooks/useSafeAreaInsetsCompat";
 import { useWorkdayTimer } from "../../src/hooks/useLiveClock";
 import { useSecureScreen } from "../../src/hooks/useSecureScreen";
 import { useTabBarBottomInset } from "../../src/hooks/useTabBarBottomInset";
@@ -29,10 +28,11 @@ import { isSameVisitLocalDay } from "../../src/utils/format";
 import { getHomeVisits } from "../../src/utils/visitsCache";
 import { resolveWorkdayStartedAt } from "../../src/utils/workdayStartedAt";
 import { DaySummaryRouteCard } from "../components/daySummary/DaySummaryRouteCard";
-import { HeaderHero, ScreenCanvas, ScreenEntranceBloom } from "../components/layout";
+import { ScreenCanvas, ScreenEntranceBloom, ScreenPageHeader } from "../components/layout";
 import { FadeInSection, entranceStagger } from "../components/ui/FadeInSection";
 import { RecentActivitySection } from "../components/today/RecentActivitySection";
 import { TodayKpiRow } from "../components/today/TodayKpiRow";
+import { TabDashboardSkeleton } from "../components/today/TabDashboardSkeleton";
 import { WorkdayHero } from "../components/workday/WorkdayHero";
 import { useScreenEntrance } from "../hooks/useScreenEntrance";
 import {
@@ -41,13 +41,8 @@ import {
   fetchWorkStatus
 } from "../lib/homeApi";
 import { formatDistanceKm, formatShortTime } from "../lib/format";
-import {
-  HEADER_IMAGE_POSITION,
-  resolveScreenHeaderHeight,
-  SCREEN_HEADER_IMAGES
-} from "../lib/screenHeaderImages";
 import type { DashboardRecentVisit } from "../lib/types";
-import { Colors, FontSize, FontWeight, Spacing } from "../lib/theme";
+import { Colors, FontSize, FontWeight, Layout, Spacing } from "../lib/theme";
 
 function formatStartedTime(startedAt: string | null) {
   if (!startedAt) return null;
@@ -81,9 +76,6 @@ function TrackingWorkspaceScreenInner() {
   const { t } = useI18n();
   const navigation = useNavigation<any>();
   const rootNav = navigation.getParent();
-  const { top: safeTop } = useSafeAreaInsetsCompat();
-  const { height: screenH } = useWindowDimensions();
-  const headerHeroHeight = resolveScreenHeaderHeight(screenH);
   const { pendingCount } = useOfflineSync();
   const tabInset = useTabBarBottomInset();
   const refreshControlProps = useRefreshControlProps();
@@ -104,6 +96,7 @@ function TrackingWorkspaceScreenInner() {
   const [farmersCovered, setFarmersCovered] = useState(0);
   const [villagesCovered, setVillagesCovered] = useState(0);
   const [recentVisits, setRecentVisits] = useState<DashboardRecentVisit[]>([]);
+  const [summaryLoading, setSummaryLoading] = useState(true);
   const entranceTick = useScreenEntrance();
 
   const startedAt = useMemo(
@@ -111,6 +104,8 @@ function TrackingWorkspaceScreenInner() {
     [trackingStartedAt, workday]
   );
   const workdayTimer = useWorkdayTimer(startedAt, isActive);
+
+  const resolvedWorkdayId = workdayId ?? workday?.workday_id;
 
   const loadSummary = useCallback(async () => {
     const workStatusUrl = buildApiUrl("mobile/work/status/", API_BASE_URL);
@@ -146,7 +141,7 @@ function TrackingWorkspaceScreenInner() {
       const nextWorkdayId =
         "workday_id" in workStatus && typeof workStatus.workday_id === "number"
           ? workStatus.workday_id
-          : undefined;
+          : workday?.workday_id;
       setWorkdayId(nextWorkdayId);
 
       const today = new Date();
@@ -194,8 +189,10 @@ function TrackingWorkspaceScreenInner() {
       setFarmersCovered(0);
       setVillagesCovered(0);
       setRecentVisits([]);
+    } finally {
+      setSummaryLoading(false);
     }
-  }, [isActive]);
+  }, [isActive, workday?.workday_id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -225,22 +222,17 @@ function TrackingWorkspaceScreenInner() {
   }
 
   return (
-    <View style={styles.screen}>
+    <SafeAreaView style={styles.screen} edges={["top"]}>
       <ScreenCanvas />
       <ScreenEntranceBloom replayKey={entranceTick} />
-      <HeaderHero
-        imageSource={SCREEN_HEADER_IMAGES.summary}
-        height={headerHeroHeight}
-        contentPosition={HEADER_IMAGE_POSITION.summary}
+      <ScreenPageHeader
         title={t("daySummary.title")}
         subtitle={t("daySummary.reflectSubtitle")}
-        showLogo
-        safeTop={safeTop}
       />
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.content, { paddingBottom: tabInset + Spacing.xl }]}
+        contentContainerStyle={[styles.content, { paddingBottom: tabInset + Layout.scrollBottomExtra }]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} {...refreshControlProps} />
         }
@@ -257,6 +249,10 @@ function TrackingWorkspaceScreenInner() {
 
         {shouldShowExpoGoDevWarning() ? <ExpoGoDevBanner onBuildApk={openBuildApkPage} /> : null}
 
+        {summaryLoading ? (
+          <TabDashboardSkeleton />
+        ) : (
+          <>
         <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
           <WorkdayHero
           active={isActive}
@@ -271,10 +267,17 @@ function TrackingWorkspaceScreenInner() {
           statItems={
             isActive
               ? [
-                  { label: t("daySummary.hoursWorked"), value: workdayTimer.display },
                   {
                     label: t("daySummary.distanceTravelled"),
                     value: `${formatDistanceKm(distanceKm)} km`
+                  },
+                  {
+                    label: t("daySummary.visitsCompleted"),
+                    value: String(visitsToday)
+                  },
+                  {
+                    label: t("daySummary.farmersCovered"),
+                    value: String(farmersCovered)
                   }
                 ]
               : undefined
@@ -318,9 +321,9 @@ function TrackingWorkspaceScreenInner() {
           title={t("daySummary.routeSummary")}
           distanceLabel={t("daySummary.totalRouteDistance")}
           distanceValue={`${formatDistanceKm(distanceKm)} km`}
-          workdayId={workdayId}
+          workdayId={resolvedWorkdayId}
           refreshToken={lastSyncTime}
-          onPress={() => rootNav?.navigate("TravelHistory")}
+          onPress={() => rootNav?.navigate("MyLocation")}
         />
         </FadeInSection>
 
@@ -338,15 +341,17 @@ function TrackingWorkspaceScreenInner() {
           }
         />
         </FadeInSection>
+          </>
+        )}
 
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: Colors.bg,
+    backgroundColor: "transparent",
     flex: 1
   },
   pendingHint: {

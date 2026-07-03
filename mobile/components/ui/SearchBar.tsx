@@ -1,29 +1,30 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, TextInput, View } from "react-native";
-import { Colors, FontSize, Radius } from "../../lib/theme";
+import { Pressable, StyleSheet, TextInput, View, type StyleProp, type ViewStyle } from "react-native";
+import { Colors, Enterprise, FontSize, Layout, Radius, Spacing } from "../../lib/theme";
 
 type Props = {
   placeholder: string;
   value: string;
   onChangeText: (text: string) => void;
   onClear?: () => void;
+  style?: StyleProp<ViewStyle>;
 };
 
-export function SearchBar({ placeholder, value, onChangeText, onClear }: Props) {
+export function SearchBar({ placeholder, value, onChangeText, onClear, style }: Props) {
   function handleClear() {
     onChangeText("");
     onClear?.();
   }
 
   return (
-    <View style={[styles.wrap, { backgroundColor: Colors.surface, borderColor: Colors.border, borderRadius: Radius.xl }]}>
-      <Ionicons name="search" size={18} color={Colors.text4} />
+    <View style={[styles.wrap, style]}>
+      <Ionicons name="search" size={20} color={Colors.text4} />
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={Colors.text4}
-        style={[styles.input, { color: Colors.text1, fontSize: FontSize.md }]}
+        style={styles.input}
         returnKeyType="search"
         clearButtonMode="never"
       />
@@ -39,14 +40,20 @@ export function SearchBar({ placeholder, value, onChangeText, onClear }: Props) 
 const styles = StyleSheet.create({
   wrap: {
     alignItems: "center",
-    borderWidth: 1,
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
+    borderRadius: Radius.input,
+    borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
-    gap: 8,
-    height: 48,
-    paddingHorizontal: 14
+    gap: Spacing.sm,
+    height: Layout.buttonHeight - 4,
+    minHeight: Layout.touchTargetMin,
+    paddingHorizontal: Spacing.lg
   },
   input: {
+    color: Colors.text1,
     flex: 1,
+    fontSize: FontSize.body,
     paddingVertical: 0
   }
 });

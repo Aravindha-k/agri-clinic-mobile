@@ -1,9 +1,13 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ChevronRight, Clock } from "lucide-react-native";
+import { StyleSheet, Text, View } from "react-native";
 import type { DashboardRecentVisit } from "../../lib/types";
-import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
+import { Grid, Harvest, IconSize, PremiumShadow, Typography } from "../../lib/designSystem";
+import { TODAY_CARD_RADIUS, TODAY_PAGE_PAD, TODAY_SECTION_GAP } from "../../lib/todayLayout";
+import { TodaySurfaces } from "../../lib/todaySurfaces";
+import { Colors, FontWeight } from "../../lib/theme";
 import { formatRelativeTime } from "../../../src/utils/formatRelativeTime";
-import { Avatar } from "../ui/Avatar";
-import { FlatCard } from "../layout/FlatCard";
+import { Avatar, PressableCard } from "../ui";
+import { LucideGlyph } from "../ui/AppIcon";
 import { SectionHeader } from "../ui/SectionHeader";
 import {
   FadeInSection,
@@ -33,11 +37,7 @@ export function RecentActivitySection({
 }: Props) {
   const header = (
     <View style={styles.headerPad}>
-      <SectionHeader
-        title={title}
-        action={items.length > 0 ? viewAllLabel : undefined}
-        onAction={onViewAll}
-      />
+      <SectionHeader title={title} action={items.length > 0 ? viewAllLabel : undefined} onAction={onViewAll} />
     </View>
   );
 
@@ -51,45 +51,45 @@ export function RecentActivitySection({
         header
       )}
       {items.length === 0 ? (
-        entrance ? (
-          <FadeInSection
-            replayKey={entrance.replayKey}
-            delay={entranceListStagger(entrance.sectionStep, 0)}
-            variant="card"
-          >
-            <FlatCard style={styles.emptyCard}>
-              <Text style={styles.emptyText}>{emptyLabel}</Text>
-            </FlatCard>
-          </FadeInSection>
-        ) : (
-          <FlatCard style={styles.emptyCard}>
+        <View style={styles.emptyWrap}>
+          <View style={[styles.emptyCard, TodaySurfaces.activity, PremiumShadow.card]}>
+            <LucideGlyph icon={Clock} size={IconSize.lg} color={Colors.brand700} />
             <Text style={styles.emptyText}>{emptyLabel}</Text>
-          </FlatCard>
-        )
+          </View>
+        </View>
       ) : (
         <View style={styles.list}>
           {items.map((item, index) => {
             const row = (
-              <Pressable onPress={() => onPressVisit(item.id)}>
-                <FlatCard style={styles.rowCard}>
+              <PressableCard onPress={() => onPressVisit(item.id)} style={styles.rowPress}>
+                <View style={[styles.rowCard, TodaySurfaces.activity, PremiumShadow.card]}>
                   <View style={styles.row}>
                     <Avatar name={item.farmer_name} size="sm" />
                     <View style={styles.copy}>
                       <Text style={styles.name} numberOfLines={1}>
                         {item.farmer_name}
                       </Text>
+                      {item.village_name ? (
+                        <Text style={styles.village} numberOfLines={1}>
+                          {item.village_name}
+                        </Text>
+                      ) : null}
                       {item.crop ? (
-                        <View style={styles.cropChip}>
-                          <Text style={styles.cropText} numberOfLines={1}>
-                            {item.crop}
-                          </Text>
+                        <View style={styles.cropPill}>
+                          <Text style={styles.cropText}>{item.crop}</Text>
                         </View>
                       ) : null}
                     </View>
-                    <Text style={styles.time}>{formatRelativeTime(item.visited_at)}</Text>
+                    <View style={styles.rightCol}>
+                      <View style={styles.statusChip}>
+                        <Text style={styles.statusText}>Completed</Text>
+                      </View>
+                      <Text style={styles.time}>{formatRelativeTime(item.visited_at)}</Text>
+                      <LucideGlyph icon={ChevronRight} size={IconSize.sm} color={Harvest.textMuted} />
+                    </View>
                   </View>
-                </FlatCard>
-              </Pressable>
+                </View>
+              </PressableCard>
             );
 
             if (!entrance) {
@@ -115,60 +115,91 @@ export function RecentActivitySection({
 
 const styles = StyleSheet.create({
   section: {
-    gap: Spacing.sm,
-    marginTop: Spacing.lg
+    gap: Grid.sm,
+    marginTop: TODAY_SECTION_GAP
   },
   headerPad: {
-    paddingHorizontal: Spacing.lg
+    paddingHorizontal: TODAY_PAGE_PAD
   },
   list: {
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.lg
+    gap: Grid.sm,
+    paddingHorizontal: TODAY_PAGE_PAD
+  },
+  rowPress: {
+    width: "100%"
   },
   rowCard: {
-    padding: Spacing.md
+    backgroundColor: Harvest.card,
+    borderRadius: TODAY_CARD_RADIUS,
+    padding: Grid.md
   },
   row: {
     alignItems: "center",
     flexDirection: "row",
-    gap: Spacing.md
+    gap: Grid.sm
   },
   copy: {
     flex: 1,
-    gap: 4,
+    gap: 2,
     minWidth: 0
   },
-  name: {
-    color: Colors.text1,
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.semibold
-  },
-  cropChip: {
+  cropPill: {
     alignSelf: "flex-start",
-    backgroundColor: Colors.bg,
-    borderColor: Colors.border,
-    borderRadius: Radius.chip,
-    borderWidth: 1,
-    paddingHorizontal: 7,
+    backgroundColor: Colors.greenBg,
+    borderRadius: 8,
+    marginTop: 2,
+    paddingHorizontal: 8,
     paddingVertical: 2
   },
   cropText: {
-    color: Colors.text3,
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.medium
+    ...Typography.caption,
+    color: Colors.greenText,
+    fontSize: 10
+  },
+  rightCol: {
+    alignItems: "flex-end",
+    gap: 4
+  },
+  statusChip: {
+    backgroundColor: Colors.greenBg,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3
+  },
+  statusText: {
+    ...Typography.caption,
+    color: Colors.greenText,
+    fontSize: 10,
+    fontWeight: FontWeight.semibold
+  },
+  name: {
+    ...Typography.bodyMedium,
+    fontSize: 15,
+    fontWeight: FontWeight.semibold
+  },
+  village: {
+    ...Typography.caption,
+    color: Harvest.textMuted,
+    fontSize: 11
   },
   time: {
-    color: Colors.text4,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.medium
+    ...Typography.caption,
+    color: Harvest.textMuted,
+    fontSize: 11
+  },
+  emptyWrap: {
+    paddingHorizontal: TODAY_PAGE_PAD
   },
   emptyCard: {
-    marginHorizontal: Spacing.lg,
-    paddingVertical: Spacing.xl
+    alignItems: "center",
+    backgroundColor: Harvest.card,
+    borderRadius: TODAY_CARD_RADIUS,
+    gap: Grid.sm,
+    paddingVertical: Grid.xl
   },
   emptyText: {
-    color: Colors.text3,
-    fontSize: FontSize.base,
+    ...Typography.body,
+    color: Harvest.textSecondary,
     textAlign: "center"
   }
 });

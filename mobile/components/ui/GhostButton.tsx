@@ -1,15 +1,17 @@
 import { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, type ViewStyle } from "react-native";
-import { Colors, FontSize, FontWeight, Radius, Shadow } from "../../lib/theme";
-
+import { Pressable, StyleSheet, Text, type ViewStyle } from "react-native";import { Colors, Enterprise, FontSize, FontWeight, Layout, Radius, Shadow, Spacing } from "../../lib/theme";
 type Props = {
   label: string;
   onPress: () => void;
   icon?: ReactNode;
   style?: ViewStyle;
+  variant?: "default" | "danger";
 };
 
-export function GhostButton({ label, onPress, icon, style }: Props) {
+export function GhostButton({ label, onPress, icon, style, variant = "default" }: Props) {
+  const labelColor = variant === "danger" ? Colors.red : Colors.text2;
+  const borderColor = variant === "danger" ? Colors.red : Colors.border;
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -17,7 +19,7 @@ export function GhostButton({ label, onPress, icon, style }: Props) {
       style={({ pressed }) => [
         styles.btn,
         {
-          borderColor: Colors.brand100,
+          borderColor,
           borderRadius: Radius.button,
           opacity: pressed ? 0.92 : 1
         },
@@ -25,7 +27,7 @@ export function GhostButton({ label, onPress, icon, style }: Props) {
       ]}
     >
       {icon}
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, { color: labelColor }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -34,17 +36,19 @@ const styles = StyleSheet.create({
   btn: {
     alignItems: "center",
     backgroundColor: Colors.surface,
-    borderWidth: 1,
+    borderColor: Colors.border,
+    borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
-    gap: 8,
-    height: 44,
+    gap: Spacing.sm,
+    height: Layout.buttonHeight - 8,
     justifyContent: "center",
-    paddingHorizontal: 16,
+    minHeight: Layout.touchTargetMin,
+    paddingHorizontal: Spacing.lg,
     ...Shadow.card
   },
   label: {
     color: Colors.text2,
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.medium
+    fontSize: FontSize.body,
+    fontWeight: FontWeight.semibold
   }
 });

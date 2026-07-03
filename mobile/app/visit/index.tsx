@@ -1,9 +1,10 @@
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { useEffect, useRef, useState } from "react";
-import { Animated, Dimensions, Easing, StyleSheet, useWindowDimensions, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, Animated, Dimensions, Easing, StyleSheet } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import type { Farmer } from "../../../src/api/farmers";
-import { useSafeAreaInsetsCompat } from "../../../src/hooks/useSafeAreaInsetsCompat";
 import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
+import { useI18n } from "../../../src/i18n/I18nContext";
 import { useMasterData } from "../../../src/storage/MasterDataContext";
 import { useTracking } from "../../../src/storage/TrackingContext";
 import { loadRevisitPrefill } from "../../../src/utils/farmerPrefill";
@@ -12,12 +13,7 @@ import {
   WorkdayRequiredSheet,
   type WorkdayRequiredSheetRef
 } from "../../components/workday/WorkdayRequiredSheet";
-import { ScreenCanvas, ScreenEntranceBloom, HeaderHero } from "../../components/layout";
-import {
-  HEADER_IMAGE_POSITION,
-  resolveScreenHeaderHeight,
-  SCREEN_HEADER_IMAGES
-} from "../../lib/screenHeaderImages";
+import { ScreenCanvas, ScreenEntranceBloom } from "../../components/layout";
 import { VisitEntranceProvider } from "../../context/VisitEntranceContext";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
 import { useVisitFormStore } from "../../store/visitFormStore";
@@ -27,11 +23,9 @@ const SCREEN_WIDTH = Dimensions.get("window").width;
 
 export default function VisitFlowShell() {
   useSecureScreen();
+  const { t } = useI18n();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { top: safeTop } = useSafeAreaInsetsCompat();
-  const { height: screenH } = useWindowDimensions();
-  const headerHeroHeight = resolveScreenHeaderHeight(screenH);
   const { districts, villages } = useMasterData();
   const { isActive, startDay, busy: workdayBusy } = useTracking();
   const workdaySheetRef = useRef<WorkdayRequiredSheetRef>(null);
@@ -53,13 +47,18 @@ export default function VisitFlowShell() {
 
     Animated.timing(slideAnim, {
       toValue: -dir * SCREEN_WIDTH,
-      duration: 280,
-      easing: Easing.in(Easing.ease),
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
       useNativeDriver: true
     }).start(() => {
       setDisplayedStep(step);
       slideAnim.setValue(dir * SCREEN_WIDTH);
-      Animated.spring(slideAnim, { toValue: 0, speed: 20, bounciness: 6, useNativeDriver: true }).start();
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 200,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true
+      }).start();
     });
   }, [slideAnim, step]);
 
@@ -94,6 +93,9 @@ export default function VisitFlowShell() {
       if (!allowed) {
         fastRevisitStarted.current = false;
         navigation.setParams({ fastRevisit: undefined });
+        Alert.alert(t("visitFlow.revisitGpsTitle"), t("visitFlow.revisitGpsBody"), [
+          { text: t("common.cancel"), style: "cancel", onPress: () => navigation.goBack() }
+        ]);
         return;
       }
 
@@ -104,6 +106,16 @@ export default function VisitFlowShell() {
         navigation.setParams({ fastRevisit: undefined });
       } catch {
         fastRevisitStarted.current = false;
+        Alert.alert(t("visitFlow.revisitPrefillTitle"), t("visitFlow.revisitPrefillBody"), [
+          {
+            text: t("common.retry"),
+            onPress: () => {
+              fastRevisitStarted.current = false;
+              navigation.setParams({ fastRevisit: true });
+            }
+          },
+          { text: t("common.cancel"), style: "cancel", onPress: () => navigation.goBack() }
+        ]);
       }
     })();
   }, [
@@ -113,6 +125,7 @@ export default function VisitFlowShell() {
     route.params?.fastRevisit,
     route.params?.prefill,
     setStep,
+    t,
     villages,
     isActive,
     startDay
@@ -133,16 +146,9 @@ export default function VisitFlowShell() {
   }
 
   return (
-    <View style={styles.shell}>
+    <SafeAreaView style={styles.shell} edges={["top"]}>
       <ScreenCanvas />
       <ScreenEntranceBloom replayKey={entranceKey} />
-      <HeaderHero
-        imageSource={SCREEN_HEADER_IMAGES.visit}
-        height={headerHeroHeight}
-        contentPosition={HEADER_IMAGE_POSITION.visit}
-        showLogo
-        safeTop={safeTop}
-      />
       <VisitEntranceProvider replayKey={entranceKey}>
         <Animated.View style={[styles.stepPane, { transform: [{ translateX: slideAnim }] }]}>
           {displayedStep === 1 ? <VisitCreateStep onClose={closeFlow} /> : null}
@@ -170,7 +176,7 @@ export default function VisitFlowShell() {
           }
         }}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -180,6 +186,7 @@ const styles = StyleSheet.create({
     overflow: "hidden"
   },
   stepPane: {
-    flex: 1
+    flex: 1,
+    minHeight: 0
   }
 });

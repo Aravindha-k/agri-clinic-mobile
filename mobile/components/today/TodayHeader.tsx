@@ -1,130 +1,133 @@
-import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { AppLogo } from "../../../src/components/brand/AppLogo";
-import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
+import Animated, {
+  Extrapolation,
+  interpolate,
+  type SharedValue,
+  useAnimatedStyle
+} from "react-native-reanimated";
+import { useLiveClock } from "../../../src/hooks/useLiveClock";
+import { useI18n } from "../../../src/i18n/I18nContext";
+import { BrandHeader, BrandHeaderDots, BrandHeaderSpacing, GreetingHeader } from "../brand";
+import { AppIcon } from "../ui/AppIcon";
+import { FadeInSection, entranceStagger } from "../ui/FadeInSection";
+import { FieldGlassSurface } from "../ui/FieldGlassSurface";
+import { Colors, FontWeight, Radius, Shadow, Spacing } from "../../lib/theme";
+import { TODAY_PAGE_PAD } from "../../lib/todayLayout";
+import { TodayHeroLayers } from "./hero";
 
 type Props = {
   greeting: string;
   name?: string | null;
   dateLabel: string;
-  subtitle?: string;
   notificationCount: number;
   onNotifications: () => void;
-  onMedia?: boolean;
+  entranceTick?: number | string;
+  entranceStep?: number;
+  scrollY?: SharedValue<number>;
 };
 
 export function TodayHeader({
   greeting,
   name,
   dateLabel,
-  subtitle,
   notificationCount,
   onNotifications,
-  onMedia = false
+  entranceTick = 0,
+  entranceStep = 0,
+  scrollY
 }: Props) {
-  const title = name?.trim() ? `${greeting}, ${name.trim().split(/\s+/)[0]}` : greeting;
+  const { t } = useI18n();
+  const { time } = useLiveClock();
+  const firstName = name?.trim().split(/\s+/)[0] ?? null;
+
+  const greetingScrollStyle = useAnimatedStyle(() => {
+    if (!scrollY) return {};
+    return {
+      opacity: interpolate(scrollY.value, [0, 90], [1, 0.35], Extrapolation.CLAMP),
+      transform: [
+        {
+          translateY: interpolate(scrollY.value, [0, 100], [0, -6], Extrapolation.CLAMP)
+        }
+      ]
+    };
+  });
+
+  const bell = (
+    <Pressable
+      onPress={onNotifications}
+      accessibilityRole="button"
+      accessibilityLabel="Notifications"
+      style={({ pressed }) => [styles.bell, pressed && { opacity: 0.88 }]}
+    >
+      <AppIcon name="bell" size={20} color={Colors.text2} />
+      {notificationCount > 0 ? (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{notificationCount > 9 ? "9+" : notificationCount}</Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.topRow}>
-        <View style={[styles.brandShell, onMedia && styles.brandShellOnMedia]}>
-          <AppLogo
-            size="lg"
-            showWordmark
-            layout="horizontal"
-            compactWordmark
-            bare
-            variant={onMedia ? "light" : "dark"}
-            style={styles.brand}
-          />
-        </View>
-        <Pressable
-          onPress={onNotifications}
-          accessibilityRole="button"
-          accessibilityLabel="Notifications"
-          style={({ pressed }) => [styles.bell, onMedia && styles.bellOnMedia, pressed && { opacity: 0.88 }]}
-        >
-          <Ionicons name="notifications-outline" size={20} color={onMedia ? "#FFFFFF" : Colors.text2} />
-          {notificationCount > 0 ? (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{notificationCount > 9 ? "9+" : notificationCount}</Text>
-            </View>
-          ) : null}
-        </Pressable>
-      </View>
-
-      <View style={styles.copy}>
-        <Text style={[styles.greeting, onMedia && styles.greetingOnMedia]} numberOfLines={1}>
-          {title}
-        </Text>
-        <Text style={[styles.date, onMedia && styles.metaOnMedia]}>{dateLabel}</Text>
-        {subtitle ? <Text style={[styles.subtitle, onMedia && styles.metaOnMedia]}>{subtitle}</Text> : null}
-      </View>
+      <FieldGlassSurface style={styles.glass} borderRadius={26}>
+        <TodayHeroLayers />
+        <BrandHeaderDots />
+        <BrandHeader
+          size="hero"
+          variant="plain"
+          layout="split"
+          align="left"
+          right={bell}
+          entrance={{ replayKey: entranceTick, step: entranceStep }}
+          scrollY={scrollY}
+          style={styles.brandHeader}
+        />
+        <Animated.View style={greetingScrollStyle}>
+          <FadeInSection replayKey={entranceTick} delay={entranceStagger(entranceStep + 2)} duration={280}>
+            <GreetingHeader
+              timeGreeting={greeting}
+              welcomePrefix={t("home.welcomeBack")}
+              firstName={firstName}
+              operationsLine={t("home.fieldOperations")}
+              dateLabel={dateLabel}
+              timeLabel={time}
+            />
+          </FadeInSection>
+        </Animated.View>
+      </FieldGlassSurface>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    gap: Spacing.md,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md
+    borderRadius: 26,
+    marginHorizontal: TODAY_PAGE_PAD,
+    overflow: "hidden",
+    paddingBottom: BrandHeaderSpacing.greetingToHero,
+    position: "relative"
   },
-  topRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: Spacing.md
+  glass: {
+    marginTop: Spacing.sm,
+    minHeight: 288,
+    overflow: "hidden"
   },
-  brandShell: {
-    flex: 1,
-    minWidth: 0
-  },
-  brandShellOnMedia: {
-    alignSelf: "flex-start",
-    backgroundColor: "rgba(0,0,0,0.25)",
-    borderRadius: 999,
-    maxWidth: "100%",
-    paddingHorizontal: 14,
-    paddingVertical: 10
-  },
-  brand: {
-    flex: 1,
-    minWidth: 0
-  },
-  copy: {
-    gap: 2,
-    minWidth: 0
-  },
-  greeting: {
-    color: Colors.text1,
-    fontSize: FontSize.hero,
-    fontWeight: FontWeight.bold,
-    letterSpacing: -0.3
-  },
-  date: {
-    color: Colors.text3,
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.medium
-  },
-  subtitle: {
-    color: Colors.text3,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.medium
+  brandHeader: {
+    paddingHorizontal: Spacing.sm,
+    paddingTop: Spacing.sm,
+    zIndex: 4
   },
   bell: {
     alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
+    backgroundColor: "rgba(255, 255, 255, 0.88)",
+    borderColor: "rgba(255, 255, 255, 0.7)",
     borderRadius: Radius.inner,
     borderWidth: 1,
-    flexShrink: 0,
     height: 40,
     justifyContent: "center",
-    width: 40
-  },
-  bellOnMedia: {
-    backgroundColor: "rgba(0,0,0,0.25)",
-    borderColor: "rgba(255,255,255,0.2)"
+    width: 40,
+    ...Shadow.card
   },
   badge: {
     alignItems: "center",
@@ -142,17 +145,5 @@ const styles = StyleSheet.create({
     color: Colors.surface,
     fontSize: 8,
     fontWeight: FontWeight.bold
-  },
-  greetingOnMedia: {
-    color: "#FFFFFF",
-    textShadowColor: "rgba(0,0,0,0.45)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4
-  },
-  metaOnMedia: {
-    color: "rgba(255,255,255,0.94)",
-    textShadowColor: "rgba(0,0,0,0.4)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3
   }
 });

@@ -51,7 +51,7 @@ export function GpsHealthPanel({
       </Pressable>
 
       {expanded ? (
-        <FlatCard style={styles.panel}>
+        <FlatCard variant="secondary" style={styles.panel}>
           <HealthRow label={t("daySummary.gpsActive")} value={gpsActive ? t("daySummary.yes") : t("daySummary.no")} />
           {permissionStatus ? (
             <HealthRow label="Permission" value={permissionStatus.replace(/_/g, " ")} />

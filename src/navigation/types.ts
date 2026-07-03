@@ -97,6 +97,7 @@ export type RootStackParamList = {
   VisitFlow: NavigatorScreenParams<VisitFlowParamList>;
   LiveMap: undefined;
   TravelHistory: undefined;
+  MyLocation: undefined;
   FarmerMap: FarmerMapParams;
   OfflineSync: undefined;
   Notifications: undefined;

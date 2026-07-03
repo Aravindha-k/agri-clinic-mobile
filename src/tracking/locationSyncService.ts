@@ -12,6 +12,7 @@ import {
 } from "../storage/lastSentRouteStorage";
 import { getActiveDutySessionId, getActiveWorkdayId } from "../storage/workdaySessionStorage";
 import { toTrackingPayload } from "../utils/location";
+import { isDutySessionMismatchMessage } from "../utils/workdayStatus";
 import { shouldSendLocation, type RoutePoint } from "./shouldSendLocation";
 import { trackingDevLog } from "./trackingDevLog";
 import { getBatteryPercent } from "../../mobile/lib/gps/trackingService";
@@ -96,13 +97,15 @@ export async function syncLocationPoint(payload: LocationPushPayload): Promise<v
         `${payload.latitude},${payload.longitude} @ ${payload.captured_at}`
       );
     } catch (err) {
-      await appendLocationPush(payload);
-      refreshSyncStoreCounts();
-      scheduleBackgroundGpsFlush();
-      trackingDevLog(
-        "queued_offline",
-        err instanceof Error ? err.message : "upload failed"
-      );
+      const message = err instanceof Error ? err.message : "upload failed";
+      if (isDutySessionMismatchMessage(message)) {
+        trackingDevLog("duty_session_mismatch", message);
+      } else {
+        await appendLocationPush(payload);
+        refreshSyncStoreCounts();
+        scheduleBackgroundGpsFlush();
+        trackingDevLog("queued_offline", message);
+      }
       throw err;
     }
   } finally {
@@ -112,10 +115,16 @@ export async function syncLocationPoint(payload: LocationPushPayload): Promise<v
 
 /** Flush MMKV offline queue — used on reconnect / app foreground. */
 export async function flushOfflineLocationQueue(): Promise<number> {
-  const queue = await readLocationPushQueue();
-  if (!queue.length || locationUploadInFlight) {
+  const rawQueue = await readLocationPushQueue();
+  if (!rawQueue.length || locationUploadInFlight) {
     return 0;
   }
+
+  const activeDutyId = await getActiveDutySessionId();
+  const queue = rawQueue.map((point) => ({
+    ...point,
+    duty_session_id: activeDutyId ?? point.duty_session_id
+  }));
 
   locationUploadInFlight = true;
   try {
@@ -124,7 +133,11 @@ export async function flushOfflineLocationQueue(): Promise<number> {
     } else {
       try {
         await pushLocationsBulk(queue);
-      } catch {
+      } catch (bulkErr) {
+        const bulkMessage = bulkErr instanceof Error ? bulkErr.message : "";
+        if (isDutySessionMismatchMessage(bulkMessage)) {
+          throw bulkErr;
+        }
         for (const point of queue) {
           await pushLocation(point);
         }
@@ -138,10 +151,12 @@ export async function flushOfflineLocationQueue(): Promise<number> {
     trackingDevLog("offline_flush", `synced=${queue.length}`);
     return queue.length;
   } catch (err) {
-    trackingDevLog(
-      "offline_flush_failed",
-      err instanceof Error ? err.message : "flush failed"
-    );
+    const message = err instanceof Error ? err.message : "flush failed";
+    if (isDutySessionMismatchMessage(message)) {
+      await clearLocationPushQueue();
+      refreshSyncStoreCounts();
+    }
+    trackingDevLog("offline_flush_failed", message);
     return 0;
   } finally {
     locationUploadInFlight = false;

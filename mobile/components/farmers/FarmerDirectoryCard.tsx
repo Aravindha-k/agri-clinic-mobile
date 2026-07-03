@@ -1,12 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
+import { memo } from "react";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { useI18n } from "../../../src/i18n/I18nContext";
-import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
+import { Colors, Enterprise, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 import type { FarmerWorkflowMeta, VisitPriorityLabel } from "../../lib/workQueue";
 import type { MobileFarmer } from "../../lib/farmersApi";
 import { farmerVisitCount } from "../../lib/farmerStatus";
 import { buildFarmerWorkflowMeta } from "../../lib/workQueue";
 import { FlatCard } from "../layout/FlatCard";
+import { PressableCard } from "../ui/PressableCard";
 
 function priorityStyles(label: VisitPriorityLabel) {
   switch (label) {
@@ -43,7 +45,14 @@ type Props = {
   onVisit: () => void;
 };
 
-export function FarmerDirectoryCard({ farmer, workflow, onPress, onCall, onMap, onVisit }: Props) {
+export const FarmerDirectoryCard = memo(function FarmerDirectoryCard({
+  farmer,
+  workflow,
+  onPress,
+  onCall,
+  onMap,
+  onVisit
+}: Props) {
   const { t } = useI18n();
   const meta = workflow ?? buildFarmerWorkflowMeta(farmer);
   const village = farmer.village_name || farmer.village;
@@ -66,14 +75,11 @@ export function FarmerDirectoryCard({ farmer, workflow, onPress, onCall, onMap, 
   }
 
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => [styles.wrap, pressed && { opacity: 0.98 }]}
-    >
-      <FlatCard style={styles.card}>
+    <PressableCard onPress={onPress} accessibilityRole="button" style={styles.wrap}>
+      <FlatCard variant="list" style={styles.card}>
         <View style={styles.topBlock}>
           <View style={styles.nameRow}>
+            <View style={styles.nameDot} />
             <Text style={styles.name} numberOfLines={1}>
               {displayName}
             </Text>
@@ -100,6 +106,8 @@ export function FarmerDirectoryCard({ farmer, workflow, onPress, onCall, onMap, 
             {t("work.lastVisitLabel", { date: lastVisitLabel })}
           </Text>
         </View>
+
+        <View style={styles.divider} />
 
         <View style={styles.buttonRow}>
           <Pressable
@@ -136,16 +144,16 @@ export function FarmerDirectoryCard({ farmer, workflow, onPress, onCall, onMap, 
             }}
             style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.92 }]}
           >
-            <Ionicons name="add-circle-outline" size={12} color={Colors.surface} />
+            <Ionicons name="add-circle-outline" size={12} color={Colors.onPrimary} />
             <Text style={styles.primaryBtnText}>
               {neverVisited ? t("farmers.firstVisit") : t("work.startVisit")}
             </Text>
           </Pressable>
         </View>
       </FlatCard>
-    </Pressable>
+    </PressableCard>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrap: {
@@ -153,18 +161,24 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.lg
   },
   card: {
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.lg
   },
   topBlock: {
-    gap: 2,
+    gap: 6,
     minWidth: 0
   },
   nameRow: {
     alignItems: "center",
     flexDirection: "row",
     gap: 8
+  },
+  nameDot: {
+    backgroundColor: Colors.brand700,
+    borderRadius: 4,
+    height: 8,
+    width: 8
   },
   name: {
     color: Colors.text1,
@@ -194,28 +208,34 @@ const styles = StyleSheet.create({
   lastVisit: {
     color: Colors.text4,
     fontSize: FontSize.xs,
-    marginTop: 2
+    marginTop: 4
+  },
+  divider: {
+    backgroundColor: Colors.border,
+    height: StyleSheet.hairlineWidth
   },
   buttonRow: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 6
+    gap: Spacing.sm,
+    paddingTop: 2
   },
   outlineBtn: {
     alignItems: "center",
     backgroundColor: Colors.bg,
     borderColor: Colors.border,
-    borderRadius: Radius.inner,
-    borderWidth: 1,
+    borderRadius: Enterprise.radius.button,
+    borderWidth: StyleSheet.hairlineWidth,
     flex: 1,
     flexDirection: "row",
-    gap: 3,
-    height: 28,
-    justifyContent: "center"
+    gap: 4,
+    height: 40,
+    justifyContent: "center",
+    minHeight: 40
   },
   outlineBtnText: {
-    color: Colors.text3,
-    fontSize: 11,
+    color: Colors.text2,
+    fontSize: FontSize.caption,
     fontWeight: FontWeight.semibold
   },
   btnDisabled: {
@@ -224,16 +244,17 @@ const styles = StyleSheet.create({
   primaryBtn: {
     alignItems: "center",
     backgroundColor: Colors.brand700,
-    borderRadius: Radius.inner,
-    flex: 1.35,
+    borderRadius: Enterprise.radius.button,
+    flex: 1.5,
     flexDirection: "row",
-    gap: 3,
-    height: 28,
-    justifyContent: "center"
+    gap: 4,
+    height: 44,
+    justifyContent: "center",
+    minHeight: 44
   },
   primaryBtnText: {
-    color: Colors.surface,
-    fontSize: 11,
+    color: Colors.onPrimary,
+    fontSize: FontSize.body,
     fontWeight: FontWeight.bold
   }
 });

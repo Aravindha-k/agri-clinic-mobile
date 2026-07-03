@@ -2,20 +2,21 @@ import { Ionicons } from "@expo/vector-icons";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useState } from "react";
 import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
-import { EmptyState } from "../components/EmptyState";
-import { AppHeader, PremiumCard, PrimaryButton } from "../components/ui";
-import { formatRelativeTime } from "../utils/formatRelativeTime";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { EmptyState, PrimaryButton } from "../../mobile/components/ui";
+import { useI18n } from "../i18n/I18nContext";
+import { formatRelativeTimeLocalized } from "../i18n";
 import { RootStackParamList } from "../navigation/types";
 import { useOfflineSync } from "../storage/OfflineSyncContext";
-import { useTheme } from "../theme";
 import { refreshControlProps } from "../theme/refresh";
 import { formatDisplayDateTime } from "../utils/format";
+import { FlatCard, ScreenCanvas, StackScreenHeader } from "../../mobile/components/layout";
+import { Colors, Enterprise, FontSize, FontWeight, Layout, Radius, Spacing } from "../../mobile/lib/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "OfflineSync">;
 
 export function OfflineSyncScreen({ navigation }: Props) {
-  const { theme } = useTheme();
-  const c = theme.colors;
+  const { t, language } = useI18n();
   const { queue, syncing, syncAll, refreshQueue, lastSyncAt } = useOfflineSync();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -26,38 +27,48 @@ export function OfflineSyncScreen({ navigation }: Props) {
   }, [refreshQueue]);
 
   const count = queue.length;
+  const subtitle =
+    count > 0
+      ? t(count === 1 ? "offlineSync.subtitleQueued" : "offlineSync.subtitleQueued_plural", { count })
+      : t("offlineSync.subtitleClear");
 
   return (
-    <View style={[styles.screen, { backgroundColor: c.offlineBackground, flex: 1 }]}>
-      <AppHeader
-        title="Offline sync"
-        subtitle={count ? `${count} visit${count === 1 ? "" : "s"} queued` : "All visits synced"}
-        variant="dark"
+    <SafeAreaView style={styles.screen} edges={["top"]}>
+      <ScreenCanvas />
+      <StackScreenHeader
+        title={t("offlineSync.title")}
+        subtitle={subtitle}
         onBack={() => navigation.goBack()}
+        includeSafeTop={false}
       />
-      <View style={styles.hero}>
-        <View style={styles.cloudWrap}>
-          <Ionicons name="cloud-upload" size={40} color={c.primaryLight} />
-          <View style={styles.cloudRing} />
-        </View>
-        <Text style={[styles.heroTitle, { color: c.offlineText }]}>
-          {count ? "Waiting to upload" : "You're all caught up"}
-        </Text>
-        <Text style={[styles.heroSub, { color: c.offlineMuted }]}>
-          {count ? "Visits save locally and sync when you're online." : "Every field visit has been sent to the server."}
-        </Text>
-      </View>
-      <View style={styles.actions}>
+
+      <View style={styles.body}>
+        <FlatCard style={styles.hero}>
+          <View style={styles.cloudWrap}>
+            <Ionicons name="cloud-upload" size={36} color={Colors.brand700} />
+          </View>
+          <Text style={styles.heroTitle}>
+            {count ? t("offlineSync.heroWaiting") : t("offlineSync.heroClear")}
+          </Text>
+          <Text style={styles.heroSub}>
+            {count ? t("offlineSync.heroWaitingHint") : t("offlineSync.heroClearHint")}
+          </Text>
+        </FlatCard>
+
         <PrimaryButton
-          title={syncing ? "Syncing…" : "Sync now"}
+          label={syncing ? t("offlineSync.syncing") : t("offlineSync.syncNow")}
           onPress={() => void syncAll()}
           loading={syncing}
           disabled={!count}
+          style={styles.syncBtn}
         />
-        <Text style={[styles.meta, { color: c.offlineMuted }]}>
-          {lastSyncAt ? `Last synced ${formatRelativeTime(lastSyncAt)}` : "Not synced yet"}
+        <Text style={styles.meta}>
+          {lastSyncAt
+            ? t("offlineSync.lastSynced", { time: formatRelativeTimeLocalized(language, lastSyncAt) })
+            : t("offlineSync.notSyncedYet")}
         </Text>
       </View>
+
       <FlatList
         data={queue}
         keyExtractor={(item) => item.id}
@@ -65,53 +76,106 @@ export function OfflineSyncScreen({ navigation }: Props) {
         contentContainerStyle={[styles.list, !count && styles.listEmpty]}
         ListEmptyComponent={
           <EmptyState
-            title="All synced"
-            message="No visits waiting to upload. Field work is fully backed up."
-            illustration="sync"
-            actionLabel="Back"
+            icon="cloud-upload-outline"
+            title={t("offlineSync.emptyTitle")}
+            subtitle={t("offlineSync.emptyMessage")}
+            action={t("offlineSync.emptyAction")}
             onAction={() => navigation.goBack()}
           />
         }
         renderItem={({ item }) => (
-          <PremiumCard elevated style={{ backgroundColor: c.offlineCard }}>
+          <FlatCard style={styles.queueCard}>
             <View style={styles.rowTop}>
-              <Ionicons name="cloud-upload-outline" size={20} color={c.primaryLight} />
-              <Text style={[styles.name, { color: c.offlineText }]}>{item.values.farmer_name || "Farmer"}</Text>
+              <Ionicons name="cloud-upload-outline" size={20} color={Colors.brand700} />
+              <Text style={styles.name}>{item.values.farmer_name || "Farmer"}</Text>
             </View>
-            <Text style={{ color: c.offlineMuted, fontSize: 13, marginTop: 6 }}>{formatDisplayDateTime(item.createdAt)}</Text>
-            {item.lastError ? <Text style={{ color: c.danger, fontSize: 13, marginTop: 8 }}>{item.lastError}</Text> : null}
-            <Text style={{ color: c.offlineMuted, fontSize: 12, marginTop: 6 }}>Attempts: {item.attempts}</Text>
-          </PremiumCard>
+            <Text style={styles.queueMeta}>{formatDisplayDateTime(item.createdAt)}</Text>
+            {item.lastError ? (
+              <Text style={styles.queueWarn}>{t("offlineSync.uploadPending")}</Text>
+            ) : null}
+            <Text style={styles.queueMeta}>
+              {t("offlineSync.attempts", { count: item.attempts })}
+            </Text>
+          </FlatCard>
         )}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1 },
-  hero: { alignItems: "center", paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8 },
+  screen: {
+    backgroundColor: Colors.bg,
+    flex: 1
+  },
+  body: {
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.screen,
+    paddingTop: Spacing.sm
+  },
+  hero: {
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.lg
+  },
   cloudWrap: {
     alignItems: "center",
-    height: 88,
+    backgroundColor: Colors.brand50,
+    borderRadius: Radius.pill,
+    height: 64,
     justifyContent: "center",
-    marginBottom: 14,
-    width: 88
+    width: 64
   },
-  cloudRing: {
-    borderColor: "rgba(95,214,142,0.35)",
-    borderRadius: 999,
-    borderWidth: 2,
-    height: 88,
-    position: "absolute",
-    width: 88
+  heroTitle: {
+    color: Colors.text1,
+    fontSize: FontSize.h1,
+    fontWeight: FontWeight.bold,
+    textAlign: "center"
   },
-  heroTitle: { fontSize: 20, fontWeight: "900", textAlign: "center" },
-  heroSub: { fontSize: 14, lineHeight: 20, marginTop: 8, textAlign: "center" },
-  actions: { gap: 10, paddingHorizontal: 16, paddingBottom: 12 },
-  list: { gap: 12, padding: 16, paddingBottom: 32 },
-  listEmpty: { flexGrow: 1 },
-  meta: { fontSize: 12, textAlign: "center" },
-  rowTop: { alignItems: "center", flexDirection: "row", gap: 10 },
-  name: { flex: 1, fontSize: 16, fontWeight: "900" }
+  heroSub: {
+    color: Colors.text3,
+    fontSize: FontSize.md,
+    lineHeight: 20,
+    textAlign: "center"
+  },
+  syncBtn: {
+    minHeight: Layout.buttonHeight
+  },
+  meta: {
+    color: Colors.text3,
+    fontSize: FontSize.sm,
+    marginBottom: Spacing.sm,
+    textAlign: "center"
+  },
+  list: {
+    gap: Spacing.sm,
+    padding: Spacing.screen,
+    paddingBottom: Layout.stackScrollBottom
+  },
+  listEmpty: {
+    flexGrow: 1
+  },
+  queueCard: {
+    gap: Spacing.xs
+  },
+  rowTop: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: Spacing.sm
+  },
+  name: {
+    color: Colors.text1,
+    flex: 1,
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.bold
+  },
+  queueMeta: {
+    color: Colors.text3,
+    fontSize: FontSize.md
+  },
+  queueWarn: {
+    color: Colors.amberText,
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.medium
+  }
 });

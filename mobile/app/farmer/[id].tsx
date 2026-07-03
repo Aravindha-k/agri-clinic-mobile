@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import type { RouteProp } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -9,11 +10,12 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import type { Visit } from "../../../src/api/visits";
 import { useRefreshControlProps } from "../../../src/hooks/useRefreshControlProps";
+import { useI18n } from "../../../src/i18n/I18nContext";
 import { useSafeAreaInsetsCompat } from "../../../src/hooks/useSafeAreaInsetsCompat";
 import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
 import { navigateFarmerMap } from "../../../src/navigation/navigateFarmerMap";
@@ -21,15 +23,11 @@ import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
 import { getVisitDisplayDateTime } from "../../../src/utils/format";
 import { prefillFromFarmer } from "../../../src/utils/farmerPrefill";
+import type { WorkStackParamList } from "../../../src/navigation/types";
 import { FarmerPhotoAvatar } from "../../components/farmers/FarmerPhotoAvatar";
 import { EmptyState, GhostButton, PrimaryButton, SectionHeader, Skeleton, StatusChip } from "../../components/ui";
 import { FadeInSection, entranceListStagger, entranceStagger } from "../../components/ui/FadeInSection";
-import { ScreenEntranceShell, HeaderHero } from "../../components/layout";
-import {
-  HEADER_IMAGE_POSITION,
-  resolveScreenHeaderHeight,
-  SCREEN_HEADER_IMAGES
-} from "../../lib/screenHeaderImages";
+import { ScreenEntranceShell, StackScreenHeader } from "../../components/layout";
 import {
   cropFromVisit,
   fetchMobileFarmerProfile,
@@ -77,13 +75,14 @@ function KpiCell({ value, label }: { value: string | number; label: string }) {
 }
 
 function CropCard({ crop }: { crop: CurrentCropCard }) {
+  const { t } = useI18n();
   return (
     <View style={[styles.cropCard, { backgroundColor: CROP_CARD_BG[crop.tone] }]}>
       <Text style={[styles.cropName, { color: CROP_CARD_TEXT[crop.tone] }]} numberOfLines={1}>
         {crop.crop_name}
       </Text>
       <Text style={[styles.cropMeta, { color: CROP_CARD_TEXT[crop.tone] }]} numberOfLines={2}>
-        {[crop.field_name, crop.stage].filter(Boolean).join(" · ") || "Active crop"}
+        {[crop.field_name, crop.stage].filter(Boolean).join(" · ") || t("farmerDetail.activeCrop")}
       </Text>
     </View>
   );
@@ -98,6 +97,7 @@ function FieldAccordionItem({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <View style={styles.fieldCard}>
       <Pressable onPress={onToggle} style={styles.fieldHead}>
@@ -105,7 +105,7 @@ function FieldAccordionItem({
           <Text style={styles.fieldName}>{field.land_name}</Text>
           <Text style={styles.fieldMeta}>
             {[field.land_size, field.soil_type, field.irrigation_type].filter(Boolean).join(" · ") ||
-              "Details not recorded"}
+              t("farmerDetail.detailsNotRecorded")}
           </Text>
         </View>
         <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={18} color={Colors.text3} />
@@ -113,7 +113,7 @@ function FieldAccordionItem({
       {expanded ? (
         <View style={styles.fieldCrops}>
           {field.crops.length === 0 ? (
-            <Text style={styles.fieldEmpty}>No crops linked to this field.</Text>
+            <Text style={styles.fieldEmpty}>{t("farmerDetail.noCropsOnField")}</Text>
           ) : (
             field.crops.map((crop, index) => (
               <View key={`${crop.crop_name}-${index}`} style={styles.fieldCropRow}>
@@ -155,12 +155,11 @@ function TimelineItem({ visit, isLast }: { visit: Visit; isLast: boolean }) {
 
 export default function FarmerProfileScreen() {
   useSecureScreen();
+  const { t } = useI18n();
   const navigation = useNavigation<any>();
-  const route = useRoute<any>();
-  const farmerId = Number(route.params?.id);
+  const route = useRoute<RouteProp<WorkStackParamList, "FarmerDetail">>();
+  const farmerId = Number(route.params.id);
   const { top: safeTop, bottom: safeBottom } = useSafeAreaInsetsCompat();
-  const { height: screenH } = useWindowDimensions();
-  const headerHeroHeight = resolveScreenHeaderHeight(screenH);
   const refreshControlProps = useRefreshControlProps();
   const { bumpAfterFarmerPhotoChange } = useFieldDataRefresh();
 
@@ -176,7 +175,7 @@ export default function FarmerProfileScreen() {
   const load = useCallback(
     async (isRefresh = false) => {
       if (!Number.isFinite(farmerId) || farmerId <= 0) {
-        setError("Invalid farmer.");
+        setError(t("farmerDetail.invalidFarmer"));
         setLoading(false);
         return;
       }
@@ -191,12 +190,15 @@ export default function FarmerProfileScreen() {
         setRefreshing(false);
       }
     },
-    [farmerId]
+    [farmerId, t]
   );
 
   useEffect(() => {
+    setProfile(null);
+    setLoading(true);
+    setError("");
     void load(false);
-  }, [load]);
+  }, [farmerId, load]);
 
   const visitsPreview = useMemo(() => {
     if (!profile) return [];
@@ -219,16 +221,16 @@ export default function FarmerProfileScreen() {
 
   function openOptionsMenu() {
     if (!profile) return;
-    Alert.alert("Farmer options", profile.farmer.name || "Farmer", [
+    Alert.alert(t("farmerDetail.optionsTitle"), profile.farmer.name || t("farmerDetail.title"), [
       {
-        text: "Refresh profile",
+        text: t("farmerDetail.refreshProfile"),
         onPress: () => {
           setRefreshing(true);
           void load(true);
         }
       },
       {
-        text: "View on map",
+        text: t("farmerDetail.viewOnMap"),
         onPress: () =>
           navigateFarmerMap(navigation, {
             farmerId: profile.farmer.id,
@@ -238,7 +240,7 @@ export default function FarmerProfileScreen() {
             longitude: profile.farmer.longitude
           })
       },
-      { text: "Cancel", style: "cancel" }
+      { text: t("common.cancel"), style: "cancel" }
     ]);
   }
 
@@ -272,41 +274,37 @@ export default function FarmerProfileScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.screen, { paddingTop: safeTop }]}>
-        <View style={styles.topBar}>
-          <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={18} color={Colors.text1} />
-          </Pressable>
-          <Text style={styles.topTitle}>Farmer profile</Text>
-          <View style={styles.backBtn} />
-        </View>
+      <SafeAreaView style={styles.screen} edges={["top"]}>
+        <StackScreenHeader
+          title={t("farmerDetail.title")}
+          onBack={() => navigation.goBack()}
+          includeSafeTop={false}
+        />
         <View style={styles.loadingWrap}>
           <Skeleton width="100%" height={160} borderRadius={Radius.card} />
           <Skeleton width="100%" height={72} />
           <Skeleton width="100%" height={120} borderRadius={Radius.card} />
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (error || !profile) {
     return (
-      <View style={[styles.screen, { paddingTop: safeTop }]}>
-        <View style={styles.topBar}>
-          <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={18} color={Colors.text1} />
-          </Pressable>
-          <Text style={styles.topTitle}>Farmer profile</Text>
-          <View style={styles.backBtn} />
-        </View>
+      <SafeAreaView style={styles.screen} edges={["top"]}>
+        <StackScreenHeader
+          title={t("farmerDetail.title")}
+          onBack={() => navigation.goBack()}
+          includeSafeTop={false}
+        />
         <EmptyState
           icon="person-outline"
-          title="Could not load farmer"
-          subtitle={error || "Try again."}
-          action="Retry"
+          title={t("farmerDetail.loadError")}
+          subtitle={error || t("farmerDetail.loadErrorHint")}
+          action={t("common.retry")}
           onAction={() => void load(false)}
         />
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -314,29 +312,20 @@ export default function FarmerProfileScreen() {
   const phone = farmer.phone?.trim() || "—";
 
   return (
-    <ScreenEntranceShell style={styles.screen}>
+    <ScreenEntranceShell style={styles.screen} withBrandHeader={false}>
       {(entranceTick) => (
         <>
-      <HeaderHero
-        imageSource={SCREEN_HEADER_IMAGES.visit}
-        height={headerHeroHeight}
-        contentPosition={HEADER_IMAGE_POSITION.visit}
-        showLogo
-        alignContent="top"
-        safeTop={safeTop}
-      >
-        <View style={styles.heroNav}>
-          <Pressable onPress={() => navigation.goBack()} style={styles.heroNavBtn}>
-            <Ionicons name="arrow-back" size={18} color="#FFFFFF" />
+      <StackScreenHeader
+        title={t("farmerDetail.title")}
+        subtitle={profile.farmer.name || undefined}
+        onBack={() => navigation.goBack()}
+        includeSafeTop
+        right={
+          <Pressable onPress={openOptionsMenu} style={styles.menuBtn} hitSlop={8}>
+            <Ionicons name="ellipsis-vertical" size={20} color={Colors.text2} />
           </Pressable>
-          <Text style={styles.heroNavTitle} numberOfLines={1}>
-            Farmer profile
-          </Text>
-          <Pressable onPress={openOptionsMenu} style={styles.heroNavBtn}>
-            <Ionicons name="ellipsis-vertical" size={18} color="#FFFFFF" />
-          </Pressable>
-        </View>
-      </HeaderHero>
+        }
+      />
 
       <ScrollView
         style={styles.scrollView}
@@ -384,38 +373,38 @@ export default function FarmerProfileScreen() {
             </View>
           </View>
           <View style={styles.heroStats}>
-            <StatChip label="Land area" value={profile.land_area || "—"} />
-            <StatChip label="Irrigation" value={profile.irrigation_type || "—"} />
-            <StatChip label="Soil type" value={profile.soil_type || "—"} />
+            <StatChip label={t("farmerDetail.landArea")} value={profile.land_area || "—"} />
+            <StatChip label={t("farmerDetail.irrigation")} value={profile.irrigation_type || "—"} />
+            <StatChip label={t("farmerDetail.soilType")} value={profile.soil_type || "—"} />
           </View>
         </View>
         </FadeInSection>
 
         <FadeInSection replayKey={entranceTick} delay={entranceStagger(2)} variant="card">
         <View style={styles.kpiStrip}>
-          <KpiCell value={profile.total_visits} label="Total visits" />
-          <KpiCell value={profile.last_visit_label} label="Last visit" />
+          <KpiCell value={profile.total_visits} label={t("farmerDetail.totalVisits")} />
+          <KpiCell value={profile.last_visit_label} label={t("farmerDetail.lastVisit")} />
         </View>
 
         {lastVisit ? (
           <View style={styles.section}>
-            <SectionHeader title="LAST VISIT" />
+            <SectionHeader title={t("farmerDetail.lastVisitSection").toUpperCase()} />
             <View style={styles.lastVisitCard}>
               {lastVisitCrop ? (
                 <Text style={styles.lastVisitLine}>
-                  <Text style={styles.lastVisitLabel}>Crop: </Text>
+                  <Text style={styles.lastVisitLabel}>{t("farmerDetail.cropLabel")}: </Text>
                   {lastVisitCrop}
                 </Text>
               ) : null}
               {lastVisitProblem ? (
                 <Text style={styles.lastVisitLine}>
-                  <Text style={styles.lastVisitLabel}>Problem: </Text>
+                  <Text style={styles.lastVisitLabel}>{t("farmerDetail.problemLabel")}: </Text>
                   {lastVisitProblem}
                 </Text>
               ) : null}
               {lastVisitRecommendation ? (
                 <Text style={styles.lastVisitLine}>
-                  <Text style={styles.lastVisitLabel}>Recommendation: </Text>
+                  <Text style={styles.lastVisitLabel}>{t("farmerDetail.recommendationLabel")}: </Text>
                   {lastVisitRecommendation}
                 </Text>
               ) : null}
@@ -426,9 +415,9 @@ export default function FarmerProfileScreen() {
 
         <FadeInSection replayKey={entranceTick} delay={entranceStagger(3)} variant="card">
         <View style={styles.section}>
-          <SectionHeader title="CURRENT CROPS" />
+          <SectionHeader title={t("farmerDetail.currentCrops").toUpperCase()} />
           {profile.current_crops.length === 0 ? (
-            <Text style={styles.emptyLine}>No active crops recorded.</Text>
+            <Text style={styles.emptyLine}>{t("farmerDetail.noActiveCrops")}</Text>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cropScroll}>
               {profile.current_crops.map((crop) => (
@@ -441,9 +430,9 @@ export default function FarmerProfileScreen() {
 
         <FadeInSection replayKey={entranceTick} delay={entranceStagger(4)} variant="card">
         <View style={styles.section}>
-          <SectionHeader title="FIELDS & LAND" />
+          <SectionHeader title={t("farmerDetail.fieldsAndLand").toUpperCase()} />
           {profile.fields.length === 0 ? (
-            <Text style={styles.emptyLine}>No fields registered for this farmer.</Text>
+            <Text style={styles.emptyLine}>{t("farmerDetail.noFields")}</Text>
           ) : (
             profile.fields.map((field, index) => (
               <FadeInSection
@@ -464,12 +453,12 @@ export default function FarmerProfileScreen() {
 
         <View style={styles.section}>
           <SectionHeader
-            title="VISIT HISTORY"
-            action={profile.visits.length > 5 ? (showAllVisits ? "Show less" : "View all") : undefined}
+            title={t("farmerDetail.visitHistory").toUpperCase()}
+            action={profile.visits.length > 5 ? (showAllVisits ? t("farmerDetail.showLess") : t("farmerDetail.viewAll")) : undefined}
             onAction={() => setShowAllVisits((v) => !v)}
           />
           {profile.visits.length === 0 ? (
-            <Text style={styles.emptyLine}>No visits logged yet.</Text>
+            <Text style={styles.emptyLine}>{t("farmerDetail.noVisits")}</Text>
           ) : (
             visitsPreview.map((visit, index) => (
               <FadeInSection
@@ -497,19 +486,19 @@ export default function FarmerProfileScreen() {
 
       <View style={[styles.bottomBar, { paddingBottom: Math.max(safeBottom, 12) }]}>
         <GhostButton
-          label="Call"
+          label={t("farmerDetail.call")}
           onPress={openCall}
           icon={<Ionicons name="call-outline" size={16} color={Colors.text2} />}
           style={styles.bottomGhost}
         />
         <GhostButton
-          label="Map"
+          label={t("farmerDetail.map")}
           onPress={openMap}
           icon={<Ionicons name="map-outline" size={16} color={Colors.text2} />}
           style={styles.bottomGhost}
         />
         <PrimaryButton
-          label="Start revisit →"
+          label={`${t("farmerDetail.startRevisit")} →`}
           onPress={openNewVisit}
           style={styles.bottomPrimary}
           icon={<Ionicons name="arrow-forward" size={16} color={Colors.surface} />}
@@ -529,6 +518,12 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1
   },
+  menuBtn: {
+    alignItems: "center",
+    height: 40,
+    justifyContent: "center",
+    width: 40
+  },
   topBar: {
     alignItems: "center",
     flexDirection: "row",
@@ -544,23 +539,20 @@ const styles = StyleSheet.create({
   },
   heroNavBtn: {
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.22)",
-    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     height: 32,
     justifyContent: "center",
     width: 32
   },
   heroNavTitle: {
-    color: "#FFFFFF",
+    color: Colors.text1,
     flex: 1,
     fontSize: FontSize.lg,
     fontWeight: FontWeight.bold,
-    textAlign: "center",
-    textShadowColor: "rgba(0,0,0,0.45)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4
+    textAlign: "center"
   },
   backBtn: {
     alignItems: "center",
@@ -607,7 +599,7 @@ const styles = StyleSheet.create({
   },
   codeBadge: {
     alignSelf: "flex-start",
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: Colors.onPrimaryGlass,
     borderRadius: Radius.sm,
     paddingHorizontal: 8,
     paddingVertical: 4
@@ -640,7 +632,7 @@ const styles = StyleSheet.create({
     gap: 8
   },
   statChip: {
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: Colors.onPrimaryGlass,
     borderRadius: Radius.sm,
     flex: 1,
     gap: 2,
@@ -824,7 +816,6 @@ const styles = StyleSheet.create({
     flex: 1
   },
   bottomPrimary: {
-    flex: 2,
-    height: 42
+    flex: 2
   }
 });

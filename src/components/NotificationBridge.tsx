@@ -36,7 +36,7 @@ export function NotificationBridge() {
     lastLoginNotice.current = loginNotice;
     if (loginNotice.includes("another device")) {
       push({ type: "session_replaced", title: "Signed out", message: SESSION_REPLACED_MESSAGE });
-    } else if (loginNotice.includes("Session expired") || loginNotice.includes("sign in")) {
+    } else if (loginNotice === SESSION_EXPIRED_MESSAGE || loginNotice.includes("Session expired")) {
       push({ type: "session_expired", title: "Session ended", message: SESSION_EXPIRED_MESSAGE });
     } else {
       push({ type: "info", title: "Account", message: loginNotice });

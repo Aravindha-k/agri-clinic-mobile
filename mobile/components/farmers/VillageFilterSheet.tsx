@@ -14,6 +14,7 @@ import {
 import { getOptionLabel } from "../../../src/api/masters";
 import type { MasterOption } from "../../../src/api/masters";
 import { useSafeAreaInsetsCompat } from "../../../src/hooks/useSafeAreaInsetsCompat";
+import { useI18n } from "../../../src/i18n/I18nContext";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 
 export type VillageFilterSheetRef = {
@@ -32,11 +33,11 @@ type Props = {
   onSelect: (villageId: string, villageName: string) => void;
 };
 
-function groupVillages(villages: MasterOption[]): VillageRow[] {
+function groupVillages(villages: MasterOption[], otherLabel: string): VillageRow[] {
   return villages.map((v) => ({
     id: String(v.id),
     title: getOptionLabel(v),
-    district: v.district_name || "Other"
+    district: v.district_name || otherLabel
   }));
 }
 
@@ -45,6 +46,7 @@ export const VillageFilterSheet = forwardRef<VillageFilterSheetRef, Props>(funct
   ref
 ) {
   const insets = useSafeAreaInsetsCompat();
+  const { t } = useI18n();
   const searchRef = useRef<TextInput>(null);
   const [visible, setVisible] = useState(false);
   const [query, setQuery] = useState("");
@@ -61,13 +63,13 @@ export const VillageFilterSheet = forwardRef<VillageFilterSheetRef, Props>(funct
   }));
 
   const rows = useMemo(() => {
-    const all = groupVillages(villages);
+    const all = groupVillages(villages, t("farmers.otherDistrict"));
     const needle = query.trim().toLowerCase();
     if (!needle) return all;
     return all.filter(
       (row) => row.title.toLowerCase().includes(needle) || row.district.toLowerCase().includes(needle)
     );
-  }, [query, villages]);
+  }, [query, t, villages]);
 
   const sections = useMemo(() => {
     const map = new Map<string, VillageRow[]>();
@@ -103,7 +105,7 @@ export const VillageFilterSheet = forwardRef<VillageFilterSheetRef, Props>(funct
           <Pressable onPress={handleClose} hitSlop={12} style={styles.closeBtn}>
             <Ionicons name="close" size={26} color={Colors.text1} />
           </Pressable>
-          <Text style={styles.title}>Filter by village</Text>
+          <Text style={styles.title}>{t("farmers.filterByVillage")}</Text>
           <View style={styles.closeBtn} />
         </View>
 
@@ -113,7 +115,7 @@ export const VillageFilterSheet = forwardRef<VillageFilterSheetRef, Props>(funct
             ref={searchRef}
             value={query}
             onChangeText={setQuery}
-            placeholder="Search village or district"
+            placeholder={t("farmers.searchPlaceholder")}
             placeholderTextColor={Colors.text4}
             style={styles.searchInput}
           />

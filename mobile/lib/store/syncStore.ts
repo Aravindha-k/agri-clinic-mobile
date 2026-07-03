@@ -7,10 +7,12 @@ type SyncStoreState = {
   unreadNotifCount: number;
   lastSyncedAt: string | null;
   isSyncing: boolean;
+  globalStripVisible: boolean;
   setPending: (visits: number, gps: number, failed: number) => void;
   setUnreadNotifCount: (count: number) => void;
   setLastSynced: (time: string) => void;
   setSyncing: (value: boolean) => void;
+  setGlobalStripVisible: (value: boolean) => void;
 };
 
 export const useSyncStore = create<SyncStoreState>((set) => ({
@@ -20,6 +22,7 @@ export const useSyncStore = create<SyncStoreState>((set) => ({
   unreadNotifCount: 0,
   lastSyncedAt: null,
   isSyncing: false,
+  globalStripVisible: false,
   setPending: (visits, gps, failed) =>
     set({
       pendingVisitsCount: visits,
@@ -28,5 +31,6 @@ export const useSyncStore = create<SyncStoreState>((set) => ({
     }),
   setUnreadNotifCount: (count) => set({ unreadNotifCount: Math.max(0, count) }),
   setLastSynced: (time) => set({ lastSyncedAt: time }),
-  setSyncing: (value) => set({ isSyncing: value })
+  setSyncing: (value) => set({ isSyncing: value }),
+  setGlobalStripVisible: (value) => set({ globalStripVisible: value })
 }));

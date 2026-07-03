@@ -1,22 +1,26 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { getProblemCategories, type ProblemCategory } from "../../src/api/problems";
-import { useSafeAreaInsetsCompat } from "../../src/hooks/useSafeAreaInsetsCompat";
+import { useRefreshControlProps } from "../../src/hooks/useRefreshControlProps";
+import { useSecureScreen } from "../../src/hooks/useSecureScreen";
+import { useI18n } from "../../src/i18n/I18nContext";
 import { EmptyState, SearchBar } from "../components/ui";
-import { EntranceBlocks } from "../components/ui/EntranceBlocks";
-import { FadeInSection, entranceListStagger, entranceStagger } from "../components/ui/FadeInSection";
-import { ScreenEntranceShell } from "../components/layout";
-import { ScreenLoader } from "../components/layout/ScreenLoader";
-import { Colors, FontSize, FontWeight, Radius, Spacing } from "../lib/theme";
+import { FlatCard, ScreenCanvas, ScreenLoader, StackScreenHeader } from "../components/layout";
+import { useScreenTopEdges } from "../hooks/useScreenTopEdges";
+import { Colors, FontSize, FontWeight, Layout, Radius, Spacing } from "../lib/theme";
 
 export default function ProblemsCatalogScreen() {
+  useSecureScreen();
   const navigation = useNavigation<any>();
-  const { top: safeTop } = useSafeAreaInsetsCompat();
+  const { t } = useI18n();
+  const topEdges = useScreenTopEdges();
+  const refreshControlProps = useRefreshControlProps();
   const [categories, setCategories] = useState<ProblemCategory[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -24,22 +28,20 @@ export default function ProblemsCatalogScreen() {
       setError("");
       setCategories(await getProblemCategories());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load problem catalog.");
+      setError(err instanceof Error ? err.message : t("problems.loadError"));
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  if (loading) {
-    return (
-      <ScreenEntranceShell style={[styles.screen, { paddingTop: safeTop }]}>
-        <ScreenLoader />
-      </ScreenEntranceShell>
-    );
+  async function onRefresh() {
+    setRefreshing(true);
+    await load();
   }
 
   const filtered = categories.filter((row) => {
@@ -49,107 +51,86 @@ export default function ProblemsCatalogScreen() {
   });
 
   return (
-    <ScreenEntranceShell style={[styles.screen, { paddingTop: safeTop }]}>
-      {(entranceTick) => (
-        <>
-          <FadeInSection replayKey={entranceTick} delay={entranceStagger(0)}>
-            <View style={styles.header}>
-              <Pressable onPress={() => navigation.goBack()} style={styles.iconBtn}>
-                <Ionicons name="arrow-back" size={18} color={Colors.text1} />
-              </Pressable>
-              <Text style={styles.headerTitle}>Problem catalog</Text>
-              <View style={styles.iconBtn} />
-            </View>
-          </FadeInSection>
+    <SafeAreaView style={styles.screen} edges={topEdges}>
+      <ScreenCanvas />
+      <StackScreenHeader
+        title={t("problems.title")}
+        subtitle={t("problems.subtitle")}
+        onBack={() => navigation.goBack()}
+        includeSafeTop={false}
+      />
 
-          <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={styles.scroll}
-            showsVerticalScrollIndicator={false}
-          >
-            <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
-              <SearchBar value={query} onChangeText={setQuery} placeholder="Search categories…" />
-            </FadeInSection>
+      {loading && !refreshing ? (
+        <ScreenLoader />
+      ) : (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlProps} />
+          }
+        >
+          <SearchBar value={query} onChangeText={setQuery} placeholder={t("problems.searchPlaceholder")} />
 
-            {error ? (
-              <EntranceBlocks replayKey={entranceTick} startStep={2}>
-                <EmptyState
-                  icon="alert-circle-outline"
-                  title="Could not load catalog"
-                  subtitle={error}
-                  action="Retry"
-                  onAction={() => void load()}
-                />
-              </EntranceBlocks>
-            ) : filtered.length === 0 ? (
-              <EntranceBlocks replayKey={entranceTick} startStep={2}>
-                <EmptyState icon="leaf-outline" title="No categories" subtitle="Try a different search." />
-              </EntranceBlocks>
-            ) : (
-              filtered.map((row, index) => (
-                <FadeInSection
-                  key={row.id}
-                  replayKey={entranceTick}
-                  delay={entranceListStagger(2, index)}
-                  variant="card"
-                >
-                  <View style={styles.row}>
-                    <View style={styles.codeBadge}>
-                      <Text style={styles.codeText}>{row.code}</Text>
-                    </View>
-                    <Text style={styles.rowName}>{row.name}</Text>
-                  </View>
-                </FadeInSection>
-              ))
-            )}
-          </ScrollView>
-        </>
+          {error ? (
+            <EmptyState
+              icon="alert-circle-outline"
+              title={t("problems.loadError")}
+              subtitle={error}
+              action={t("problems.retry")}
+              onAction={() => {
+                setLoading(true);
+                void load();
+              }}
+            />
+          ) : filtered.length === 0 ? (
+            <EmptyState
+              icon="leaf-outline"
+              title={t("problems.emptyTitle")}
+              subtitle={t("problems.emptySubtitle")}
+            />
+          ) : (
+            filtered.map((row) => (
+              <FlatCard key={row.id} padded={false} style={styles.row}>
+                <View style={styles.codeBadge}>
+                  <Text style={styles.codeText}>{row.code}</Text>
+                </View>
+                <Text style={styles.rowName}>{row.name}</Text>
+              </FlatCard>
+            ))
+          )}
+        </ScrollView>
       )}
-    </ScreenEntranceShell>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { backgroundColor: Colors.bg, flex: 1 },
-  scrollView: { flex: 1 },
-  header: {
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: Spacing.screen,
-    paddingVertical: 10
+  screen: {
+    backgroundColor: Colors.bg,
+    flex: 1
   },
-  iconBtn: {
-    alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    height: 32,
-    justifyContent: "center",
-    width: 32
+  scrollView: {
+    flex: 1
   },
-  headerTitle: {
-    color: Colors.text1,
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.bold
+  scroll: {
+    gap: Spacing.sm,
+    padding: Spacing.screen,
+    paddingBottom: Layout.stackScrollBottom
   },
-  scroll: { gap: 10, padding: Spacing.screen, paddingBottom: 32 },
   row: {
     alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderRadius: Radius.card,
-    borderWidth: 1,
     flexDirection: "row",
-    gap: 10,
-    padding: 14
+    gap: Spacing.md,
+    padding: Spacing.cardLg
   },
   codeBadge: {
     backgroundColor: Colors.brand50,
     borderRadius: Radius.sm,
-    paddingHorizontal: 8,
-    paddingVertical: 4
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs
   },
   codeText: {
     color: Colors.brand700,
@@ -159,7 +140,8 @@ const styles = StyleSheet.create({
   rowName: {
     color: Colors.text1,
     flex: 1,
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.medium
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.semibold,
+    lineHeight: 22
   }
 });

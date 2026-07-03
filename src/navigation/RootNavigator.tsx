@@ -4,19 +4,14 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 import { DeferredFieldReminderController } from "../components/DeferredFieldReminderController";
-import { StartupStuckScreen } from "../components/StartupStuckScreen";
 import { GlobalStatusStrip } from "../../mobile/components/layout/GlobalStatusStrip";
-import { ScreenLoader } from "../../mobile/components/layout/ScreenLoader";
-import { KavyaSplashScreen } from "../components/brand/KavyaSplashScreen";
 import MainTabBar from "../../mobile/components/navigation/MainTabBar";
 import { VisitFabTabButton } from "../components/ui/VisitFabTabButton";
-import { useAppSplash } from "../hooks/useAppSplash";
 import { useI18n } from "../i18n/I18nContext";
 import { useAuth } from "../storage/AuthContext";
 import { useTheme } from "../theme";
 import { Colors } from "../../mobile/lib/theme";
 import { useSyncStore } from "../../mobile/lib/store/syncStore";
-import { StartupScreen } from "../screens/StartupScreen";
 import { AuthStartScreen } from "../screens/AuthStartScreen";
 import HomeTabScreen from "../../mobile/app/(tabs)/index";
 import WorkTabScreen from "../../mobile/app/(tabs)/work";
@@ -24,8 +19,7 @@ import FarmerProfileScreen from "../../mobile/app/farmer/[id]";
 import ProfileTabScreen from "../../mobile/app/(tabs)/profile";
 import ProblemsCatalogScreen from "../../mobile/app/problems";
 import { FarmerMapScreen } from "../screens/map/FarmerMapScreen";
-import { LiveMapScreen } from "../screens/map/LiveMapScreen";
-import { TravelHistoryScreen } from "../screens/map/TravelHistoryScreen";
+import { MyLocationScreen } from "../screens/map/MyLocationScreen";
 import { OfflineSyncScreen } from "../screens/OfflineSyncScreen";
 import DiagnosticsScreen from "../../mobile/app/me/diagnostics";
 import NotificationsScreen from "../../mobile/app/notifications";
@@ -54,10 +48,6 @@ const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const WorkStack = createNativeStackNavigator<WorkStackParamList>();
 const MeStack = createNativeStackNavigator<MeStackParamList>();
-
-/** Splash branding only — never wait for auth bootstrap (release APK can hang on auth/me). */
-const SPLASH_MAX_MS = 8_000;
-const STARTUP_STUCK_MS = 8_000;
 
 function AuthNavigator() {
   return (
@@ -160,14 +150,8 @@ function MainTabs() {
 }
 
 function AppRoutes() {
-  const { isReady, isAuthenticated, authLoading, bootstrapIssue, retryBootstrap, resetLocalSession } = useAuth();
-  const { hideNativeSplash } = useAppSplash(true);
-  const [introDone, setIntroDone] = useState(false);
-  const [splashExpired, setSplashExpired] = useState(false);
-  const [showStuckFallback, setShowStuckFallback] = useState(false);
+  const { isReady, isAuthenticated } = useAuth();
   const [forceLogin, setForceLogin] = useState(false);
-  const splashLoggedRef = useRef(false);
-  const postSplashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navLoggedRef = useRef<string | null>(null);
 
   const logNavOnce = useCallback((phase: "nav_home" | "nav_login" | "nav_error", detail?: string) => {
@@ -177,94 +161,21 @@ function AppRoutes() {
     logStartup(phase, detail);
   }, []);
 
-  const handleIntroFinish = useCallback(() => {
-    setIntroDone(true);
-    patchStartupSnapshot({ introDone: true });
-    logStartup("splash_end", "intro animation finished");
-  }, []);
-
-  useEffect(() => {
-    if (!splashLoggedRef.current) {
-      splashLoggedRef.current = true;
-      logStartup("splash_start");
-    }
-    const timer = setTimeout(() => {
-      setSplashExpired(true);
-      patchStartupSnapshot({ splashExpired: true });
-      logStartup("splash_timeout", `${SPLASH_MAX_MS}ms`);
-    }, SPLASH_MAX_MS);
-    return () => clearTimeout(timer);
-  }, []);
-
   useEffect(() => {
     patchStartupSnapshot({
-      authLoading,
       isReady,
-      isAuthenticated,
-      bootstrapIssue
+      isAuthenticated
     });
-  }, [authLoading, bootstrapIssue, isAuthenticated, isReady]);
-
-  const showIntro = !introDone && !splashExpired;
+  }, [isAuthenticated, isReady]);
 
   useEffect(() => {
-    if (showIntro) {
-      if (postSplashTimerRef.current) {
-        clearTimeout(postSplashTimerRef.current);
-        postSplashTimerRef.current = null;
-      }
-      setShowStuckFallback(false);
-      return;
+    if (forceLogin && isAuthenticated) {
+      setForceLogin(false);
     }
+  }, [forceLogin, isAuthenticated]);
 
-    postSplashTimerRef.current = setTimeout(() => {
-      if (authLoading) {
-        setShowStuckFallback(true);
-        logStartup("nav_stuck_fallback", "auth still loading after splash");
-      }
-    }, STARTUP_STUCK_MS);
-
-    return () => {
-      if (postSplashTimerRef.current) {
-        clearTimeout(postSplashTimerRef.current);
-        postSplashTimerRef.current = null;
-      }
-    };
-  }, [authLoading, showIntro]);
-
-  if (showIntro) {
-    return (
-      <KavyaSplashScreen onFinish={handleIntroFinish} onReady={hideNativeSplash} />
-    );
-  }
-
-  if (showStuckFallback && authLoading && !forceLogin) {
-    return (
-      <StartupStuckScreen
-        onContinueToLogin={() => {
-          void resetLocalSession("startup stuck — continue to login")
-            .catch(() => undefined)
-            .finally(() => {
-              setForceLogin(true);
-              setShowStuckFallback(false);
-              logStartup("nav_login", "forced after startup fallback");
-            });
-        }}
-        onRetry={() => {
-          setShowStuckFallback(false);
-          void retryBootstrap().catch(() => undefined);
-        }}
-        onResetLocalSession={() => {
-          void resetLocalSession("startup stuck — manual reset")
-            .catch(() => undefined)
-            .finally(() => {
-              setForceLogin(true);
-              setShowStuckFallback(false);
-              logStartup("nav_login", "reset local session after stuck");
-            });
-        }}
-      />
-    );
+  if (!isReady) {
+    return <View style={{ flex: 1, backgroundColor: Colors.bg }} />;
   }
 
   if (forceLogin) {
@@ -274,22 +185,6 @@ function AppRoutes() {
         <DeferredFieldReminderController />
         <RootStack.Navigator screenOptions={{ headerShown: false }}>
           <RootStack.Screen name="Auth" component={AuthNavigator} />
-        </RootStack.Navigator>
-      </>
-    );
-  }
-
-  if (!isReady || authLoading) {
-    return <ScreenLoader message="Starting…" />;
-  }
-
-  if (bootstrapIssue !== "none") {
-    logNavOnce("nav_error", bootstrapIssue);
-    return (
-      <>
-        <DeferredFieldReminderController />
-        <RootStack.Navigator screenOptions={{ headerShown: false }}>
-          <RootStack.Screen name="Splash" component={StartupScreen} />
         </RootStack.Navigator>
       </>
     );
@@ -307,8 +202,9 @@ function AppRoutes() {
           component={VisitFlowNavigator}
           options={stackScreenOptionsModal}
         />
-        <RootStack.Screen name="LiveMap" component={LiveMapScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
-        <RootStack.Screen name="TravelHistory" component={TravelHistoryScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
+        <RootStack.Screen name="MyLocation" component={MyLocationScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
+        <RootStack.Screen name="LiveMap" component={MyLocationScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
+        <RootStack.Screen name="TravelHistory" component={MyLocationScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
         <RootStack.Screen name="FarmerMap" component={FarmerMapScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
         <RootStack.Screen
           name="OfflineSync"

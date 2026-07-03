@@ -59,10 +59,11 @@ export const NaturePalette = {
 } as const;
 
 export const FieldGradient = {
-  screen: ["#EEF6EA", "#D9EBD2", "#C5DFBE"] as const,
-  screenLocations: [0, 0.48, 1] as const,
-  heroActive: ["#1F7A4F", "#0F5132", "#082818"] as const,
-  heroActiveLocations: [0, 0.52, 1] as const,
+  /** Warm white field wash */
+  screen: ["#FAF9F6", "#F6F8F5", "#F0F4F1"] as const,
+  screenLocations: [0, 0.55, 1] as const,
+  heroActive: ["rgba(46,155,100,0.92)", "rgba(15,81,50,0.95)", "rgba(11,61,40,0.98)"] as const,
+  heroActiveLocations: [0, 0.5, 1] as const,
   loginTop: ["#061810", "#0C2818", "#143D28"] as const,
   loginTopLocations: [0, 0.5, 1] as const,
   forestBackdrop: ["#061810", "#0E2E1C", "#1A4A30", "#0C2818"] as const,
@@ -71,10 +72,12 @@ export const FieldGradient = {
 } as const;
 
 export const FieldRadius = {
-  glass: 18,
-  hero: 20,
-  chip: 10,
-  panel: 24
+  glass: 22,
+  hero: 26,
+  card: 24,
+  list: 20,
+  chip: 12,
+  panel: 28
 } as const;
 
 export const fieldShadow = {

@@ -7,6 +7,7 @@ import { normalizeMobileVisitSubmitPayload } from "../../src/utils/format";
 import { isLanOnlyError, isNetworkError } from "../../src/utils/apiError";
 import { unwrapSuccessEnvelope } from "../../src/utils/apiUnwrap";
 import { getAccessToken } from "../../src/storage/tokenStorage";
+import { prepareVisitForSubmit } from "../../src/visit/prepareVisitSubmit";
 import { validateVisitSubmitValues } from "../../src/visit/visitValidation";
 import type { VisitPhotoAsset } from "./visitPhotos";
 import { useVisitFormStore, type VisitSeverity } from "../store/visitFormStore";
@@ -230,7 +231,8 @@ export async function submitVisitFromStore(
 ): Promise<{ visit: Visit; evidenceFailed: string[] }> {
   const duty = extras?.duty ?? (await getVisitDutyFields());
   const values = buildVisitFormValuesFromStore(state, localSyncId, { ...extras, duty });
-  const validationError = validateVisitSubmitValues(values);
+  const prepared = await prepareVisitForSubmit(values);
+  const validationError = validateVisitSubmitValues(prepared);
   if (validationError) {
     throw new Error(validationError);
   }
@@ -238,11 +240,11 @@ export async function submitVisitFromStore(
   let visit: Visit;
 
   try {
-    const flat = flattenPayload(values, localSyncId);
+    const flat = flattenPayload(prepared, localSyncId);
     const result = await postVisitMultipart(flat);
     visit = result.visit;
   } catch {
-    visit = await submitMobileVisit(values, { localSyncId });
+    visit = await submitMobileVisit(prepared, { localSyncId });
   }
 
   const evidenceFailed = state.photos.length ? await uploadVisitPhotos(visit.id, state.photos) : [];

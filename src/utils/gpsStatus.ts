@@ -38,5 +38,9 @@ export async function probeGpsAvailability(): Promise<GpsAvailability> {
 }
 
 export function isGpsAvailable(availability: GpsAvailability) {
-  return availability === "active" || availability === "foreground_only";
+  return (
+    availability === "active" ||
+    availability === "foreground_only" ||
+    availability === "background_denied"
+  );
 }

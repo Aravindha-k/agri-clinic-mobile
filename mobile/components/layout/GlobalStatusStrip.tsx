@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useConnectivityOnline } from "../../../src/hooks/useConnectivityOnline";
+import { useI18n } from "../../../src/i18n/I18nContext";
 import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
 import { autoFlushPendingGps } from "../../lib/sync/offlineSyncManager";
 import { useSyncStore } from "../../lib/store/syncStore";
@@ -19,6 +20,7 @@ function resolveMode(input: { offline: boolean; pendingVisits: number; syncing: 
 
 export function GlobalStatusStrip() {
   const insets = useSafeAreaInsets();
+  const { t } = useI18n();
   const apiOnline = useConnectivityOnline();
   const [netOffline, setNetOffline] = useState(false);
   const { pendingCount, syncAll, syncing } = useOfflineSync();
@@ -66,6 +68,13 @@ export function GlobalStatusStrip() {
     [offline, pendingCount, syncing]
   );
 
+  const setGlobalStripVisible = useSyncStore((state) => state.setGlobalStripVisible);
+
+  useEffect(() => {
+    setGlobalStripVisible(mode !== "hidden");
+    return () => setGlobalStripVisible(false);
+  }, [mode, setGlobalStripVisible]);
+
   if (mode === "hidden") {
     return null;
   }
@@ -73,12 +82,14 @@ export function GlobalStatusStrip() {
   const bg = Colors.amberBg;
   const iconColor = Colors.amberText;
 
+  const countKey = (base: string) => (pendingCount === 1 ? base : `${base}_plural`);
+
   const message =
     mode === "offline"
-      ? `Offline · ${pendingCount} visit${pendingCount === 1 ? "" : "s"} will sync when online`
+      ? t(countKey("offlineSync.stripOffline"), { count: pendingCount })
       : syncing
-        ? `Syncing ${pendingCount} visit${pendingCount === 1 ? "" : "s"}…`
-        : `${pendingCount} visit${pendingCount === 1 ? "" : "s"} syncing automatically`;
+        ? t(countKey("offlineSync.stripSyncing"), { count: pendingCount })
+        : t(countKey("offlineSync.stripPending"), { count: pendingCount });
 
   const iconName = mode === "offline" ? "cloud-offline-outline" : "sync-outline";
 

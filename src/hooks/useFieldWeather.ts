@@ -7,6 +7,10 @@ export type FieldWeather = {
   tempC: number;
   label: string;
   code: number;
+  humidity?: number;
+  rainChance?: number;
+  windKmh?: number;
+  uvIndex?: number;
 };
 
 const FALLBACK_LAT = 11.1271;
@@ -56,16 +60,35 @@ async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Respons
 async function fetchWeather(lat: number, lng: number): Promise<FieldWeather | null> {
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lng.toFixed(4)}` +
-    `&current=temperature_2m,weather_code&timezone=auto`;
+    `&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m` +
+    `&daily=precipitation_probability_max,uv_index_max&forecast_days=1&timezone=auto`;
   const res = await fetchWithTimeout(url, FETCH_TIMEOUT_MS);
   if (!res.ok) return null;
   const data = (await res.json()) as {
-    current?: { temperature_2m?: number; weather_code?: number };
+    current?: {
+      temperature_2m?: number;
+      relative_humidity_2m?: number;
+      weather_code?: number;
+      wind_speed_10m?: number;
+    };
+    daily?: { precipitation_probability_max?: number[]; uv_index_max?: number[] };
   };
   const temp = data.current?.temperature_2m;
   const code = data.current?.weather_code ?? 0;
   if (typeof temp !== "number" || !Number.isFinite(temp)) return null;
-  return { tempC: Math.round(temp), label: weatherFromCode(code), code };
+  const humidity = data.current?.relative_humidity_2m;
+  const rainChance = data.daily?.precipitation_probability_max?.[0];
+  const wind = data.current?.wind_speed_10m;
+  const uv = data.daily?.uv_index_max?.[0];
+  return {
+    tempC: Math.round(temp),
+    label: weatherFromCode(code),
+    code,
+    humidity: typeof humidity === "number" ? Math.round(humidity) : undefined,
+    rainChance: typeof rainChance === "number" ? Math.round(rainChance) : undefined,
+    windKmh: typeof wind === "number" ? Math.round(wind) : undefined,
+    uvIndex: typeof uv === "number" ? Math.round(uv) : undefined
+  };
 }
 
 export function useFieldWeather(latitude?: string | number | null, longitude?: string | number | null) {

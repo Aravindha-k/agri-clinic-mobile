@@ -2,7 +2,9 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { AppHeader, PrimaryButton } from "../../../src/components/ui";
+import { PrimaryButton, GhostButton } from "../../components/ui";
+import { ProductionApiDiagnosticsPanel } from "../../components/diagnostics/ProductionApiDiagnosticsPanel";
+import { StackScreenHeader } from "../../components/layout";
 import { useConnectivityOnline } from "../../../src/hooks/useConnectivityOnline";
 import { useRefreshControlProps } from "../../../src/hooks/useRefreshControlProps";
 import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
@@ -13,9 +15,8 @@ import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
 import { useTracking } from "../../../src/storage/TrackingContext";
 import { getGpsStateReport } from "../../../src/utils/gpsStateReport";
 import { formatRelativeTime } from "../../../src/utils/formatRelativeTime";
-import { ProductionApiDiagnosticsPanel } from "../../components/diagnostics/ProductionApiDiagnosticsPanel";
 import { GpsHealthPanel } from "../../components/daySummary/GpsHealthPanel";
-import { ScreenCanvas, ScreenEntranceBloom, BrandPageHeader } from "../../components/layout";
+import { ScreenCanvas, FlatCard, TechnicalDetailsCollapsible } from "../../components/layout";
 import { FadeInSection, entranceStagger } from "../../components/ui/FadeInSection";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
 import {
@@ -26,7 +27,7 @@ import {
   migrateLegacyGpsQueueIfNeeded
 } from "../../lib/gps/trackingService";
 import { useSyncStore } from "../../lib/store/syncStore";
-import { Colors, FontSize, Spacing } from "../../lib/theme";
+import { Colors, FontSize, FontWeight, Layout, Spacing } from "../../lib/theme";
 
 export default function DiagnosticsScreen() {
   useSecureScreen();
@@ -100,16 +101,15 @@ export default function DiagnosticsScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
       <ScreenCanvas />
-      <ScreenEntranceBloom replayKey={entranceTick} />
-      <BrandPageHeader showWordmark style={styles.brandHeader} />
-      <AppHeader
+      <StackScreenHeader
         title={t("diagnostics.title")}
         subtitle={t("diagnostics.subtitle")}
         onBack={() => navigation.goBack()}
+        includeSafeTop={false}
       />
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, { paddingBottom: tabInset + Spacing.xl }]}
+        contentContainerStyle={[styles.content, { paddingBottom: tabInset + Layout.scrollBottomExtra }]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} {...refreshControlProps} />
         }
@@ -127,12 +127,12 @@ export default function DiagnosticsScreen() {
           />
         </FadeInSection>
 
-        <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
+        <TechnicalDetailsCollapsible>
           <ProductionApiDiagnosticsPanel />
-        </FadeInSection>
+        </TechnicalDetailsCollapsible>
 
         <FadeInSection replayKey={entranceTick} delay={entranceStagger(2)}>
-          <View style={styles.syncSection}>
+          <FlatCard style={styles.syncSection}>
           <Text style={styles.sectionTitle}>{t("profile.syncOffline")}</Text>
           <View style={styles.statRow}>
             <Text style={styles.statLabel}>{t("profile.pendingVisits")}</Text>
@@ -154,19 +154,18 @@ export default function DiagnosticsScreen() {
           </View>
 
           <PrimaryButton
-            title={syncing ? t("home.syncing") : t("profile.syncAllNow")}
+            label={syncing ? t("home.syncing") : t("profile.syncAllNow")}
             onPress={() => void handleSyncAll()}
             loading={syncing}
             disabled={pendingCount === 0}
             style={styles.syncBtn}
           />
-          <PrimaryButton
-            title={t("diagnostics.viewQueue")}
-            variant="secondary"
+          <GhostButton
+            label={t("diagnostics.viewQueue")}
             onPress={() => rootNav?.navigate("OfflineSync")}
             style={styles.queueBtn}
           />
-        </View>
+          </FlatCard>
         </FadeInSection>
       </ScrollView>
     </SafeAreaView>
@@ -178,10 +177,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bg,
     flex: 1
   },
-  brandHeader: {
-    paddingTop: 0,
-    zIndex: 2
-  },
   scroll: {
     flex: 1
   },
@@ -190,33 +185,29 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.sm
   },
   syncSection: {
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    borderWidth: 1,
     gap: Spacing.sm,
-    marginHorizontal: Spacing.lg,
-    padding: Spacing.md
+    marginHorizontal: Spacing.lg
   },
   sectionTitle: {
     color: Colors.text2,
-    fontSize: FontSize.sm,
-    fontWeight: "700",
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.bold,
     textTransform: "uppercase"
   },
   statRow: {
     alignItems: "center",
     flexDirection: "row",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    minHeight: 32
   },
   statLabel: {
     color: Colors.text3,
-    fontSize: FontSize.sm
+    fontSize: FontSize.md
   },
   statValue: {
     color: Colors.text1,
-    fontSize: FontSize.sm,
-    fontWeight: "600"
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.semibold
   },
   statWarn: {
     color: Colors.red

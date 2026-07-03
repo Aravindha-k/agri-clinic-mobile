@@ -1,5 +1,6 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Colors, FontSize, FontWeight } from "../../lib/theme";
+import { StyleSheet, Text, View } from "react-native";
+import { Typography } from "../../lib/designSystem";
+import { Colors, FontSize, FontWeight, Spacing } from "../../lib/theme";
 
 type Props = {
   title: string;
@@ -15,9 +16,9 @@ export function SectionHeader({ title, action, onAction }: Props) {
         <Text style={styles.title}>{title}</Text>
       </View>
       {action && onAction ? (
-        <Pressable onPress={onAction} hitSlop={8}>
-          <Text style={styles.action}>{action}</Text>
-        </Pressable>
+        <Text onPress={onAction} style={styles.action} accessibilityRole="button">
+          {action}
+        </Text>
       ) : null}
     </View>
   );
@@ -27,29 +28,30 @@ const styles = StyleSheet.create({
   row: {
     alignItems: "center",
     flexDirection: "row",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    marginBottom: Spacing.xs
   },
   titleWrap: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 8
+    gap: Spacing.sm
   },
   accent: {
     backgroundColor: Colors.brand700,
     borderRadius: 2,
-    height: 14,
+    height: 16,
     width: 3
   },
   title: {
-    color: Colors.text3,
-    fontSize: FontSize.sm,
+    ...Typography.label,
+    fontSize: 12,
     fontWeight: FontWeight.semibold,
-    letterSpacing: 0.06 * FontSize.sm,
+    letterSpacing: 0.55,
     textTransform: "uppercase"
   },
   action: {
     color: Colors.brand700,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.medium
+    fontSize: FontSize.caption,
+    fontWeight: FontWeight.semibold
   }
 });

@@ -1,6 +1,7 @@
 import { StyleSheet, View } from "react-native";
 import { AppFallbackScreen } from "../components/AppFallbackScreen";
 import { ScreenLoader } from "../../mobile/components/layout/ScreenLoader";
+import { Colors } from "../../mobile/lib/theme";
 import { useAuth, type BootstrapIssue } from "../storage/AuthContext";
 import { API_BASE_URL } from "../api/config";
 import { getNetworkMessage, SERVER_MESSAGE } from "../utils/apiError";
@@ -12,11 +13,11 @@ function issueCopy(issue: BootstrapIssue) {
   return { title: "Server unavailable", message: SERVER_MESSAGE };
 }
 
-/** Bootstrap error screen — shown after intro when session restore fails. */
+/** Bootstrap error screen — manual retry when server validation fails (non-blocking at startup). */
 export function StartupScreen() {
-  const { authLoading, bootstrapIssue, retryBootstrap, resetLocalSession } = useAuth();
+  const { sessionValidating, bootstrapIssue, retryBootstrap, resetLocalSession } = useAuth();
 
-  if (authLoading || bootstrapIssue === "none") {
+  if (sessionValidating || bootstrapIssue === "none") {
     return (
       <View style={styles.wait}>
         <ScreenLoader />
@@ -44,7 +45,7 @@ export function StartupScreen() {
 
 const styles = StyleSheet.create({
   wait: {
-    backgroundColor: "#FAFCFB",
+    backgroundColor: Colors.bg,
     flex: 1
   }
 });

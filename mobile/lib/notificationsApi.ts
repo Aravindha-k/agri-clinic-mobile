@@ -111,12 +111,18 @@ export async function getBadgeCount(force = false): Promise<number> {
 export async function fetchNotificationsPage(options?: {
   page?: number;
   nextUrl?: string | null;
+  unreadOnly?: boolean;
 }): Promise<NotificationListPage> {
   let path = "notifications/";
   if (options?.nextUrl) {
     const nextPath = apiPathFromNextUrl(options.nextUrl);
     if (!nextPath) return { results: [], next: null, count: 0 };
     path = nextPath;
+  } else if (options?.unreadOnly) {
+    path = "notifications/?is_read=false";
+    if (options?.page && options.page > 1) {
+      path = `notifications/?is_read=false&page=${options.page}`;
+    }
   } else if (options?.page && options.page > 1) {
     path = `notifications/?page=${options.page}`;
   }

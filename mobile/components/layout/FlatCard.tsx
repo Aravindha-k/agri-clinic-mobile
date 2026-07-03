@@ -1,24 +1,24 @@
 import { type ReactNode } from "react";
-import { StyleSheet, View, type ViewStyle } from "react-native";
-import { Colors, Layout, Radius, Shadow } from "../../lib/theme";
+import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { fieldCardStyles, type FieldCardVariant } from "../../lib/fieldCardStyles";
+import { Spacing } from "../../lib/theme";
 
 type Props = {
   children: ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
+  padded?: boolean;
+  /** primary = white elevated card; secondary = light green tint */
+  variant?: FieldCardVariant;
 };
 
-/** White bordered surface card — replaces glass GlassCard (surface variant). */
-export function FlatCard({ children, style }: Props) {
-  return <View style={[styles.card, style]}>{children}</View>;
+export function FlatCard({ children, style, padded = false, variant = "primary" }: Props) {
+  return (
+    <View style={[fieldCardStyles[variant], padded && styles.padded, style]}>{children}</View>
+  );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderRadius: Radius.card,
-    borderWidth: Layout.cardBorderWidth,
-    overflow: "hidden",
-    ...Shadow.card
+  padded: {
+    padding: Spacing.cardLg
   }
 });

@@ -1,7 +1,6 @@
 import { ReactNode } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, ViewStyle } from "react-native";
-import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from "../../lib/theme";
-
+import { Colors, Enterprise, FontSize, FontWeight, Layout, Radius, Shadow, Spacing } from "../../lib/theme";
 type Props = {
   label: string;
   onPress: () => void;
@@ -24,7 +23,7 @@ export function PrimaryButton({ label, onPress, loading, icon, disabled, style }
         {
           backgroundColor: Colors.brand700,
           borderRadius: Radius.button,
-          opacity: isDisabled ? 0.55 : pressed ? 0.92 : 1
+          opacity: isDisabled ? 0.55 : pressed ? 0.94 : 1
         },
         style
       ]}
@@ -45,15 +44,16 @@ const styles = StyleSheet.create({
   btn: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 8,
-    height: 48,
+    gap: Spacing.sm,
+    height: Layout.buttonHeight,
     justifyContent: "center",
-    paddingHorizontal: Spacing.lg,
-    ...Shadow.cardRaised
+    minHeight: Layout.touchTargetMin,
+    paddingHorizontal: Spacing.xl,
+    ...Shadow.card
   },
   label: {
     color: Colors.surface,
-    fontSize: FontSize.md,
+    fontSize: FontSize.body,
     fontWeight: FontWeight.semibold
   }
 });

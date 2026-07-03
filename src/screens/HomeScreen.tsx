@@ -262,7 +262,7 @@ export function HomeScreen() {
               {
                 icon: "map-outline",
                 label: "Route history",
-                onPress: () => rootNav?.navigate("TravelHistory")
+                onPress: () => rootNav?.navigate("MyLocation")
               }
             ]}
           />

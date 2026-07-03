@@ -1,7 +1,11 @@
-import { Ionicons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
-import { FlatCard } from "../layout/FlatCard";
+import type { LucideIcon } from "lucide-react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Grid, IconSize, PremiumShadow, Typography } from "../../lib/designSystem";
+import { TODAY_CARD_RADIUS, TODAY_PAGE_PAD, TODAY_SECTION_GAP } from "../../lib/todayLayout";
+import { Colors, FontWeight } from "../../lib/theme";
+import { IconPopOnce } from "../ui/IconPopOnce";
+import { PressableCard } from "../ui/PressableCard";
 import { SectionHeader } from "../ui/SectionHeader";
 import {
   FadeInSection,
@@ -10,24 +14,62 @@ import {
   type ScreenEntranceProps
 } from "../ui/FadeInSection";
 
+const TILE_GRADIENTS: Record<string, readonly [string, string]> = {
+  farmers: ["#2E9B64", "#0F6B43"],
+  visits: ["#14B8A6", "#0D9488"],
+  problems: ["#8B5CF6", "#6D28D9"],
+  routes: ["#F59E0B", "#D97706"]
+};
+
 export type TodayQuickAction = {
   key: string;
   label: string;
-  icon: keyof typeof Ionicons.glyphMap;
+  subtitle?: string;
+  icon: LucideIcon;
   onPress: () => void;
 };
 
 type Props = {
   title: string;
+  viewAllLabel?: string;
+  onViewAll?: () => void;
   actions: TodayQuickAction[];
   entrance?: ScreenEntranceProps;
 };
 
-export function TodayQuickActions({ title, actions, entrance }: Props) {
+/** Horizontal quick-action rail — circular icons like reference mock. */
+export function TodayQuickActions({ title, viewAllLabel, onViewAll, actions, entrance }: Props) {
   const header = (
     <View style={styles.headerPad}>
-      <SectionHeader title={title} />
+      <SectionHeader title={title} action={viewAllLabel} onAction={onViewAll} />
     </View>
+  );
+
+  const rail = (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.railContent}
+    >
+      {actions.map((action, index) => {
+        const gradient = TILE_GRADIENTS[action.key] ?? (["#2E9B64", "#0F6B43"] as const);
+        return (
+          <PressableCard
+            key={action.key}
+            onPress={action.onPress}
+            accessibilityRole="button"
+            style={styles.railItem}
+          >
+            <LinearGradient colors={[...gradient]} style={styles.iconCircle} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+              <IconPopOnce icon={action.icon} size={IconSize.md} color={Colors.onPrimary} delay={index * 40} />
+            </LinearGradient>
+            <Text style={styles.railLabel} numberOfLines={2}>
+              {action.label}
+            </Text>
+          </PressableCard>
+        );
+      })}
+    </ScrollView>
   );
 
   return (
@@ -39,97 +81,51 @@ export function TodayQuickActions({ title, actions, entrance }: Props) {
       ) : (
         header
       )}
-      <View style={styles.grid}>
-        {actions.map((action, index) => {
-          const tile = (
-            <FlatCard style={styles.tileWrap}>
-              <Pressable
-                onPress={action.onPress}
-                accessibilityRole="button"
-                style={({ pressed }) => [styles.tile, pressed && { opacity: 0.92 }]}
-              >
-                <View style={styles.iconWrap}>
-                  <Ionicons name={action.icon} size={20} color={Colors.brand700} />
-                </View>
-                <Text style={styles.label} numberOfLines={2}>
-                  {action.label}
-                </Text>
-              </Pressable>
-            </FlatCard>
-          );
-
-          if (!entrance) {
-            return <View key={action.key}>{tile}</View>;
-          }
-
-          return (
-            <FadeInSection
-              key={action.key}
-              replayKey={entrance.replayKey}
-              delay={entranceListStagger(entrance.sectionStep, index + 1)}
-              variant="card"
-              style={styles.tileWrap}
-            >
-              <FlatCard style={styles.tileCard}>
-                <Pressable
-                  onPress={action.onPress}
-                  accessibilityRole="button"
-                  style={({ pressed }) => [styles.tile, pressed && { opacity: 0.92 }]}
-                >
-                  <View style={styles.iconWrap}>
-                    <Ionicons name={action.icon} size={20} color={Colors.brand700} />
-                  </View>
-                  <Text style={styles.label} numberOfLines={2}>
-                    {action.label}
-                  </Text>
-                </Pressable>
-              </FlatCard>
-            </FadeInSection>
-          );
-        })}
-      </View>
+      {entrance ? (
+        <FadeInSection
+          replayKey={entrance.replayKey}
+          delay={entranceListStagger(entrance.sectionStep, 1)}
+          variant="card"
+        >
+          {rail}
+        </FadeInSection>
+      ) : (
+        rail
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   section: {
-    gap: Spacing.sm,
-    marginTop: Spacing.lg
+    gap: Grid.sm,
+    marginTop: TODAY_SECTION_GAP
   },
   headerPad: {
-    paddingHorizontal: Spacing.lg
+    paddingHorizontal: TODAY_PAGE_PAD
   },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.lg
+  railContent: {
+    gap: Grid.md,
+    paddingHorizontal: TODAY_PAGE_PAD,
+    paddingVertical: Grid.xs
   },
-  tileWrap: {
-    flexBasis: "47%",
-    flexGrow: 1
-  },
-  tileCard: {
-    flex: 1
-  },
-  tile: {
-    alignItems: "flex-start",
-    gap: Spacing.sm,
-    minHeight: 88,
-    padding: Spacing.md
-  },
-  iconWrap: {
+  railItem: {
     alignItems: "center",
-    backgroundColor: Colors.brand50,
-    borderRadius: Radius.inner,
-    height: 36,
-    justifyContent: "center",
-    width: 36
+    width: 72
   },
-  label: {
-    color: Colors.text1,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold
+  iconCircle: {
+    alignItems: "center",
+    borderRadius: 28,
+    height: 56,
+    justifyContent: "center",
+    width: 56,
+    ...PremiumShadow.card
+  },
+  railLabel: {
+    ...Typography.caption,
+    fontSize: 11,
+    fontWeight: FontWeight.medium,
+    marginTop: Grid.xs,
+    textAlign: "center"
   }
 });

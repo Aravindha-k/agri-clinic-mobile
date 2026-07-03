@@ -53,7 +53,6 @@ export function WorkQueueSectionHeader({
 
 const styles = StyleSheet.create({
   wrap: {
-    backgroundColor: Colors.bg,
     marginBottom: 6,
     marginHorizontal: Spacing.lg,
     marginTop: 12
@@ -69,7 +68,7 @@ const styles = StyleSheet.create({
   accent: {
     backgroundColor: Colors.brand700,
     borderRadius: 2,
-    height: 12,
+    height: 16,
     width: 3
   },
   title: {

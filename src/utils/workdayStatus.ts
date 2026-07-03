@@ -17,8 +17,14 @@ export function isWorkdayExpiredMessage(message: string): boolean {
 export function isWorkdayInactiveMessage(message: string): boolean {
   return (
     isWorkdayExpiredMessage(message) ||
+    isDutySessionMismatchMessage(message) ||
     /no active workday|not active|already ended|workday not started/i.test(message)
   );
+}
+
+/** Server rejected location because cached duty_session_id is stale or wrong. */
+export function isDutySessionMismatchMessage(message: string): boolean {
+  return /duty_session_id.*does not match|active duty session/i.test(message);
 }
 
 export function isWorkdayExpiredPayload(data: unknown): boolean {
@@ -46,7 +52,16 @@ export function normalizeWorkdayRow(raw: unknown): WorkdayStatus | null {
   }
 
   const dutySessionRaw = row.duty_session_id ?? row.session_id ?? row.duty_id;
-  const dutySessionId = dutySessionRaw != null ? Number(dutySessionRaw) : undefined;
+  let dutySessionId = dutySessionRaw != null ? Number(dutySessionRaw) : undefined;
+  const rowId = typeof row.id === "number" ? row.id : undefined;
+  if (
+    (dutySessionId == null || !Number.isFinite(dutySessionId) || dutySessionId <= 0) &&
+    rowId != null &&
+    rowId > 0 &&
+    rowId !== workdayId
+  ) {
+    dutySessionId = rowId;
+  }
 
   const startedAt =
     typeof row.started_at === "string"

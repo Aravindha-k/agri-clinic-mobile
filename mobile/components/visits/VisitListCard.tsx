@@ -1,12 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
+import { memo } from "react";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Visit } from "../../../src/api/visits";
-import { FONTS } from "../../../src/theme/fonts";
-import { Colors } from "../../lib/theme";
-import type { PendingVisitRecord } from "../../lib/pendingVisitsQueue";
-import { avatarInitials, getAvatarColors } from "../../lib/avatarColor";
 import { resolveVisitFarmer } from "../../../src/utils/visitFarmer";
 import { visitDisplayIso } from "../../../src/utils/format";
+import type { PendingVisitRecord } from "../../lib/pendingVisitsQueue";
+import { avatarInitials, getAvatarColors } from "../../lib/avatarColor";
+import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
+import { FlatCard } from "../layout/FlatCard";
+import { PressableCard } from "../ui/PressableCard";
+import { StatusChip } from "../ui/StatusChip";
 
 function VisitAvatar({ name }: { name: string }) {
   const { bg, text } = getAvatarColors(name);
@@ -42,7 +45,7 @@ function problemCategoryLabel(visit: Visit) {
   return visit.problem_seen?.trim() || "Problem";
 }
 
-export function VisitListCard({ visit, pending, onPress }: Props) {
+export const VisitListCard = memo(function VisitListCard({ visit, pending, onPress }: Props) {
   const isPending = Boolean(pending);
   const values = pending?.values;
   const resolved = visit ? resolveVisitFarmer(visit) : null;
@@ -63,12 +66,8 @@ export function VisitListCard({ visit, pending, onPress }: Props) {
     : hasGps(visit!.latitude, visit!.longitude);
   const canCall = Boolean(phone && phone !== "—");
 
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      style={({ pressed }) => [styles.card, isPending && styles.cardPending, pressed && onPress && { opacity: 0.98 }]}
-    >
+  const card = (
+    <FlatCard style={isPending ? [styles.card, styles.cardPending] : styles.card}>
       <View style={styles.topRow}>
         <View style={styles.topLeft}>
           <VisitAvatar name={farmerName} />
@@ -79,34 +78,17 @@ export function VisitListCard({ visit, pending, onPress }: Props) {
             <Text style={styles.time}>{formatCardTime(timeIso)}</Text>
           </View>
         </View>
-        {gpsOk ? (
-          <View style={styles.gpsBadge}>
-            <Ionicons name="location" size={10} color={Colors.brand700} />
-            <Text style={styles.gpsText}>GPS ✓</Text>
-          </View>
-        ) : null}
+        {gpsOk ? <StatusChip label="GPS" variant="success" icon="location" /> : null}
       </View>
 
       <View style={styles.tagsRow}>
-        <View style={styles.cropTag}>
-          <Text style={styles.cropTagText} numberOfLines={1}>
-            {cropName !== "—" ? cropName : "Crop"}
-          </Text>
-        </View>
-        <View style={styles.pestTag}>
-          <Text style={styles.pestTagText} numberOfLines={1}>
-            {problemLabel}
-          </Text>
-        </View>
-        {isPending ? (
-          <View style={styles.pendingTag}>
-            <Text style={styles.pendingTagText}>Pending sync</Text>
-          </View>
-        ) : null}
+        <StatusChip label={cropName !== "—" ? cropName : "Crop"} variant="gray" />
+        <StatusChip label={problemLabel} variant="error" />
+        {isPending ? <StatusChip label="Pending sync" variant="pending" /> : null}
       </View>
 
       <View style={styles.locationRow}>
-        <Ionicons name="location-outline" size={11} color={Colors.text3} />
+        <Ionicons name="location-outline" size={14} color={Colors.text3} />
         <Text style={styles.locationText} numberOfLines={1}>
           {village !== "—" ? village : "Village not set"}
         </Text>
@@ -118,25 +100,34 @@ export function VisitListCard({ visit, pending, onPress }: Props) {
             e.stopPropagation?.();
             void Linking.openURL(`tel:${phone}`);
           }}
-          style={({ pressed }) => [styles.callBtn, pressed && { opacity: 0.88 }]}
+          style={({ pressed }) => [styles.callBtn, pressed && { opacity: 0.9 }]}
         >
-          <Ionicons name="call-outline" size={14} color={Colors.text3} />
+          <Ionicons name="call-outline" size={16} color={Colors.text2} />
           <Text style={styles.callBtnText}>Call farmer</Text>
         </Pressable>
       ) : null}
-    </Pressable>
+    </FlatCard>
   );
-}
+
+  if (!onPress) {
+    return <View style={styles.wrap}>{card}</View>;
+  }
+
+  return (
+    <PressableCard onPress={onPress} style={styles.wrap}>
+      {card}
+    </PressableCard>
+  );
+});
 
 const styles = StyleSheet.create({
+  wrap: {
+    marginBottom: Spacing.sm,
+    marginHorizontal: Spacing.lg
+  },
   card: {
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: 10,
-    marginHorizontal: 16,
-    padding: 14
+    gap: Spacing.md,
+    padding: Spacing.lg
   },
   cardPending: {
     borderLeftColor: Colors.amber,
@@ -151,20 +142,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
     flexDirection: "row",
-    gap: 10,
+    gap: Spacing.md,
     minWidth: 0
   },
   avatar: {
     alignItems: "center",
-    borderRadius: 11,
-    height: 38,
+    borderRadius: Radius.inner,
+    height: 42,
     justifyContent: "center",
-    width: 38
+    width: 42
   },
   avatarText: {
-    fontFamily: FONTS.extrabold,
-    fontSize: 11,
-    fontWeight: "800"
+    fontSize: FontSize.caption,
+    fontWeight: FontWeight.bold
   },
   nameCol: {
     flex: 1,
@@ -173,103 +163,45 @@ const styles = StyleSheet.create({
   },
   farmerName: {
     color: Colors.text1,
-    fontFamily: FONTS.bold,
-    fontSize: 13,
-    fontWeight: "700"
+    fontSize: FontSize.body,
+    fontWeight: FontWeight.bold
   },
   time: {
     color: Colors.text3,
-    fontFamily: FONTS.medium,
-    fontSize: 10,
-    fontWeight: "500"
-  },
-  gpsBadge: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 3
-  },
-  gpsText: {
-    color: Colors.brand700,
-    fontFamily: FONTS.bold,
-    fontSize: 9.5,
-    fontWeight: "700"
+    fontSize: FontSize.caption,
+    fontWeight: FontWeight.medium
   },
   tagsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 6,
-    marginTop: 10
-  },
-  cropTag: {
-    backgroundColor: Colors.bg,
-    borderColor: Colors.border,
-    borderRadius: 7,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 3
-  },
-  cropTagText: {
-    color: Colors.text3,
-    fontFamily: FONTS.semibold,
-    fontSize: 10,
-    fontWeight: "600"
-  },
-  pestTag: {
-    backgroundColor: Colors.redBg,
-    borderColor: "#FECACA",
-    borderRadius: 7,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 3
-  },
-  pestTagText: {
-    color: Colors.red,
-    fontFamily: FONTS.semibold,
-    fontSize: 10,
-    fontWeight: "600"
-  },
-  pendingTag: {
-    backgroundColor: Colors.amberBg,
-    borderRadius: 7,
-    paddingHorizontal: 8,
-    paddingVertical: 3
-  },
-  pendingTagText: {
-    color: Colors.amber,
-    fontFamily: FONTS.semibold,
-    fontSize: 9,
-    fontWeight: "600"
+    gap: Spacing.sm
   },
   locationRow: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 4,
-    marginTop: 8
+    gap: Spacing.xs
   },
   locationText: {
     color: Colors.text3,
     flex: 1,
-    fontFamily: FONTS.medium,
-    fontSize: 10.5,
-    fontWeight: "500"
+    fontSize: FontSize.caption,
+    fontWeight: FontWeight.medium
   },
   callBtn: {
     alignItems: "center",
     backgroundColor: Colors.bg,
     borderColor: Colors.border,
-    borderRadius: 10,
-    borderWidth: 1,
+    borderRadius: Radius.button,
+    borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
-    gap: 6,
-    height: 36,
+    gap: Spacing.sm,
+    height: 44,
     justifyContent: "center",
-    marginTop: 10,
     width: "100%"
   },
   callBtnText: {
-    color: Colors.text3,
-    fontFamily: FONTS.semibold,
-    fontSize: 11,
-    fontWeight: "600"
+    color: Colors.text2,
+    fontSize: FontSize.body,
+    fontWeight: FontWeight.semibold
   }
 });

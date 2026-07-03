@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { FlashList } from "@shopify/flash-list";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -10,17 +10,17 @@ import {
   Text,
   View
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRefreshControlProps } from "../../src/hooks/useRefreshControlProps";
-import { useSafeAreaInsetsCompat } from "../../src/hooks/useSafeAreaInsetsCompat";
 import { useSecureScreen } from "../../src/hooks/useSecureScreen";
-import { formatRelativeTime } from "../../src/utils/formatRelativeTime";
+import { useI18n } from "../../src/i18n/I18nContext";
+import { formatRelativeTimeLocalized, type AppLanguage } from "../../src/i18n";
 import { requestGpsForFieldWork } from "../../src/utils/locationRequiredModal";
-import { EmptyState, FilterChipRow } from "../components/ui";
-import { EntranceBlocks } from "../components/ui/EntranceBlocks";
-import { FadeInSection, entranceListStagger, entranceStagger } from "../components/ui/FadeInSection";
-import { ScreenEntranceShell } from "../components/layout";
+import { EmptyState, FilterChipRow, PressableCard } from "../components/ui";
+import { FlatCard, ScreenCanvas, StackScreenHeader } from "../components/layout";
 import { InlineSeedLoader } from "../components/layout/InlineSeedLoader";
 import { ScreenLoader } from "../components/layout/ScreenLoader";
+import { useScreenTopEdges } from "../hooks/useScreenTopEdges";
 import {
   fetchNotificationsPage,
   getBadgeCount,
@@ -30,14 +30,9 @@ import {
   type NotificationType
 } from "../lib/notificationsApi";
 import { useSyncStore } from "../lib/store/syncStore";
-import { Colors, FontSize, FontWeight, Radius, Spacing } from "../lib/theme";
+import { Colors, FontSize, FontWeight, Layout, Radius, Spacing } from "../lib/theme";
 
 type FilterId = "all" | "unread";
-
-const FILTERS: { id: FilterId; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "unread", label: "Unread" }
-];
 
 type IconConfig = {
   name: keyof typeof Ionicons.glyphMap;
@@ -56,39 +51,36 @@ function iconForType(type: NotificationType): IconConfig {
     case "gps":
       return { name: "radio", bg: Colors.purpleBg, color: Colors.purple };
     default:
-      return { name: "settings", bg: "#f3f4f6", color: Colors.text3 };
+      return { name: "settings", bg: Colors.brand50, color: Colors.text3 };
   }
 }
 
 function NotificationRow({
   item,
+  language,
   onPress
 }: {
   item: AppNotification;
+  language: AppLanguage;
   onPress: (item: AppNotification) => void;
 }) {
   const icon = iconForType(item.notification_type);
   const unread = !item.is_read;
 
   return (
-    <Pressable
-      onPress={() => onPress(item)}
-      style={({ pressed }) => [
-        styles.row,
-        unread ? styles.rowUnread : styles.rowRead,
-        pressed && { opacity: 0.94 }
-      ]}
-    >
-      <View style={[styles.iconBox, { backgroundColor: icon.bg }]}>
-        <Ionicons name={icon.name} size={16} color={icon.color} />
-      </View>
-      <View style={styles.rowContent}>
-        <Text style={styles.rowMessage} numberOfLines={2}>
-          {item.message}
-        </Text>
-      </View>
-      <Text style={styles.rowTime}>{formatRelativeTime(item.created_at)}</Text>
-    </Pressable>
+    <PressableCard onPress={() => onPress(item)} style={styles.rowWrap}>
+      <FlatCard style={[styles.row, unread ? styles.rowUnread : styles.rowRead]}>
+        <View style={[styles.iconBox, { backgroundColor: icon.bg }]}>
+          <Ionicons name={icon.name} size={20} color={icon.color} />
+        </View>
+        <View style={styles.rowContent}>
+          <Text style={[styles.rowMessage, unread && styles.rowMessageUnread]} numberOfLines={2}>
+            {item.message}
+          </Text>
+        </View>
+        <Text style={styles.rowTime}>{formatRelativeTimeLocalized(language, item.created_at)}</Text>
+      </FlatCard>
+    </PressableCard>
   );
 }
 
@@ -96,7 +88,8 @@ export default function NotificationsScreen() {
   useSecureScreen();
   const navigation = useNavigation<any>();
   const rootNav = navigation.getParent();
-  const { top: safeTop } = useSafeAreaInsetsCompat();
+  const { t, language } = useI18n();
+  const topEdges = useScreenTopEdges();
   const refreshControlProps = useRefreshControlProps();
   const requestId = useRef(0);
 
@@ -117,6 +110,14 @@ export default function NotificationsScreen() {
     return items;
   }, [filter, items]);
 
+  const filters = useMemo(
+    () => [
+      { id: "all" as const, label: t("notifications.filterAll") },
+      { id: "unread" as const, label: t("notifications.filterUnread") }
+    ],
+    [t]
+  );
+
   const loadPage = useCallback(async (opts?: { refresh?: boolean; next?: string | null }) => {
     const id = ++requestId.current;
     if (!opts?.next) {
@@ -128,7 +129,9 @@ export default function NotificationsScreen() {
 
     try {
       const page = await fetchNotificationsPage(
-        opts?.next ? { nextUrl: opts.next } : { page: 1 }
+        opts?.next
+          ? { nextUrl: opts.next, unreadOnly: filter === "unread" }
+          : { page: 1, unreadOnly: filter === "unread" }
       );
       if (id !== requestId.current) return;
 
@@ -136,11 +139,13 @@ export default function NotificationsScreen() {
         setItems((prev) => [...prev, ...page.results]);
       } else {
         setItems(page.results);
+        const unreadOnPage = page.results.filter((row) => !row.is_read).length;
+        setUnreadNotifCount(unreadOnPage);
       }
       setNextUrl(page.next);
     } catch (err) {
       if (id !== requestId.current) return;
-      setError(err instanceof Error ? err.message : "Unable to load notifications.");
+      setError(err instanceof Error ? err.message : t("notifications.loadError"));
     } finally {
       if (id === requestId.current) {
         setLoading(false);
@@ -148,16 +153,25 @@ export default function NotificationsScreen() {
         setRefreshing(false);
       }
     }
-  }, [setUnreadNotifCount]);
+  }, [filter, t]);
+
+  const filterBootstrapped = useRef(false);
+
+  useEffect(() => {
+    if (!filterBootstrapped.current) {
+      filterBootstrapped.current = true;
+      return;
+    }
+    void loadPage({ refresh: true });
+  }, [filter, loadPage]);
 
   useFocusEffect(
     useCallback(() => {
-      setUnreadNotifCount(0);
       void loadPage();
       return () => {
         void getBadgeCount(true);
       };
-    }, [loadPage, setUnreadNotifCount])
+    }, [loadPage])
   );
 
   async function onRefresh() {
@@ -174,7 +188,7 @@ export default function NotificationsScreen() {
       setUnreadNotifCount(0);
       await getBadgeCount(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not mark all as read.");
+      setError(err instanceof Error ? err.message : t("notifications.loadError"));
     } finally {
       setMarkingAll(false);
     }
@@ -217,10 +231,7 @@ export default function NotificationsScreen() {
         break;
       }
       case "sync_fail": {
-        rootNav?.navigate("Main", {
-          screen: "Me",
-          params: { screen: "ProfileMain" }
-        });
+        rootNav?.navigate("OfflineSync");
         break;
       }
       default:
@@ -228,33 +239,33 @@ export default function NotificationsScreen() {
     }
   }
 
-  const listHeader = (entranceTick: number) => (
-    <FadeInSection replayKey={entranceTick} delay={entranceStagger(0)}>
-      <View style={styles.headerBlock}>
-      <View style={styles.topBar}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.iconBtn}>
-          <Ionicons name="arrow-back" size={18} color={Colors.text1} />
-        </Pressable>
-        <Text style={styles.screenTitle}>Notifications</Text>
-        {unreadCount > 0 ? (
-          <Pressable
-            onPress={() => void handleMarkAllRead()}
-            disabled={markingAll}
-            style={styles.markAllBtn}
-          >
-            {markingAll ? (
-              <ActivityIndicator size="small" color={Colors.brand700} />
-            ) : (
-              <Text style={styles.markAllText}>Mark all read</Text>
-            )}
-          </Pressable>
+  const headerRight =
+    unreadCount > 0 ? (
+      <Pressable
+        onPress={() => void handleMarkAllRead()}
+        disabled={markingAll}
+        style={styles.markAllBtn}
+      >
+        {markingAll ? (
+          <ActivityIndicator size="small" color={Colors.brand700} />
         ) : (
-          <View style={styles.iconBtn} />
+          <Text style={styles.markAllText}>{t("notifications.markAllRead")}</Text>
         )}
-      </View>
+      </Pressable>
+    ) : null;
 
-      <FilterChipRow>
-        {FILTERS.map((chip) => {
+  return (
+    <SafeAreaView style={styles.screen} edges={topEdges}>
+      <ScreenCanvas />
+      <StackScreenHeader
+        title={t("notifications.title")}
+        onBack={() => navigation.goBack()}
+        right={headerRight}
+        includeSafeTop={false}
+      />
+
+      <FilterChipRow style={styles.filters}>
+        {filters.map((chip) => {
           const active = filter === chip.id;
           return (
             <Pressable
@@ -269,48 +280,40 @@ export default function NotificationsScreen() {
       </FilterChipRow>
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
-      </View>
-    </FadeInSection>
-  );
 
-  return (
-    <ScreenEntranceShell style={[styles.screen, { paddingTop: safeTop }]}>
-      {(entranceTick) =>
-        loading && items.length === 0 ? (
-          <ScreenLoader />
-        ) : (
-          <FlashList
-            data={visibleItems}
-            renderItem={({ item, index }) => (
-              <FadeInSection
-                replayKey={entranceTick}
-                delay={entranceListStagger(1, index)}
-                variant="card"
-              >
-                <NotificationRow item={item} onPress={handleRowPress} />
-              </FadeInSection>
-            )}
-            keyExtractor={(item) => String(item.id)}
-            ListHeaderComponent={listHeader(entranceTick)}
-            style={styles.list}
-            contentContainerStyle={{ paddingBottom: 32, paddingHorizontal: Spacing.screen }}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlProps} />}
-            onEndReached={() => {
-              if (nextUrl && !loadingMore) void loadPage({ next: nextUrl });
-            }}
-            onEndReachedThreshold={0.25}
-            ListFooterComponent={loadingMore ? <InlineSeedLoader /> : null}
-            ListEmptyComponent={
-              !loading ? (
-                <EntranceBlocks replayKey={entranceTick} startStep={1}>
-                  <EmptyState icon="happy-outline" title="All caught up" subtitle="No notifications" />
-                </EntranceBlocks>
-              ) : null
-            }
-          />
-        )
-      }
-    </ScreenEntranceShell>
+      {loading && items.length === 0 ? (
+        <ScreenLoader />
+      ) : (
+        <FlashList
+          data={visibleItems}
+          renderItem={({ item }) => (
+            <NotificationRow item={item} language={language} onPress={handleRowPress} />
+          )}
+          keyExtractor={(item) => String(item.id)}
+          style={styles.list}
+          contentContainerStyle={{
+            paddingBottom: Layout.stackScrollBottom,
+            paddingHorizontal: Spacing.screen,
+            paddingTop: Spacing.sm
+          }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlProps} />}
+          onEndReached={() => {
+            if (nextUrl && !loadingMore) void loadPage({ next: nextUrl });
+          }}
+          onEndReachedThreshold={0.25}
+          ListFooterComponent={loadingMore ? <InlineSeedLoader /> : null}
+          ListEmptyComponent={
+            !loading ? (
+              <EmptyState
+                icon="happy-outline"
+                title={t("notifications.emptyTitle")}
+                subtitle={t("notifications.emptySubtitle")}
+              />
+            ) : null
+          }
+        />
+      )}
+    </SafeAreaView>
   );
 }
 
@@ -322,55 +325,27 @@ const styles = StyleSheet.create({
   list: {
     flex: 1
   },
-  loadingWrap: {
-    flex: 1,
+  filters: {
+    paddingBottom: Spacing.sm,
     paddingHorizontal: Spacing.screen
-  },
-  skeleton: {
-    marginTop: Spacing.md
-  },
-  headerBlock: {
-    gap: Spacing.md,
-    paddingBottom: Spacing.md,
-    paddingTop: Spacing.sm
-  },
-  topBar: {
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between"
-  },
-  iconBtn: {
-    alignItems: "center",
-    height: 36,
-    justifyContent: "center",
-    width: 36
-  },
-  screenTitle: {
-    color: Colors.text1,
-    flex: 1,
-    fontSize: FontSize.h1,
-    fontWeight: FontWeight.bold,
-    textAlign: "center"
   },
   markAllBtn: {
     alignItems: "flex-end",
     justifyContent: "center",
-    minWidth: 96,
+    minHeight: 40,
     paddingLeft: Spacing.sm
   },
   markAllText: {
     color: Colors.brand700,
-    fontSize: FontSize.sm,
+    fontSize: FontSize.md,
     fontWeight: FontWeight.semibold
-  },
-  filterRow: {
-    gap: Spacing.sm
   },
   filterChip: {
     backgroundColor: Colors.surface,
     borderColor: Colors.border,
     borderRadius: Radius.pill,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 40,
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm
   },
@@ -380,7 +355,7 @@ const styles = StyleSheet.create({
   },
   filterChipText: {
     color: Colors.text2,
-    fontSize: FontSize.sm,
+    fontSize: FontSize.md,
     fontWeight: FontWeight.medium
   },
   filterChipTextActive: {
@@ -388,47 +363,54 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: Colors.red,
-    fontSize: FontSize.sm
+    fontSize: FontSize.md,
+    marginBottom: Spacing.sm,
+    marginHorizontal: Spacing.screen
+  },
+  rowWrap: {
+    marginBottom: Spacing.sm,
+    marginHorizontal: Spacing.screen
   },
   row: {
     alignItems: "center",
-    borderRadius: Radius.card,
     flexDirection: "row",
     gap: Spacing.md,
-    marginBottom: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md
+    minHeight: 56,
+    padding: Spacing.lg
   },
   rowUnread: {
-    backgroundColor: Colors.surface,
-    borderLeftColor: Colors.brand700,
-    borderLeftWidth: 3
+    backgroundColor: Colors.brand50,
+    borderColor: Colors.brand100,
+    borderWidth: StyleSheet.hairlineWidth
   },
   rowRead: {
-    backgroundColor: Colors.bg
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
+    borderWidth: StyleSheet.hairlineWidth
   },
   iconBox: {
     alignItems: "center",
-    borderRadius: Radius.sm,
-    height: 32,
+    borderRadius: Radius.inner,
+    height: 40,
     justifyContent: "center",
-    width: 32
+    width: 40
   },
   rowContent: {
     flex: 1
   },
   rowMessage: {
+    color: Colors.text2,
+    fontSize: FontSize.md,
+    lineHeight: 20
+  },
+  rowMessageUnread: {
     color: Colors.text1,
-    fontSize: FontSize.base,
-    lineHeight: 18
+    fontWeight: FontWeight.semibold
   },
   rowTime: {
     color: Colors.text4,
-    fontSize: FontSize.xs,
+    fontSize: FontSize.sm,
     maxWidth: 72,
     textAlign: "right"
-  },
-  footerSpinner: {
-    marginVertical: Spacing.lg
   }
 });

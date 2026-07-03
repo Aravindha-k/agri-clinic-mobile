@@ -1,9 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Image,
   Pressable,
@@ -13,8 +12,7 @@ import {
   Text,
   View
 } from "react-native";
-import { Employee, getCurrentEmployee, mergeEmployeePhoto } from "../../../src/api/employees";
-import { uploadEmployeePhoto } from "../../../src/api/profilePhotos";
+import { Employee, getCurrentEmployee } from "../../../src/api/employees";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { formatRelativeTimeLocalized } from "../../../src/i18n";
 import { useRefreshControlProps } from "../../../src/hooks/useRefreshControlProps";
@@ -23,30 +21,24 @@ import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
 import { useTabBarBottomInset } from "../../../src/hooks/useTabBarBottomInset";
 import { useAuth } from "../../../src/storage/AuthContext";
 import { useEmployee } from "../../../src/storage/EmployeeContext";
-import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
 import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
-import { isSameVisitLocalDay, visitDisplayIso } from "../../../src/utils/format";
 import { formatDisplayRole } from "../../../src/utils/formatRole";
-import {
-  handleProfilePickerError,
-  pickProfileImage,
-  showProfilePhotoSourcePicker
-} from "../../../src/utils/profileImagePick";
 import { cacheBustPhotoUrl, extractPhotoUrl, photoCacheVersion } from "../../../src/utils/profilePhotoUrl";
-import { getHomeVisits } from "../../../src/utils/visitsCache";
-import { EmptyState } from "../../components/ui";
+import { fetchVisitsPage } from "../../../src/api/visits";
+import { EmptyState, GhostButton, PrimaryButton } from "../../components/ui";
+import { FlatCard } from "../../components/layout";
 import { FadeInSection, entranceListStagger, entranceStagger } from "../../components/ui/FadeInSection";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
 import { getBadgeCount } from "../../lib/notificationsApi";
 import { useSyncStore } from "../../lib/store/syncStore";
 import { DS } from "../../../src/theme/globalStyles";
-import { LOGO_SIZES } from "../../../src/brand/logoSizing";
 import { ScreenCanvas, ScreenEntranceBloom } from "../../components/layout";
-import { Colors, FontSize, FontWeight, Spacing } from "../../lib/theme";
+import { Colors, FontSize, FontWeight, Layout, Radius, Spacing } from "../../lib/theme";
 import { SECTION_LABEL } from "../../lib/sectionLabel";
 import { BRAND_COLORS } from "../../../src/config/brand";
+import { ProfilePhotoFallback } from "../../../src/components/ProfilePhotoFallback";
 
-const PROFILE_DS = { ...DS, dangerBorder: "#fee2e2", hero: BRAND_COLORS.primary } as const;
+const PROFILE_DS = { ...DS, dangerBorder: Colors.redBg, hero: BRAND_COLORS.primary } as const;
 
 type MenuRow = {
   key: string;
@@ -69,49 +61,63 @@ function HeroVersionMark({ version }: { version: string }) {
   );
 }
 
-const PROFILE_AVATAR_SIZE = LOGO_SIZES.appLogo.xl;
+const PROFILE_AVATAR_SIZE = 96;
 
 function HeroAvatar({
   photoUrl,
   photoVersion,
-  uploading,
-  size = PROFILE_AVATAR_SIZE,
-  onPress
+  size = PROFILE_AVATAR_SIZE
 }: {
   photoUrl: string | null;
   photoVersion: string | number;
-  uploading: boolean;
   size?: number;
-  onPress: () => void;
 }) {
-  const uri = photoUrl ? cacheBustPhotoUrl(photoUrl, photoVersion) : null;
+  const [imgFailed, setImgFailed] = useState(false);
+  const uri = photoUrl && !imgFailed ? cacheBustPhotoUrl(photoUrl, photoVersion) : null;
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [photoUrl, photoVersion]);
+
+  const onImageError = useCallback(() => setImgFailed(true), []);
 
   return (
-    <Pressable
-      onPress={onPress}
-      disabled={uploading}
-      accessibilityRole="button"
-      accessibilityLabel="Change profile photo"
-      style={[
-        styles.heroAvatarWrap,
-        { width: size, height: size, borderRadius: size / 2 }
-      ]}
+    <View
+      accessibilityRole="image"
+      accessibilityLabel="Kavya Agri Clinic profile"
+      style={[styles.avatarShell, { width: size, height: size, borderRadius: size / 2 }]}
     >
       {uri ? (
         <Image
           source={{ uri }}
           style={{ width: size, height: size, borderRadius: size / 2 }}
           resizeMode="cover"
+          onError={onImageError}
         />
       ) : (
-        <Ionicons name="person" size={size * 0.4} color="#fff" />
+        <ProfilePhotoFallback size={size} />
       )}
-      {uploading ? (
-        <View style={[styles.heroAvatarOverlay, { borderRadius: size / 2 }]}>
-          <ActivityIndicator color="#fff" size="small" />
-        </View>
-      ) : null}
-    </Pressable>
+    </View>
+  );
+}
+
+function SyncStatusChip({
+  syncing,
+  pendingCount,
+  label
+}: {
+  syncing: boolean;
+  pendingCount: number;
+  label: string;
+}) {
+  const online = pendingCount === 0 && !syncing;
+  return (
+    <View style={[styles.syncChip, online ? styles.syncChipOnline : styles.syncChipPending]}>
+      <View style={[styles.syncDot, online ? styles.syncDotOnline : styles.syncDotPending]} />
+      <Text style={[styles.syncChipText, online ? styles.syncChipTextOnline : styles.syncChipTextPending]}>
+        {label}
+      </Text>
+    </View>
   );
 }
 
@@ -176,8 +182,7 @@ export default function ProfileTabScreen() {
   const refreshControlProps = useRefreshControlProps();
   const { signOut } = useAuth();
   const { employee, refreshEmployee } = useEmployee();
-  const { bumpAfterEmployeePhotoChange } = useFieldDataRefresh();
-  const { pendingCount, lastSyncAt, refreshQueue, syncAll } = useOfflineSync();
+  const { pendingCount, lastSyncAt, refreshQueue, syncAll, syncing } = useOfflineSync();
   const pendingGpsCount = useSyncStore((state) => state.pendingGPSCount);
   const { t, language, setLanguage } = useI18n();
 
@@ -186,43 +191,30 @@ export default function ProfileTabScreen() {
   const entranceTick = useScreenEntrance();
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoVersion, setPhotoVersion] = useState<string | number>(Date.now());
   const [visitsToday, setVisitsToday] = useState(0);
   const [visitsMonth, setVisitsMonth] = useState(0);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [syncingAll, setSyncingAll] = useState(false);
+  const lastLoadAtRef = useRef(0);
+  const PROFILE_FOCUS_TTL_MS = 45_000;
+  const SIGN_OUT_SYNC_TIMEOUT_MS = 8_000;
 
   const load = useCallback(async () => {
     try {
       setError("");
-      const [me, visits, unread] = await Promise.all([
+      const [me, todayPage, monthPage, unread] = await Promise.all([
         getCurrentEmployee(),
-        getHomeVisits({ pageSize: 100, force: true }),
+        fetchVisitsPage({ dateFilter: "today", pageSize: 1 }),
+        fetchVisitsPage({ dateFilter: "month", pageSize: 1 }),
         getBadgeCount(true)
       ]);
 
       setProfile(me);
       setUnreadNotifications(unread);
       setPhotoVersion(photoCacheVersion(me) ?? Date.now());
-
-      const today = new Date();
-      const month = today.getMonth();
-      const year = today.getFullYear();
-      let todayCount = 0;
-      let monthCount = 0;
-      for (const visit of visits.visits) {
-        if (isSameVisitLocalDay(visit, today)) todayCount += 1;
-        const iso = visitDisplayIso(visit);
-        if (iso) {
-          const d = new Date(iso);
-          if (!Number.isNaN(d.getTime()) && d.getMonth() === month && d.getFullYear() === year) {
-            monthCount += 1;
-          }
-        }
-      }
-      setVisitsToday(todayCount);
-      setVisitsMonth(monthCount);
+      setVisitsToday(todayPage.count ?? 0);
+      setVisitsMonth(monthPage.count ?? 0);
       await refreshEmployee().catch(() => undefined);
       await refreshQueue().catch(() => undefined);
     } catch (err) {
@@ -235,28 +227,16 @@ export default function ProfileTabScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      void load();
-    }, [load])
-  );
-
-  async function changePhoto(source: "camera" | "library") {
-    try {
-      const picked = await pickProfileImage(source);
-      if (!picked) return;
-      setUploadingPhoto(true);
-      const result = await uploadEmployeePhoto(picked, () => undefined);
-      const refreshed = mergeEmployeePhoto(profile, result);
-      if (refreshed) {
-        setProfile(refreshed);
-        setPhotoVersion(result.profile_photo_updated_at ?? photoCacheVersion(refreshed) ?? Date.now());
+      const now = Date.now();
+      if (now - lastLoadAtRef.current < PROFILE_FOCUS_TTL_MS && profile) {
+        void getBadgeCount(true).then(setUnreadNotifications);
+        void refreshQueue();
+        return;
       }
-      bumpAfterEmployeePhotoChange();
-    } catch (err) {
-      Alert.alert(t("common.uploadFailed"), handleProfilePickerError(err) || t("common.tryAgain"));
-    } finally {
-      setUploadingPhoto(false);
-    }
-  }
+      lastLoadAtRef.current = now;
+      void load();
+    }, [load, profile, refreshQueue])
+  );
 
   async function handleSyncAll() {
     setSyncingAll(true);
@@ -279,7 +259,10 @@ export default function ProfileTabScreen() {
         onPress: () => {
           void (async () => {
             try {
-              await syncAll();
+              await Promise.race([
+                syncAll(),
+                new Promise<void>((resolve) => setTimeout(resolve, SIGN_OUT_SYNC_TIMEOUT_MS))
+              ]);
             } catch {
               /* pending visits remain locally until next sync */
             }
@@ -352,7 +335,7 @@ export default function ProfileTabScreen() {
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scroll, { paddingBottom: tabInset + 24 }]}
+        contentContainerStyle={[styles.scroll, { paddingBottom: tabInset + Layout.scrollBottomExtra }]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -365,25 +348,31 @@ export default function ProfileTabScreen() {
         }
       >
         <FadeInSection replayKey={entranceTick} delay={entranceStagger(0)}>
-          <View style={[styles.hero, { paddingTop: safeTop + Spacing.lg }]}>
+          <View style={[styles.hero, { paddingTop: safeTop + Spacing.md }]}>
             <View style={styles.heroTopRow}>
-              <Text style={styles.pageTitle}>{t("tabs.profile")}</Text>
+              <Text style={styles.pageTitle}>{t("profile.pageTitle")}</Text>
               <HeroVersionMark version={appVersion} />
             </View>
 
             <View style={styles.profileIdentity}>
-              <HeroAvatar
-                photoUrl={photoUrl}
-                photoVersion={photoVersion}
-                uploading={uploadingPhoto}
-                onPress={() => showProfilePhotoSourcePicker((s) => void changePhoto(s))}
-              />
+              <HeroAvatar photoUrl={photoUrl} photoVersion={photoVersion} />
               <Text style={styles.userName} numberOfLines={2}>
                 {displayName}
               </Text>
               <View style={styles.roleBadge}>
                 <Text style={styles.roleText}>{roleLabel}</Text>
               </View>
+              <SyncStatusChip
+                syncing={syncing}
+                pendingCount={pendingCount + pendingGpsCount}
+                label={
+                  syncing
+                    ? t("home.syncing")
+                    : pendingCount + pendingGpsCount > 0
+                      ? t("profile.pendingSync", { count: pendingCount + pendingGpsCount })
+                      : t("profile.synced")
+                }
+              />
               <Text style={styles.userMeta} numberOfLines={2}>
                 {employeeId !== "—" ? `EMP ${employeeId}` : "EMP —"}
                 {phone !== "—" ? ` · ${phone}` : ""}
@@ -422,7 +411,7 @@ export default function ProfileTabScreen() {
           </FadeInSection>
 
           <FadeInSection replayKey={entranceTick} delay={entranceListStagger(2, menuRows.length + 1)} variant="card">
-          <View style={styles.syncCard}>
+          <FlatCard style={styles.syncCard} padded>
             <SectionLabel title={t("profile.syncOffline")} />
             <View style={styles.syncRow}>
               <Text style={styles.syncKey}>{t("profile.pendingVisits")}</Text>
@@ -440,36 +429,28 @@ export default function ProfileTabScreen() {
               <Text style={styles.syncKey}>{t("profile.lastSynced")}</Text>
               <Text style={[styles.syncValue, neverSynced && styles.syncValueNever]}>{lastSyncedLabel}</Text>
             </View>
-          </View>
+          </FlatCard>
           </FadeInSection>
 
           <FadeInSection replayKey={entranceTick} delay={entranceListStagger(2, menuRows.length + 2)} variant="card">
-          <Pressable
+          <PrimaryButton
+            label={t("profile.syncAllNow")}
             onPress={() => void handleSyncAll()}
+            loading={syncingAll}
             disabled={syncingAll}
-            style={({ pressed }) => [
-              styles.syncBtn,
-              syncingAll && styles.syncBtnDisabled,
-              pressed && !syncingAll && { opacity: 0.92 }
-            ]}
-          >
-            {syncingAll ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Ionicons name="refresh" size={16} color="#fff" />
-            )}
-            <Text style={styles.syncBtnText}>{t("profile.syncAllNow")}</Text>
-          </Pressable>
+            icon={<Ionicons name="refresh" size={18} color={Colors.surface} />}
+            style={styles.syncBtnOuter}
+          />
           </FadeInSection>
 
           <FadeInSection replayKey={entranceTick} delay={entranceListStagger(2, menuRows.length + 3)} variant="card">
-          <Pressable
+          <GhostButton
+            label={t("profile.signOut")}
             onPress={confirmSignOut}
-            style={({ pressed }) => [styles.signOutBtn, pressed && { opacity: 0.92 }]}
-          >
-            <Ionicons name="log-out-outline" size={15} color={PROFILE_DS.danger} />
-            <Text style={styles.signOutText}>{t("profile.signOut")}</Text>
-          </Pressable>
+            variant="danger"
+            icon={<Ionicons name="log-out-outline" size={18} color={Colors.red} />}
+            style={styles.signOutBtnOuter}
+          />
           </FadeInSection>
           </View>
         </FadeInSection>
@@ -480,7 +461,7 @@ export default function ProfileTabScreen() {
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: Colors.bg,
+    backgroundColor: "transparent",
     flex: 1
   },
   scrollView: {
@@ -490,7 +471,9 @@ const styles = StyleSheet.create({
     flexGrow: 1
   },
   hero: {
-    backgroundColor: Colors.brand700,
+    backgroundColor: Colors.surface,
+    borderBottomColor: Colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     paddingBottom: 18,
     paddingHorizontal: 20
   },
@@ -501,7 +484,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg
   },
   pageTitle: {
-    color: "#FFFFFF",
+    color: Colors.text1,
     fontSize: FontSize.hero,
     fontWeight: FontWeight.bold,
     letterSpacing: -0.3
@@ -511,49 +494,79 @@ const styles = StyleSheet.create({
   },
   profileIdentity: {
     alignItems: "center",
-    gap: 8,
+    gap: 10,
     marginBottom: 18
   },
   heroVersion: {
-    color: "rgba(255,255,255,0.75)",
-    fontSize: 10,
+    color: Colors.text3,
+    fontSize: FontSize.sm,
     fontWeight: "600"
   },
-  heroAvatarWrap: {
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderColor: "rgba(255,255,255,0.55)",
-    borderWidth: 3,
-    justifyContent: "center",
+  avatarShell: {
+    backgroundColor: Colors.bg,
+    borderColor: Colors.border,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden"
   },
-  heroAvatarOverlay: {
-    ...StyleSheet.absoluteFillObject,
+  syncChip: {
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.35)",
-    justifyContent: "center"
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 5
+  },
+  syncChipOnline: {
+    backgroundColor: Colors.greenBg,
+    borderColor: Colors.green
+  },
+  syncChipPending: {
+    backgroundColor: Colors.amberBg,
+    borderColor: Colors.amber
+  },
+  syncDot: {
+    borderRadius: 4,
+    height: 8,
+    width: 8
+  },
+  syncDotOnline: {
+    backgroundColor: Colors.green
+  },
+  syncDotPending: {
+    backgroundColor: Colors.amber
+  },
+  syncChipText: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semibold
+  },
+  syncChipTextOnline: {
+    color: Colors.greenText
+  },
+  syncChipTextPending: {
+    color: Colors.amberText
   },
   userName: {
-    color: "#fff",
+    color: Colors.text1,
     fontSize: 20,
     fontWeight: "800",
     letterSpacing: -0.3,
     textAlign: "center"
   },
   roleBadge: {
-    backgroundColor: "rgba(255,255,255,0.18)",
+    backgroundColor: Colors.brand50,
     borderRadius: 99,
     paddingHorizontal: 10,
     paddingVertical: 3
   },
   roleText: {
-    color: "#fff",
-    fontSize: 9.5,
+    color: Colors.greenText,
+    fontSize: FontSize.sm,
     fontWeight: "700"
   },
   userMeta: {
-    color: "rgba(255,255,255,0.65)",
-    fontSize: 10,
+    color: Colors.text3,
+    fontSize: FontSize.md,
     textAlign: "center"
   },
   statsRow: {
@@ -564,11 +577,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: Colors.surface,
     borderColor: Colors.border,
-    borderRadius: 14,
+    borderRadius: Radius.card,
     borderWidth: StyleSheet.hairlineWidth,
     flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md
   },
   statValue: {
     color: Colors.text1,
@@ -577,33 +590,35 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     color: Colors.text3,
-    fontSize: 9.5,
-    fontWeight: "500",
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.medium,
     marginTop: 2,
     textAlign: "center"
   },
   menuSection: {
     backgroundColor: Colors.bg,
     flex: 1,
-    paddingBottom: 8
+    paddingBottom: 8,
+    paddingTop: Spacing.md
   },
   sectionLabel: {
-    marginBottom: 6,
-    marginHorizontal: 16,
-    marginTop: 14
+    marginBottom: Spacing.sm,
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.lg
   },
   menuItem: {
     alignItems: "center",
     backgroundColor: Colors.surface,
     borderColor: Colors.border,
-    borderRadius: 14,
+    borderRadius: Radius.card,
     borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
-    gap: 12,
-    marginBottom: 8,
-    marginHorizontal: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12
+    gap: Spacing.md,
+    marginBottom: Spacing.sm,
+    marginHorizontal: Spacing.lg,
+    minHeight: 52,
+    paddingHorizontal: Spacing.cardLg,
+    paddingVertical: Spacing.md
   },
   menuIconBox: {
     alignItems: "center",
@@ -616,8 +631,8 @@ const styles = StyleSheet.create({
   menuLabel: {
     color: Colors.text1,
     flex: 1,
-    fontSize: 12.5,
-    fontWeight: "600"
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.semibold
   },
   menuBadge: {
     backgroundColor: PROFILE_DS.danger,
@@ -627,9 +642,9 @@ const styles = StyleSheet.create({
     paddingVertical: 2
   },
   menuBadgeText: {
-    color: "#fff",
-    fontSize: 9,
-    fontWeight: "700",
+    color: Colors.onPrimary,
+    fontSize: FontSize.caption,
+    fontWeight: FontWeight.bold,
     textAlign: "center"
   },
   langToggle: {
@@ -650,20 +665,23 @@ const styles = StyleSheet.create({
   },
   langPillText: {
     color: PROFILE_DS.textMuted,
-    fontSize: 9.5,
-    fontWeight: "700"
+    fontSize: FontSize.caption,
+    fontWeight: FontWeight.bold
   },
   langPillTextActive: {
-    color: "#fff"
+    color: Colors.onPrimary
   },
   syncCard: {
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginHorizontal: 16,
-    marginTop: 4,
-    padding: 14
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.xs
+  },
+  syncBtnOuter: {
+    marginHorizontal: Spacing.lg
+  },
+  signOutBtnOuter: {
+    borderColor: Colors.red,
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.sm
   },
   syncRow: {
     borderBottomColor: Colors.border,
@@ -677,13 +695,13 @@ const styles = StyleSheet.create({
   },
   syncKey: {
     color: Colors.text3,
-    fontSize: 11,
-    fontWeight: "500"
+    fontSize: FontSize.body,
+    fontWeight: FontWeight.medium
   },
   syncValue: {
     color: Colors.text1,
-    fontSize: 11,
-    fontWeight: "700"
+    fontSize: FontSize.body,
+    fontWeight: FontWeight.bold
   },
   syncValueWarn: {
     color: Colors.amber
@@ -691,41 +709,7 @@ const styles = StyleSheet.create({
   syncValueNever: {
     color: Colors.red
   },
-  syncBtn: {
-    alignItems: "center",
-    backgroundColor: Colors.brand700,
-    borderRadius: 14,
-    flexDirection: "row",
-    gap: 8,
-    height: 48,
-    justifyContent: "center",
-    marginHorizontal: 16,
-    marginTop: 10
-  },
   syncBtnDisabled: {
     opacity: 0.7
   },
-  syncBtnText: {
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: "700"
-  },
-  signOutBtn: {
-    alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderRadius: 14,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: 8,
-    height: 44,
-    justifyContent: "center",
-    marginHorizontal: 16,
-    marginTop: 8
-  },
-  signOutText: {
-    color: PROFILE_DS.danger,
-    fontSize: 13,
-    fontWeight: "600"
-  }
 });

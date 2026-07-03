@@ -60,6 +60,15 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated]);
 
   useEffect(() => {
+    if (!sessionReady) {
+      setError("");
+      return;
+    }
+    if (authEmployee) return;
+    void refreshEmployee();
+  }, [authEmployee, refreshEmployee, sessionReady]);
+
+  useEffect(() => {
     if (!sessionReady || employeePhotoVersion <= 0) return;
     void refreshEmployee();
   }, [employeePhotoVersion, refreshEmployee, sessionReady]);

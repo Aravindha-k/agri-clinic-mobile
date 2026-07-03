@@ -2,8 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { ReactNode } from "react";
 import { useNavigation } from "@react-navigation/native";
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
-import { AppHeader } from "../components/ui";
-import { useDesignSystem } from "../hooks/useDesignSystem";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useSecureScreen } from "../hooks/useSecureScreen";
 import { useI18n } from "../i18n/I18nContext";
 import { scheduleReminderSoundTest } from "../notifications/fieldReminderNotifications";
@@ -11,11 +10,12 @@ import { playFieldReminderSound } from "../notifications/playReminderSound";
 import { useAppPreferences } from "../storage/AppPreferencesContext";
 import { useTheme } from "../theme";
 import type { AppLanguage } from "../i18n";
+import { FlatCard, ScreenCanvas, StackScreenHeader } from "../../mobile/components/layout";
+import { Colors, FontSize, FontWeight, Layout, Radius, Spacing } from "../../mobile/lib/theme";
 
 export function SettingsScreen() {
   useSecureScreen();
   const navigation = useNavigation<any>();
-  const { colors, type, shadows } = useDesignSystem();
   const { isDark, toggleTheme } = useTheme();
   const { autoSyncOnReconnect, wifiOnlySync, trackingBatterySaver, reminderSoundsEnabled, setPreference } =
     useAppPreferences();
@@ -39,26 +39,32 @@ export function SettingsScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <AppHeader title={t("settings.title")} subtitle={t("settings.subtitle")} onBack={() => navigation.goBack()} />
+    <SafeAreaView style={styles.screen} edges={["top"]}>
+      <ScreenCanvas />
+      <StackScreenHeader
+        title={t("settings.title")}
+        subtitle={t("settings.subtitle")}
+        onBack={() => navigation.goBack()}
+        includeSafeTop={false}
+      />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        <Text style={type.label}>{t("settings.language")}</Text>
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderSubtle }, shadows.card]}>
+        <Text style={styles.sectionLabel}>{t("settings.language")}</Text>
+        <FlatCard padded={false}>
           <LanguageRow language={language} onSelect={(lang) => void setLanguage(lang)} t={t} />
-        </View>
+        </FlatCard>
 
-        <Text style={[type.label, styles.sectionGap]}>{t("settings.appearance")}</Text>
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderSubtle }, shadows.card]}>
+        <Text style={styles.sectionLabel}>{t("settings.appearance")}</Text>
+        <FlatCard padded={false}>
           <SettingRow
             icon={isDark ? "moon" : "sunny"}
             title={t("settings.darkMode")}
             subtitle={t("settings.darkModeHint")}
-            right={<Switch value={isDark} onValueChange={toggleTheme} trackColor={{ true: colors.primary }} />}
+            right={<Switch value={isDark} onValueChange={toggleTheme} trackColor={{ true: Colors.brand700 }} />}
           />
-        </View>
+        </FlatCard>
 
-        <Text style={[type.label, styles.sectionGap]}>{t("settings.sync")}</Text>
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderSubtle }, shadows.card]}>
+        <Text style={styles.sectionLabel}>{t("settings.sync")}</Text>
+        <FlatCard padded={false}>
           <SettingRow
             icon="cloud-upload-outline"
             title={t("settings.autoSync")}
@@ -67,11 +73,11 @@ export function SettingsScreen() {
               <Switch
                 value={autoSyncOnReconnect}
                 onValueChange={(v) => void setPreference("autoSyncOnReconnect", v)}
-                trackColor={{ true: colors.primary }}
+                trackColor={{ true: Colors.brand700 }}
               />
             }
           />
-          <View style={[styles.divider, { backgroundColor: colors.borderSubtle }]} />
+          <View style={styles.divider} />
           <SettingRow
             icon="wifi-outline"
             title={t("settings.wifiOnly")}
@@ -80,14 +86,14 @@ export function SettingsScreen() {
               <Switch
                 value={wifiOnlySync}
                 onValueChange={(v) => void setPreference("wifiOnlySync", v)}
-                trackColor={{ true: colors.primary }}
+                trackColor={{ true: Colors.brand700 }}
               />
             }
           />
-        </View>
+        </FlatCard>
 
-        <Text style={[type.label, styles.sectionGap]}>{t("settings.tracking")}</Text>
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderSubtle }, shadows.card]}>
+        <Text style={styles.sectionLabel}>{t("settings.tracking")}</Text>
+        <FlatCard padded={false}>
           <SettingRow
             icon="battery-charging-outline"
             title={t("settings.batterySaver")}
@@ -96,14 +102,14 @@ export function SettingsScreen() {
               <Switch
                 value={trackingBatterySaver}
                 onValueChange={(v) => void setPreference("trackingBatterySaver", v)}
-                trackColor={{ true: colors.primary }}
+                trackColor={{ true: Colors.brand700 }}
               />
             }
           />
-        </View>
+        </FlatCard>
 
-        <Text style={[type.label, styles.sectionGap]}>{t("settings.reminders")}</Text>
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderSubtle }, shadows.card]}>
+        <Text style={styles.sectionLabel}>{t("settings.reminders")}</Text>
+        <FlatCard padded={false}>
           <SettingRow
             icon="volume-high-outline"
             title={t("settings.reminderSounds")}
@@ -112,12 +118,12 @@ export function SettingsScreen() {
               <Switch
                 value={reminderSoundsEnabled}
                 onValueChange={(v) => void setPreference("reminderSoundsEnabled", v)}
-                trackColor={{ true: colors.primary }}
+                trackColor={{ true: Colors.brand700 }}
               />
             }
           />
-          <View style={[styles.divider, { backgroundColor: colors.borderSubtle }]} />
-          <Text style={[type.caption, styles.testHint]}>{t("settings.reminderTestHint")}</Text>
+          <View style={styles.divider} />
+          <Text style={styles.testHint}>{t("settings.reminderTestHint")}</Text>
           <View style={styles.testRow}>
             <ReminderTestButton label={t("settings.reminderTestWater")} onPress={() => void testReminderSound("water")} />
             <ReminderTestButton label={t("settings.reminderTestHeat")} onPress={() => void testReminderSound("heat")} />
@@ -126,7 +132,7 @@ export function SettingsScreen() {
               onPress={() => void testReminderSound("battery")}
             />
           </View>
-        </View>
+        </FlatCard>
 
         <Pressable
           onPress={() =>
@@ -146,10 +152,10 @@ export function SettingsScreen() {
           }
           style={({ pressed }) => [styles.reset, pressed && { opacity: 0.9 }]}
         >
-          <Text style={{ color: colors.danger, fontWeight: "800" }}>{t("settings.resetDefaults")}</Text>
+          <Text style={styles.resetText}>{t("settings.resetDefaults")}</Text>
         </Pressable>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -162,30 +168,29 @@ function LanguageRow({
   onSelect: (lang: AppLanguage) => void;
   t: (key: string) => string;
 }) {
-  const { colors, type } = useDesignSystem();
   return (
     <View style={styles.langRow}>
-      <View style={[styles.icon, { backgroundColor: colors.primarySoft }]}>
-        <Ionicons name="language-outline" size={20} color={colors.primary} />
+      <View style={styles.icon}>
+        <Ionicons name="language-outline" size={20} color={Colors.brand700} />
       </View>
       <View style={styles.rowCopy}>
-        <Text style={type.bodyStrong}>{t("settings.language")}</Text>
-        <Text style={type.caption}>{t("settings.languageHint")}</Text>
+        <Text style={styles.rowTitle}>{t("settings.language")}</Text>
+        <Text style={styles.rowSub}>{t("settings.languageHint")}</Text>
       </View>
       <View style={styles.langChips}>
         <Pressable
           onPress={() => onSelect("en")}
-          style={[styles.langChip, language === "en" && { backgroundColor: colors.primary }]}
+          style={[styles.langChip, language === "en" && styles.langChipActive]}
         >
-          <Text style={[styles.langChipText, language === "en" && { color: "#fff" }]}>
+          <Text style={[styles.langChipText, language === "en" && styles.langChipTextActive]}>
             {t("profile.english")}
           </Text>
         </Pressable>
         <Pressable
           onPress={() => onSelect("ta")}
-          style={[styles.langChip, language === "ta" && { backgroundColor: colors.primary }]}
+          style={[styles.langChip, language === "ta" && styles.langChipActive]}
         >
-          <Text style={[styles.langChipText, language === "ta" && { color: "#fff" }]}>
+          <Text style={[styles.langChipText, language === "ta" && styles.langChipTextActive]}>
             {t("profile.tamil")}
           </Text>
         </Pressable>
@@ -195,17 +200,9 @@ function LanguageRow({
 }
 
 function ReminderTestButton({ label, onPress }: { label: string; onPress: () => void }) {
-  const { colors, type } = useDesignSystem();
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.testBtn,
-        { backgroundColor: colors.primarySoft, borderColor: colors.borderSubtle },
-        pressed && { opacity: 0.9 }
-      ]}
-    >
-      <Text style={[type.caption, styles.testBtnText, { color: colors.primary }]}>{label}</Text>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.testBtn, pressed && { opacity: 0.9 }]}>
+      <Text style={styles.testBtnText}>{label}</Text>
     </Pressable>
   );
 }
@@ -221,15 +218,14 @@ function SettingRow({
   subtitle: string;
   right: ReactNode;
 }) {
-  const { colors, type } = useDesignSystem();
   return (
     <View style={styles.row}>
-      <View style={[styles.icon, { backgroundColor: colors.primarySoft }]}>
-        <Ionicons name={icon} size={20} color={colors.primary} />
+      <View style={styles.icon}>
+        <Ionicons name={icon} size={20} color={Colors.brand700} />
       </View>
       <View style={styles.rowCopy}>
-        <Text style={type.bodyStrong}>{title}</Text>
-        <Text style={type.caption}>{subtitle}</Text>
+        <Text style={styles.rowTitle}>{title}</Text>
+        <Text style={styles.rowSub}>{subtitle}</Text>
       </View>
       {right}
     </View>
@@ -237,31 +233,107 @@ function SettingRow({
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: Colors.bg,
+    flex: 1
+  },
   scrollView: { flex: 1 },
-  body: { gap: 8, padding: 16, paddingBottom: 32 },
-  sectionGap: { marginTop: 12 },
-  card: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
-  row: { alignItems: "center", flexDirection: "row", gap: 12, padding: 14 },
-  langRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 12, padding: 14 },
-  langChips: { flexDirection: "row", gap: 6 },
+  body: { gap: Spacing.sm, padding: Spacing.screen, paddingBottom: Layout.stackScrollBottom },
+  sectionLabel: {
+    color: Colors.text3,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+    letterSpacing: 0.5,
+    marginTop: Spacing.md,
+    textTransform: "uppercase"
+  },
+  row: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: Spacing.md,
+    minHeight: 56,
+    padding: Spacing.cardLg
+  },
+  langRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.md,
+    padding: Spacing.cardLg
+  },
+  langChips: { flexDirection: "row", gap: Spacing.sm },
   langChip: {
-    borderRadius: 999,
+    backgroundColor: Colors.brand50,
+    borderColor: Colors.border,
+    borderRadius: Radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 12,
-    paddingVertical: 6
+    minHeight: 40,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm
   },
-  langChipText: { fontSize: 13, fontWeight: "700" },
-  icon: { alignItems: "center", borderRadius: 12, height: 42, justifyContent: "center", width: 42 },
+  langChipActive: {
+    backgroundColor: Colors.brand700,
+    borderColor: Colors.brand700
+  },
+  langChipText: {
+    color: Colors.text2,
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.bold
+  },
+  langChipTextActive: {
+    color: Colors.surface
+  },
+  icon: {
+    alignItems: "center",
+    backgroundColor: Colors.brand50,
+    borderRadius: Radius.inner,
+    height: 42,
+    justifyContent: "center",
+    width: 42
+  },
   rowCopy: { flex: 1, gap: 2 },
-  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 14 },
-  testHint: { marginHorizontal: 14, marginTop: 4 },
-  testRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, padding: 14, paddingTop: 10 },
-  testBtn: {
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 12,
-    paddingVertical: 8
+  rowTitle: {
+    color: Colors.text1,
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.semibold
   },
-  testBtnText: { fontWeight: "700" },
-  reset: { alignItems: "center", marginTop: 20, padding: 12 }
+  rowSub: {
+    color: Colors.text3,
+    fontSize: FontSize.md,
+    lineHeight: 20
+  },
+  divider: {
+    backgroundColor: Colors.border,
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: Spacing.cardLg
+  },
+  testHint: {
+    color: Colors.text3,
+    fontSize: FontSize.md,
+    marginHorizontal: Spacing.cardLg,
+    marginTop: Spacing.xs
+  },
+  testRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    padding: Spacing.cardLg,
+    paddingTop: Spacing.sm
+  },
+  testBtn: {
+    backgroundColor: Colors.brand50,
+    borderColor: Colors.border,
+    borderRadius: Radius.button,
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 44,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm
+  },
+  testBtnText: {
+    color: Colors.brand700,
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.semibold
+  },
+  reset: { alignItems: "center", marginTop: Spacing.lg, minHeight: 48, padding: Spacing.md },
+  resetText: { color: Colors.red, fontSize: FontSize.md, fontWeight: FontWeight.bold }
 });

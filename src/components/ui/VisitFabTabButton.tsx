@@ -1,5 +1,6 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Plus } from "lucide-react-native";
 import { BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
+import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
@@ -13,19 +14,19 @@ import { useActiveWorkday } from "../../hooks/useActiveWorkday";
 import { useTracking } from "../../storage/TrackingContext";
 import { requestGpsForFieldWork } from "../../utils/locationRequiredModal";
 import { FAB_HALO_SIZE, FAB_RISE_ABOVE_BAR, FAB_SIZE } from "../../theme/tabBar";
+import { LucideGlyph } from "../../../mobile/components/ui/AppIcon";
 import { Colors, FontSize, FontWeight } from "../../../mobile/lib/theme";
 
-function RippleRing({ progress, color }: { progress: Animated.Value; color: string }) {
-  const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.42] });
-  const opacity = progress.interpolate({ inputRange: [0, 0.15, 1], outputRange: [0, 0.28, 0] });
+function GlowRing({ progress }: { progress: Animated.Value }) {
+  const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [1, 1.35] });
+  const opacity = progress.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 0.22, 0] });
 
   return (
     <Animated.View
       pointerEvents="none"
       style={[
-        styles.ripple,
+        styles.glowRing,
         {
-          borderColor: color,
           opacity,
           transform: [{ scale }]
         }
@@ -47,72 +48,23 @@ export function VisitFabTabButton({
   const workdaySheetRef = useRef<WorkdayRequiredSheetRef>(null);
   const fabRotate = useRef(new Animated.Value(0)).current;
   const pressScale = useRef(new Animated.Value(1)).current;
-  const breathe = useRef(new Animated.Value(1)).current;
-  const plusPulse = useRef(new Animated.Value(1)).current;
-  const rippleA = useRef(new Animated.Value(0)).current;
-  const rippleB = useRef(new Animated.Value(0)).current;
+  const glowPulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const breatheLoop = Animated.loop(
+    const glowLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(breathe, {
-          toValue: 1.04,
-          duration: 1400,
-          easing: Easing.inOut(Easing.sin),
+        Animated.timing(glowPulse, {
+          toValue: 1,
+          duration: 2400,
+          easing: Easing.out(Easing.quad),
           useNativeDriver: true
         }),
-        Animated.timing(breathe, {
-          toValue: 1,
-          duration: 1400,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true
-        })
+        Animated.timing(glowPulse, { toValue: 0, duration: 0, useNativeDriver: true })
       ])
     );
-
-    const plusLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(plusPulse, {
-          toValue: 1.06,
-          duration: 1400,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true
-        }),
-        Animated.timing(plusPulse, {
-          toValue: 1,
-          duration: 1400,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true
-        })
-      ])
-    );
-
-    const rippleLoop = (value: Animated.Value, delayMs: number) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(delayMs),
-          Animated.timing(value, {
-            toValue: 1,
-            duration: 2000,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: true
-          }),
-          Animated.timing(value, { toValue: 0, duration: 0, useNativeDriver: true })
-        ])
-      );
-
-    breatheLoop.start();
-    plusLoop.start();
-    rippleLoop(rippleA, 0).start();
-    rippleLoop(rippleB, 1000).start();
-
-    return () => {
-      breatheLoop.stop();
-      plusLoop.stop();
-      rippleA.stopAnimation();
-      rippleB.stopAnimation();
-    };
-  }, [breathe, plusPulse, rippleA, rippleB]);
+    glowLoop.start();
+    return () => glowLoop.stop();
+  }, [glowPulse]);
 
   useEffect(() => {
     type NavLike = {
@@ -157,7 +109,6 @@ export function VisitFabTabButton({
   }, [fabRotate, visitFlowOpen]);
 
   const spin = fabRotate.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "45deg"] });
-  const dockScale = Animated.multiply(breathe, pressScale);
 
   const openNewVisit = useCallback(() => {
     navigateToVisitFlow(navigation, {
@@ -195,7 +146,7 @@ export function VisitFabTabButton({
   };
 
   const onPressOut = () => {
-    Animated.spring(pressScale, { toValue: 1, useNativeDriver: true, speed: 24, bounciness: 5 }).start();
+    Animated.spring(pressScale, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 6 }).start();
   };
 
   return (
@@ -216,19 +167,21 @@ export function VisitFabTabButton({
               styles.dock,
               {
                 marginTop: -FAB_RISE_ABOVE_BAR,
-                transform: [{ scale: dockScale }]
+                transform: [{ scale: pressScale }]
               }
             ]}
           >
-            <RippleRing progress={rippleA} color={Colors.brand700} />
-            <RippleRing progress={rippleB} color={Colors.brand500} />
-            <View style={styles.halo}>
-              <View style={styles.haloInner} />
-            </View>
-            <Animated.View style={[styles.fab, { transform: [{ rotate: spin }] }]}>
-              <Animated.View style={{ transform: [{ scale: plusPulse }] }}>
-                <Ionicons name="add" size={28} color={Colors.surface} />
-              </Animated.View>
+            <GlowRing progress={glowPulse} />
+            <View style={styles.outerRing} />
+            <Animated.View style={[styles.fabWrap, { transform: [{ rotate: spin }] }]}>
+              <LinearGradient
+                colors={["#3CB878", "#1F7A4F", "#0F5C3A"]}
+                start={{ x: 0.2, y: 0 }}
+                end={{ x: 0.9, y: 1 }}
+                style={styles.fab}
+              >
+                <LucideGlyph icon={Plus} size={26} color={Colors.surface} strokeWidth={2.5} />
+              </LinearGradient>
             </Animated.View>
           </Animated.View>
           <Text style={styles.label} numberOfLines={1}>
@@ -262,48 +215,37 @@ const styles = StyleSheet.create({
     marginBottom: 3,
     width: FAB_HALO_SIZE + 8
   },
-  ripple: {
+  glowRing: {
+    borderColor: "rgba(46, 155, 100, 0.45)",
     borderRadius: FAB_HALO_SIZE,
     borderWidth: 2,
     height: FAB_HALO_SIZE,
     position: "absolute",
     width: FAB_HALO_SIZE
   },
-  halo: {
-    alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderColor: Colors.brand100,
-    borderRadius: FAB_HALO_SIZE / 2,
+  outerRing: {
+    borderColor: "rgba(255, 255, 255, 0.85)",
+    borderRadius: (FAB_HALO_SIZE + 6) / 2,
     borderWidth: 2,
-    elevation: 4,
-    height: FAB_HALO_SIZE,
-    justifyContent: "center",
+    height: FAB_HALO_SIZE + 6,
     position: "absolute",
-    shadowColor: "#0F5132",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    width: FAB_HALO_SIZE
+    width: FAB_HALO_SIZE + 6
   },
-  haloInner: {
-    backgroundColor: Colors.brand50,
-    borderRadius: (FAB_HALO_SIZE - 8) / 2,
-    height: FAB_HALO_SIZE - 8,
-    width: FAB_HALO_SIZE - 8
+  fabWrap: {
+    borderRadius: FAB_SIZE / 2,
+    elevation: 10,
+    shadowColor: "#0B3D28",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.28,
+    shadowRadius: 12
   },
   fab: {
     alignItems: "center",
-    backgroundColor: Colors.brand700,
-    borderColor: Colors.surface,
+    borderColor: "rgba(255,255,255,0.35)",
     borderRadius: FAB_SIZE / 2,
-    borderWidth: 2,
-    elevation: 10,
+    borderWidth: 1.5,
     height: FAB_SIZE,
     justifyContent: "center",
-    shadowColor: "#0F5132",
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.32,
-    shadowRadius: 10,
     width: FAB_SIZE
   },
   label: {

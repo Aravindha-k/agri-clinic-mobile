@@ -84,14 +84,17 @@ function followUpOverdueDays(farmer: MobileFarmer, ref = new Date()): number {
   return ms > 0 ? Math.floor(ms / 86_400_000) : 0;
 }
 
-export function formatLastVisitDateLabel(farmer: MobileFarmer): string | null {
+export function formatLastVisitDateLabel(
+  farmer: MobileFarmer,
+  options?: { neverLabel?: string; locale?: string }
+): string | null {
   const visits = farmerVisitCount(farmer);
-  if (visits === 0) return "Never visited";
+  if (visits === 0) return options?.neverLabel ?? "Never visited";
   const raw = farmerLastVisitDate(farmer);
   if (!raw) return null;
   const d = parseDate(raw);
   if (!d) return null;
-  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  return d.toLocaleDateString(options?.locale, { day: "numeric", month: "short", year: "numeric" });
 }
 
 export function computePriorityScore(farmer: MobileFarmer, ref = new Date()): number {
@@ -111,12 +114,16 @@ export function priorityLabelForScore(
   return "Routine";
 }
 
-export function buildFarmerWorkflowMeta(farmer: MobileFarmer, ref = new Date()): FarmerWorkflowMeta {
+export function buildFarmerWorkflowMeta(
+  farmer: MobileFarmer,
+  ref = new Date(),
+  localeOptions?: { neverLabel?: string; locale?: string }
+): FarmerWorkflowMeta {
   const priorityScore = computePriorityScore(farmer, ref);
   return {
     priorityScore,
     priorityLabel: priorityLabelForScore(farmer, priorityScore, ref),
-    lastVisitDateLabel: formatLastVisitDateLabel(farmer),
+    lastVisitDateLabel: formatLastVisitDateLabel(farmer, localeOptions),
     showFollowUpBadge: isFollowUpDue(farmer, ref)
   };
 }
@@ -181,7 +188,89 @@ export type BuildWorkQueueOptions = {
   sectionTitle?: (sectionId: FarmerWorkSectionId, count: number) => string;
   emptyMessage?: (sectionId: FarmerWorkSectionId) => string | null;
   collapsedSections?: ReadonlySet<FarmerWorkSectionId>;
+  localeOptions?: { neverLabel?: string; locale?: string };
 };
+
+export function buildFarmerDirectoryRows(
+  farmers: MobileFarmer[],
+  ref = new Date(),
+  options?: BuildWorkQueueOptions
+): FarmerWorkQueueRow[] {
+  const locale = options?.localeOptions?.locale;
+  const collator = new Intl.Collator(locale);
+  const sorted = [...farmers].sort(
+    (a, b) => collator.compare(a.name || "", b.name || "") || a.id - b.id
+  );
+
+  const followUps = sorted.filter((farmer) => isFollowUpDue(farmer, ref));
+  const followUpIds = new Set(followUps.map((farmer) => farmer.id));
+  const directoryFarmers = sorted.filter((farmer) => !followUpIds.has(farmer.id));
+
+  const rows: FarmerWorkQueueRow[] = [];
+
+  if (followUps.length > 0) {
+    const title = options?.sectionTitle
+      ? options.sectionTitle("follow_ups_today", followUps.length)
+      : `${SECTION_TITLES.follow_ups_today} (${followUps.length})`;
+    rows.push({
+      type: "section",
+      id: "section-follow_ups_today",
+      title,
+      sectionId: "follow_ups_today",
+      count: followUps.length,
+      collapsible: false,
+      collapsed: false
+    });
+    for (const farmer of followUps) {
+      rows.push({
+        type: "farmer",
+        id: `farmer-${farmer.id}`,
+        farmer,
+        workflow: buildFarmerWorkflowMeta(farmer, ref, options?.localeOptions),
+        sectionId: "follow_ups_today"
+      });
+    }
+  }
+
+  const allTitle = options?.sectionTitle
+    ? options.sectionTitle("all_farmers", sorted.length)
+    : `${SECTION_TITLES.all_farmers} (${sorted.length})`;
+
+  rows.push({
+    type: "section",
+    id: "section-all_farmers",
+    title: allTitle,
+    sectionId: "all_farmers",
+    count: sorted.length,
+    collapsible: false,
+    collapsed: false
+  });
+
+  if (directoryFarmers.length === 0 && followUps.length === 0) {
+    const message = options?.emptyMessage?.("all_farmers");
+    if (message) {
+      rows.push({
+        type: "empty",
+        id: "empty-all_farmers",
+        sectionId: "all_farmers",
+        message
+      });
+    }
+    return rows;
+  }
+
+  for (const farmer of directoryFarmers) {
+    rows.push({
+      type: "farmer",
+      id: `farmer-${farmer.id}`,
+      farmer,
+      workflow: buildFarmerWorkflowMeta(farmer, ref, options?.localeOptions),
+      sectionId: "all_farmers"
+    });
+  }
+
+  return rows;
+}
 
 export function buildFarmerWorkQueueRows(
   farmers: MobileFarmer[],
@@ -242,7 +331,7 @@ export function buildFarmerWorkQueueRows(
         type: "farmer",
         id: `farmer-${farmer.id}`,
         farmer,
-        workflow: buildFarmerWorkflowMeta(farmer, ref),
+        workflow: buildFarmerWorkflowMeta(farmer, ref, options?.localeOptions),
         sectionId
       });
     }

@@ -1,22 +1,26 @@
 import type { Visit } from "../../src/api/visits";
+import type { AppLanguage } from "../../src/i18n";
 import { isSameLocalDay, visitDisplayIso } from "../../src/utils/format";
 import type { PendingVisitRecord } from "./pendingVisitsQueue";
 
-export type VisitListRow =
-  | { kind: "section"; id: string; title: string }
-  | { kind: "pending"; id: string; pending: PendingVisitRecord }
-  | { kind: "visit"; id: string; visit: Visit };
-
-function sectionTitleForDate(date: Date, ref: Date) {
+function sectionTitleForDate(date: Date, ref: Date, language: AppLanguage, labels: VisitListLabels) {
   const yesterday = new Date(ref);
   yesterday.setDate(ref.getDate() - 1);
-  if (isSameLocalDay(date.toISOString(), ref)) return "TODAY";
-  if (isSameLocalDay(date.toISOString(), yesterday)) return "YESTERDAY";
+  if (isSameLocalDay(date.toISOString(), ref)) return labels.today;
+  if (isSameLocalDay(date.toISOString(), yesterday)) return labels.yesterday;
+  const locale = language === "ta" ? "ta-IN" : "en-IN";
   return date
-    .toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })
+    .toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short" })
     .toUpperCase()
     .replace(/\./g, "");
 }
+
+export type VisitListLabels = {
+  today: string;
+  yesterday: string;
+  pendingSync: string;
+  unknownDate: string;
+};
 
 function dayKey(iso: string | null) {
   if (!iso) return "unknown";
@@ -55,14 +59,16 @@ export function visitMatchesSearch(visit: Visit, query: string) {
 export function buildVisitListRows(
   pending: PendingVisitRecord[],
   visits: Visit[],
-  searchQuery: string
+  searchQuery: string,
+  labels: VisitListLabels,
+  language: AppLanguage
 ): VisitListRow[] {
   const rows: VisitListRow[] = [];
   const q = searchQuery.trim();
 
   const pendingRows = pending.filter((p) => pendingMatchesSearch(p, q));
   if (pendingRows.length) {
-    rows.push({ kind: "section", id: "section-pending", title: "PENDING SYNC" });
+    rows.push({ kind: "section", id: "section-pending", title: labels.pendingSync });
     for (const item of pendingRows) {
       rows.push({ kind: "pending", id: `pending-${item.id}`, pending: item });
     }
@@ -77,7 +83,7 @@ export function buildVisitListRows(
     const key = dayKey(iso);
     if (key !== lastDay) {
       lastDay = key;
-      const title = iso ? sectionTitleForDate(new Date(iso), ref) : "UNKNOWN DATE";
+      const title = iso ? sectionTitleForDate(new Date(iso), ref, language, labels) : labels.unknownDate;
       rows.push({ kind: "section", id: `section-${key}`, title });
     }
     rows.push({ kind: "visit", id: `visit-${visit.id}`, visit });
@@ -85,6 +91,11 @@ export function buildVisitListRows(
 
   return rows;
 }
+
+export type VisitListRow =
+  | { kind: "section"; id: string; title: string }
+  | { kind: "pending"; id: string; pending: PendingVisitRecord }
+  | { kind: "visit"; id: string; visit: Visit };
 
 export function stickySectionIndices(rows: VisitListRow[]) {
   return rows

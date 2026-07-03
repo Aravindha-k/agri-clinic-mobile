@@ -48,7 +48,7 @@ export function RouteSyncCard({
       <View style={styles.headerPad}>
         <SectionHeader title={title} />
       </View>
-      <FlatCard style={styles.card}>
+      <FlatCard variant="secondary" style={styles.card}>
         <View style={styles.metrics}>
           <View style={styles.metric}>
             <Text style={styles.metricValue}>{distanceValue}</Text>
@@ -149,10 +149,10 @@ const styles = StyleSheet.create({
     width: StyleSheet.hairlineWidth
   },
   syncBlock: {
-    backgroundColor: Colors.bg,
-    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    borderColor: "rgba(15, 81, 50, 0.08)",
     borderRadius: Radius.inner,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     gap: 4,
     padding: Spacing.md
   },

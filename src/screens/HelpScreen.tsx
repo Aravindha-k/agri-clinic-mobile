@@ -1,16 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { AppHeader, PrimaryButton } from "../components/ui";
-import { useDesignSystem } from "../hooks/useDesignSystem";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { GhostButton } from "../../mobile/components/ui";
 import { useSecureScreen } from "../hooks/useSecureScreen";
 import { useI18n } from "../i18n/I18nContext";
 import { BRAND } from "../brand/constants";
+import { FlatCard, ScreenCanvas, StackScreenHeader } from "../../mobile/components/layout";
+import { Colors, FontSize, FontWeight, Layout, Radius, Spacing } from "../../mobile/lib/theme";
 
 export function HelpScreen() {
   useSecureScreen();
   const navigation = useNavigation<any>();
-  const { colors, type, shadows } = useDesignSystem();
   const { t } = useI18n();
 
   const tips = [
@@ -21,45 +22,92 @@ export function HelpScreen() {
   ];
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <AppHeader title={t("help.title")} subtitle={t("help.subtitle")} onBack={() => navigation.goBack()} />
+    <SafeAreaView style={styles.screen} edges={["top"]}>
+      <ScreenCanvas />
+      <StackScreenHeader
+        title={t("help.title")}
+        subtitle={t("help.subtitle")}
+        onBack={() => navigation.goBack()}
+        includeSafeTop={false}
+      />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.body}>
-        <View style={[styles.hero, { backgroundColor: colors.primarySoft }, shadows.card]}>
-          <Text style={[type.sectionTitle, { color: colors.primaryDark }]}>{BRAND.appName}</Text>
-          <Text style={[type.meta, { color: colors.textSecondary, marginTop: 6 }]}>{BRAND.tagline}</Text>
-        </View>
-        {tips.map((tip) => (
-          <View
-            key={tip.title}
-            style={[styles.tip, { backgroundColor: colors.card, borderColor: colors.borderSubtle }, shadows.card]}
-          >
-            <Ionicons name={tip.icon} size={22} color={colors.primary} />
-            <View style={{ flex: 1 }}>
-              <Text style={type.bodyStrong}>{tip.title}</Text>
-              <Text style={[type.meta, { marginTop: 4 }]}>{tip.body}</Text>
+        <FlatCard style={styles.hero}>
+          <Text style={styles.heroTitle}>{BRAND.appName}</Text>
+          <Text style={styles.heroSub}>{BRAND.tagline}</Text>
+        </FlatCard>
+        {tips.map((tip, index) => (
+          <FlatCard key={tip.title} style={styles.tip}>
+            <View style={styles.tipIcon}>
+              <Ionicons name={tip.icon} size={22} color={Colors.brand700} />
             </View>
-          </View>
+            <View style={styles.tipCopy}>
+              <Text style={styles.tipTitle}>
+                {index + 1}. {tip.title}
+              </Text>
+              <Text style={styles.tipBody}>{tip.body}</Text>
+            </View>
+          </FlatCard>
         ))}
-        <PrimaryButton
-          title={t("help.contactSupport")}
-          variant="secondary"
+        <GhostButton
+          label={t("help.contactSupport")}
           onPress={() => void Linking.openURL("mailto:support@agriclinic.local")}
+          style={styles.supportBtn}
         />
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: Colors.bg,
+    flex: 1
+  },
   scrollView: { flex: 1 },
-  body: { gap: 12, padding: 16, paddingBottom: 32 },
-  hero: { borderRadius: 16, padding: 18 },
+  body: { gap: Spacing.sm, padding: Spacing.screen, paddingBottom: Layout.stackScrollBottom },
+  hero: {
+    gap: Spacing.xs,
+    padding: Spacing.cardLg
+  },
+  heroTitle: {
+    color: Colors.brand700,
+    fontSize: FontSize.h1,
+    fontWeight: FontWeight.bold
+  },
+  heroSub: {
+    color: Colors.text3,
+    fontSize: FontSize.md,
+    lineHeight: 20
+  },
   tip: {
     alignItems: "flex-start",
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
-    gap: 12,
-    padding: 14
+    gap: Spacing.md,
+    padding: Spacing.cardLg
+  },
+  tipIcon: {
+    alignItems: "center",
+    backgroundColor: Colors.brand50,
+    borderRadius: Radius.inner,
+    height: 40,
+    justifyContent: "center",
+    width: 40
+  },
+  tipCopy: {
+    flex: 1,
+    gap: Spacing.xs
+  },
+  tipTitle: {
+    color: Colors.text1,
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.bold
+  },
+  tipBody: {
+    color: Colors.text3,
+    fontSize: FontSize.md,
+    lineHeight: 20
+  },
+  supportBtn: {
+    marginTop: Spacing.sm
   }
 });

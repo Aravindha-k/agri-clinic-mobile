@@ -19,7 +19,7 @@ type Props = {
 export function TodayKpiRow({ items }: Props) {
   return (
     <View style={styles.wrap}>
-      <FlatCard style={styles.card}>
+      <FlatCard variant="secondary" style={styles.card}>
         <View style={styles.row}>
           {items.map((item, index) => (
             <View key={item.key} style={[styles.cell, index > 0 && styles.cellBorder]}>

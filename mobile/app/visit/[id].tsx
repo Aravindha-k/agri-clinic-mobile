@@ -283,9 +283,9 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
             <FadeInSection replayKey={entranceTick} delay={entranceStagger(0)}>
               <EmptyState
                 icon="document-text-outline"
-                title="Could not load visit"
-                subtitle={error || "Try again."}
-                action="Retry"
+                title={t("visitFlow.visitLoadError")}
+                subtitle={error || t("visitFlow.visitLoadErrorHint")}
+                action={t("common.retry")}
                 onAction={() => void load(false)}
               />
             </FadeInSection>
@@ -529,7 +529,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
               return (
                 <Pressable
                   key={attachment.id}
-                  onPress={() => setViewerIndex(index)}
+                  onPress={() => setViewerIndex(imageUrls.indexOf(uri))}
                   onLongPress={() => confirmDeleteAttachment(attachment)}
                   style={[styles.photoCell, { width: photoWidth, height: photoWidth }]}
                 >
@@ -716,7 +716,7 @@ const styles = StyleSheet.create({
     gap: 8
   },
   heroChip: {
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: Colors.onPrimaryGlass,
     borderRadius: Radius.sm,
     paddingHorizontal: 10,
     paddingVertical: 6
@@ -913,7 +913,7 @@ const styles = StyleSheet.create({
   },
   viewerBackdrop: {
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.92)",
+    backgroundColor: Colors.scrim,
     flex: 1,
     justifyContent: "center"
   },
@@ -923,7 +923,7 @@ const styles = StyleSheet.create({
   },
   viewerClose: {
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: Colors.onPrimaryGlass,
     borderRadius: 20,
     height: 40,
     justifyContent: "center",

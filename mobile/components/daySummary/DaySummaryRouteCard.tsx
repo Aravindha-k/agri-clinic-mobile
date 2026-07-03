@@ -1,18 +1,30 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { API_BASE_URL, buildApiUrl } from "../../../src/api/config";
-import { getAllWorkdayLocations } from "../../../src/api/tracking";
-import { logDayTabApi, logDayTabError } from "../../../src/utils/dayTabDiagnostics";
-import { subscribeRouteSync } from "../../../src/utils/routeSyncBus";
+import { getAllWorkdayLocations, type LocationLogPoint } from "../../../src/api/tracking";
+import { FieldMapView } from "../../../src/components/map/FieldMapView";
+import { useI18n } from "../../../src/i18n/I18nContext";
+import { readPendingGpsBuffer } from "../../../mobile/lib/gps/trackingService";
+import { useTracking } from "../../../src/storage/TrackingContext";
+import {
+  buildDayMarkerFitCoords,
+  buildDayRouteMarkers,
+  extractWorkdayStartPoint
+} from "../../../src/utils/dayRouteMap";
+import { logDayTabError } from "../../../src/utils/dayTabDiagnostics";
+import { isSameVisitLocalDay } from "../../../src/utils/format";
 import { hasValidMapCoords, parseMapCoord } from "../../../src/utils/mapCoords";
-import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
+import { fitMapRegion } from "../../../src/utils/mapRegion";
+import { visitRowFromApi, type VisitMapPoint } from "../../../src/utils/visitMapFlow";
+import { getHomeVisits } from "../../../src/utils/visitsCache";
+import { Colors, FontSize, FontWeight, Spacing } from "../../lib/theme";
 import { FlatCard } from "../layout/FlatCard";
 import { SectionHeader } from "../ui/SectionHeader";
 
 const MAP_HEIGHT = 132;
-const ROUTE_AUTO_REFRESH_MS = 45_000;
+const VISITS_REFRESH_MS = 60_000;
+const ACTIVE_TRACK_REFRESH_MS = 20_000;
 
 type Props = {
   title: string;
@@ -24,7 +36,6 @@ type Props = {
   onPress: () => void;
 };
 
-/** Static route preview — no MapView (MapView inside ScrollView crashes on Android). */
 export function DaySummaryRouteCard({
   title,
   distanceLabel,
@@ -33,35 +44,104 @@ export function DaySummaryRouteCard({
   refreshToken,
   onPress
 }: Props) {
+  const { t } = useI18n();
+  const { isActive, currentLocation } = useTracking();
   const mountedRef = useRef(true);
+  const [previewWidth, setPreviewWidth] = useState(0);
   const [loading, setLoading] = useState(Boolean(workdayId));
-  const [routePoints, setRoutePoints] = useState(0);
+  const [visitsToday, setVisitsToday] = useState<VisitMapPoint[]>([]);
+  const [serverTrack, setServerTrack] = useState<LocationLogPoint[]>([]);
+  const [pendingTrackTick, setPendingTrackTick] = useState(0);
 
-  const loadRoute = useCallback(async () => {
+  const liveCoordinate = useMemo(() => {
+    const lat = parseMapCoord(currentLocation?.latitude);
+    const lng = parseMapCoord(currentLocation?.longitude);
+    if (lat == null || lng == null || !hasValidMapCoords(lat, lng)) return null;
+    return { latitude: lat, longitude: lng };
+  }, [currentLocation?.latitude, currentLocation?.longitude]);
+
+  const pendingPoints = useMemo(() => {
+    void pendingTrackTick;
+    if (!workdayId) return [];
+    return readPendingGpsBuffer();
+  }, [pendingTrackTick, workdayId]);
+
+  const startPoint = useMemo(
+    () =>
+      workdayId
+        ? extractWorkdayStartPoint({
+            serverPoints: serverTrack,
+            pendingPoints,
+            workdayId
+          })
+        : null,
+    [pendingPoints, serverTrack, workdayId]
+  );
+
+  const fitCoordinates = useMemo(
+    () =>
+      buildDayMarkerFitCoords({
+        startPoint,
+        visits: visitsToday,
+        live: isActive ? liveCoordinate : null
+      }),
+    [isActive, liveCoordinate, startPoint, visitsToday]
+  );
+
+  const markers = useMemo(
+    () =>
+      buildDayRouteMarkers({
+        startPoint,
+        visits: visitsToday,
+        isActive: Boolean(workdayId && isActive),
+        live: liveCoordinate,
+        startLabel: t("myLocation.legendRouteStart"),
+        startDescription: t("myLocation.workStartHint")
+      }),
+    [isActive, liveCoordinate, startPoint, t, visitsToday, workdayId]
+  );
+
+  const showLiveOnMap = Boolean(workdayId && isActive && liveCoordinate);
+
+  const mapRegion = useMemo(() => {
+    if (fitCoordinates.length === 0) return undefined;
+    return fitMapRegion(fitCoordinates.map((p) => ({ lat: p.latitude, lng: p.longitude })));
+  }, [fitCoordinates]);
+
+  const loadDayRoute = useCallback(async () => {
     if (!workdayId) {
-      setRoutePoints(0);
+      setVisitsToday([]);
+      setServerTrack([]);
       setLoading(false);
       return;
     }
-    const url = buildApiUrl(
-      `tracking/workday/${workdayId}/locations/?page=1&page_size=200`,
-      API_BASE_URL
-    );
     setLoading(true);
     try {
-      const logs = await getAllWorkdayLocations(workdayId);
+      const [visitsCache, locations] = await Promise.all([
+        getHomeVisits({ pageSize: 80 }),
+        getAllWorkdayLocations(workdayId).catch((err) => {
+          logDayTabError("day_route_locations", err);
+          return [] as LocationLogPoint[];
+        })
+      ]);
       if (!mountedRef.current) return;
-      const count = logs.filter((p) => {
-        const lat = parseMapCoord(p.latitude);
-        const lng = parseMapCoord(p.longitude);
-        return lat != null && lng != null && hasValidMapCoords(lat, lng);
-      }).length;
-      setRoutePoints(count);
-      logDayTabApi("route", url, true, `points=${count}`);
+
+      const today = new Date();
+      const rows =
+        visitsCache?.visits
+          .filter((v) => isSameVisitLocalDay(v, today))
+          .map(visitRowFromApi)
+          .filter((row): row is VisitMapPoint => row != null) ?? [];
+
+      setVisitsToday(rows);
+      setServerTrack(locations);
+      setPendingTrackTick((tick) => tick + 1);
     } catch (err) {
-      logDayTabApi("route", url, false, err instanceof Error ? err.message : String(err));
-      logDayTabError("route_load", err);
-      if (mountedRef.current) setRoutePoints(0);
+      logDayTabError("day_route_visits", err);
+      if (mountedRef.current) {
+        setVisitsToday([]);
+        setServerTrack([]);
+      }
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -75,28 +155,31 @@ export function DaySummaryRouteCard({
   }, []);
 
   useEffect(() => {
-    void loadRoute();
-  }, [loadRoute, refreshToken]);
+    void loadDayRoute();
+  }, [loadDayRoute, refreshToken]);
 
   useFocusEffect(
     useCallback(() => {
-      void loadRoute();
-    }, [loadRoute])
+      void loadDayRoute();
+    }, [loadDayRoute])
   );
 
   useEffect(() => {
-    return subscribeRouteSync(() => {
-      void loadRoute();
-    });
-  }, [loadRoute]);
+    if (!workdayId) return;
+    const timer = setInterval(() => void loadDayRoute(), VISITS_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [loadDayRoute, workdayId]);
 
   useEffect(() => {
-    if (!workdayId) return;
-    const timer = setInterval(() => {
-      void loadRoute();
-    }, ROUTE_AUTO_REFRESH_MS);
+    if (!workdayId || !isActive) return;
+    const bumpPending = () => setPendingTrackTick((tick) => tick + 1);
+    bumpPending();
+    const timer = setInterval(bumpPending, ACTIVE_TRACK_REFRESH_MS);
     return () => clearInterval(timer);
-  }, [loadRoute, workdayId]);
+  }, [isActive, workdayId, refreshToken, currentLocation?.latitude, currentLocation?.longitude]);
+
+  const hasMapContent = fitCoordinates.length > 0;
+  const showMap = !loading && hasMapContent && mapRegion && previewWidth > 0;
 
   return (
     <View style={styles.section}>
@@ -104,26 +187,41 @@ export function DaySummaryRouteCard({
         <SectionHeader title={title} />
       </View>
       <Pressable onPress={onPress} style={({ pressed }) => [pressed && { opacity: 0.96 }]}>
-        <FlatCard style={styles.card}>
-          <View style={styles.previewWrap}>
+          <FlatCard variant="secondary" style={styles.card}>
+          <View
+            style={styles.previewWrap}
+            onLayout={(e) => {
+              const w = Math.round(e.nativeEvent.layout.width);
+              if (w > 0) setPreviewWidth(w);
+            }}
+          >
             {loading ? (
               <View style={styles.previewBody}>
                 <ActivityIndicator color={Colors.brand700} />
               </View>
-            ) : routePoints > 0 ? (
-              <View style={styles.previewBody}>
-                <View style={styles.previewIconWrap}>
-                  <Ionicons name="navigate" size={28} color={Colors.brand700} />
-                </View>
-                <Text style={styles.previewTitle}>
-                  {routePoints} GPS point{routePoints === 1 ? "" : "s"} recorded
-                </Text>
-                <Text style={styles.previewHint}>Tap to open full route map</Text>
-              </View>
+            ) : showMap ? (
+              <FieldMapView
+                screenName="DaySummaryRouteCard"
+                height={MAP_HEIGHT}
+                width={previewWidth}
+                region={mapRegion}
+                route={[]}
+                markers={markers}
+                fitCoordinates={fitCoordinates}
+                fitEdgePadding={{ top: 28, right: 28, bottom: 28, left: 28 }}
+                showsUserLocation={showLiveOnMap}
+                locationGranted={showLiveOnMap}
+                permissionResolved
+                loading={false}
+                interactive={false}
+                compactMarkers
+              />
             ) : (
               <View style={styles.previewBody}>
                 <Ionicons name="map-outline" size={28} color={Colors.text4} />
-                <Text style={styles.previewHint}>Route updates automatically while you work</Text>
+                <Text style={styles.previewHint}>
+                  {workdayId ? t("myLocation.noRouteMapHint") : t("myLocation.empty.noWorkday")}
+                </Text>
               </View>
             )}
           </View>
@@ -134,7 +232,7 @@ export function DaySummaryRouteCard({
               <Text style={styles.distanceLabel}>{distanceLabel}</Text>
             </View>
             <View style={styles.openHint}>
-              <Text style={styles.openHintText}>View route</Text>
+              <Text style={styles.openHintText}>{t("myLocation.openFullMap")}</Text>
               <Ionicons name="chevron-forward" size={16} color={Colors.brand700} />
             </View>
           </View>
@@ -159,11 +257,12 @@ const styles = StyleSheet.create({
     padding: 0
   },
   previewWrap: {
-    backgroundColor: Colors.bg,
+    backgroundColor: Colors.surface,
     borderBottomColor: Colors.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
     height: MAP_HEIGHT,
-    overflow: "hidden"
+    overflow: "hidden",
+    width: "100%"
   },
   previewBody: {
     alignItems: "center",
@@ -171,20 +270,6 @@ const styles = StyleSheet.create({
     gap: 6,
     justifyContent: "center",
     paddingHorizontal: Spacing.lg
-  },
-  previewIconWrap: {
-    alignItems: "center",
-    backgroundColor: Colors.brand50,
-    borderRadius: Radius.pill,
-    height: 52,
-    justifyContent: "center",
-    width: 52
-  },
-  previewTitle: {
-    color: Colors.text1,
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.semibold,
-    textAlign: "center"
   },
   previewHint: {
     color: Colors.text3,

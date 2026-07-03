@@ -18,7 +18,7 @@ import {
 } from "../constants/gpsCompliance";
 import { GpsAvailability, isGpsAvailable, probeGpsAvailability } from "../utils/gpsStatus";
 import { readCachedActiveWorkday } from "./workdaySessionStorage";
-import { useAuth } from "./AuthContext";
+import { useAuthSessionReady } from "./AuthContext";
 
 export type GpsComplianceStatus = "active" | "required" | "blocked";
 
@@ -53,7 +53,7 @@ function promptOpenSettings() {
 }
 
 export function GpsComplianceProvider({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const sessionReady = useAuthSessionReady();
   const [availability, setAvailability] = useState<GpsAvailability>("permission_undetermined");
   const [status, setStatus] = useState<GpsComplianceStatus>("active");
   const offlineSinceRef = useRef<number | null>(null);
@@ -101,7 +101,7 @@ export function GpsComplianceProvider({ children }: { children: React.ReactNode 
   }, []);
 
   const refreshGpsStatus = useCallback(async () => {
-    if (!isAuthenticated || probingRef.current) {
+    if (!sessionReady || probingRef.current) {
       return;
     }
 
@@ -122,10 +122,10 @@ export function GpsComplianceProvider({ children }: { children: React.ReactNode 
     } finally {
       probingRef.current = false;
     }
-  }, [applyAvailability, isAuthenticated]);
+  }, [applyAvailability, sessionReady]);
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!sessionReady) {
       offlineSinceRef.current = null;
       lastReminderAtRef.current = 0;
       setAvailability("permission_undetermined");
@@ -149,7 +149,7 @@ export function GpsComplianceProvider({ children }: { children: React.ReactNode 
       clearInterval(interval);
       sub.remove();
     };
-  }, [isAuthenticated, refreshGpsStatus]);
+  }, [sessionReady, refreshGpsStatus]);
 
   const permissionDenied =
     availability === "permission_denied" || availability === "permission_undetermined";
@@ -160,7 +160,7 @@ export function GpsComplianceProvider({ children }: { children: React.ReactNode 
 
   const ensureWorkAllowed = useCallback(
     (_actionLabel?: string) => {
-      if (!isAuthenticated || status !== "blocked") {
+      if (!sessionReady || status !== "blocked") {
         return true;
       }
 
@@ -174,7 +174,7 @@ export function GpsComplianceProvider({ children }: { children: React.ReactNode 
       }
       return false;
     },
-    [availability, isAuthenticated, status]
+    [availability, sessionReady, status]
   );
 
   const bannerCopy = useMemo(() => {

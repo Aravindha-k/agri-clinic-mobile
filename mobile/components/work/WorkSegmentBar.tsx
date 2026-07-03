@@ -1,5 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
+import { useEffect, useState } from "react";
+import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { Colors, Enterprise, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 
 export type WorkSegment = "queue" | "visits";
 
@@ -11,18 +13,39 @@ type Props = {
 };
 
 export function WorkSegmentBar({ segment, queueLabel, visitsLabel, onChange }: Props) {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const indicatorX = useSharedValue(0);
+
+  useEffect(() => {
+    if (!trackWidth) return;
+    const segmentWidth = (trackWidth - 6) / 2;
+    indicatorX.value = withTiming(segment === "queue" ? 0 : segmentWidth, {
+      duration: Enterprise.motion.normal
+    });
+  }, [indicatorX, segment, trackWidth]);
+
+  const indicatorStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: indicatorX.value }]
+  }));
+
+  function onTrackLayout(event: LayoutChangeEvent) {
+    setTrackWidth(event.nativeEvent.layout.width);
+  }
+
   return (
-    <View style={styles.wrap}>
-      <Pressable
-        onPress={() => onChange("queue")}
-        style={[styles.segment, segment === "queue" && styles.segmentActive]}
-      >
+    <View style={styles.wrap} onLayout={onTrackLayout}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.indicator,
+          trackWidth ? { width: (trackWidth - 6) / 2 } : null,
+          indicatorStyle
+        ]}
+      />
+      <Pressable onPress={() => onChange("queue")} style={styles.segment} accessibilityRole="tab">
         <Text style={[styles.label, segment === "queue" && styles.labelActive]}>{queueLabel}</Text>
       </Pressable>
-      <Pressable
-        onPress={() => onChange("visits")}
-        style={[styles.segment, segment === "visits" && styles.segmentActive]}
-      >
+      <Pressable onPress={() => onChange("visits")} style={styles.segment} accessibilityRole="tab">
         <Text style={[styles.label, segment === "visits" && styles.labelActive]}>{visitsLabel}</Text>
       </Pressable>
     </View>
@@ -33,24 +56,34 @@ const styles = StyleSheet.create({
   wrap: {
     backgroundColor: Colors.surface,
     borderColor: Colors.border,
-    borderRadius: Radius.button,
-    borderWidth: 1,
+    borderRadius: Enterprise.radius.button,
+    borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
+    marginBottom: Spacing.sm,
     marginHorizontal: Spacing.lg,
-    padding: 3
+    marginTop: Spacing.sm,
+    padding: 3,
+    position: "relative"
+  },
+  indicator: {
+    backgroundColor: Colors.brand700,
+    borderRadius: Radius.inner,
+    bottom: 3,
+    left: 3,
+    position: "absolute",
+    top: 3
   },
   segment: {
     alignItems: "center",
-    borderRadius: Radius.inner,
     flex: 1,
-    paddingVertical: 10
-  },
-  segmentActive: {
-    backgroundColor: Colors.brand700
+    justifyContent: "center",
+    minHeight: 44,
+    paddingVertical: Spacing.sm,
+    zIndex: 1
   },
   label: {
     color: Colors.text3,
-    fontSize: FontSize.sm,
+    fontSize: FontSize.body,
     fontWeight: FontWeight.semibold
   },
   labelActive: {

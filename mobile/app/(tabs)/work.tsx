@@ -1,31 +1,24 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useEffect, useState } from "react";
-import { StyleSheet, useWindowDimensions, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { StyleSheet, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import type { WorkStackParamList } from "../../../src/navigation/types";
-import { useSafeAreaInsetsCompat } from "../../../src/hooks/useSafeAreaInsetsCompat";
 import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
 import { useI18n } from "../../../src/i18n/I18nContext";
-import { HeaderHero, ScreenCanvas, ScreenEntranceBloom } from "../../components/layout";
-import { FadeInSection, entranceStagger } from "../../components/ui/FadeInSection";
+import { ScreenCanvas, ScreenEntranceBloom, ScreenPageHeader } from "../../components/layout";
 import { WorkQueuePanel } from "../../components/work/WorkQueuePanel";
 import { WorkSegmentBar, type WorkSegment } from "../../components/work/WorkSegmentBar";
 import { WorkVisitsPanel } from "../../components/work/WorkVisitsPanel";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
-import {
-  HEADER_IMAGE_POSITION,
-  resolveScreenHeaderHeight,
-  SCREEN_HEADER_IMAGES
-} from "../../lib/screenHeaderImages";
-import { Colors, Spacing } from "../../lib/theme";
+import { useScreenTopEdges } from "../../hooks/useScreenTopEdges";
+import { Colors } from "../../lib/theme";
 
 type Props = NativeStackScreenProps<WorkStackParamList, "WorkHome">;
 
 export default function WorkTabScreen({ route }: Props) {
   useSecureScreen();
   const { t } = useI18n();
-  const { top: safeTop } = useSafeAreaInsetsCompat();
-  const { height: screenH } = useWindowDimensions();
-  const headerHeroHeight = resolveScreenHeaderHeight(screenH);
+  const topEdges = useScreenTopEdges();
   const entranceTick = useScreenEntrance();
   const initialSegment = route.params?.segment ?? "queue";
   const [segment, setSegment] = useState<WorkSegment>(initialSegment);
@@ -36,47 +29,43 @@ export default function WorkTabScreen({ route }: Props) {
     }
   }, [route.params?.segment]);
 
+  const onSegmentChange = useCallback((next: WorkSegment) => {
+    setSegment(next);
+  }, []);
+
   return (
-    <View style={styles.screen}>
+    <SafeAreaView style={styles.screen} edges={topEdges}>
       <ScreenCanvas />
       <ScreenEntranceBloom replayKey={entranceTick} />
-      <HeaderHero
-        imageSource={SCREEN_HEADER_IMAGES.work}
-        height={headerHeroHeight}
-        contentPosition={HEADER_IMAGE_POSITION.work}
+      <ScreenPageHeader
         title={t("work.title")}
-        subtitle={segment === "queue" ? t("work.farmersListSubtitle") : undefined}
-        showLogo
-        safeTop={safeTop}
+        subtitle={t("work.farmersListSubtitle")}
       />
-      <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
-        <WorkSegmentBar
-          segment={segment}
-          queueLabel={t("work.farmersList")}
-          visitsLabel={t("work.visits")}
-          onChange={setSegment}
-        />
-      </FadeInSection>
+      <WorkSegmentBar
+        segment={segment}
+        queueLabel={t("work.farmersList")}
+        visitsLabel={t("work.visits")}
+        onChange={onSegmentChange}
+      />
 
-      <View style={styles.body}>
+      <View style={styles.panel}>
         {segment === "queue" ? (
           <WorkQueuePanel entranceTick={`${entranceTick}-queue`} entranceStep={2} />
         ) : (
-          <WorkVisitsPanel entranceTick={`${entranceTick}-visits`} entranceStep={2} />
+          <WorkVisitsPanel active entranceTick={`${entranceTick}-visits`} entranceStep={2} />
         )}
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: Colors.bg,
+    backgroundColor: "transparent",
     flex: 1
   },
-  body: {
+  panel: {
     flex: 1,
-    marginTop: Spacing.md,
     minHeight: 0
   }
 });

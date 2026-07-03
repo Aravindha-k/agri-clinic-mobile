@@ -29,6 +29,13 @@ function shouldTryNextBase(error: unknown) {
   return error instanceof ApiRequestError && (error.status === 404 || error.status === 405);
 }
 
+/** Duty routes 404 on this backend — skip them for the rest of the app session. */
+let dutyRoutesUnavailable = false;
+
+function markDutyRoutesUnavailable() {
+  dutyRoutesUnavailable = true;
+}
+
 type DutyRequestInit = RequestInit & { source?: string };
 
 /**
@@ -42,6 +49,10 @@ export async function dutyTrackingPost<T = unknown>(
   init: DutyRequestInit,
   legacyPath?: string
 ): Promise<T> {
+  if (dutyRoutesUnavailable && legacyPath) {
+    return await apiClient<T>(legacyPath, { ...init, dedupe: false });
+  }
+
   const nonV1Base = resolveNonV1ApiBase();
   if (nonV1Base) {
     try {
@@ -57,6 +68,7 @@ export async function dutyTrackingPost<T = unknown>(
     return await apiClient<T>(dutyPath, { ...init, dedupe: false });
   } catch (error) {
     if (legacyPath && shouldTryNextBase(error)) {
+      markDutyRoutesUnavailable();
       return await apiClient<T>(legacyPath, { ...init, dedupe: false });
     }
     throw error;
@@ -69,6 +81,10 @@ export async function dutyTrackingGet<T = unknown>(
   init: DutyRequestInit = {},
   legacyPath?: string
 ): Promise<T> {
+  if (dutyRoutesUnavailable && legacyPath) {
+    return await apiClient<T>(legacyPath, { ...init, method: "GET", dedupe: false });
+  }
+
   const nonV1Base = resolveNonV1ApiBase();
   if (nonV1Base) {
     try {
@@ -84,6 +100,7 @@ export async function dutyTrackingGet<T = unknown>(
     return await apiClient<T>(dutyPath, { ...init, method: "GET", dedupe: false });
   } catch (error) {
     if (legacyPath && shouldTryNextBase(error)) {
+      markDutyRoutesUnavailable();
       return await apiClient<T>(legacyPath, { ...init, method: "GET", dedupe: false });
     }
     throw error;

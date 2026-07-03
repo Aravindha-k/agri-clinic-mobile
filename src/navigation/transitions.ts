@@ -4,18 +4,18 @@ import type { NativeStackNavigationOptions } from "@react-navigation/native-stac
 /** Native stack — slide + fade, 200–250ms cinematic pass. */
 export const stackScreenOptions: NativeStackNavigationOptions = {
   animation: "fade_from_bottom",
-  animationDuration: 220
+  animationDuration: 200
 };
 
 export const stackScreenOptionsModal: NativeStackNavigationOptions = {
   presentation: "modal",
   animation: "slide_from_bottom",
-  animationDuration: 240
+  animationDuration: 200
 };
 
 export const stackScreenOptionsPush: NativeStackNavigationOptions = {
   animation: "slide_from_right",
-  animationDuration: 220
+  animationDuration: 200
 };
 
 /** Tab switches — native stack handles push transitions between flows. */

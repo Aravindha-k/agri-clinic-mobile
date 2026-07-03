@@ -17,6 +17,7 @@ type TrackingLogEvent =
   | "queued_location_count"
   | "offline_flush"
   | "offline_flush_failed"
+  | "duty_session_mismatch"
   | "task_error"
   | "expo_go_limited";
 

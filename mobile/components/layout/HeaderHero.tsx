@@ -1,10 +1,9 @@
-import { Image, type ImageContentPosition, type ImageSource } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
+import type { ImageContentPosition, ImageSource } from "expo-image";
 import { ReactNode } from "react";
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { AppLogo } from "../../../src/components/brand/AppLogo";
-import { SCREEN_HEADER_IMAGE_BLEED, SCREEN_HEADER_OVERLAY } from "../../lib/screenHeaderImages";
-import { FontSize, FontWeight, Spacing } from "../../lib/theme";
+import { resolveScreenHeaderHeight } from "../../lib/screenHeaderImages";
+import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from "../../lib/theme";
 
 export type HeaderHeroOverlayStyle = {
   colors: string[];
@@ -12,7 +11,8 @@ export type HeaderHeroOverlayStyle = {
 };
 
 type Props = {
-  imageSource: ImageSource;
+  /** @deprecated Decorative images removed — ignored */
+  imageSource?: ImageSource;
   height?: number;
   title?: string;
   subtitle?: string;
@@ -27,64 +27,33 @@ type Props = {
   style?: StyleProp<ViewStyle>;
 };
 
+/** Clean page header — logo, title, and optional toolbar. No background photos. */
 export function HeaderHero({
-  imageSource,
-  height = 220,
+  height,
   title,
   subtitle,
   showLogo = false,
-  overlayStyle = SCREEN_HEADER_OVERLAY,
-  contentPosition = "center",
   absolute = false,
   safeTop = 0,
   alignContent = "top",
-  imageBleed = SCREEN_HEADER_IMAGE_BLEED,
   children,
   style
 }: Props) {
-  const bleedX = imageBleed;
-  const bleedY = imageBleed + 0.06;
+  const shellHeight = height ?? resolveScreenHeaderHeight();
 
   return (
     <View
       style={[
         styles.shell,
-        { height },
+        { minHeight: shellHeight, paddingTop: safeTop + Spacing.sm },
+        alignContent === "bottom" && styles.shellBottom,
         absolute && styles.absolute,
         style
       ]}
       pointerEvents={absolute ? "none" : "auto"}
     >
-      <Image
-        source={imageSource}
-        style={[
-          styles.heroImage,
-          {
-            width: `${bleedX * 100}%`,
-            height: `${bleedY * 100}%`,
-            left: `${-(bleedX - 1) * 50}%`,
-            top: `${-(bleedY - 1) * 45}%`
-          }
-        ]}
-        contentFit="cover"
-        contentPosition={contentPosition}
-        cachePolicy="memory-disk"
-        transition={0}
-        accessibilityIgnoresInvertColors
-      />
-      <LinearGradient
-        colors={overlayStyle.colors as [string, string, ...string[]]}
-        locations={overlayStyle.locations as [number, number, ...number[]] | undefined}
-        style={StyleSheet.absoluteFill}
-      />
-      <View
-        style={[
-          styles.content,
-          alignContent === "top" ? styles.contentTop : styles.contentBottom,
-          { paddingTop: safeTop + Spacing.sm }
-        ]}
-        pointerEvents="box-none"
-      >
+      <View style={[styles.inner, alignContent === "bottom" && styles.innerBottom]}>
+        {children}
         {showLogo ? (
           <View style={styles.logoShell}>
             <AppLogo
@@ -93,7 +62,8 @@ export function HeaderHero({
               layout="horizontal"
               compactWordmark
               bare
-              variant="light"
+              variant="dark"
+              style={styles.logo}
             />
           </View>
         ) : null}
@@ -107,7 +77,6 @@ export function HeaderHero({
             {subtitle}
           </Text>
         ) : null}
-        {children}
       </View>
     </View>
   );
@@ -115,7 +84,9 @@ export function HeaderHero({
 
 const styles = StyleSheet.create({
   shell: {
-    overflow: "hidden",
+    backgroundColor: Colors.bg,
+    borderBottomColor: Colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     width: "100%"
   },
   absolute: {
@@ -125,46 +96,43 @@ const styles = StyleSheet.create({
     top: 0,
     zIndex: 0
   },
-  heroImage: {
-    position: "absolute"
+  shellBottom: {
+    justifyContent: "flex-end"
   },
-  content: {
-    flex: 1,
+  inner: {
     gap: Spacing.xs,
+    paddingBottom: Spacing.md,
     paddingHorizontal: Spacing.lg
   },
-  contentTop: {
-    justifyContent: "flex-start",
-    paddingBottom: Spacing.sm
-  },
-  contentBottom: {
-    justifyContent: "flex-end",
-    paddingBottom: Spacing.md
+  innerBottom: {
+    justifyContent: "flex-end"
   },
   logoShell: {
     alignSelf: "flex-start",
-    backgroundColor: "rgba(0,0,0,0.22)",
-    borderRadius: 999,
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
+    borderRadius: Radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
     marginBottom: Spacing.xs,
     maxWidth: "100%",
     paddingHorizontal: 14,
-    paddingVertical: 10
+    paddingVertical: 10,
+    ...Shadow.card
+  },
+  logo: {
+    flex: 1,
+    minWidth: 0
   },
   title: {
-    color: "#FFFFFF",
+    color: Colors.text1,
     fontSize: FontSize.hero,
     fontWeight: FontWeight.bold,
-    letterSpacing: -0.3,
-    textShadowColor: "rgba(0,0,0,0.45)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4
+    letterSpacing: -0.3
   },
   subtitle: {
-    color: "rgba(255,255,255,0.94)",
+    color: Colors.text3,
     fontSize: FontSize.sm,
     fontWeight: FontWeight.medium,
-    textShadowColor: "rgba(0,0,0,0.4)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3
+    lineHeight: 20
   }
 });

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { StyleSheet, Text, View } from "react-native";
-import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from "../../lib/theme";
+import { StyleSheet, Text, View, type ViewStyle } from "react-native";
+import { Colors, Enterprise, FontSize, FontWeight, Layout, Radius, Shadow, Spacing } from "../../lib/theme";
 import { PrimaryButton } from "./PrimaryButton";
 
 type Props = {
@@ -9,16 +9,18 @@ type Props = {
   subtitle?: string;
   action?: string;
   onAction?: () => void;
+  compact?: boolean;
+  style?: ViewStyle;
 };
 
-export function EmptyState({ icon, title, subtitle, action, onAction }: Props) {
+export function EmptyState({ icon, title, subtitle, action, onAction, compact, style }: Props) {
   return (
-    <View style={styles.wrap}>
-      <View style={[styles.iconWrap, { backgroundColor: Colors.brand50 }]}>
-        <Ionicons name={icon} size={48} color={Colors.brand700} />
+    <View style={[styles.wrap, compact && styles.wrapCompact, style]}>
+      <View style={[styles.iconWrap, compact && styles.iconWrapCompact]}>
+        <Ionicons name={icon} size={compact ? 36 : 44} color={Colors.brand700} />
       </View>
-      <Text style={[styles.title, { color: Colors.text1 }]}>{title}</Text>
-      {subtitle ? <Text style={[styles.subtitle, { color: Colors.text3 }]}>{subtitle}</Text> : null}
+      <Text style={[styles.title, compact && styles.titleCompact]}>{title}</Text>
+      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       {action && onAction ? (
         <PrimaryButton label={action} onPress={onAction} style={styles.action} />
       ) : null}
@@ -29,31 +31,43 @@ export function EmptyState({ icon, title, subtitle, action, onAction }: Props) {
 const styles = StyleSheet.create({
   wrap: {
     alignItems: "center",
-    paddingHorizontal: Spacing.xxl,
-    paddingVertical: 40
+    paddingHorizontal: Spacing.xxl
+  },
+  wrapCompact: {
+    paddingHorizontal: Spacing.lg
   },
   iconWrap: {
     alignItems: "center",
     backgroundColor: Colors.brand50,
-    borderColor: Colors.brand100,
-    borderRadius: Radius.card,
-    borderWidth: 1,
-    height: 84,
+    borderColor: Colors.border,
+    borderRadius: Enterprise.radius.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    height: 80,
     justifyContent: "center",
     marginBottom: Spacing.lg,
-    width: 84,
+    width: 80,
     ...Shadow.card
   },
+  iconWrapCompact: {
+    height: 64,
+    marginBottom: Spacing.md,
+    width: 64
+  },
   title: {
-    fontSize: FontSize.xl,
+    color: Colors.text1,
+    fontSize: FontSize.section,
     fontWeight: FontWeight.semibold,
     textAlign: "center"
   },
+  titleCompact: {
+    fontSize: FontSize.body
+  },
   subtitle: {
-    fontSize: FontSize.base,
-    lineHeight: 21,
+    color: Colors.text3,
+    fontSize: FontSize.body,
+    lineHeight: 22,
     marginTop: Spacing.sm,
-    maxWidth: 280,
+    maxWidth: 300,
     textAlign: "center"
   },
   action: {

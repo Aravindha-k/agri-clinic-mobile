@@ -8,8 +8,8 @@ import {
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useState } from "react";
-import { Dimensions, LogBox, Platform, StatusBar as RNStatusBar, View } from "react-native";
+import { useEffect } from "react";
+import { Dimensions, LogBox, Platform, StatusBar as RNStatusBar } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import type { Metrics } from "react-native-safe-area-context";
@@ -51,8 +51,6 @@ const FALLBACK_METRICS: Metrics = {
   frame: { x: 0, y: 0, width: winW, height: winH },
   insets: { top: 0, right: 0, bottom: 0, left: 0 }
 };
-
-const FONT_LOAD_TIMEOUT_MS = 8_000;
 
 function AppStatusBar() {
   return (
@@ -101,17 +99,11 @@ export default function AppProviders({ onShellReady }: Props) {
     Inter_700Bold,
     Inter_800ExtraBold
   });
-  const [fontsTimedOut, setFontsTimedOut] = useState(false);
-  const fontsReady = fontsLoaded || fontsTimedOut;
 
   useEffect(() => {
     logStartup("fonts_loading");
-    const timer = setTimeout(() => {
-      setFontsTimedOut(true);
-      logStartup("fonts_timeout", `${FONT_LOAD_TIMEOUT_MS}ms`);
-    }, FONT_LOAD_TIMEOUT_MS);
-    return () => clearTimeout(timer);
-  }, []);
+    onShellReady?.();
+  }, [onShellReady]);
 
   useEffect(() => {
     if (fontsLoaded) {
@@ -120,16 +112,6 @@ export default function AppProviders({ onShellReady }: Props) {
       applyGlobalFonts();
     }
   }, [fontsLoaded]);
-
-  useEffect(() => {
-    if (fontsReady) {
-      onShellReady?.();
-    }
-  }, [fontsReady, onShellReady]);
-
-  if (!fontsReady) {
-    return <View style={{ flex: 1 }} />;
-  }
 
   return (
     <WebMobileFrame>

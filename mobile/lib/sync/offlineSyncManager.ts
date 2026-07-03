@@ -9,6 +9,8 @@ import type { VisitFormValues } from "../../../src/api/visits";
 import { api, isNetworkError, unwrapApiData } from "../api";
 import { flattenVisitPayloadForMultipart } from "../visitSubmitApi";
 import { isDuplicateVisitResponse } from "../visitDuplicate";
+import { prepareVisitForSubmit } from "../../../src/visit/prepareVisitSubmit";
+import { validateVisitSubmitValues } from "../../../src/visit/visitValidation";
 import { getJson, setJson, SYNC_STORAGE_KEYS } from "../storage";
 import { useSyncStore } from "../store/syncStore";
 import { GPS_QUEUE_MAX_POINTS } from "../../../src/tracking/trackingConfig";
@@ -353,18 +355,25 @@ export async function flushVisitQueue(
         });
 
         try {
-          const formData = buildVisitFormData(visit.payload, visit.local_sync_id);
+          const prepared = await prepareVisitForSubmit(visit.payload as VisitFormValues);
+          const validationError = validateVisitSubmitValues(prepared);
+          if (validationError) {
+            throw new Error(validationError);
+          }
+          const formData = buildVisitFormData(prepared, visit.local_sync_id);
           const response = await api.post("mobile/visits/", formData, {
             headers: { "Content-Type": "multipart/form-data" }
           });
           const body = unwrapApiData<Record<string, unknown>>(response.data);
           if (response.status === 200 || response.status === 201 || isDuplicateVisitResponse(body)) {
             const visitId = Number(body.id ?? body.visit_id);
-            const pendingAttachments = visit.payload.__pending_attachments as
-              | PendingVisitAttachment[]
-              | undefined;
+            const pendingAttachments = (visit.payload as Record<string, unknown>)
+              .__pending_attachments as PendingVisitAttachment[] | undefined;
             if (visitId > 0 && pendingAttachments?.length) {
-              await uploadAllPendingAttachments(visitId, pendingAttachments);
+              const { failed } = await uploadAllPendingAttachments(visitId, pendingAttachments);
+              if (failed.length > 0) {
+                throw new Error(`Photo upload failed: ${failed.join(", ")}`);
+              }
             }
             const next = readVisitQueue().filter((v) => v.local_sync_id !== visit.local_sync_id);
             writeVisitQueue(next);

@@ -1,9 +1,9 @@
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect, useIsFocused, useNavigation } from "@react-navigation/native";
 import { FlashList } from "@shopify/flash-list";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -11,7 +11,8 @@ import {
   View
 } from "react-native";
 import { FilterPillRow } from "../FilterPillRow";
-import { ScreenLoader } from "../layout/ScreenLoader";
+import { ListSkeleton } from "../ui/ListSkeleton";
+import { ListStateView } from "../ui/ListStateView";
 import { InlineSeedLoader } from "../layout/InlineSeedLoader";
 import {
   FadeInSection,
@@ -25,8 +26,6 @@ import {
   type Visit,
   type VisitDateFilter
 } from "../../../src/api/visits";
-import { BrandLogo } from "../../../src/components/brand/BrandLogo";
-import { LOGO_IMAGE } from "../../../src/config/brand";
 import { useRefreshControlProps } from "../../../src/hooks/useRefreshControlProps";
 import { useTabBarBottomInset } from "../../../src/hooks/useTabBarBottomInset";
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
@@ -41,18 +40,7 @@ import {
 } from "../../lib/visitListSections";
 import { readPendingVisits, type PendingVisitRecord } from "../../lib/pendingVisitsQueue";
 import { DS } from "../../../src/theme/globalStyles";
-import { Colors, FontSize, FontWeight, Spacing } from "../../lib/theme";
-
-function LogoWatermark({ size = 48, opacity = 0.1 }: { size?: number; opacity?: number }) {
-  if (!LOGO_IMAGE) return <BrandLogo variant="watermark" width={size} height={size} />;
-  return (
-    <Image
-      source={LOGO_IMAGE}
-      style={{ width: size, height: size, opacity, borderRadius: 8 }}
-      resizeMode="contain"
-    />
-  );
-}
+import { Colors, FontSize, FontWeight, Layout, Spacing } from "../../lib/theme";
 
 function sortVisitsNewestFirst(items: Visit[]) {
   return [...items].sort((a, b) => {
@@ -62,14 +50,19 @@ function sortVisitsNewestFirst(items: Visit[]) {
   });
 }
 
+const MAX_ROW_ENTRANCE = 6;
+
 export function WorkVisitsPanel({
+  active = true,
   entranceTick,
   entranceStep = 2
 }: {
+  active?: boolean;
   entranceTick?: number | string;
   entranceStep?: number;
 } = {}) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
+  const isFocused = useIsFocused();
   const navigation = useNavigation<any>();
   const tabInset = useTabBarBottomInset();
   const refreshControlProps = useRefreshControlProps();
@@ -139,22 +132,27 @@ export function WorkVisitsPanel({
 
   useFocusEffect(
     useCallback(() => {
+      if (!isFocused || !active) return;
       void loadPending();
       void loadVisits({ refresh: true });
-    }, [loadPending, loadVisits])
+    }, [active, isFocused, loadPending, loadVisits])
   );
 
   useEffect(() => {
-    if (visitsVersion > 0) {
-      void loadPending();
-      void loadVisits({ refresh: true });
-    }
-  }, [visitsVersion, loadPending, loadVisits]);
+    if (!active || visitsVersion <= 0) return;
+    void loadPending();
+    void loadVisits({ refresh: true });
+  }, [active, visitsVersion, loadPending, loadVisits]);
 
-  const listRows = useMemo(
-    () => buildVisitListRows(pendingVisits, visits, ""),
-    [pendingVisits, visits]
-  );
+  const listRows = useMemo(() => {
+    const labels = {
+      today: t("work.sectionToday"),
+      yesterday: t("work.sectionYesterday"),
+      pendingSync: t("work.pendingSyncSection"),
+      unknownDate: t("work.unknownDate")
+    };
+    return buildVisitListRows(pendingVisits, visits, "", labels, language);
+  }, [language, pendingVisits, t, visits]);
 
   const stickyIndices = useMemo(() => stickySectionIndices(listRows), [listRows]);
   const headerCount = totalCount + pendingVisits.length;
@@ -183,8 +181,9 @@ export function WorkVisitsPanel({
 
   const renderItem = useCallback(
     ({ item, index }: { item: VisitListRow; index: number }) => {
+      const shouldAnimate = Boolean(entranceTick) && index < MAX_ROW_ENTRANCE;
       const wrap = (node: ReactNode, asCard = false): ReactElement => {
-        if (!entranceTick) return <>{node}</>;
+        if (!shouldAnimate) return <>{node}</>;
         return (
           <FadeInSection
             replayKey={entranceTick}
@@ -224,12 +223,7 @@ export function WorkVisitsPanel({
   );
 
   const ListEmptyComponent = useMemo(
-    () => (
-      <View style={styles.emptyState}>
-        <LogoWatermark size={48} opacity={0.1} />
-        <Text style={styles.emptyStateText}>{t("home.noVisitsYet")}</Text>
-      </View>
-    ),
+    () => <ListStateView kind="empty" title={t("home.noVisitsYet")} compact />,
     [t]
   );
 
@@ -284,6 +278,9 @@ export function WorkVisitsPanel({
           active: dateFilter === chip.id,
           onPress: () => {
             setDateFilter(chip.id);
+            setNextUrl(null);
+            setVisits([]);
+            setLoading(true);
             void loadVisits({ filter: chip.id });
           }
         }))}
@@ -302,16 +299,17 @@ export function WorkVisitsPanel({
       )}
 
       <View style={styles.listArea}>
-        {loading ? (
-          <ScreenLoader />
+        {loading && visits.length === 0 && pendingVisits.length === 0 ? (
+          <ListSkeleton variant="visit" count={6} />
         ) : (
           <FlashList
             data={listRows}
             renderItem={renderItem}
             keyExtractor={(item) => item.id}
+            getItemType={(item) => item.kind}
             stickyHeaderIndices={stickyIndices}
             style={styles.list}
-            contentContainerStyle={{ paddingBottom: tabInset + 16, paddingTop: 8 }}
+            contentContainerStyle={{ paddingBottom: tabInset + Layout.scrollBottomExtra, paddingTop: 8 }}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlProps} />
             }
@@ -394,17 +392,6 @@ const styles = StyleSheet.create({
   },
   list: {
     flex: 1
-  },
-  emptyState: {
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 24,
-    paddingVertical: 40
-  },
-  emptyStateText: {
-    color: Colors.text3,
-    fontSize: FontSize.base,
-    textAlign: "center"
   },
   footerLoader: {
     alignItems: "center",

@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: Colors.photoOverlay,
     justifyContent: "center"
   },
   progressText: {

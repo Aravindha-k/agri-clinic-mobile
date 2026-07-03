@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getOptionLabel } from "../../src/api/masters";
 import { useConnectivityOnline } from "../../src/hooks/useConnectivityOnline";
 import { useLanOnlyMode } from "../../src/hooks/useLanOnlyMode";
+import { formatRelativeTimeLocalized } from "../../src/i18n";
 import { useI18n } from "../../src/i18n/I18nContext";
+import { useFieldDataRefresh } from "../../src/storage/FieldDataRefreshContext";
 import { useMasterData } from "../../src/storage/MasterDataContext";
 import { getCachedFarmers, readFarmersCache } from "../lib/farmersCache";
 import {
@@ -15,7 +17,7 @@ import {
 } from "../lib/farmersApi";
 import { StorageKeys, storage, touchCacheTimestamp } from "../lib/storage";
 import {
-  buildFarmerWorkQueueRows,
+  buildFarmerDirectoryRows,
   countWorkQueueFarmers,
   paginateWorkQueueRows,
   WORK_SECTION_I18N,
@@ -70,10 +72,19 @@ export function useFarmersDirectory(
   sectionTitle: (sectionId: FarmerWorkSectionId, count: number) => string,
   emptyMessage: (sectionId: FarmerWorkSectionId) => string | null
 ) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const online = useConnectivityOnline();
   const lanOnly = useLanOnlyMode();
   const { villages } = useMasterData();
+  const { farmersVersion } = useFieldDataRefresh();
+
+  const localeOptions = useMemo(
+    () => ({
+      neverLabel: t("work.neverVisited"),
+      locale: language === "ta" ? "ta-IN" : "en-IN"
+    }),
+    [language, t]
+  );
 
   const isFetchingRef = useRef(false);
   const lastRequestKeyRef = useRef("");
@@ -83,14 +94,20 @@ export function useFarmersDirectory(
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const offlineToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [farmers, setFarmers] = useState<MobileFarmer[]>([]);
+  const [farmers, setFarmers] = useState<MobileFarmer[]>(() => {
+    const cached = getCachedFarmers() as MobileFarmer[];
+    return cached.slice(0, PAGE_SIZE);
+  });
   const [cachedFarmers, setCachedFarmers] = useState<MobileFarmer[]>(() => getCachedFarmers() as MobileFarmer[]);
-  const [totalCount, setTotalCount] = useState<number | null>(null);
+  const [totalCount, setTotalCount] = useState<number | null>(() => {
+    const cached = getCachedFarmers();
+    return cached.length > 0 ? cached.length : null;
+  });
   const [page, setPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(false);
   const [nextUrl, setNextUrl] = useState<string | null>(null);
   const [cacheWindow, setCacheWindow] = useState(PAGE_SIZE);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(() => getCachedFarmers().length === 0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [syncingAll, setSyncingAll] = useState(false);
@@ -102,9 +119,6 @@ export function useFarmersDirectory(
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedVillageId, setSelectedVillageId] = useState("");
   const [selectedVillageName, setSelectedVillageName] = useState("");
-  const [collapsedSections, setCollapsedSections] = useState<ReadonlySet<FarmerWorkSectionId>>(
-    () => new Set(["all_farmers"])
-  );
 
   const isOffline = !online;
   const hasFullCache = cachedFarmers.length > 0;
@@ -180,8 +194,20 @@ export function useFarmersDirectory(
         setTotalCount(response.count ?? rows.length);
       } catch {
         if (seq !== requestSeqRef.current) return;
-        setHasNextPage(false);
-        setNextUrl(null);
+        const cached = getCachedFarmers() as MobileFarmer[];
+        if (cached.length > 0) {
+          const filtered = cached.filter((farmer) => {
+            if (!matchesSearch(farmer, debouncedSearch)) return false;
+            if (!matchesVillage(farmer, selectedVillageId, villageLabel)) return false;
+            return true;
+          });
+          setFarmers(filtered.slice(0, PAGE_SIZE));
+          setTotalCount(filtered.length);
+          setHasNextPage(filtered.length > PAGE_SIZE);
+        } else {
+          setHasNextPage(false);
+          setNextUrl(null);
+        }
       } finally {
         if (seq === requestSeqRef.current) {
           isFetchingRef.current = false;
@@ -190,7 +216,7 @@ export function useFarmersDirectory(
         }
       }
     },
-    [debouncedSearch, farmers.length, useApiList, villageLabel]
+    [debouncedSearch, farmers.length, selectedVillageId, useApiList, villageLabel]
   );
 
   const loadMore = useCallback(async () => {
@@ -229,8 +255,14 @@ export function useFarmersDirectory(
   }, [fetchPageOne, useApiList]);
 
   const sourceFarmers = useMemo(() => {
-    const pool = useApiList ? farmers : cachedFarmers;
-    return pool.filter((farmer) => {
+    if (useApiList) {
+      return farmers.filter((farmer) => {
+        if (!matchesSearch(farmer, debouncedSearch)) return false;
+        if (!matchesVillage(farmer, selectedVillageId, villageLabel)) return false;
+        return true;
+      });
+    }
+    return cachedFarmers.filter((farmer) => {
       if (!matchesSearch(farmer, debouncedSearch)) return false;
       if (!matchesVillage(farmer, selectedVillageId, villageLabel)) return false;
       return true;
@@ -239,13 +271,20 @@ export function useFarmersDirectory(
 
   const workQueueRows = useMemo(
     () =>
-      buildFarmerWorkQueueRows(sourceFarmers, new Date(), {
+      buildFarmerDirectoryRows(sourceFarmers, new Date(), {
         sectionTitle,
         emptyMessage,
-        collapsedSections
+        localeOptions
       }),
-    [collapsedSections, emptyMessage, sectionTitle, sourceFarmers]
+    [emptyMessage, localeOptions, sectionTitle, sourceFarmers]
   );
+
+  useEffect(() => {
+    if (farmersVersion <= 0) return;
+    if (useApiList) {
+      void fetchPageOne("refresh");
+    }
+  }, [farmersVersion, fetchPageOne, useApiList]);
 
   const listData = useMemo(
     () => paginateWorkQueueRows(workQueueRows, cacheWindow),
@@ -278,7 +317,7 @@ export function useFarmersDirectory(
       setCachedFarmers(all);
       touchCacheTimestamp(StorageKeys.FARMERS_CACHE_TTL);
       refreshLastSyncedLabel();
-      setSyncCompleteMessage(`✓ ${all.length} farmers synced`);
+      setSyncCompleteMessage(t("farmers.syncedCount", { count: all.length }));
       if (successTimerRef.current) clearTimeout(successTimerRef.current);
       successTimerRef.current = setTimeout(() => setSyncCompleteMessage(null), SYNC_SUCCESS_MS);
 
@@ -324,19 +363,11 @@ export function useFarmersDirectory(
     setSelectedVillageName("");
   }, []);
 
-  const toggleSection = useCallback((sectionId: FarmerWorkSectionId) => {
-    setCollapsedSections((current) => {
-      const next = new Set(current);
-      if (next.has(sectionId)) {
-        next.delete(sectionId);
-      } else {
-        next.add(sectionId);
-      }
-      return next;
-    });
+  const toggleSection = useCallback((_sectionId: FarmerWorkSectionId) => {
+    // Sections stay expanded in directory mode.
   }, []);
 
-  const directoryTotal = totalCount ?? sourceFarmers.length;
+  const directoryTotal = totalCount ?? cachedFarmers.length ?? sourceFarmers.length;
 
   const totalFarmersLabel = useMemo(() => {
     return t("farmers.totalFarmers", { count: directoryTotal });
@@ -347,16 +378,18 @@ export function useFarmersDirectory(
     const d = dayjs(lastSyncedAt);
     if (!d.isValid()) return t("farmers.notSyncedYet");
     if (d.isSame(dayjs(), "day")) return t("farmers.lastSyncToday");
-    return t("farmers.lastSyncAgo", { time: d.fromNow() });
-  }, [lastSyncedAt, t]);
+    return t("farmers.lastSyncAgo", {
+      time: formatRelativeTimeLocalized(language, lastSyncedAt)
+    });
+  }, [language, lastSyncedAt, t]);
 
   const subtitle = useMemo(() => {
-    if (!lastSyncedAt) return `${displayTotal} total · not synced`;
+    if (!lastSyncedAt) return `${directoryTotal} total · not synced`;
     const d = dayjs(lastSyncedAt);
-    if (!d.isValid()) return `${displayTotal} total · not synced`;
-    if (d.isSame(dayjs(), "day")) return `${displayTotal} total · synced today`;
-    return `${displayTotal} total · synced ${d.fromNow(true)} ago`;
-  }, [displayTotal, lastSyncedAt]);
+    if (!d.isValid()) return `${directoryTotal} total · not synced`;
+    if (d.isSame(dayjs(), "day")) return `${directoryTotal} total · synced today`;
+    return `${directoryTotal} total · synced ${d.fromNow(true)} ago`;
+  }, [directoryTotal, lastSyncedAt]);
 
   return {
     lanOnly,
@@ -379,11 +412,11 @@ export function useFarmersDirectory(
     setSelectedVillageName,
     clearVillage,
     displayTotal,
+    sourceCount: sourceFarmers.length,
     directoryTotal,
     totalFarmersLabel,
     lastSyncLabel,
     subtitle,
-    collapsedSections,
     toggleSection,
     hasMore,
     onRefresh,

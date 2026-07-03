@@ -1,4 +1,3 @@
-import { Ionicons } from "@expo/vector-icons";
 import { memo, useEffect, useState } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import { Marker } from "react-native-maps";
@@ -11,79 +10,84 @@ type Props = {
   title?: string;
   description?: string;
   kind?: MapPinKind;
+  compact?: boolean;
 };
 
 type MarkerStyle = {
   backgroundColor: string;
   borderColor: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  iconColor: string;
   size: number;
+  showIcon: boolean;
 };
 
-function resolveMarkerStyle(kind: MapPinKind | undefined): MarkerStyle {
+function resolveMarkerStyle(kind: MapPinKind | undefined, compact: boolean): MarkerStyle {
+  if (compact) {
+    switch (kind) {
+      case "route_start":
+        return {
+          backgroundColor: "#D97706",
+          borderColor: "#FFFFFF",
+          size: 10,
+          showIcon: false
+        };
+      case "visit":
+        return {
+          backgroundColor: "#16A34A",
+          borderColor: "#FFFFFF",
+          size: 10,
+          showIcon: false
+        };
+      default:
+        return {
+          backgroundColor: "#0B5A38",
+          borderColor: "#FFFFFF",
+          size: 10,
+          showIcon: false
+        };
+    }
+  }
+
   switch (kind) {
-    case "current":
-      return {
-        backgroundColor: "#2196F3",
-        borderColor: "#FFFFFF",
-        icon: "navigate",
-        iconColor: "#FFFFFF",
-        size: 38
-      };
     case "route_start":
       return {
-        backgroundColor: "#0B5A38",
+        backgroundColor: "#D97706",
         borderColor: "#FFFFFF",
-        icon: "flag",
-        iconColor: "#FFFFFF",
-        size: 36
+        size: 18,
+        showIcon: false
+      };
+    case "visit":
+      return {
+        backgroundColor: "#16A34A",
+        borderColor: "#FFFFFF",
+        size: 16,
+        showIcon: false
       };
     case "route_end":
       return {
         backgroundColor: "#C2410C",
         borderColor: "#FFFFFF",
-        icon: "flag",
-        iconColor: "#FFFFFF",
-        size: 36
+        size: 18,
+        showIcon: false
       };
     case "farmer":
       return {
         backgroundColor: "#15803D",
         borderColor: "#FFFFFF",
-        icon: "leaf",
-        iconColor: "#FFFFFF",
-        size: 38
-      };
-    case "visit":
-      return {
-        backgroundColor: "#0F766E",
-        borderColor: "#FFFFFF",
-        icon: "location",
-        iconColor: "#FFFFFF",
-        size: 38
-      };
-    case "checkin":
-      return {
-        backgroundColor: "#6D28D9",
-        borderColor: "#FFFFFF",
-        icon: "time",
-        iconColor: "#FFFFFF",
-        size: 34
+        size: 18,
+        showIcon: false
       };
     default:
       return {
         backgroundColor: "#0B5A38",
         borderColor: "#FFFFFF",
-        icon: "location",
-        iconColor: "#FFFFFF",
-        size: 34
+        size: 16,
+        showIcon: false
       };
   }
 }
 
-function FieldMapMarkerInner({ id, latitude, longitude, title, description, kind }: Props) {
-  const style = resolveMarkerStyle(kind);
+function FieldMapMarkerInner({ id, latitude, longitude, title, description, kind, compact = false }: Props) {
+  const style = resolveMarkerStyle(kind, compact);
   const [tracksViewChanges, setTracksViewChanges] = useState(Platform.OS === "android");
 
   useEffect(() => {
@@ -100,11 +104,12 @@ function FieldMapMarkerInner({ id, latitude, longitude, title, description, kind
       description={description}
       anchor={{ x: 0.5, y: 0.5 }}
       tracksViewChanges={tracksViewChanges}
-      zIndex={kind === "current" ? 10 : 5}
+      zIndex={5}
     >
       <View
         style={[
           styles.shell,
+          compact && styles.shellCompact,
           {
             width: style.size,
             height: style.size,
@@ -113,10 +118,7 @@ function FieldMapMarkerInner({ id, latitude, longitude, title, description, kind
             borderColor: style.borderColor
           }
         ]}
-      >
-        <Ionicons name={style.icon} size={Math.round(style.size * 0.46)} color={style.iconColor} />
-        {kind === "current" ? <View style={styles.currentPulse} /> : null}
-      </View>
+      />
     </Marker>
   );
 }
@@ -125,27 +127,20 @@ export const FieldMapMarker = memo(FieldMapMarkerInner);
 
 const styles = StyleSheet.create({
   shell: {
-    alignItems: "center",
-    borderWidth: 2.5,
-    justifyContent: "center",
+    borderWidth: 2,
     ...Platform.select({
       ios: {
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.22,
-        shadowRadius: 4
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.18,
+        shadowRadius: 2
       },
       android: {
-        elevation: 4
+        elevation: 3
       }
     })
   },
-  currentPulse: {
-    backgroundColor: "rgba(33, 150, 243, 0.25)",
-    borderRadius: 999,
-    height: 52,
-    position: "absolute",
-    width: 52,
-    zIndex: -1
+  shellCompact: {
+    borderWidth: 1.5
   }
 });

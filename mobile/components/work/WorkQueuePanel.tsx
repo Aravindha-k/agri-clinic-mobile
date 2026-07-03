@@ -22,7 +22,8 @@ import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal
 import { FarmerDirectoryCard } from "../farmers/FarmerDirectoryCard";
 import { VillageFilterSheet, type VillageFilterSheetRef } from "../farmers/VillageFilterSheet";
 import { FlatProgressBar } from "../ui/FlatProgressBar";
-import { ScreenLoader } from "../layout/ScreenLoader";
+import { ListSkeleton } from "../ui/ListSkeleton";
+import { ListStateView } from "../ui/ListStateView";
 import { InlineSeedLoader } from "../layout/InlineSeedLoader";
 import {
   FadeInSection,
@@ -31,7 +32,7 @@ import {
 } from "../ui/FadeInSection";
 import { useFarmersDirectory, type FarmerWorkQueueRow } from "../../hooks/useFarmersDirectory";
 import { WORK_SECTION_I18N, type FarmerWorkSectionId } from "../../lib/workQueue";
-import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
+import { Colors, FontSize, FontWeight, Layout, Radius, Spacing } from "../../lib/theme";
 import { BRAND_COLORS } from "../../../src/config/brand";
 import { DS } from "../../../src/theme/globalStyles";
 import { WorkQueueSectionHeader } from "./WorkQueueSectionHeader";
@@ -39,7 +40,10 @@ import { WorkQueueSectionHeader } from "./WorkQueueSectionHeader";
 type Props = {
   entranceTick?: number | string;
   entranceStep?: number;
+  active?: boolean;
 };
+
+const MAX_ROW_ENTRANCE = 6;
 
 export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
   const { t } = useI18n();
@@ -82,8 +86,9 @@ export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
 
   const renderItem = useCallback(
     ({ item, index }: { item: FarmerWorkQueueRow; index: number }) => {
+      const shouldAnimate = Boolean(entranceTick) && index < MAX_ROW_ENTRANCE;
       const wrap = (node: ReactNode, asCard = false): ReactElement => {
-        if (!entranceTick) return <>{node}</>;
+        if (!shouldAnimate) return <>{node}</>;
         return (
           <FadeInSection
             replayKey={entranceTick}
@@ -123,7 +128,7 @@ export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
         <FarmerDirectoryCard
           farmer={farmer}
           workflow={item.workflow}
-          onPress={() => navigation.navigate("FarmerDetail", { id: farmer.id })}
+          onPress={() => navigation.push("FarmerDetail", { id: farmer.id })}
           onMap={() =>
             navigateFarmerMap(navigation, {
               farmerId: farmer.id,
@@ -150,18 +155,20 @@ export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
     [directory.toggleSection, entranceStep, entranceTick, navigation, rootNav, t]
   );
 
-  const ListEmptyComponent = useMemo(
-    () => (
-      <View style={styles.emptyState}>
-        <Text style={styles.emptyStateText}>
-          {directory.searchQuery.trim() || directory.villageLabel
+  const ListEmptyComponent = useMemo(() => {
+    if (directory.isInitialLoading || directory.sourceCount > 0) return null;
+    return (
+      <ListStateView
+        kind={directory.searchQuery.trim() || directory.villageLabel ? "noResults" : "empty"}
+        title={
+          directory.searchQuery.trim() || directory.villageLabel
             ? t("farmers.tryDifferentSearch")
-            : t("farmers.noFarmers")}
-        </Text>
-      </View>
-    ),
-    [directory.searchQuery, directory.villageLabel, t]
-  );
+            : t("farmers.noFarmers")
+        }
+        compact
+      />
+    );
+  }, [directory.isInitialLoading, directory.searchQuery, directory.sourceCount, directory.villageLabel, t]);
 
   const ListFooterComponent = useMemo(
     () =>
@@ -229,6 +236,9 @@ export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
     </View>
   );
 
+  const showBlockingLoader = directory.isInitialLoading && !directory.hasFullCache;
+  const showUpdatingBar = directory.isInitialLoading && directory.hasFullCache;
+
   return (
     <View style={styles.shell}>
       {entranceTick ? (
@@ -281,17 +291,25 @@ export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
         </View>
       ) : null}
 
+      {showUpdatingBar ? (
+        <View style={styles.updatingBar}>
+          <ActivityIndicator size="small" color={Colors.brand700} />
+          <Text style={styles.updatingText}>{t("home.syncing")}</Text>
+        </View>
+      ) : null}
+
       <View style={styles.listArea}>
-        {directory.isInitialLoading ? (
-          <ScreenLoader />
+        {showBlockingLoader ? (
+          <ListSkeleton variant="farmer" count={6} />
         ) : (
           <FlashList
             data={directory.listData}
             renderItem={renderItem}
             keyExtractor={keyExtractor}
+            getItemType={(item) => item.type}
             stickyHeaderIndices={stickyIndices}
             style={styles.list}
-            contentContainerStyle={{ paddingBottom: tabInset + 16, paddingTop: 4 }}
+            contentContainerStyle={{ paddingBottom: tabInset + Layout.scrollBottomExtra, paddingTop: 4 }}
             refreshControl={
               <RefreshControl
                 refreshing={directory.isRefreshing}
@@ -341,8 +359,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     gap: 8,
-    height: 42,
-    paddingHorizontal: 12
+    height: Layout.buttonHeight - 4,
+    minHeight: Layout.touchTargetMin,
+    paddingHorizontal: Spacing.lg
   },
   searchInput: {
     color: Colors.text1,
@@ -427,7 +446,22 @@ const styles = StyleSheet.create({
   offlineToastText: {
     color: Colors.amberText,
     flex: 1,
-    fontSize: FontSize.sm,
+    fontSize: FontSize.body,
+    fontWeight: FontWeight.medium
+  },
+  updatingBar: {
+    alignItems: "center",
+    backgroundColor: Colors.brand50,
+    borderBottomColor: Colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    gap: Spacing.sm,
+    justifyContent: "center",
+    paddingVertical: Spacing.sm
+  },
+  updatingText: {
+    color: Colors.text2,
+    fontSize: FontSize.caption,
     fontWeight: FontWeight.medium
   },
   cacheBanner: {
@@ -477,16 +511,6 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: Spacing.lg,
     paddingTop: 8
-  },
-  emptyState: {
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 40
-  },
-  emptyStateText: {
-    color: Colors.text3,
-    fontSize: FontSize.base,
-    textAlign: "center"
   },
   footerLoader: {
     alignItems: "center",

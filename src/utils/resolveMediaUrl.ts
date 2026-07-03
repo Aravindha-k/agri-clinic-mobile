@@ -33,7 +33,9 @@ export function resolveMediaUrl(url: string | null | undefined): string | null {
       }
       if (isDevHost(parsed.hostname)) {
         const rewritten = joinOriginPath(PRODUCTION_MEDIA_ORIGIN, parsed.pathname + parsed.search);
-        console.warn("[Media] Rewrote dev host URL:", trimmed, "→", rewritten);
+        if (__DEV__) {
+          console.warn("[Media] Rewrote dev host URL:", trimmed, "→", rewritten);
+        }
         return rewritten;
       }
       return trimmed;

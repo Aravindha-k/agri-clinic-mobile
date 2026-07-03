@@ -89,7 +89,7 @@ export function MoreMenuScreen() {
               icon: "navigate-outline",
               title: "Route history",
               subtitle: "Past workday routes",
-              onPress: () => rootNav?.navigate("TravelHistory")
+              onPress: () => rootNav?.navigate("MyLocation")
             }
           ]}
         />

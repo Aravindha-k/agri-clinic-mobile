@@ -7,6 +7,7 @@ import { logApiTelemetrySummary, resetApiTelemetry } from "../api/apiTelemetry";
 import { SESSION_EXPIRED_MESSAGE } from "../constants/authMessages";
 import { SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
 import { registerGoToLogin } from "./authRecovery";
+import { requestSplashReplay } from "../bootstrap/splashReplay";
 import { clearDeviceSessionId, DEVICE_SESSION_STORAGE_ERROR, ensureDeviceSessionLoaded, getDeviceSessionId } from "./deviceSessionStorage";
 import { registerSessionExpiredTeardown } from "./sessionExpired";
 import { registerSessionTeardown } from "./sessionConflict";
@@ -19,7 +20,6 @@ import { isDeviceSessionConflict } from "./sessionConflict";
 import { logStartup, patchStartupSnapshot } from "../utils/startupDiagnostics";
 
 const FIELD_EMPLOYEE_ONLY_MESSAGE = "This app is only for field employees.";
-const BOOTSTRAP_TIMEOUT_MS = 12_000;
 
 export type BootstrapIssue = "none" | "network" | "server";
 
@@ -27,6 +27,7 @@ type AuthContextValue = {
   isReady: boolean;
   isAuthenticated: boolean;
   authLoading: boolean;
+  sessionValidating: boolean;
   bootstrapIssue: BootstrapIssue;
   loginNotice: string | null;
   employee: Employee | null;
@@ -61,26 +62,29 @@ function shouldForceReLoginOnBootstrap(err: unknown): boolean {
   return false;
 }
 
-function bootstrapTimeout(): Promise<never> {
-  return new Promise((_, reject) => {
-    setTimeout(() => reject(new Error("BOOTSTRAP_TIMEOUT")), BOOTSTRAP_TIMEOUT_MS);
-  });
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isReady, setIsReady] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
+  const [sessionValidating, setSessionValidating] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [bootstrapIssue, setBootstrapIssue] = useState<BootstrapIssue>("none");
   const [loginNotice, setLoginNotice] = useState<string | null>(null);
   const [employee, setEmployee] = useState<Employee | null>(null);
   const bootstrapRunningRef = useRef(false);
+  const backgroundValidationRunningRef = useRef(false);
+  const autoValidateStartedRef = useRef(false);
+  const validationGenerationRef = useRef(0);
+
+  const invalidateBootstrap = useCallback(() => {
+    validationGenerationRef.current += 1;
+  }, []);
 
   const clearLoginNotice = useCallback(() => {
     setLoginNotice(null);
   }, []);
 
   const performLocalSignOut = useCallback(async (options?: { notice?: string | null; reason?: string }) => {
+    invalidateBootstrap();
     await clearTokens();
     await clearDeviceSessionId();
     await clearCachedActiveWorkday().catch(() => undefined);
@@ -90,14 +94,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setEmployee(null);
     setIsAuthenticated(false);
     setBootstrapIssue("none");
+    setSessionValidating(false);
+    setAuthLoading(false);
     setIsReady(true);
+    autoValidateStartedRef.current = false;
     if (options?.reason) {
       logStartup("session_cleared", options.reason);
     }
     if (options?.notice) {
       setLoginNotice(options.notice);
     }
-  }, []);
+  }, [invalidateBootstrap]);
 
   const refreshUser = useCallback(async () => {
     const token = await getAccessToken();
@@ -136,17 +143,100 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, [performLocalSignOut]);
 
-  const bootstrap = useCallback(async () => {
+  const validateSessionInBackground = useCallback(
+    async (options?: { isRetry?: boolean }) => {
+      if (backgroundValidationRunningRef.current) return;
+      backgroundValidationRunningRef.current = true;
+      const generation = ++validationGenerationRef.current;
+      const isStale = () => generation !== validationGenerationRef.current;
+
+      if (options?.isRetry) {
+        setBootstrapIssue("none");
+      }
+
+      setSessionValidating(true);
+      logStartup("auth_validate_background_start");
+
+      let endedIssue: BootstrapIssue = "none";
+
+      try {
+        const token = await getAccessToken();
+        if (isStale() || !token) {
+          return;
+        }
+
+        await ensureDeviceSessionLoaded();
+        if (isStale()) return;
+
+        if (!(await getDeviceSessionId())) {
+          await performLocalSignOut({
+            notice: "This device needs a fresh sign-in. Please log in again."
+          });
+          return;
+        }
+
+        try {
+          const profile = await getCurrentEmployee();
+          if (isStale()) return;
+          if (!isFieldEmployee(profile)) {
+            try {
+              await logoutRequest().catch(() => undefined);
+            } finally {
+              await performLocalSignOut({ notice: FIELD_EMPLOYEE_ONLY_MESSAGE });
+            }
+            return;
+          }
+          setEmployee(profile);
+          setBootstrapIssue("none");
+          endedIssue = "none";
+          logStartup("session_restored", `employee=${profile.id}`);
+        } catch (err) {
+          if (isStale()) return;
+          if (isDeviceSessionConflict(err)) {
+            return;
+          }
+          if (shouldForceReLoginOnBootstrap(err)) {
+            await performLocalSignOut({
+              notice: "Session is not valid for this server. Please sign in again.",
+              reason: "invalid session for server"
+            });
+            return;
+          }
+          if (isRetriableAuthError(err)) {
+            const issue = isNetworkError(err) ? "network" : "server";
+            setBootstrapIssue(issue);
+            endedIssue = issue;
+            return;
+          }
+          setBootstrapIssue("server");
+          endedIssue = "server";
+        }
+      } finally {
+        if (!isStale()) {
+          setSessionValidating(false);
+          patchStartupSnapshot({ bootstrapIssue: endedIssue });
+          logStartup("auth_validate_background_end", `issue=${endedIssue}`);
+          if (__DEV__) {
+            setTimeout(() => logApiTelemetrySummary(), 2500);
+          }
+        }
+        backgroundValidationRunningRef.current = false;
+      }
+    },
+    [performLocalSignOut]
+  );
+
+  const runFastLocalBootstrap = useCallback(async () => {
     if (bootstrapRunningRef.current) return;
     bootstrapRunningRef.current = true;
+
     setAuthLoading(true);
     setBootstrapIssue("none");
     logStartup("auth_bootstrap_start");
 
     let endedAuthenticated = false;
-    let endedIssue: BootstrapIssue = "none";
 
-    const runBootstrap = async () => {
+    try {
       const token = await getAccessToken();
       if (!token) {
         setIsAuthenticated(false);
@@ -155,8 +245,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      logStartup("session_restored", "token present — validating");
-
       await ensureDeviceSessionLoaded();
 
       if (!(await getDeviceSessionId())) {
@@ -164,68 +252,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           notice: "This device needs a fresh sign-in. Please log in again."
         });
         endedAuthenticated = false;
-        endedIssue = "none";
         return;
       }
 
-      try {
-        const profile = await getCurrentEmployee();
-        if (!isFieldEmployee(profile)) {
-          try {
-            await logoutRequest().catch(() => undefined);
-          } finally {
-            await performLocalSignOut({ notice: FIELD_EMPLOYEE_ONLY_MESSAGE });
-          }
-          endedAuthenticated = false;
-          endedIssue = "none";
-          return;
-        }
-        setEmployee(profile);
-        setIsAuthenticated(true);
-        setBootstrapIssue("none");
-        endedAuthenticated = true;
-        endedIssue = "none";
-        logStartup("session_restored", `employee=${profile.id}`);
-      } catch (err) {
-        if (isDeviceSessionConflict(err)) {
-          return;
-        }
-        if (shouldForceReLoginOnBootstrap(err)) {
-          await performLocalSignOut({
-            notice: "Session is not valid for this server. Please sign in again.",
-            reason: "invalid session for server"
-          });
-          endedAuthenticated = false;
-          endedIssue = "none";
-          return;
-        }
-        if (isRetriableAuthError(err)) {
-          const issue = isNetworkError(err) ? "network" : "server";
-          setIsAuthenticated(true);
-          setBootstrapIssue(issue);
-          endedAuthenticated = true;
-          endedIssue = issue;
-          return;
-        }
-        setIsAuthenticated(true);
-        setBootstrapIssue("server");
-        endedAuthenticated = true;
-        endedIssue = "server";
-      }
-    };
-
-    try {
-      await Promise.race([runBootstrap(), bootstrapTimeout()]);
-    } catch (err) {
-      if (err instanceof Error && err.message === "BOOTSTRAP_TIMEOUT") {
-        logStartup("auth_bootstrap_timeout", `${BOOTSTRAP_TIMEOUT_MS}ms`);
-        await performLocalSignOut({
-          notice: "Could not restore your session in time. Please sign in again.",
-          reason: "bootstrap timeout"
-        });
-        endedAuthenticated = false;
-        endedIssue = "none";
-      }
+      setIsAuthenticated(true);
+      endedAuthenticated = true;
+      logStartup("session_restored", "token present — home unlocked");
     } finally {
       setAuthLoading(false);
       setIsReady(true);
@@ -234,27 +266,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         authLoading: false,
         isReady: true,
         isAuthenticated: endedAuthenticated,
-        bootstrapIssue: endedIssue
+        bootstrapIssue: "none"
       });
-      logStartup(
-        "auth_bootstrap_end",
-        `authenticated=${endedAuthenticated} issue=${endedIssue}`
-      );
-      if (__DEV__) {
-        setTimeout(() => logApiTelemetrySummary(), 2500);
-      }
+      logStartup("auth_bootstrap_end", `authenticated=${endedAuthenticated} local=true`);
     }
   }, [performLocalSignOut]);
 
   useEffect(() => {
-    void bootstrap();
-  }, [bootstrap]);
+    if (!isReady || !isAuthenticated) {
+      autoValidateStartedRef.current = false;
+      return;
+    }
+    if (autoValidateStartedRef.current) return;
+    autoValidateStartedRef.current = true;
+    void validateSessionInBackground();
+  }, [isAuthenticated, isReady, validateSessionInBackground]);
+
+  useEffect(() => {
+    void runFastLocalBootstrap();
+  }, [runFastLocalBootstrap]);
 
   const retryBootstrap = useCallback(async () => {
-    setAuthLoading(true);
-    setBootstrapIssue("none");
-    await bootstrap();
-  }, [bootstrap]);
+    await validateSessionInBackground({ isRetry: true });
+  }, [validateSessionInBackground]);
 
   const resetLocalSession = useCallback(
     async (reason = "manual reset") => {
@@ -313,6 +347,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await logoutRequest();
     } finally {
       await performLocalSignOut();
+      requestSplashReplay("sign_out");
     }
   }, [performLocalSignOut]);
 
@@ -321,6 +356,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isReady,
       isAuthenticated,
       authLoading,
+      sessionValidating,
       bootstrapIssue,
       loginNotice,
       employee,
@@ -335,6 +371,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isReady,
       isAuthenticated,
       authLoading,
+      sessionValidating,
       bootstrapIssue,
       loginNotice,
       employee,
@@ -358,8 +395,8 @@ export function useAuth() {
   return value;
 }
 
-/** True when auth bootstrap finished and there is no blocking startup issue. */
+/** True when local token check passed — home may render; server validation may still run. */
 export function useAuthSessionReady() {
-  const { isReady, isAuthenticated, bootstrapIssue } = useAuth();
-  return isReady && isAuthenticated && bootstrapIssue === "none";
+  const { isReady, isAuthenticated } = useAuth();
+  return isReady && isAuthenticated;
 }

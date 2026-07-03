@@ -3,10 +3,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
-import { Employee, getCurrentEmployee, mergeEmployeePhoto } from "../api/employees";
+import { Employee, getCurrentEmployee } from "../api/employees";
 import { fetchFarmersPage } from "../api/farmers";
 import { useEmployee } from "../storage/EmployeeContext";
-import { uploadEmployeePhoto } from "../api/profilePhotos";
 import { Visit } from "../api/visits";
 import { getHomeVisits } from "../utils/visitsCache";
 import { ProfileAvatar } from "../components/ProfileAvatar";
@@ -21,11 +20,6 @@ import { useTabBarBottomInset } from "../hooks/useTabBarBottomInset";
 import { useDesignSystem } from "../hooks/useDesignSystem";
 import { isSameVisitLocalDay } from "../utils/format";
 import { extractPhotoUrl, photoCacheVersion } from "../utils/profilePhotoUrl";
-import {
-  handleProfilePickerError,
-  pickProfileImage,
-  showProfilePhotoSourcePicker
-} from "../utils/profileImagePick";
 import { formatDisplayRole } from "../utils/formatRole";
 import { useTracking } from "../storage/TrackingContext";
 import { formatRelativeTime } from "../utils/formatRelativeTime";
@@ -44,8 +38,6 @@ export function ProfileScreen() {
   const [farmerCount, setFarmerCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [photoVersion, setPhotoVersion] = useState<string | number>(Date.now());
 
   const load = useCallback(async () => {
@@ -89,28 +81,6 @@ export function ProfileScreen() {
     ]);
   }
 
-  async function changePhoto(source: "camera" | "library") {
-    try {
-      const picked = await pickProfileImage(source);
-      if (!picked) return;
-      setUploadingPhoto(true);
-      setUploadProgress(0);
-      const result = await uploadEmployeePhoto(picked, setUploadProgress);
-      const refreshed =
-        mergeEmployeePhoto(await getCurrentEmployee(), result) ??
-        (result.entity && typeof result.entity === "object" ? (result.entity as Employee) : null);
-      if (!refreshed) throw new Error("Photo uploaded but profile could not be refreshed.");
-      await refreshEmployee();
-      setPhotoVersion(result.profile_photo_updated_at ?? photoCacheVersion(refreshed) ?? Date.now());
-      bumpAfterEmployeePhotoChange();
-    } catch (err) {
-      Alert.alert("Upload failed", handleProfilePickerError(err) || "Please try again.");
-    } finally {
-      setUploadingPhoto(false);
-      setUploadProgress(0);
-    }
-  }
-
   const displayError = error || employeeError;
   if (displayError && !employee) return <ErrorState message={displayError} onRetry={() => void load()} />;
 
@@ -138,10 +108,7 @@ export function ProfileScreen() {
                 photoUrl={photoUrl}
                 photoVersion={photoVersion}
                 size="xxl"
-                editable
-                uploading={uploadingPhoto}
-                uploadProgress={uploadProgress}
-                onPress={() => showProfilePhotoSourcePicker((s) => void changePhoto(s))}
+                fallback="icon"
               />
               <Text style={type.pageTitle}>{displayName}</Text>
               <View style={[styles.rolePill, { backgroundColor: colors.primarySoft }]}>
@@ -149,14 +116,6 @@ export function ProfileScreen() {
               </View>
               {employee?.phone?.trim() ? <Text style={type.meta}>{employee.phone.trim()}</Text> : null}
               <Text style={type.caption}>Employee ID · {employee?.employee_id?.toString().trim() || "—"}</Text>
-              <Pressable
-                onPress={() => showProfilePhotoSourcePicker((s) => void changePhoto(s))}
-                disabled={uploadingPhoto}
-                style={[styles.photoBtn, { borderColor: colors.borderSubtle }]}
-              >
-                <Ionicons name="camera-outline" size={16} color={colors.primary} />
-                <Text style={[type.caption, { color: colors.primary, fontWeight: "800" }]}>Update photo</Text>
-              </Pressable>
             </View>
 
             <View style={styles.statsRow}>

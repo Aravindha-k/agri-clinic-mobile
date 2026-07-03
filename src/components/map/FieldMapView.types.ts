@@ -40,6 +40,22 @@ export type FieldMapViewProps = {
   locationGranted?: boolean;
   emptyMessage?: string;
   errorMessage?: string;
-  accuracyCircle?: { center: MapCoordinate; radiusMeters: number };
+  accuracyCircle?: {
+    center: MapCoordinate;
+    radiusMeters: number;
+    /** Softer outer ring radius — defaults to radiusMeters when omitted. */
+    outerRadiusMeters?: number;
+  };
   mapRef?: RefObject<unknown | null>;
+  routeStrokePrimary?: string;
+  routeStrokeOutline?: string;
+  /** Thinner stroke for small preview maps. */
+  routeStyle?: "default" | "compact";
+  /** Small dot markers for mini map previews. */
+  compactMarkers?: boolean;
+  /** When false, map is display-only (safe inside ScrollView). */
+  interactive?: boolean;
+  /** Smoothly center map on this coordinate while tracking (WhatsApp-style follow). */
+  liveFocus?: MapCoordinate | null;
+  liveFocusDelta?: number;
 };

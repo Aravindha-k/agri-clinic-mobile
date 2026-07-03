@@ -50,6 +50,29 @@ function normalizeFollowUp(raw: Record<string, unknown>): DashboardFollowUp | nu
   };
 }
 
+function villageFromVisit(visit: Visit): string | undefined {
+  const name =
+    visit.village_name?.trim() ||
+    visit.farmer_village?.trim() ||
+    (visit.farmer && typeof visit.farmer === "object"
+      ? String((visit.farmer as { village_name?: string }).village_name ?? "").trim()
+      : "");
+  return name || undefined;
+}
+
+function hasGpsFromVisit(visit: Visit): boolean {
+  const lat = visit.latitude;
+  const lng = visit.longitude;
+  return lat != null && lng != null && String(lat).trim() !== "" && String(lng).trim() !== "";
+}
+
+function villageFromRaw(raw: Record<string, unknown>): string | undefined {
+  const name = String(
+    raw.village_name ?? raw.farmer_village ?? raw.village ?? ""
+  ).trim();
+  return name || undefined;
+}
+
 function parseRecentId(raw: Record<string, unknown>): number | null {
   const idRaw = raw.id ?? raw.visit_id;
   if (typeof idRaw === "number" && Number.isFinite(idRaw)) return idRaw;
@@ -79,6 +102,7 @@ function normalizeRecent(raw: Record<string, unknown>): DashboardRecentVisit | n
         : typeof raw.crop_name === "string"
           ? raw.crop_name
           : undefined,
+    village_name: villageFromRaw(raw),
     visited_at:
       typeof raw.visited_at === "string"
         ? raw.visited_at
@@ -86,7 +110,12 @@ function normalizeRecent(raw: Record<string, unknown>): DashboardRecentVisit | n
           ? raw.visit_date
           : typeof raw.created_at === "string"
             ? raw.created_at
-            : null
+            : null,
+    has_gps:
+      raw.latitude != null &&
+      raw.longitude != null &&
+      String(raw.latitude).trim() !== "" &&
+      String(raw.longitude).trim() !== ""
   };
 }
 
@@ -175,7 +204,9 @@ function buildDashboardFromVisits(visits: Visit[]): DashboardData {
       id: v.id,
       farmer_name: farmerNameFromVisit(v),
       crop: cropLabelFromVisit(v),
-      visited_at: visitDisplayIso(v)
+      village_name: villageFromVisit(v),
+      visited_at: visitDisplayIso(v),
+      has_gps: hasGpsFromVisit(v)
     }));
 
   return {

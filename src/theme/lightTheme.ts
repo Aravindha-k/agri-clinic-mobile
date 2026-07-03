@@ -4,8 +4,8 @@ import { spacing } from "./spacing";
 export const lightTheme = {
   dark: false,
   colors: {
-    background: "#F4FAF6",
-    backgroundAlt: "#E8F2EC",
+    background: "#F8F7F2",
+    backgroundAlt: "#F0F5F1",
     card: "#FFFFFF",
     cardMuted: "#F6FAF7",
     surface: "#FFFFFF",

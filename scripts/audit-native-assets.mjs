@@ -44,8 +44,12 @@ for (const [name, fallback] of assetPaths) {
 if (exists("assets/brand/logo-splash.png")) pass("Boot splash logo: assets/brand/logo-splash.png");
 else fail("Missing assets/brand/logo-splash.png (BootSplash)");
 
-if (exists("assets/splash/rice-field.png")) pass("React splash poster: assets/splash/rice-field.png");
-else fail("Missing assets/splash/rice-field.png");
+  if (exists("assets/splash/sky-background.jpg")) pass("Splash sky: assets/splash/sky-background.jpg");
+  else if (exists("assets/splash/rice-field.png")) pass("React splash poster: assets/splash/rice-field.png");
+  else fail("Missing assets/splash/sky-background.jpg or rice-field.png");
+
+  if (exists("assets/splash/product-pile.png")) pass("Splash product pile: assets/splash/product-pile.png");
+  else fail("Missing assets/splash/product-pile.png");
 
 const splashDensities = ["mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"];
 for (const density of splashDensities) {

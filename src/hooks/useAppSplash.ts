@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { hideNativeSplashSafe } from "../bootstrap/nativeSplash";
 
-/** Hide native splash once the custom animated splash is mounted. */
+/** Hide native Expo splash once the app shell is ready to paint. */
 export function useAppSplash(hideWhenReady = false) {
   const hidden = useRef(false);
 
@@ -14,8 +14,8 @@ export function useAppSplash(hideWhenReady = false) {
   const hideNativeSplash = () => {
     if (hidden.current) return;
     hidden.current = true;
-    void hideNativeSplashSafe("kavya_splash_ready");
+    void hideNativeSplashSafe("app_shell_ready");
   };
 
   return { hideNativeSplash };
-}
+};

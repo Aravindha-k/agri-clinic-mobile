@@ -79,7 +79,7 @@ export function TrackingHubScreen() {
           accuracyMeters={currentLocation?.accuracy}
         />
         <Pressable
-          onPress={() => rootNav?.navigate("LiveMap")}
+          onPress={() => rootNav?.navigate("MyLocation")}
           style={[styles.mapOverlay, { backgroundColor: colors.card }]}
         >
           <Ionicons name="expand-outline" size={18} color={colors.primary} />
@@ -115,7 +115,7 @@ export function TrackingHubScreen() {
           busy={busy}
           elapsedLabel={isActive ? elapsedDuration : undefined}
           onStart={() => void startDay()}
-          onLiveMap={() => rootNav?.navigate("LiveMap")}
+          onLiveMap={() => rootNav?.navigate("MyLocation")}
         />
       </View>
 
@@ -125,7 +125,7 @@ export function TrackingHubScreen() {
         <PrimaryButton
           title="View route history"
           variant="secondary"
-          onPress={() => rootNav?.navigate("TravelHistory")}
+          onPress={() => rootNav?.navigate("MyLocation")}
           style={{ marginTop: 12 }}
         />
       </View>

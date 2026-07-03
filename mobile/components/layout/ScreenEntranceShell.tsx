@@ -25,7 +25,7 @@ export function ScreenEntranceShell({
   children,
   style,
   withCanvas = true,
-  withBrandHeader = true
+  withBrandHeader = false
 }: Props) {
   const entranceTick = useScreenEntrance();
 
@@ -34,7 +34,7 @@ export function ScreenEntranceShell({
       <View style={[styles.root, style]}>
         {withCanvas ? <ScreenCanvas /> : null}
         <ScreenEntranceBloom replayKey={entranceTick} />
-        {withBrandHeader ? <BrandPageHeader showWordmark style={styles.brandHeader} /> : null}
+        {withBrandHeader ? <BrandPageHeader style={styles.brandHeader} /> : null}
         {typeof children === "function" ? children(entranceTick) : children}
       </View>
     </EntranceTickContext.Provider>

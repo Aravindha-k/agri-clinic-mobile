@@ -25,20 +25,25 @@ const MAP_FALLBACK_MESSAGE = "Map could not load. Please enable GPS and try agai
 function RoutePolylines({
   route,
   strokePrimary,
-  strokeOutline
+  strokeOutline,
+  routeStyle = "default"
 }: {
   route: MapCoordinate[];
   strokePrimary: string;
   strokeOutline: string;
+  routeStyle?: "default" | "compact";
 }) {
   if (route.length < 2) return null;
+
+  const outlineWidth = routeStyle === "compact" ? 4 : 7;
+  const primaryWidth = routeStyle === "compact" ? 2 : 3.5;
 
   return (
     <>
       <Polyline
         coordinates={route}
         strokeColor={strokeOutline}
-        strokeWidth={8}
+        strokeWidth={outlineWidth}
         lineCap="round"
         lineJoin="round"
         geodesic
@@ -47,7 +52,7 @@ function RoutePolylines({
       <Polyline
         coordinates={route}
         strokeColor={strokePrimary}
-        strokeWidth={4}
+        strokeWidth={primaryWidth}
         lineCap="round"
         lineJoin="round"
         geodesic
@@ -75,7 +80,14 @@ export function FieldMapView({
   emptyMessage,
   errorMessage,
   accuracyCircle,
-  mapRef: externalRef
+  mapRef: externalRef,
+  routeStrokePrimary,
+  routeStrokeOutline,
+  routeStyle = "default",
+  compactMarkers = false,
+  interactive = true,
+  liveFocus,
+  liveFocusDelta = 0.006
 }: Props) {
   const { theme } = useTheme();
 
@@ -129,7 +141,7 @@ export function FieldMapView({
   const hasRenderableCoordinates = useMemo(() => {
     if (!hasValidMapCoords(safeRegion.latitude, safeRegion.longitude)) return false;
     if (safeMarkers.length > 0) return true;
-    if (safeRoute.length >= 2) return true;
+    if (safeRoute.length >= 1) return true;
     if (safeFit && safeFit.length > 0) return true;
     if (showsUserLocation && locationGranted) return true;
     return false;
@@ -164,12 +176,7 @@ export function FieldMapView({
   ]);
 
   const allowFollowUser =
-    canRenderMap &&
-    mapReady &&
-    followsUserLocation &&
-    showsUserLocation &&
-    locationGranted &&
-    Platform.OS === "ios";
+    canRenderMap && mapReady && followsUserLocation && showsUserLocation && locationGranted;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -181,7 +188,16 @@ export function FieldMapView({
   useEffect(() => {
     setMapReady(false);
     cameraAppliedRef.current = false;
-  }, [permissionResolved, locationDenied, locationGranted, safeRegion.latitude, safeRegion.longitude]);
+  }, [
+    permissionResolved,
+    locationDenied,
+    locationGranted,
+    safeRegion.latitude,
+    safeRegion.longitude,
+    safeMarkers.length,
+    safeRoute.length,
+    safeFit?.length ?? 0
+  ]);
 
   useEffect(() => {
     logMapDiagnostics(screenName, {
@@ -257,7 +273,43 @@ export function FieldMapView({
     return () => clearTimeout(timer);
   }, [applyCamera, canRenderMap, mapReady]);
 
-  const mapHeight = Math.max(height, MIN_MAP_HEIGHT);
+  const lastLiveFocusAtRef = useRef(0);
+  useEffect(() => {
+    if (!liveFocus || !mapReady || !canRenderMap || !followsUserLocation) return;
+    const lat = parseMapCoord(liveFocus.latitude);
+    const lng = parseMapCoord(liveFocus.longitude);
+    if (lat == null || lng == null || !hasValidMapCoords(lat, lng)) return;
+
+    const now = Date.now();
+    if (now - lastLiveFocusAtRef.current < 700) return;
+    lastLiveFocusAtRef.current = now;
+
+    const map = mapRef.current;
+    if (!map) return;
+    try {
+      map.animateToRegion(
+        sanitizeRegion({
+          latitude: lat,
+          longitude: lng,
+          latitudeDelta: liveFocusDelta,
+          longitudeDelta: liveFocusDelta
+        }),
+        480
+      );
+    } catch {
+      // ignore animation errors
+    }
+  }, [
+    canRenderMap,
+    followsUserLocation,
+    liveFocus?.latitude,
+    liveFocus?.longitude,
+    liveFocusDelta,
+    mapReady,
+    mapRef
+  ]);
+
+  const mapHeight = height > 0 ? height : MIN_MAP_HEIGHT;
   const shellWidth = Math.max(width, 1);
 
   const placeholderMessage =
@@ -277,7 +329,7 @@ export function FieldMapView({
       <View
         style={[
           styles.shell,
-          { height: mapHeight, width: shellWidth, minHeight: MIN_MAP_HEIGHT, backgroundColor: shellBg }
+          { height: mapHeight, width: shellWidth, minHeight: mapHeight, backgroundColor: shellBg }
         ]}
       >
         {!canRenderMap ? (
@@ -322,24 +374,42 @@ export function FieldMapView({
             mapType={FIELD_MAP_TYPE}
             userInterfaceStyle="light"
             pitchEnabled={false}
-            rotateEnabled={false}
+            rotateEnabled={interactive}
             toolbarEnabled={false}
+            scrollEnabled={interactive}
+            zoomEnabled={interactive}
+            zoomTapEnabled={interactive}
             moveOnMarkerPress={false}
           >
             {accuracyCircle &&
             hasValidMapCoords(accuracyCircle.center.latitude, accuracyCircle.center.longitude) ? (
-              <Circle
-                center={accuracyCircle.center}
-                radius={Math.min(Math.max(accuracyCircle.radiusMeters, 12), 200)}
-                strokeColor={theme.colors.primary}
-                fillColor={theme.colors.primarySoft}
-                strokeWidth={2}
-              />
+              <>
+                <Circle
+                  center={accuracyCircle.center}
+                  radius={Math.min(
+                    Math.max(accuracyCircle.outerRadiusMeters ?? accuracyCircle.radiusMeters, 18),
+                    120
+                  )}
+                  strokeColor="rgba(59, 130, 246, 0.45)"
+                  fillColor="rgba(59, 130, 246, 0.08)"
+                  strokeWidth={2}
+                  zIndex={1}
+                />
+                <Circle
+                  center={accuracyCircle.center}
+                  radius={Math.min(Math.max(accuracyCircle.radiusMeters, 10), 60)}
+                  strokeColor="rgba(59, 130, 246, 0.55)"
+                  fillColor="rgba(59, 130, 246, 0.22)"
+                  strokeWidth={1.5}
+                  zIndex={2}
+                />
+              </>
             ) : null}
             <RoutePolylines
               route={safeRoute}
-              strokePrimary={theme.colors.primaryDark}
-              strokeOutline="rgba(255,255,255,0.92)"
+              strokePrimary={routeStrokePrimary ?? theme.colors.primaryDark}
+              strokeOutline={routeStrokeOutline ?? "rgba(255,255,255,0.92)"}
+              routeStyle={routeStyle}
             />
             {safeMarkers.map((m) => (
               <FieldMapMarker
@@ -350,6 +420,7 @@ export function FieldMapView({
                 title={m.title}
                 description={m.description}
                 kind={m.kind}
+                compact={compactMarkers}
               />
             ))}
           </MapView>
@@ -366,8 +437,7 @@ const styles = StyleSheet.create({
     overflow: "hidden"
   },
   map: {
-    ...StyleSheet.absoluteFillObject,
-    minHeight: MIN_MAP_HEIGHT
+    ...StyleSheet.absoluteFillObject
   },
   placeholder: {
     ...StyleSheet.absoluteFillObject,

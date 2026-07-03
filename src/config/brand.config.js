@@ -1,6 +1,10 @@
 /** Shared brand metadata — imported by `app.config.js` and `brand.ts`. */
 module.exports = {
   companyName: "Kavya Agri-Horti Clinic",
+  brandShortName: "KAVYA",
+  brandTitleLine1: "Kavya",
+  brandTitleLine2: "Agri Clinic",
+  platformSubtitle: "Smart Field Operations",
   appName: "Kavya Agri Clinic",
   splashTitle: "Kavya Agri Clinic",
   splashSubtitle: "Field Officer App",
@@ -8,9 +12,9 @@ module.exports = {
   portalSubtitle: "Field Officer App",
   loaderSubtitle: "Diagnostics • Solutions • Growth",
   employeeHint: "For field employees only",
-  splashBackgroundColor: "#142818",
-  /** Branded intro duration before login/home (ms). */
-  splashDurationMs: 5500,
+  splashBackgroundColor: "#D8ECF8",
+  /** Premium splash visible duration (ms) incl. crossfade. */
+  splashDurationMs: 4500,
   iconBackgroundColor: "#0F5132",
   logoAsset: "./assets/brand/logo.png",
   iconAsset: "./assets/brand/app-icon.png",

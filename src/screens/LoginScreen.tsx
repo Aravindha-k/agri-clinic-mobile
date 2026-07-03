@@ -1,34 +1,24 @@
 import { useFocusEffect } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  Animated,
-  Easing,
   StatusBar,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
-  useWindowDimensions,
   ActivityIndicator,
-  Image,
   ScrollView
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import Reanimated, {
-  Easing as REasing,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming
-} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LoginBiometricSection } from "../components/auth/LoginBiometricSection";
-import { BRAND } from "../config/brand";
+import { LoginHeroHeader, LOGIN_HEADER_OVERLAP } from "../components/auth/LoginHeroHeader";
+import { LoginPageFooter } from "../components/auth/LoginPageFooter";
 import { useSecureScreen } from "../hooks/useSecureScreen";
 import { useAuth } from "../storage/AuthContext";
 import {
@@ -39,24 +29,15 @@ import {
   type BiometricLoginStatus
 } from "../storage/biometricLoginStorage";
 import { FONTS } from "../theme/fonts";
-import { Colors, Radius, Shadow } from "../../mobile/lib/theme";
-import { LoginImagePanel } from "../../mobile/components/nature";
+import { Colors, Enterprise, FontSize, FontWeight, Layout, Radius, Shadow, Spacing } from "../../mobile/lib/theme";
 import { ProductionApiDiagnosticsPanel } from "../../mobile/components/diagnostics/ProductionApiDiagnosticsPanel";
+import { TechnicalDetailsCollapsible } from "../../mobile/components/layout";
 import { ApiRequestError, getNetworkMessage, isNetworkError } from "../utils/apiError";
 
-const SPLASH_LOGO = require("../../assets/brand/logo-splash.png");
-
-const SCREEN_BG = "#F8F7F2";
-const SHEET_BG = "#FCFCFA";
-const INPUT_BG = "#FFFFFF";
-const INPUT_BORDER = "#E5E7EB";
-const TEXT_MAIN = "#2F3830";
-const TEXT_MUTED = "#4B554C";
-
-const HERO_RATIO = 0.52;
-const SHEET_TOP_GAP = 18;
-const SHEET_RADIUS = 24;
-const LOGO_SIZE = 74;
+const CARD_TOP_RADIUS = 24;
+const CARD_PAD = 24;
+const INPUT_H = 52;
+const BTN_H = 52;
 
 const EMPTY_BIOMETRIC_STATUS: BiometricLoginStatus = {
   hardwareAvailable: false,
@@ -65,48 +46,12 @@ const EMPTY_BIOMETRIC_STATUS: BiometricLoginStatus = {
   label: "Biometrics"
 };
 
-function LoginLogoMark() {
-  const scale = useSharedValue(1);
-
-  useEffect(() => {
-    scale.value = withRepeat(
-      withSequence(
-        withTiming(1.08, { duration: 1200, easing: REasing.inOut(REasing.sin) }),
-        withTiming(1, { duration: 1200, easing: REasing.inOut(REasing.sin) })
-      ),
-      -1,
-      false
-    );
-  }, [scale]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }]
-  }));
-
-  return (
-    <Reanimated.View style={animatedStyle}>
-      <Image
-        source={SPLASH_LOGO}
-        style={styles.logoMark}
-        resizeMode="contain"
-        accessibilityLabel="App logo"
-      />
-    </Reanimated.View>
-  );
-}
-
 export function LoginScreen() {
   useSecureScreen();
   const insets = useSafeAreaInsets();
-  const { height: screenH } = useWindowDimensions();
-  const heroHeight = Math.round(screenH * HERO_RATIO);
-  const sheetTop = heroHeight + SHEET_TOP_GAP;
-  const sheetMinHeight = screenH - sheetTop;
   const { signIn, loginNotice, clearLoginNotice } = useAuth();
 
   const scrollRef = useRef<ScrollView>(null);
-  const formY = useRef(new Animated.Value(10)).current;
-  const formAlpha = useRef(new Animated.Value(0)).current;
   const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   const [empId, setEmpId] = useState("");
@@ -132,24 +77,6 @@ export function LoginScreen() {
       void refreshBiometricState();
     }, [refreshBiometricState])
   );
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(formY, {
-        toValue: 0,
-        duration: 320,
-        delay: 60,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true
-      }),
-      Animated.timing(formAlpha, {
-        toValue: 1,
-        duration: 280,
-        delay: 60,
-        useNativeDriver: true
-      })
-    ]).start();
-  }, [formAlpha, formY]);
 
   useEffect(() => {
     if (loginNotice) {
@@ -184,7 +111,7 @@ export function LoginScreen() {
   async function handleLogin() {
     const user = empId.trim();
     if (!user || !password.trim()) {
-      setLoginError("Enter username and password.");
+      setLoginError("Enter your Employee ID and password.");
       return;
     }
 
@@ -195,11 +122,11 @@ export function LoginScreen() {
       await signIn(user, password);
     } catch (error) {
       if (error instanceof ApiRequestError && error.code === "INVALID_CREDENTIALS") {
-        setLoginError(error.message || "Please check your credentials.");
+        setLoginError(error.message || "Please check your ID and password.");
       } else if (isNetworkError(error)) {
         setLoginError(getNetworkMessage());
       } else {
-        setLoginError(error instanceof Error ? error.message : "Please check your credentials.");
+        setLoginError(error instanceof Error ? error.message : "Please check your ID and password.");
       }
     } finally {
       setLoading(false);
@@ -217,7 +144,7 @@ export function LoginScreen() {
     try {
       const credentials = await readBiometricCredentials();
       if (!credentials) {
-        setLoginError("Biometric sign-in was cancelled.");
+        setLoginError("Fingerprint login was cancelled.");
         return;
       }
       await signIn(credentials.username, credentials.password);
@@ -225,11 +152,11 @@ export function LoginScreen() {
       if (error instanceof ApiRequestError && error.code === "INVALID_CREDENTIALS") {
         await clearBiometricLogin();
         await refreshBiometricState();
-        setLoginError(error.message || "Saved sign-in expired. Use your password.");
+        setLoginError("Saved login expired. Use your password.");
       } else if (isNetworkError(error)) {
         setLoginError(getNetworkMessage());
       } else {
-        setLoginError(error instanceof Error ? error.message : "Biometric sign-in failed.");
+        setLoginError(error instanceof Error ? error.message : "Fingerprint login failed.");
       }
     } finally {
       setBiometricBusy(false);
@@ -238,64 +165,41 @@ export function LoginScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-      {/* Layer 1 — fixed hero (never moves with keyboard) */}
-      <View style={[styles.hero, { height: heroHeight }]}>
-        <LoginImagePanel style={StyleSheet.absoluteFillObject} />
-        <View
-          style={[styles.brand, { top: insets.top + 8, right: 16 }]}
-          pointerEvents="none"
-        >
-          <LoginLogoMark />
-          <Text style={styles.brandName}>{BRAND.splashTitle}</Text>
-        </View>
-      </View>
+      <LoginHeroHeader topInset={insets.top} />
 
-      {/* Layer 2 — bottom sheet (keyboard-aware only) */}
       <KeyboardAvoidingView
-        style={[styles.sheetHost, { top: sheetTop }]}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+        style={styles.body}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
           ref={scrollRef}
-          style={styles.sheetScroll}
-          contentContainerStyle={[styles.sheetScrollContent, { minHeight: sheetMinHeight }]}
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
-          bounces={false}
-          scrollEnabled={keyboardOpen || screenH < 720}
+          bounces={keyboardOpen}
         >
-          <Animated.View
-            style={[
-              styles.sheet,
-              {
-                minHeight: sheetMinHeight,
-                paddingBottom: insets.bottom + 12,
-                opacity: formAlpha,
-                transform: [{ translateY: formY }]
-              }
-            ]}
-          >
-            <View>
-            <Text style={styles.welcomeTitle}>Welcome back</Text>
-            <Text style={styles.welcomeSub}>
-              {loading ? "Verifying your credentials…" : "Sign in to your field workspace"}
-            </Text>
+          <View style={styles.card}>
+            <View style={styles.loginTitleRow}>
+              <Ionicons name="person-circle-outline" size={24} color={Colors.brand700} />
+              <Text style={styles.loginTitle}>Login</Text>
+            </View>
+            <Text style={styles.loginSub}>Enter your Employee ID and password</Text>
 
             {loginError ? (
               <View style={styles.errorBox}>
-                <Ionicons name="alert-circle" size={16} color="#B91C1C" />
+                <Ionicons name="alert-circle" size={16} color={Colors.redText} />
                 <Text style={styles.errorText}>{loginError}</Text>
               </View>
             ) : null}
 
             {loginError ? (
-              <View style={styles.debugPanelWrap}>
+              <TechnicalDetailsCollapsible>
                 <ProductionApiDiagnosticsPanel compact />
-              </View>
+              </TechnicalDetailsCollapsible>
             ) : null}
 
             <Text style={styles.fieldLabel}>Employee ID</Text>
@@ -306,7 +210,7 @@ export function LoginScreen() {
                 loading && styles.inputDisabled
               ]}
             >
-              <Ionicons name="id-card-outline" size={18} color={TEXT_MUTED} style={styles.inputIcon} />
+              <Ionicons name="person-outline" size={18} color={Colors.text3} style={styles.inputIcon} />
               <TextInput
                 value={empId}
                 onChangeText={(t) => {
@@ -315,8 +219,8 @@ export function LoginScreen() {
                 }}
                 onFocus={() => handleFieldFocus("empId")}
                 onBlur={() => setFocusedField((f) => (f === "empId" ? null : f))}
-                placeholder="e.g. AG-8821"
-                placeholderTextColor="rgba(47,56,48,0.42)"
+                placeholder="Example: AG-8821"
+                placeholderTextColor={Colors.placeholder}
                 autoCapitalize="none"
                 autoCorrect={false}
                 editable={!loading}
@@ -333,7 +237,7 @@ export function LoginScreen() {
                 loading && styles.inputDisabled
               ]}
             >
-              <Ionicons name="lock-closed-outline" size={18} color={TEXT_MUTED} style={styles.inputIcon} />
+              <Ionicons name="lock-closed-outline" size={18} color={Colors.text3} style={styles.inputIcon} />
               <TextInput
                 value={password}
                 onChangeText={(t) => {
@@ -342,8 +246,8 @@ export function LoginScreen() {
                 }}
                 onFocus={() => handleFieldFocus("password")}
                 onBlur={() => setFocusedField((f) => (f === "password" ? null : f))}
-                placeholder="Enter password"
-                placeholderTextColor="rgba(47,56,48,0.42)"
+                placeholder="Enter your password"
+                placeholderTextColor={Colors.placeholder}
                 secureTextEntry={!showPw}
                 editable={!loading}
                 style={styles.input}
@@ -357,7 +261,7 @@ export function LoginScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={showPw ? "Hide password" : "Show password"}
               >
-                <Ionicons name={showPw ? "eye-off-outline" : "eye-outline"} size={18} color={TEXT_MUTED} />
+                <Ionicons name={showPw ? "eye-off-outline" : "eye-outline"} size={20} color={Colors.text3} />
               </TouchableOpacity>
             </View>
 
@@ -366,45 +270,44 @@ export function LoginScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.signInBtn, loading && styles.signInBtnBusy]}
               onPress={() => void handleLogin()}
               disabled={loading}
-              activeOpacity={0.9}
+              activeOpacity={0.92}
+              style={[styles.signInBtnWrap, loading && styles.signInBtnBusy]}
             >
-              {loading ? (
-                <>
-                  <ActivityIndicator color="#fff" size="small" />
-                  <Text style={styles.signInBtnText}>Signing in…</Text>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.signInBtnText}>Sign In</Text>
-                  <Ionicons name="arrow-forward" size={16} color={Colors.surface} />
-                </>
-              )}
+              <LinearGradient
+                colors={[Colors.brand700, Colors.brand500]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.signInBtn}
+              >
+                {loading ? (
+                  <View style={styles.signInInner}>
+                    <ActivityIndicator color={Colors.onPrimary} size="small" />
+                    <Text style={styles.signInBtnText}>Logging in…</Text>
+                  </View>
+                ) : (
+                  <View style={styles.signInInner}>
+                    <Text style={styles.signInBtnText}>Login</Text>
+                    <Ionicons name="arrow-forward" size={18} color={Colors.onPrimary} style={styles.signInArrow} />
+                  </View>
+                )}
+              </LinearGradient>
             </TouchableOpacity>
-            </View>
 
             {biometricReady && biometricStatus.hardwareAvailable ? (
-              <View style={styles.bottomFill}>
-                <LoginBiometricSection
-                  status={biometricStatus}
-                  ready={biometricReady}
-                  canLogin={biometricCanLogin}
-                  busy={biometricBusy || loading}
-                  onSignIn={() => void handleBiometricLogin()}
-                />
-                <Text style={styles.footer}>
-                  {BRAND.appName} · {BRAND.portalSubtitle}
-                </Text>
-              </View>
-            ) : (
-              <Text style={[styles.footer, styles.footerCompact]}>
-                {BRAND.appName} · {BRAND.portalSubtitle}
-              </Text>
-            )}
-          </Animated.View>
+              <LoginBiometricSection
+                status={biometricStatus}
+                ready={biometricReady}
+                canLogin={biometricCanLogin}
+                busy={biometricBusy || loading}
+                onSignIn={() => void handleBiometricLogin()}
+              />
+            ) : null}
+          </View>
         </ScrollView>
+
+        <LoginPageFooter />
       </KeyboardAvoidingView>
     </View>
   );
@@ -412,178 +315,150 @@ export function LoginScreen() {
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: SCREEN_BG,
+    backgroundColor: Colors.bg,
     flex: 1
   },
-  hero: {
-    left: 0,
-    overflow: "hidden",
-    position: "absolute",
-    right: 0,
-    top: 0,
-    width: "100%",
-    zIndex: 1
+  body: {
+    flex: 1,
+    marginTop: -LOGIN_HEADER_OVERLAP
   },
-  brand: {
-    alignItems: "flex-end",
-    position: "absolute",
-    zIndex: 2
-  },
-  logoMark: {
-    height: LOGO_SIZE,
-    width: LOGO_SIZE
-  },
-  brandName: {
-    color: "#FFFFFF",
-    fontFamily: FONTS.bold,
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 0.1,
-    marginTop: 4,
-    textAlign: "right",
-    textShadowColor: "rgba(0,0,0,0.45)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4
-  },
-  sheetHost: {
-    bottom: 0,
-    left: 0,
-    position: "absolute",
-    right: 0,
-    zIndex: 2
-  },
-  sheetScroll: {
+  scroll: {
     flex: 1
   },
-  sheetScrollContent: {
+  scrollContent: {
     flexGrow: 1
   },
-  sheet: {
-    backgroundColor: SHEET_BG,
-    borderTopLeftRadius: SHEET_RADIUS,
-    borderTopRightRadius: SHEET_RADIUS,
+  card: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: CARD_TOP_RADIUS,
+    borderTopRightRadius: CARD_TOP_RADIUS,
     flexGrow: 1,
-    paddingHorizontal: 16,
-    paddingTop: 0,
-    width: "100%"
+    minHeight: "100%",
+    paddingBottom: Spacing.lg,
+    paddingHorizontal: CARD_PAD,
+    paddingTop: CARD_PAD,
+    width: "100%",
+    ...Shadow.cardRaised
   },
-  welcomeTitle: {
-    color: TEXT_MAIN,
-    fontFamily: FONTS.extrabold,
-    fontSize: 20,
-    fontWeight: "800",
+  loginTitleRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 4
+  },
+  loginTitle: {
+    color: Colors.text1,
+    fontFamily: FONTS.bold,
+    fontSize: 24,
+    fontWeight: "700",
     letterSpacing: -0.3
   },
-  welcomeSub: {
-    color: TEXT_MUTED,
+  loginSub: {
+    color: Colors.text3,
     fontFamily: FONTS.regular,
-    fontSize: 12,
-    lineHeight: 16,
-    marginBottom: 10,
-    marginTop: 2
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: Spacing.lg
   },
   errorBox: {
     alignItems: "center",
-    backgroundColor: "rgba(254,226,226,0.65)",
-    borderColor: "rgba(252,165,165,0.55)",
-    borderRadius: Radius.inner,
-    borderWidth: 1,
+    backgroundColor: Colors.redBg,
+    borderColor: Colors.red,
+    borderRadius: Radius.button,
+    borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
-    gap: 8,
-    marginBottom: 8,
-    padding: 8
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+    padding: Spacing.md
   },
   errorText: {
-    color: "#B91C1C",
+    color: Colors.redText,
     flex: 1,
     fontFamily: FONTS.medium,
-    fontSize: 12
+    fontSize: FontSize.caption,
+    lineHeight: 18
   },
   debugPanelWrap: {
-    marginBottom: 10
+    marginBottom: Spacing.md
   },
   fieldLabel: {
-    color: TEXT_MAIN,
+    color: Colors.text1,
     fontFamily: FONTS.semibold,
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: "600",
-    marginBottom: 4
+    marginBottom: 8
   },
   inputBox: {
     alignItems: "center",
-    backgroundColor: INPUT_BG,
-    borderColor: INPUT_BORDER,
-    borderRadius: Radius.button,
-    borderWidth: 1,
+    backgroundColor: Colors.inputFill,
+    borderColor: Colors.border,
+    borderRadius: Radius.input,
+    borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
-    height: 42,
-    marginBottom: 8,
-    paddingHorizontal: 12
+    height: INPUT_H,
+    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.lg
   },
   inputBoxFocused: {
+    backgroundColor: Colors.surface,
     borderColor: Colors.brand700,
     borderWidth: 1.5
   },
   inputDisabled: {
-    opacity: 0.7
+    opacity: 0.65
   },
   inputIcon: {
-    marginRight: 8
+    marginRight: 10
   },
   input: {
-    color: TEXT_MAIN,
+    color: Colors.text1,
     flex: 1,
     fontFamily: FONTS.regular,
-    fontSize: 15,
+    fontSize: 16,
     paddingVertical: 0
   },
   eyeBtn: {
-    paddingHorizontal: 4
+    marginLeft: 4,
+    padding: 4
   },
   forgotBtn: {
     alignSelf: "flex-end",
-    marginBottom: 10,
-    marginTop: -2
+    marginBottom: Spacing.lg,
+    marginTop: -4
   },
   forgotText: {
     color: Colors.brand700,
-    fontFamily: FONTS.semibold,
-    fontSize: 12,
-    fontWeight: "600"
+    fontFamily: FONTS.medium,
+    fontSize: 13
+  },
+  signInBtnWrap: {
+    alignSelf: "stretch",
+    width: "100%"
   },
   signInBtn: {
-    alignItems: "center",
-    backgroundColor: Colors.brand700,
     borderRadius: Radius.button,
-    flexDirection: "row",
-    gap: 8,
-    height: 44,
+    height: BTN_H,
     justifyContent: "center",
-    ...Shadow.cardRaised
+    width: "100%"
+  },
+  signInInner: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    width: "100%"
+  },
+  signInBtnText: {
+    color: Colors.onPrimary,
+    fontFamily: FONTS.bold,
+    fontSize: FontSize.body,
+    fontWeight: FontWeight.bold
+  },
+  signInArrow: {
+    position: "absolute",
+    right: 20
   },
   signInBtnBusy: {
     opacity: 0.9
-  },
-  signInBtnText: {
-    color: Colors.surface,
-    fontFamily: FONTS.bold,
-    fontSize: 15,
-    fontWeight: "700"
-  },
-  bottomFill: {
-    flexGrow: 1,
-    justifyContent: "flex-end",
-    minHeight: 120,
-    paddingTop: 4
-  },
-  footer: {
-    color: "rgba(75,85,76,0.7)",
-    fontFamily: FONTS.regular,
-    fontSize: 9,
-    marginTop: 10,
-    textAlign: "center"
-  },
-  footerCompact: {
-    marginTop: 12
   }
 });

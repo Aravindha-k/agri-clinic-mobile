@@ -1,10 +1,26 @@
 import { Ionicons } from "@expo/vector-icons";
-import { StyleSheet, Text, View } from "react-native";
-import { Colors, FontSize, FontWeight, Radius } from "../../lib/theme";
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { Colors, Enterprise, FontSize, FontWeight, Layout, Radius, Spacing } from "../../lib/theme";
 
-type Variant = "green" | "amber" | "red" | "blue" | "gray" | "purple";
+export type StatusChipVariant =
+  | "success"
+  | "warning"
+  | "error"
+  | "pending"
+  | "offline"
+  | "green"
+  | "amber"
+  | "red"
+  | "blue"
+  | "gray"
+  | "purple";
 
-const VARIANT_STYLES: Record<Variant, { bg: string; text: string }> = {
+const VARIANT_STYLES: Record<StatusChipVariant, { bg: string; text: string }> = {
+  success: { bg: Colors.greenBg, text: Colors.greenText },
+  warning: { bg: Colors.amberBg, text: Colors.amberText },
+  error: { bg: Colors.redBg, text: Colors.redText },
+  pending: { bg: Colors.amberBg, text: Colors.amberText },
+  offline: { bg: Colors.brand50, text: Colors.text3 },
   green: { bg: Colors.greenBg, text: Colors.greenText },
   amber: { bg: Colors.amberBg, text: Colors.amberText },
   red: { bg: Colors.redBg, text: Colors.redText },
@@ -15,17 +31,20 @@ const VARIANT_STYLES: Record<Variant, { bg: string; text: string }> = {
 
 type Props = {
   label: string;
-  variant: Variant;
+  variant: StatusChipVariant;
   icon?: keyof typeof Ionicons.glyphMap;
+  style?: StyleProp<ViewStyle>;
 };
 
-export function StatusChip({ label, variant, icon }: Props) {
+export function StatusChip({ label, variant, icon, style }: Props) {
   const tone = VARIANT_STYLES[variant];
 
   return (
-    <View style={[styles.chip, { backgroundColor: tone.bg, borderRadius: Radius.sm }]}>
-      {icon ? <Ionicons name={icon} size={12} color={tone.text} /> : null}
-      <Text style={[styles.text, { color: tone.text }]}>{label}</Text>
+    <View style={[styles.chip, { backgroundColor: tone.bg }, style]}>
+      {icon ? <Ionicons name={icon} size={13} color={tone.text} /> : null}
+      <Text style={[styles.text, { color: tone.text }]} numberOfLines={1}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -34,13 +53,16 @@ const styles = StyleSheet.create({
   chip: {
     alignItems: "center",
     alignSelf: "flex-start",
+    borderRadius: Radius.chip,
     flexDirection: "row",
     gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4
+    maxWidth: "100%",
+    minHeight: Layout.touchTargetMin / 2,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 5
   },
   text: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.medium
+    fontSize: FontSize.caption,
+    fontWeight: FontWeight.semibold
   }
 });

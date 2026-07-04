@@ -50,7 +50,8 @@ module.exports = () => ({
   },
   android: {
     package: "com.kavya.agriclinic",
-    versionCode: 3,
+    minSdkVersion: 26,
+    versionCode: 6,
     usesCleartextTraffic: true,
     permissions: [
       "ACCESS_COARSE_LOCATION",

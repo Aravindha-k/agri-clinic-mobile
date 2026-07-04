@@ -1,8 +1,7 @@
-import LottieView from "lottie-react-native";
-import { useEffect, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import { usePremiumMotion } from "../../../src/hooks/usePremiumMotion";
 import { AppIcon } from "./AppIcon";
+import { SafeLottie } from "./SafeLottie";
 
 const LEAF_SWAY = require("../../../assets/lottie/leaf_sway.json");
 
@@ -11,27 +10,28 @@ type Props = {
 };
 
 /** Subtle animated leaf — greeting accent. */
+const leafFallback = (size: number) => <AppIcon name="leaf" size={size * 0.55} />;
+
 export function LeafSwayAccent({ size = 26 }: Props) {
-  const { reduced } = usePremiumMotion();
-  const lottieRef = useRef<LottieView>(null);
+  const { reduced, enabled } = usePremiumMotion();
 
-  useEffect(() => {
-    if (reduced) return;
-    lottieRef.current?.play();
-  }, [reduced]);
-
-  if (reduced) {
+  if (reduced || !enabled) {
     return (
       <View style={[styles.wrap, { width: size, height: size }]}>
-        <AppIcon name="leaf" size={size * 0.55} />
+        {leafFallback(size)}
       </View>
     );
   }
 
   return (
-    <View style={[styles.wrap, { width: size, height: size }]}>
-      <LottieView ref={lottieRef} source={LEAF_SWAY} autoPlay loop style={{ width: size, height: size }} />
-    </View>
+    <SafeLottie
+      source={LEAF_SWAY}
+      autoPlay
+      loop
+      componentName="LeafSwayAccent"
+      style={[styles.wrap, { width: size, height: size }]}
+      fallback={leafFallback(size)}
+    />
   );
 }
 

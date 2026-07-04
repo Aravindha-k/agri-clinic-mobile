@@ -24,6 +24,10 @@ import { setConnectivityOnline, setLanOnlyMode } from "../utils/connectivityBus"
 import { unwrapSuccessEnvelope } from "../utils/apiUnwrap";
 import { trackApiCall } from "./apiTelemetry";
 import { dedupeRequest } from "./requestDedupe";
+import { qaLogApiFailure } from "../utils/qaLog";
+
+const NETWORK_RETRY_DELAY_MS = 750;
+const MAX_GET_NETWORK_RETRIES = 1;
 
 const DEFAULT_API_TIMEOUT_MS = __DEV__ ? 120_000 : 30_000;
 
@@ -175,8 +179,9 @@ async function handleAuth401AfterRefresh(response: Response, auth: boolean): Pro
   throw401Error(data, auth);
 }
 
-async function executeApiClient<T>(path: string, options: ApiOptions = {}): Promise<T> {
-  const { auth = true, headers, body, source, signal, baseUrl, ...rest } = options;
+async function executeApiClient<T>(path: string, options: ApiOptions = {}, attempt = 0): Promise<T> {
+  const { auth = true, headers, body, source, signal, baseUrl, method: rawMethod, ...rest } = options;
+  const method = (rawMethod || "GET").toUpperCase();
   const apiRoot = baseUrl ?? API_BASE_URL;
   const { signal: requestSignal, cleanup } = createApiTimeoutSignal(DEFAULT_API_TIMEOUT_MS, signal);
   const requestHeaders = new Headers(headers);
@@ -201,6 +206,7 @@ async function executeApiClient<T>(path: string, options: ApiOptions = {}): Prom
   const request = () =>
     fetch(`${apiRoot}${path}`, {
       ...rest,
+      method,
       signal: requestSignal,
       headers: requestHeaders,
       body
@@ -258,6 +264,11 @@ async function executeApiClient<T>(path: string, options: ApiOptions = {}): Prom
         url: fullUrl,
         message: detail || "Network request failed"
       });
+      qaLogApiFailure(path, err);
+      if (method === "GET" && attempt < MAX_GET_NETWORK_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, NETWORK_RETRY_DELAY_MS));
+        return executeApiClient<T>(path, options, attempt + 1);
+      }
       if (__DEV__) {
         console.warn(`[API] Cannot reach ${API_BASE_URL} (${detail})`);
       }

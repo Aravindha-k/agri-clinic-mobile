@@ -28,11 +28,11 @@ const LEAVES: LeafSpec[] = [
 ];
 
 function FloatingLeaf({ spec }: { spec: LeafSpec }) {
-  const { reduced } = usePremiumMotion();
+  const { reduced, enabled } = usePremiumMotion();
   const drift = useSharedValue(0);
 
   useEffect(() => {
-    if (reduced) {
+    if (reduced || !enabled) {
       drift.value = 0;
       return;
     }
@@ -47,14 +47,17 @@ function FloatingLeaf({ spec }: { spec: LeafSpec }) {
         false
       )
     );
-  }, [drift, reduced, spec.delay]);
+  }, [drift, enabled, reduced, spec.delay]);
 
   const motion = useAnimatedStyle(() => ({
-    opacity: 0.38 + drift.value * 0.08,
-    transform: [
-      { translateY: -drift.value * 3 },
-      { rotate: `${spec.rotate + drift.value * 2}deg` }
-    ]
+    opacity: reduced || !enabled ? 0.38 : 0.38 + drift.value * 0.08,
+    transform:
+      reduced || !enabled
+        ? [{ rotate: `${spec.rotate}deg` }]
+        : [
+            { translateY: -drift.value * 3 },
+            { rotate: `${spec.rotate + drift.value * 2}deg` }
+          ]
   }));
 
   return (

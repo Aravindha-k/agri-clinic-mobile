@@ -7,7 +7,6 @@ import { qaLogCrash } from "../utils/qaLog";
 
 type Props = {
   children: ReactNode;
-  screenName?: string;
 };
 
 type State = {
@@ -15,8 +14,8 @@ type State = {
   message?: string;
 };
 
-/** Screen-level guard — keeps app open with retry / home / logout. */
-export class ScreenErrorBoundary extends Component<Props, State> {
+/** Catches navigation tree crashes — app stays open with recovery actions. */
+export class NavigationErrorBoundary extends Component<Props, State> {
   state: State = { hasError: false };
 
   static getDerivedStateFromError(error: Error): State {
@@ -24,10 +23,9 @@ export class ScreenErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    const tag = this.props.screenName ?? "screen";
-    logStartupError(`${tag}:${error.message}`);
-    qaLogCrash(tag, error, info.componentStack ?? undefined);
-    console.warn(`[ScreenErrorBoundary:${tag}]`, error.message, info.componentStack);
+    logStartupError(`navigation:${error.message}`);
+    qaLogCrash("Navigation", error, info.componentStack ?? undefined);
+    console.warn("[NavigationErrorBoundary]", error.message, info.componentStack);
   }
 
   private handleRetry = () => {

@@ -1,4 +1,5 @@
 import { logStartupError } from "./startupDiagnostics";
+import { qaLogCrash } from "./qaLog";
 
 let installed = false;
 
@@ -13,6 +14,7 @@ export function installGlobalErrorHandlers() {
     errorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
       const message = error?.message ?? String(error);
       logStartupError(`global:${isFatal ? "fatal" : "error"}:${message}`);
+      qaLogCrash("GlobalErrorHandler", error, error.stack);
       console.warn("[GlobalErrorHandler]", isFatal ? "FATAL" : "ERROR", message);
       prevHandler?.(error, isFatal);
     });
@@ -26,6 +28,7 @@ export function installGlobalErrorHandlers() {
     onUnhandled: (_id, rejection) => {
       const message = rejection instanceof Error ? rejection.message : String(rejection ?? "unknown");
       logStartupError(`unhandledRejection:${message}`);
+      qaLogCrash("UnhandledRejection", message);
       console.warn("[GlobalErrorHandler] unhandledRejection", message);
     }
   });

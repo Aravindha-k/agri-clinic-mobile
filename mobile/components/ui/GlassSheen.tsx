@@ -17,23 +17,23 @@ type Props = {
 
 /** Subtle moving glass highlight across cards. */
 export function GlassSheen({ borderRadius = 24 }: Props) {
-  const { reduced } = usePremiumMotion();
+  const { reduced, enabled } = usePremiumMotion();
   const shift = useSharedValue(-1);
 
   useEffect(() => {
-    if (reduced) return;
+    if (reduced || !enabled) return;
     shift.value = withRepeat(
       withTiming(1, { duration: 4200, easing: Easing.inOut(Easing.ease) }),
       -1,
       false
     );
-  }, [reduced, shift]);
+  }, [enabled, reduced, shift]);
 
   const style = useAnimatedStyle(() => ({
     transform: [{ translateX: shift.value * 180 }, { rotate: "18deg" }]
   }));
 
-  if (reduced) return null;
+  if (reduced || !enabled) return null;
 
   return (
     <View style={[StyleSheet.absoluteFill, { borderRadius, overflow: "hidden" }]} pointerEvents="none">

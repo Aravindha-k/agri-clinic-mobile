@@ -18,7 +18,7 @@ type Props = {
 
 /** Living weather micro-scene — sun, cloud drift, wind, droplet. */
 export function AnimatedWeatherScene({ code = 1 }: Props) {
-  const { reduced } = usePremiumMotion();
+  const { reduced, enabled } = usePremiumMotion();
   const cloudX = useSharedValue(0);
   const sunPulse = useSharedValue(1);
   const windShift = useSharedValue(0);
@@ -29,7 +29,7 @@ export function AnimatedWeatherScene({ code = 1 }: Props) {
   const isCloudy = code >= 1 && code <= 3;
 
   useEffect(() => {
-    if (reduced) return;
+    if (reduced || !enabled) return;
     cloudX.value = withRepeat(
       withSequence(
         withTiming(4, { duration: 4000, easing: Easing.inOut(Easing.ease) }),
@@ -59,7 +59,7 @@ export function AnimatedWeatherScene({ code = 1 }: Props) {
       -1,
       false
     );
-  }, [cloudX, dropY, reduced, sunPulse, windShift]);
+  }, [cloudX, dropY, enabled, reduced, sunPulse, windShift]);
 
   const cloudStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: cloudX.value }]
@@ -75,7 +75,7 @@ export function AnimatedWeatherScene({ code = 1 }: Props) {
     transform: [{ translateY: dropY.value }]
   }));
 
-  if (reduced) {
+  if (reduced || !enabled) {
     return (
       <View style={styles.stage}>
         <AppIcon name={isClear ? "sun" : isRainy ? "cloud-rain" : "cloud-sun"} size={22} color={Harvest.sky} />

@@ -54,8 +54,33 @@ function safeTone(tone: unknown, index: number): CurrentCropCard["tone"] {
   return CROP_TONES[index % CROP_TONES.length];
 }
 
+function str(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  const text = String(value).trim();
+  return text || undefined;
+}
+
+function sanitizeFarmer(raw: Farmer | null | undefined, fallbackId = 0): Farmer {
+  const base = raw ?? ({ id: fallbackId, name: "Farmer" } as Farmer);
+  const idNum = Number(base.id);
+  const village =
+    str(base.village_name) ||
+    str((base as Record<string, unknown>).village as string) ||
+    str((base as Record<string, unknown>).village_name as string);
+  return {
+    ...base,
+    id: Number.isFinite(idNum) && idNum > 0 ? idNum : fallbackId,
+    name: str(base.name) || "Farmer",
+    phone: str(base.phone),
+    village_name: village,
+    village: village ?? str((base as Record<string, unknown>).village as string),
+    latitude: base.latitude ?? undefined,
+    longitude: base.longitude ?? undefined
+  };
+}
+
 function sanitizeProfile(profile: MobileFarmerProfile): MobileFarmerProfile {
-  const farmer = profile.farmer ?? ({ id: 0, name: "Farmer" } as Farmer);
+  const farmer = sanitizeFarmer(profile.farmer);
   const fields = (profile.fields ?? []).map((field, index) => ({
     ...field,
     id: field.id || `field-${index}`,
@@ -80,12 +105,6 @@ function sanitizeProfile(profile: MobileFarmerProfile): MobileFarmerProfile {
     open_issues: Number.isFinite(profile.open_issues) ? profile.open_issues : 0,
     last_visit_label: profile.last_visit_label || "—"
   };
-}
-
-function str(value: unknown): string | undefined {
-  if (value == null) return undefined;
-  const text = String(value).trim();
-  return text || undefined;
 }
 
 function parseFieldCrops(raw: unknown): FieldCrop[] {

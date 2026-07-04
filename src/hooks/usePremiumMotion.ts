@@ -19,7 +19,8 @@ const BATTERY_SUPPORTED =
 function isLowEndDevice(): boolean {
   if (Platform.OS === "android") {
     const version = typeof Platform.Version === "number" ? Platform.Version : parseInt(String(Platform.Version), 10);
-    if (!Number.isNaN(version) && version < 26) return true;
+    // Oreo/Pie devices — lighter animation path for GPU stability.
+    if (!Number.isNaN(version) && version <= 28) return true;
   }
   return false;
 }

@@ -30,6 +30,8 @@ import VisitDetailScreen from "../../mobile/app/visit/[id]";
 import { VisitFlowNavigator } from "./VisitFlowNavigator";
 import { logStartup, patchStartupSnapshot } from "../utils/startupDiagnostics";
 import { registerNavigateHome } from "./navigationRecovery";
+import { NavigationErrorBoundary } from "../components/NavigationErrorBoundary";
+import { withScreenErrorBoundary } from "../components/withScreenErrorBoundary";
 import {
   stackScreenOptions,
   stackScreenOptionsModal,
@@ -51,6 +53,12 @@ const WorkStack = createNativeStackNavigator<WorkStackParamList>();
 const MeStack = createNativeStackNavigator<MeStackParamList>();
 const rootNavigationRef = createNavigationContainerRef<RootStackParamList>();
 
+const SafeTodayScreen = withScreenErrorBoundary(HomeTabScreen, "Today");
+const SafeWorkHomeScreen = withScreenErrorBoundary(WorkTabScreen, "Work");
+const SafeProfileScreen = withScreenErrorBoundary(ProfileTabScreen, "Profile");
+const SafeVisitDetailScreen = withScreenErrorBoundary(VisitDetailScreen, "VisitDetail");
+const SafeVisitFlowNavigator = withScreenErrorBoundary(VisitFlowNavigator, "VisitFlow");
+
 function AuthNavigator() {
   return (
     <AuthStack.Navigator screenOptions={{ headerShown: false, ...stackScreenOptions }}>
@@ -69,10 +77,10 @@ function WorkNavigator() {
         ...stackScreenOptions
       }}
     >
-      <WorkStack.Screen name="WorkHome" component={WorkTabScreen} />
+      <WorkStack.Screen name="WorkHome" component={SafeWorkHomeScreen} />
       <WorkStack.Screen name="FarmerDetail" component={FarmerProfileScreen} />
       <WorkStack.Screen name="FarmerMap" component={FarmerMapScreen} />
-      <WorkStack.Screen name="VisitDetail" component={VisitDetailScreen} />
+      <WorkStack.Screen name="VisitDetail" component={SafeVisitDetailScreen} />
     </WorkStack.Navigator>
   );
 }
@@ -87,7 +95,7 @@ function MeNavigator() {
         ...stackScreenOptions
       }}
     >
-      <MeStack.Screen name="ProfileMain" component={ProfileTabScreen} />
+      <MeStack.Screen name="ProfileMain" component={SafeProfileScreen} />
       <MeStack.Screen name="ProblemsCatalog" component={ProblemsCatalogScreen} />
       <MeStack.Screen name="Diagnostics" component={DiagnosticsScreen} />
       <MeStack.Screen name="Settings" component={SettingsScreen} />
@@ -116,7 +124,7 @@ function MainTabs() {
     >
       <Tab.Screen
         name="Today"
-        component={HomeTabScreen}
+        component={SafeTodayScreen}
         options={{ tabBarLabel: t("tabs.today") }}
       />
       <Tab.Screen
@@ -183,25 +191,28 @@ function AppRoutes() {
   if (forceLogin) {
     logNavOnce("nav_login", "forced");
     return (
-      <>
-        <DeferredFieldReminderController />
-        <RootStack.Navigator screenOptions={{ headerShown: false }}>
-          <RootStack.Screen name="Auth" component={AuthNavigator} />
-        </RootStack.Navigator>
-      </>
+      <NavigationErrorBoundary>
+        <>
+          <DeferredFieldReminderController />
+          <RootStack.Navigator screenOptions={{ headerShown: false }}>
+            <RootStack.Screen name="Auth" component={AuthNavigator} />
+          </RootStack.Navigator>
+        </>
+      </NavigationErrorBoundary>
     );
   }
 
   if (isAuthenticated) {
     logNavOnce("nav_home");
     return (
-      <>
-        <DeferredFieldReminderController />
-        <RootStack.Navigator screenOptions={{ headerShown: false, ...stackScreenOptions }}>
+      <NavigationErrorBoundary>
+        <>
+          <DeferredFieldReminderController />
+          <RootStack.Navigator screenOptions={{ headerShown: false, ...stackScreenOptions }}>
         <RootStack.Screen name="Main" component={MainTabs} />
         <RootStack.Screen
           name="VisitFlow"
-          component={VisitFlowNavigator}
+          component={SafeVisitFlowNavigator}
           options={stackScreenOptionsModal}
         />
         <RootStack.Screen name="MyLocation" component={MyLocationScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
@@ -219,18 +230,21 @@ function AppRoutes() {
           options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }}
         />
       </RootStack.Navigator>
-      </>
+        </>
+      </NavigationErrorBoundary>
     );
   }
 
   logNavOnce("nav_login");
   return (
-    <>
-      <DeferredFieldReminderController />
-      <RootStack.Navigator screenOptions={{ headerShown: false }}>
-        <RootStack.Screen name="Auth" component={AuthNavigator} />
-      </RootStack.Navigator>
-    </>
+    <NavigationErrorBoundary>
+      <>
+        <DeferredFieldReminderController />
+        <RootStack.Navigator screenOptions={{ headerShown: false }}>
+          <RootStack.Screen name="Auth" component={AuthNavigator} />
+        </RootStack.Navigator>
+      </>
+    </NavigationErrorBoundary>
   );
 }
 

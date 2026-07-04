@@ -1,50 +1,89 @@
 # Kavya Agri Clinic — Client QA Checklist (v1.0.1)
 
-Test on **Moto Edge 50 Pro**, **Moto Edge 60 Pro**, one low-end phone, and emulator API 29 + 35.
+APK: **Kavya_Agri_Clinic_Client_QA_v1.0.1.apk**  
+Backend: `http://13.207.17.117/api/v1/`  
+Min Android: **API 26 (Android 8.0 Oreo)**
 
-Network: Wi‑Fi, Jio mobile data, Airtel mobile data, airplane mode (offline).
+## Devices & emulators
 
-## Install & auth
-- [ ] Cold install APK
-- [ ] Splash completes within 3 seconds (no hang)
-- [ ] Login with production credentials
-- [ ] Logout and login again
-- [ ] Token refresh / reopen app while logged in
+| Target | Status |
+|--------|--------|
+| Moto Edge 50 Pro | ☐ Pass ☐ Fail |
+| Moto Edge 60 Pro | ☐ Pass ☐ Fail |
+| Low-end Android phone | ☐ Pass ☐ Fail ☐ N/A |
+| Emulator API 26 (Android 8) | ☐ Pass ☐ Fail |
+| Emulator API 29 (Android 10) | ☐ Pass ☐ Fail |
+| Emulator API 31 (Android 12) | ☐ Pass ☐ Fail |
+| Emulator API 34 (Android 14) | ☐ Pass ☐ Fail |
+| Emulator API 35 (Android 15) | ☐ Pass ☐ Fail |
 
-## Core tabs
-- [ ] Today dashboard loads
-- [ ] Work queue + visits list
-- [ ] Day tab / workday start & stop
-- [ ] Me / profile tab
+## Network conditions
 
-## Farmer & visits (critical)
-- [ ] Open farmer from Work queue — **no crash**
-- [ ] Farmer details: photo, stats, crops, fields, visit history
-- [ ] Pull-to-refresh on farmer details
-- [ ] Create visit (FAB flow)
-- [ ] Photo capture / gallery upload on visit
-- [ ] Offline visit queue + sync after reconnect
+Test on Wi‑Fi, Jio mobile data, Airtel mobile data, slow network, offline, backend unreachable.
 
-## Location & maps
-- [ ] GPS permission allow
-- [ ] GPS permission deny (friendly message, no crash)
-- [ ] My Location / live map
-- [ ] Farmer map from profile
+| Check | Status |
+|-------|--------|
+| Login over Wi‑Fi | ☐ |
+| Login over mobile data | ☐ |
+| Offline banner (no crash) | ☐ |
+| API timeout shows error (no crash) | ☐ |
+| Retry after reconnect | ☐ |
 
-## Resilience
-- [ ] Slow network — loading states, no crash
-- [ ] No internet — offline banner, no crash
-- [ ] Back button from nested screens
-- [ ] Background app and reopen
-- [ ] Force-stop and reopen
+## Core flows (each device)
 
-## Notifications
-- [ ] POST_NOTIFICATIONS permission prompt (Android 13+)
-- [ ] Notifications screen opens
+| Flow | Status |
+|------|--------|
+| Fresh install | ☐ |
+| First launch / splash ≤ 3s | ☐ |
+| Splash static fallback (if anim off) | ☐ |
+| Login | ☐ |
+| Logout | ☐ |
+| Reopen app (session restore) | ☐ |
+| Today dashboard | ☐ |
+| Work queue | ☐ |
+| **Farmer details (critical)** | ☐ |
+| Create visit (FAB) | ☐ |
+| Edit visit | ☐ |
+| Photo capture | ☐ |
+| Gallery upload | ☐ |
+| GPS allow | ☐ |
+| GPS deny (friendly, no crash) | ☐ |
+| My Location | ☐ |
+| Start / end workday | ☐ |
+| Offline mode + sync | ☐ |
+| Notifications permission (Android 13+) | ☐ |
+| Back button | ☐ |
+| Background / foreground | ☐ |
+| Force-stop and reopen | ☐ |
 
 ## Error recovery
-- [ ] If error screen appears: Retry works
-- [ ] Go to Home works
-- [ ] Logout works
 
-Pass criteria: **zero crashes** on Edge 50 Pro and Edge 60 Pro for all critical flows above.
+| Check | Status |
+|-------|--------|
+| Error screen: Retry | ☐ |
+| Error screen: Go to Home | ☐ |
+| Error screen: Logout | ☐ |
+
+## QA logcat (internal APK, `EXPO_PUBLIC_QA_MODE=true`)
+
+```powershell
+adb logcat | findstr /i "QA Startup GlobalErrorHandler ScreenErrorBoundary"
+```
+
+Verify logs show `screen_open`, no unhandled `FATAL EXCEPTION`.
+
+## Pass criteria
+
+**Client-ready only when:**
+
+- Zero crashes on Moto Edge 50 Pro and Moto Edge 60 Pro
+- Farmer Details opens without crash on both Motos
+- Splash completes or falls back within 3 seconds
+- Emulator API 26 and API 35 both pass install + login + farmer details
+
+## Capture crash logs
+
+```powershell
+adb logcat *:E
+adb logcat | findstr /i "AndroidRuntime ReactNativeJS FATAL EXCEPTION"
+```

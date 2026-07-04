@@ -103,7 +103,11 @@ export default function AppProviders({ onShellReady }: Props) {
   useEffect(() => {
     logStartup("fonts_loading");
     onShellReady?.();
-  }, [onShellReady]);
+    const timer = setTimeout(() => {
+      if (!fontsLoaded) logStartup("fonts_timeout");
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [fontsLoaded, onShellReady]);
 
   useEffect(() => {
     if (fontsLoaded) {

@@ -1,6 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, StyleSheet, useWindowDimensions, View } from "react-native";
 import Animated, {
   Easing,
@@ -15,6 +15,7 @@ import { SplashGoldenParticles } from "./SplashGoldenParticles";
 import { SPLASH_ASSETS } from "./splashAssets";
 import { usePremiumMotion } from "../../hooks/usePremiumMotion";
 import { logStartup } from "../../utils/startupDiagnostics";
+import { qaLogAnimationFallback } from "../../utils/qaLog";
 
 const BG_SOURCE = Image.resolveAssetSource(SPLASH_ASSETS.background);
 const BG_WIDTH = BG_SOURCE?.width ?? 681;
@@ -68,6 +69,7 @@ export function KavyaCinematicSplash({ onFinish, onReady }: Props) {
   const { width: screenW, height: screenH } = useWindowDimensions();
   const mountedRef = useRef(false);
   const finishedRef = useRef(false);
+  const [bgFailed, setBgFailed] = useState(false);
 
   const bgOpacity = useSharedValue(0);
   const bgScale = useSharedValue(1);
@@ -233,16 +235,22 @@ export function KavyaCinematicSplash({ onFinish, onReady }: Props) {
     <Animated.View style={[styles.screen, rootStyle]}>
       <StatusBar style="light" translucent backgroundColor="transparent" />
 
-      <View style={styles.artworkClip}>
-        <Animated.View style={[styles.artworkMotion, bgStyle]}>
-          <Image
-            source={SPLASH_ASSETS.background}
-            style={styles.artwork}
-            resizeMode="cover"
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-          />
-        </Animated.View>
+      <View style={[styles.artworkClip, bgFailed && styles.artworkFallback]}>
+        {!bgFailed ? (
+          <Animated.View style={[styles.artworkMotion, bgStyle]}>
+            <Image
+              source={SPLASH_ASSETS.background}
+              style={styles.artwork}
+              resizeMode="cover"
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              onError={() => {
+                qaLogAnimationFallback("KavyaCinematicSplash", "background_asset_failed");
+                setBgFailed(true);
+              }}
+            />
+          </Animated.View>
+        ) : null}
       </View>
 
       {enabled && !reduced ? (
@@ -304,6 +312,9 @@ const styles = StyleSheet.create({
   artworkClip: {
     ...StyleSheet.absoluteFillObject,
     overflow: "hidden"
+  },
+  artworkFallback: {
+    backgroundColor: "#B8DCF5"
   },
   artworkMotion: {
     ...StyleSheet.absoluteFillObject

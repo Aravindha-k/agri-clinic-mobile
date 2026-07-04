@@ -14,6 +14,7 @@ concurrency:
 env:
   EXPO_PUBLIC_API_BASE_URL: http://13.207.17.117/api/v1/
   EXPO_PUBLIC_ENV: production
+  EXPO_PUBLIC_QA_MODE: "true"
 
 jobs:
   build-apk:
@@ -98,12 +99,12 @@ jobs:
         run: ./gradlew assembleRelease --build-cache --no-daemon --stacktrace
 
       - name: Rename APK for client delivery
-        run: cp android/app/build/outputs/apk/release/app-release.apk Kavya_Agri_Clinic_Client_Test_v1.0.1.apk
+        run: cp android/app/build/outputs/apk/release/app-release.apk Kavya_Agri_Clinic_Client_QA_v1.0.1.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Kavya_Agri_Clinic_Client_Test_v1.0.1
-          path: Kavya_Agri_Clinic_Client_Test_v1.0.1.apk
+          name: Kavya_Agri_Clinic_Client_QA_v1.0.1
+          path: Kavya_Agri_Clinic_Client_QA_v1.0.1.apk
           if-no-files-found: error
           retention-days: 30

@@ -3,6 +3,7 @@ import { AppFallbackScreen } from "./AppFallbackScreen";
 import { requestNavigateHome } from "../navigation/navigationRecovery";
 import { requestGoToLogin } from "../storage/authRecovery";
 import { logStartupError } from "../utils/startupDiagnostics";
+import { qaLogCrash } from "../utils/qaLog";
 
 type Props = {
   children: ReactNode;
@@ -22,6 +23,7 @@ export class AppErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     logStartupError(`app:${error.message}`);
+    qaLogCrash("App", error, info.componentStack ?? undefined);
     console.warn("[AppErrorBoundary]", error.message, info.componentStack);
   }
 

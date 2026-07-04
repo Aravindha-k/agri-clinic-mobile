@@ -53,6 +53,8 @@ const requiredPerms = [
   "android.permission.ACCESS_FINE_LOCATION",
   "android.permission.ACCESS_COARSE_LOCATION",
   "android.permission.CAMERA",
+  "android.permission.READ_EXTERNAL_STORAGE",
+  "android.permission.READ_MEDIA_IMAGES",
   "android.permission.POST_NOTIFICATIONS"
 ];
 for (const perm of requiredPerms) {
@@ -85,6 +87,42 @@ if (!/release\s*\{[\s\S]*?signingConfig\s+signingConfigs\.debug/.test(gradle)) {
 }
 writeFileSync(buildGradlePath, gradle);
 console.log("[ensure-android-release-config] patched release signing (debug keystore for client test)");
+
+const gradlePropsPath = resolve(androidDir, "gradle.properties");
+if (existsSync(gradlePropsPath)) {
+  let props = readFileSync(gradlePropsPath, "utf8");
+  if (!/android\.enableMinifyInReleaseBuilds=false/m.test(props)) {
+    props += "\nandroid.enableMinifyInReleaseBuilds=false\n";
+  }
+  if (!/android\.enableShrinkResourcesInReleaseBuilds=false/m.test(props)) {
+    props += "android.enableShrinkResourcesInReleaseBuilds=false\n";
+  }
+  props = props.replace(
+    /reactNativeArchitectures=.*/m,
+    "reactNativeArchitectures=armeabi-v7a,arm64-v8a"
+  );
+  writeFileSync(gradlePropsPath, props);
+  console.log("[ensure-android-release-config] release minify off, arm ABIs only");
+}
+
+if (!/abiFilters/.test(gradle)) {
+  gradle = readFileSync(buildGradlePath, "utf8");
+  gradle = gradle.replace(
+    /defaultConfig\s*\{/,
+    `defaultConfig {
+        ndk {
+            abiFilters "armeabi-v7a", "arm64-v8a"
+        }`
+  );
+  if (/minSdkVersion rootProject\.ext\.minSdkVersion/.test(gradle)) {
+    gradle = gradle.replace(
+      "minSdkVersion rootProject.ext.minSdkVersion",
+      "minSdkVersion Math.max(rootProject.ext.minSdkVersion, 26)"
+    );
+  }
+  writeFileSync(buildGradlePath, gradle);
+  console.log("[ensure-android-release-config] minSdk 26+, ABI filters applied");
+}
 
 const rawDir = resolve(androidDir, "app/src/main/res/raw");
 mkdirSync(rawDir, { recursive: true });

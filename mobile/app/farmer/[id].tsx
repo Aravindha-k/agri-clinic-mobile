@@ -25,6 +25,7 @@ import { getVisitDisplayDateTime } from "../../../src/utils/format";
 import { prefillFromFarmer } from "../../../src/utils/farmerPrefill";
 import type { WorkStackParamList } from "../../../src/navigation/types";
 import { ScreenErrorBoundary } from "../../../src/components/ScreenErrorBoundary";
+import { qaLogNavParamsMissing, qaLogScreenOpen } from "../../../src/utils/qaLog";
 import { FarmerPhotoAvatar } from "../../components/farmers/FarmerPhotoAvatar";
 import { EmptyState, GhostButton, PrimaryButton, SectionHeader, Skeleton, StatusChip } from "../../components/ui";
 import { FadeInSection, entranceListStagger, entranceStagger } from "../../components/ui/FadeInSection";
@@ -171,6 +172,13 @@ function FarmerProfileScreenInner() {
   const route = useRoute<RouteProp<WorkStackParamList, "FarmerDetail">>();
   const rawId = route.params?.id;
   const farmerId = typeof rawId === "number" ? rawId : Number(rawId);
+
+  useEffect(() => {
+    qaLogScreenOpen("FarmerDetail", Number.isFinite(farmerId) ? `id=${farmerId}` : "invalid_id");
+    if (!Number.isFinite(farmerId) || farmerId <= 0) {
+      qaLogNavParamsMissing("FarmerDetail", "id");
+    }
+  }, [farmerId]);
   const { top: safeTop, bottom: safeBottom } = useSafeAreaInsetsCompat();
   const refreshControlProps = useRefreshControlProps();
   const { bumpAfterFarmerPhotoChange } = useFieldDataRefresh();

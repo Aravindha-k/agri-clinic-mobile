@@ -6,8 +6,12 @@ import { KavyaCinematicSplash } from "./src/components/brand/KavyaCinematicSplas
 import { hideNativeSplashSafe, holdNativeSplash } from "./src/bootstrap/nativeSplash";
 import { onSplashReplayRequested } from "./src/bootstrap/splashReplay";
 import { logStartup, logStartupError } from "./src/utils/startupDiagnostics";
+import { installGlobalErrorHandlers } from "./src/utils/globalErrorHandlers";
 
 type ProvidersComponent = ComponentType<{ onShellReady?: () => void }>;
+
+/** Hard cap — splash never blocks login beyond this (client stability). */
+const SPLASH_MAX_MS = 3000;
 
 export default function App() {
   const [splashVisible, setSplashVisible] = useState(true);
@@ -16,6 +20,7 @@ export default function App() {
   const [bootError, setBootError] = useState<string | null>(null);
 
   useEffect(() => {
+    installGlobalErrorHandlers();
     logStartup("first_render");
     void holdNativeSplash();
 
@@ -43,8 +48,19 @@ export default function App() {
   }, []);
 
   const handleCinematicFinish = useCallback(() => {
+    logStartup("splash_end", "cinematic finished");
     setSplashVisible(false);
   }, []);
+
+  useEffect(() => {
+    if (!splashVisible) return;
+    logStartup("splash_start");
+    const timer = setTimeout(() => {
+      logStartup("splash_timeout", `${SPLASH_MAX_MS}ms`);
+      setSplashVisible(false);
+    }, SPLASH_MAX_MS);
+    return () => clearTimeout(timer);
+  }, [splashVisible, splashKey]);
 
   const handleShellReady = useCallback(() => {
     void hideNativeSplashSafe("app_shell_ready");

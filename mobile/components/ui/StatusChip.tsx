@@ -37,13 +37,14 @@ type Props = {
 };
 
 export function StatusChip({ label, variant, icon, style }: Props) {
-  const tone = VARIANT_STYLES[variant];
+  const tone = VARIANT_STYLES[variant] ?? VARIANT_STYLES.gray;
+  const text = label?.trim() || "—";
 
   return (
     <View style={[styles.chip, { backgroundColor: tone.bg }, style]}>
       {icon ? <Ionicons name={icon} size={13} color={tone.text} /> : null}
       <Text style={[styles.text, { color: tone.text }]} numberOfLines={1}>
-        {label}
+        {text}
       </Text>
     </View>
   );

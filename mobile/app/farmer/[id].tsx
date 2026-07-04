@@ -24,6 +24,7 @@ import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContex
 import { getVisitDisplayDateTime } from "../../../src/utils/format";
 import { prefillFromFarmer } from "../../../src/utils/farmerPrefill";
 import type { WorkStackParamList } from "../../../src/navigation/types";
+import { ScreenErrorBoundary } from "../../../src/components/ScreenErrorBoundary";
 import { FarmerPhotoAvatar } from "../../components/farmers/FarmerPhotoAvatar";
 import { EmptyState, GhostButton, PrimaryButton, SectionHeader, Skeleton, StatusChip } from "../../components/ui";
 import { FadeInSection, entranceListStagger, entranceStagger } from "../../components/ui/FadeInSection";
@@ -76,12 +77,13 @@ function KpiCell({ value, label }: { value: string | number; label: string }) {
 
 function CropCard({ crop }: { crop: CurrentCropCard }) {
   const { t } = useI18n();
+  const tone = crop.tone === "blue" || crop.tone === "green" || crop.tone === "amber" ? crop.tone : "green";
   return (
-    <View style={[styles.cropCard, { backgroundColor: CROP_CARD_BG[crop.tone] }]}>
-      <Text style={[styles.cropName, { color: CROP_CARD_TEXT[crop.tone] }]} numberOfLines={1}>
-        {crop.crop_name}
+    <View style={[styles.cropCard, { backgroundColor: CROP_CARD_BG[tone] }]}>
+      <Text style={[styles.cropName, { color: CROP_CARD_TEXT[tone] }]} numberOfLines={1}>
+        {crop.crop_name || "Crop"}
       </Text>
-      <Text style={[styles.cropMeta, { color: CROP_CARD_TEXT[crop.tone] }]} numberOfLines={2}>
+      <Text style={[styles.cropMeta, { color: CROP_CARD_TEXT[tone] }]} numberOfLines={2}>
         {[crop.field_name, crop.stage].filter(Boolean).join(" · ") || t("farmerDetail.activeCrop")}
       </Text>
     </View>
@@ -112,10 +114,10 @@ function FieldAccordionItem({
       </Pressable>
       {expanded ? (
         <View style={styles.fieldCrops}>
-          {field.crops.length === 0 ? (
+          {field.crops?.length === 0 ? (
             <Text style={styles.fieldEmpty}>{t("farmerDetail.noCropsOnField")}</Text>
           ) : (
-            field.crops.map((crop, index) => (
+            (field.crops ?? []).map((crop, index) => (
               <View key={`${crop.crop_name}-${index}`} style={styles.fieldCropRow}>
                 <Text style={styles.fieldCropName}>{crop.crop_name}</Text>
                 <Text style={styles.fieldCropMeta}>
@@ -131,9 +133,10 @@ function FieldAccordionItem({
 }
 
 function TimelineItem({ visit, isLast }: { visit: Visit; isLast: boolean }) {
+  if (!visit) return null;
   const severity = severityFromVisit(visit);
-  const crop = cropFromVisit(visit);
-  const problem = problemCategoryFromVisit(visit);
+  const crop = cropFromVisit(visit) || "Crop";
+  const problem = problemCategoryFromVisit(visit) || "General";
 
   return (
     <View style={styles.timelineRow}>
@@ -154,11 +157,20 @@ function TimelineItem({ visit, isLast }: { visit: Visit; isLast: boolean }) {
 }
 
 export default function FarmerProfileScreen() {
+  return (
+    <ScreenErrorBoundary screenName="FarmerDetail">
+      <FarmerProfileScreenInner />
+    </ScreenErrorBoundary>
+  );
+}
+
+function FarmerProfileScreenInner() {
   useSecureScreen();
   const { t } = useI18n();
   const navigation = useNavigation<any>();
   const route = useRoute<RouteProp<WorkStackParamList, "FarmerDetail">>();
-  const farmerId = Number(route.params.id);
+  const rawId = route.params?.id;
+  const farmerId = typeof rawId === "number" ? rawId : Number(rawId);
   const { top: safeTop, bottom: safeBottom } = useSafeAreaInsetsCompat();
   const refreshControlProps = useRefreshControlProps();
   const { bumpAfterFarmerPhotoChange } = useFieldDataRefresh();
@@ -468,12 +480,14 @@ export default function FarmerProfileScreen() {
                 variant="card"
               >
               <Pressable
-                onPress={() =>
+                onPress={() => {
+                  const visitId = Number(visit?.id);
+                  if (!Number.isFinite(visitId) || visitId <= 0) return;
                   rootNav?.navigate("Main", {
                     screen: "Work",
-                    params: { screen: "VisitDetail", params: { id: visit.id } }
-                  })
-                }
+                    params: { screen: "VisitDetail", params: { id: visitId } }
+                  });
+                }}
               >
                 <TimelineItem visit={visit} isLast={index === visitsPreview.length - 1} />
               </Pressable>

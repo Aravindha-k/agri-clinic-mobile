@@ -1,4 +1,4 @@
-import Svg, { Ellipse, Path } from "react-native-svg";
+import Svg, { Ellipse, G, Path } from "react-native-svg";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { DecorOpacity, Harvest } from "../../lib/designSystem";
 
@@ -33,19 +33,22 @@ export function PremiumFieldBackdrop() {
             fill="none"
           />
         ))}
-        {LEAF_SILHOUETTES.map((leaf, i) => (
-          <Ellipse
-            key={`leaf-${i}`}
-            cx={width * leaf.cx}
-            cy={height * leaf.cy}
-            rx={leaf.rx}
-            ry={leaf.ry}
-            fill={Harvest.leaf}
-            fillOpacity={DecorOpacity.leaf}
-            rotation={leaf.rot}
-            origin={`${width * leaf.cx}, ${height * leaf.cy}`}
-          />
-        ))}
+        {LEAF_SILHOUETTES.map((leaf, i) => {
+          const cx = width * leaf.cx;
+          const cy = height * leaf.cy;
+          return (
+            <G key={`leaf-${i}`} rotation={leaf.rot} origin={`${cx}, ${cy}`}>
+              <Ellipse
+                cx={cx}
+                cy={cy}
+                rx={leaf.rx}
+                ry={leaf.ry}
+                fill={Harvest.leaf}
+                fillOpacity={DecorOpacity.leaf}
+              />
+            </G>
+          );
+        })}
       </Svg>
     </View>
   );

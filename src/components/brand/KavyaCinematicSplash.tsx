@@ -13,6 +13,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { SplashGoldenParticles } from "./SplashGoldenParticles";
 import { SPLASH_ASSETS } from "./splashAssets";
+import { usePremiumMotion } from "../../hooks/usePremiumMotion";
+import { logStartup } from "../../utils/startupDiagnostics";
 
 const BG_SOURCE = Image.resolveAssetSource(SPLASH_ASSETS.background);
 const BG_WIDTH = BG_SOURCE?.width ?? 681;
@@ -43,14 +45,14 @@ function mapCoverAnchorToScreen(
   };
 }
 
-/** Total splash time incl. fade-out (~4.5s visible). */
-export const KAVYA_CINEMATIC_SPLASH_MS = 4500;
-const BG_FADE_IN_MS = 400;
-const KEN_BURNS_MS = 4000;
-const LOGO_START_MS = 500;
-const LOGO_ANIM_MS = 900;
-const BLOOM_ANIM_MS = 1200;
-const FADE_OUT_MS = 500;
+/** Total splash time incl. fade-out — capped for client stability. */
+export const KAVYA_CINEMATIC_SPLASH_MS = 2800;
+const BG_FADE_IN_MS = 320;
+const KEN_BURNS_MS = 2200;
+const LOGO_START_MS = 360;
+const LOGO_ANIM_MS = 720;
+const BLOOM_ANIM_MS = 900;
+const FADE_OUT_MS = 420;
 const HOLD_MS = KAVYA_CINEMATIC_SPLASH_MS - FADE_OUT_MS;
 
 type Props = {
@@ -62,6 +64,7 @@ type Props = {
  * Premium splash — Ken Burns background, sunburst bloom, logo rise, golden particles.
  */
 export function KavyaCinematicSplash({ onFinish, onReady }: Props) {
+  const { reduced, enabled } = usePremiumMotion();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const mountedRef = useRef(false);
   const finishedRef = useRef(false);
@@ -123,6 +126,15 @@ export function KavyaCinematicSplash({ onFinish, onReady }: Props) {
     const easeInOut = Easing.inOut(Easing.cubic);
     const easeOut = Easing.out(Easing.cubic);
 
+    if (reduced || !enabled) {
+      bgOpacity.value = 1;
+      logoOpacity.value = 1;
+      logoScale.value = 1;
+      logoTranslateY.value = 0;
+      const quick = setTimeout(() => finishSplash(), 900);
+      return () => clearTimeout(quick);
+    }
+
     bgOpacity.value = withTiming(1, { duration: BG_FADE_IN_MS, easing: easeOut });
 
     bgScale.value = withDelay(
@@ -171,17 +183,26 @@ export function KavyaCinematicSplash({ onFinish, onReady }: Props) {
       });
     }, HOLD_MS);
 
-    return () => clearTimeout(fadeTimer);
+    const forceTimer = setTimeout(() => {
+      runOnJS(finishSplash)();
+    }, KAVYA_CINEMATIC_SPLASH_MS + 600);
+
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(forceTimer);
+    };
   }, [
     bgOpacity,
     bgScale,
     bgTranslateY,
     bloomOpacity,
     bloomScale,
+    enabled,
     exitWash,
     logoOpacity,
     logoScale,
     logoTranslateY,
+    reduced,
     screenOpacity
   ]);
 
@@ -224,7 +245,9 @@ export function KavyaCinematicSplash({ onFinish, onReady }: Props) {
         </Animated.View>
       </View>
 
-      <SplashGoldenParticles originX={anchor.x} originY={anchor.y} />
+      {enabled && !reduced ? (
+        <SplashGoldenParticles originX={anchor.x} originY={anchor.y} />
+      ) : null}
 
       <View style={styles.logoLayer} pointerEvents="none">
         <Animated.View

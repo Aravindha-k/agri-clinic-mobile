@@ -1,4 +1,4 @@
-import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
+import { NavigationContainer, DefaultTheme, createNavigationContainerRef } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -29,6 +29,7 @@ import TrackingWorkspaceScreen from "../../mobile/app/tracking";
 import VisitDetailScreen from "../../mobile/app/visit/[id]";
 import { VisitFlowNavigator } from "./VisitFlowNavigator";
 import { logStartup, patchStartupSnapshot } from "../utils/startupDiagnostics";
+import { registerNavigateHome } from "./navigationRecovery";
 import {
   stackScreenOptions,
   stackScreenOptionsModal,
@@ -48,6 +49,7 @@ const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const WorkStack = createNativeStackNavigator<WorkStackParamList>();
 const MeStack = createNativeStackNavigator<MeStackParamList>();
+const rootNavigationRef = createNavigationContainerRef<RootStackParamList>();
 
 function AuthNavigator() {
   return (
@@ -235,6 +237,13 @@ function AppRoutes() {
 export function RootNavigator() {
   const { theme, isDark } = useTheme();
 
+  useEffect(() => {
+    return registerNavigateHome(() => {
+      if (!rootNavigationRef.isReady()) return;
+      rootNavigationRef.navigate("Main", { screen: "Today" });
+    });
+  }, []);
+
   const navTheme = {
     ...DefaultTheme,
     dark: isDark,
@@ -249,7 +258,7 @@ export function RootNavigator() {
   };
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer ref={rootNavigationRef} theme={navTheme}>
       <View style={{ flex: 1 }}>
         <GlobalStatusStrip />
         <View style={{ flex: 1 }}>

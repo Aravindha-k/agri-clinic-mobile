@@ -25,7 +25,7 @@ const isProductionApi = resolvedApiUrl.includes(PRODUCTION_API_HOST);
 module.exports = () => ({
   name: brand.appName,
   slug: "agri-clinic-field-app",
-  version: "1.0.0",
+  version: "1.0.1",
   orientation: "portrait",
   userInterfaceStyle: "light",
   scheme: "agriclinicfield",

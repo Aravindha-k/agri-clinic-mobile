@@ -49,6 +49,39 @@ export type MobileFarmerProfile = {
 
 const CROP_TONES: CurrentCropCard["tone"][] = ["blue", "green", "amber"];
 
+function safeTone(tone: unknown, index: number): CurrentCropCard["tone"] {
+  if (tone === "blue" || tone === "green" || tone === "amber") return tone;
+  return CROP_TONES[index % CROP_TONES.length];
+}
+
+function sanitizeProfile(profile: MobileFarmerProfile): MobileFarmerProfile {
+  const farmer = profile.farmer ?? ({ id: 0, name: "Farmer" } as Farmer);
+  const fields = (profile.fields ?? []).map((field, index) => ({
+    ...field,
+    id: field.id || `field-${index}`,
+    land_name: field.land_name || `Field ${index + 1}`,
+    crops: Array.isArray(field.crops) ? field.crops : []
+  }));
+  const visits = Array.isArray(profile.visits) ? profile.visits : [];
+  const current_crops = (profile.current_crops ?? []).map((crop, index) => ({
+    ...crop,
+    id: crop.id || `crop-${index}`,
+    crop_name: crop.crop_name || "Crop",
+    tone: safeTone(crop.tone, index)
+  }));
+
+  return {
+    ...profile,
+    farmer,
+    fields,
+    visits,
+    current_crops,
+    total_visits: Number.isFinite(profile.total_visits) ? profile.total_visits : visits.length,
+    open_issues: Number.isFinite(profile.open_issues) ? profile.open_issues : 0,
+    last_visit_label: profile.last_visit_label || "—"
+  };
+}
+
 function str(value: unknown): string | undefined {
   if (value == null) return undefined;
   const text = String(value).trim();
@@ -194,7 +227,7 @@ export async function fetchMobileFarmerProfile(pk: number): Promise<MobileFarmer
   try {
     const data = await apiClient<unknown>(`mobile/farmers/${pk}/`, { source: "FarmerProfile" });
     const normalized = normalizeMobileProfile(data, pk);
-    if (normalized) return normalized;
+    if (normalized) return sanitizeProfile(normalized);
   } catch {
     // fallback below
   }
@@ -205,7 +238,7 @@ export async function fetchMobileFarmerProfile(pk: number): Promise<MobileFarmer
     getFarmerVisits(pk).catch(() => [])
   ]);
 
-  return buildFromParts(farmer, asArray(fieldsRaw), visits);
+  return sanitizeProfile(buildFromParts(farmer, asArray(fieldsRaw), visits));
 }
 
 export function problemCategoryFromVisit(visit: Visit | null | undefined): string {

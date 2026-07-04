@@ -6,6 +6,7 @@ import { logStartupError } from "../utils/startupDiagnostics";
 
 type Props = {
   children: ReactNode;
+  screenName?: string;
 };
 
 type State = {
@@ -13,7 +14,8 @@ type State = {
   message?: string;
 };
 
-export class AppErrorBoundary extends Component<Props, State> {
+/** Screen-level guard — keeps app open with retry / home / logout. */
+export class ScreenErrorBoundary extends Component<Props, State> {
   state: State = { hasError: false };
 
   static getDerivedStateFromError(error: Error): State {
@@ -21,8 +23,9 @@ export class AppErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    logStartupError(`app:${error.message}`);
-    console.warn("[AppErrorBoundary]", error.message, info.componentStack);
+    const tag = this.props.screenName ?? "screen";
+    logStartupError(`${tag}:${error.message}`);
+    console.warn(`[ScreenErrorBoundary:${tag}]`, error.message, info.componentStack);
   }
 
   private handleRetry = () => {
@@ -34,15 +37,14 @@ export class AppErrorBoundary extends Component<Props, State> {
     requestNavigateHome();
   };
 
-  private handleGoToLogin = () => {
+  private handleLogout = () => {
     this.setState({ hasError: false, message: undefined });
     void requestGoToLogin();
   };
 
   render() {
     if (this.state.hasError) {
-      const detail = this.state.message;
-      const devHint = __DEV__ && detail ? `\n\n(${detail})` : "";
+      const devHint = __DEV__ && this.state.message ? `\n\n(${this.state.message})` : "";
       return (
         <AppFallbackScreen
           title="Something went wrong"
@@ -52,7 +54,7 @@ export class AppErrorBoundary extends Component<Props, State> {
           secondaryLabel="Go to Home"
           onSecondary={this.handleGoHome}
           tertiaryLabel="Logout"
-          onTertiary={this.handleGoToLogin}
+          onTertiary={this.handleLogout}
         />
       );
     }

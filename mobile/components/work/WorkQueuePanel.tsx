@@ -128,7 +128,11 @@ export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
         <FarmerDirectoryCard
           farmer={farmer}
           workflow={item.workflow}
-          onPress={() => navigation.push("FarmerDetail", { id: farmer.id })}
+          onPress={() => {
+            const id = Number(farmer?.id);
+            if (!Number.isFinite(id) || id <= 0) return;
+            navigation.push("FarmerDetail", { id });
+          }}
           onMap={() =>
             navigateFarmerMap(navigation, {
               farmerId: farmer.id,

@@ -33,7 +33,7 @@ export function MoreMenuScreen() {
       <PageHeader title="More" subtitle="Tools & account" right={<SyncStatusBadge onPress={() => rootNav?.navigate("OfflineSync")} />} />
 
       <View style={{ paddingHorizontal: 16 }}>
-        <OfflineExperienceBanner onPressSync={() => rootNav?.navigate("OfflineSync")} compact />
+        <OfflineExperienceBanner onPressStatus={() => rootNav?.navigate("SyncStatus")} compact />
       </View>
 
       <Pressable

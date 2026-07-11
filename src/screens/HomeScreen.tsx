@@ -164,7 +164,7 @@ export function HomeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: safeTop }}>
-      <OfflineExperienceBanner onPressSync={() => rootNav?.navigate("OfflineSync")} />
+      <OfflineExperienceBanner onPressStatus={() => rootNav?.navigate("SyncStatus")} />
       <MasterDataOfflineBanner onPressSync={() => void refreshMasterData({ force: true })} />
       <ScrollView
         ref={scrollRef}
@@ -190,7 +190,7 @@ export function HomeScreen() {
                 <Text style={type.meta}>{weatherLine}</Text>
               </View>
             </View>
-            <SyncStatusBadge onPress={() => rootNav?.navigate("OfflineSync")} />
+            <SyncStatusBadge onPress={() => rootNav?.navigate("SyncStatus")} />
           </View>
         </View>
 
@@ -200,7 +200,7 @@ export function HomeScreen() {
             gpsActive={gpsActive}
             visitPending={pendingCount}
             routePending={pendingSyncCount}
-            onSyncPress={() => rootNav?.navigate("OfflineSync")}
+            onSyncPress={() => rootNav?.navigate("SyncStatus")}
           />
         </FadeInView>
 
@@ -216,9 +216,9 @@ export function HomeScreen() {
                   icon="time-outline"
                   label="Pending visits"
                   value={pendingCount}
-                  hint={pendingCount ? "Tap to sync" : "All synced"}
+                  hint={pendingCount ? "Syncing automatically" : "All synced"}
                   accent={pendingCount > 0}
-                  onPress={() => rootNav?.navigate("OfflineSync")}
+                  onPress={() => rootNav?.navigate("SyncStatus")}
                 />
               </View>
             </View>
@@ -238,7 +238,7 @@ export function HomeScreen() {
                   label="Open items"
                   value={pendingCount + pendingSyncCount}
                   hint="Visits + route queue"
-                  onPress={() => rootNav?.navigate("OfflineSync")}
+                  onPress={() => rootNav?.navigate("SyncStatus")}
                 />
               </View>
             </View>

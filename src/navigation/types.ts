@@ -100,5 +100,6 @@ export type RootStackParamList = {
   MyLocation: undefined;
   FarmerMap: FarmerMapParams;
   OfflineSync: undefined;
+  SyncStatus: undefined;
   Notifications: undefined;
 };

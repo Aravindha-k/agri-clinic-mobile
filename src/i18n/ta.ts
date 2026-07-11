@@ -239,6 +239,28 @@ export const ta: TranslationTree = {
     networkState: "பிணையம்",
     syncState: "ஒத்திசைவு நிலை"
   },
+  syncHealth: {
+    synced: "அனைத்து களத் தரவும் ஒத்திசைக்கப்பட்டது",
+    offlineSaving: "ஆஃப்லைனில் சேமிக்கிறது — இணையம் வந்ததும் தானாக ஒத்திசைக்கும்",
+    syncing: "களத் தரவை ஒத்திசைக்கிறது…",
+    waitingInternet: "இணையத்திற்காக காத்திருக்கிறது",
+    authRequired: "ஒத்திசைவைத் தொடர உறுதிப்படுத்தல் தேவை",
+    attentionRequired: "சில தரவுக்கு கவனம் தேவை",
+    statusTitle: "ஒத்திசைவு நிலை",
+    statusSubtitle: "தானியங்கி களத் தரவு ஒத்திசைவு",
+    readOnlyHint: "ஒத்திசைவு தானாக நடைபெறும். எந்த நடவடிக்கையும் தேவையில்லை.",
+    lastAttempt: "கடைசி தானியங்கி முயற்சி",
+    nextRetry: "அடுத்த திட்டமிடப்பட்ட மறுமுயற்சி",
+    notScheduled: "திட்டமிடப்படவில்லை",
+    online: "ஆன்லைன்",
+    offline: "ஆஃப்லைன்",
+    backgroundWorker: "பின்னணி திட்டமிடல்",
+    workerScheduled: "நிலுவை தரவு இருக்கும்போது திட்டமிடப்படும்",
+    workerIdle: "செயலற்ற — நிலுவை தரவு இல்லை",
+    viewStatus: "ஒத்திசைவு நிலையைக் காண்க",
+    autoSyncHint: "ஆன்லைனில் வந்ததும் ஒத்திசைவு தானாக தொடரும்.",
+    retryAutomatic: "தானியங்கி ஒத்திசைவை மீண்டும் முயற்சி"
+  },
   offlineSync: {
     title: "ஆஃப்லைன் ஒத்திசைவு",
     subtitleQueued: "{{count}} வருகை பதிவேற்றம் நிலுவையில்",

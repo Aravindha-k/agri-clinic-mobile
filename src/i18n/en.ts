@@ -234,6 +234,28 @@ export const en = {
     networkState: "Network",
     syncState: "Sync status"
   },
+  syncHealth: {
+    synced: "All field data is synced",
+    offlineSaving: "Saving offline — sync starts automatically when internet returns",
+    syncing: "Syncing field data…",
+    waitingInternet: "Waiting for internet",
+    authRequired: "Authentication required to resume sync",
+    attentionRequired: "Some data needs attention",
+    statusTitle: "Sync status",
+    statusSubtitle: "Automatic field data synchronization",
+    readOnlyHint: "Sync runs automatically. No action is required.",
+    lastAttempt: "Last automatic attempt",
+    nextRetry: "Next scheduled retry",
+    notScheduled: "Not scheduled",
+    online: "Online",
+    offline: "Offline",
+    backgroundWorker: "Background scheduling",
+    workerScheduled: "Scheduled when pending data exists",
+    workerIdle: "Idle — no pending data",
+    viewStatus: "View sync status",
+    autoSyncHint: "Sync will continue automatically when online.",
+    retryAutomatic: "Retry automatic sync"
+  },
   offlineSync: {
     title: "Offline sync",
     subtitleQueued: "{{count}} visit waiting to upload",

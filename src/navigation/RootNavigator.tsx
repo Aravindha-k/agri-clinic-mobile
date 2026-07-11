@@ -21,6 +21,7 @@ import ProblemsCatalogScreen from "../../mobile/app/problems";
 import { FarmerMapScreen } from "../screens/map/FarmerMapScreen";
 import { MyLocationScreen } from "../screens/map/MyLocationScreen";
 import { OfflineSyncScreen } from "../screens/OfflineSyncScreen";
+import { SyncStatusScreen } from "../screens/SyncStatusScreen";
 import DiagnosticsScreen from "../../mobile/app/me/diagnostics";
 import NotificationsScreen from "../../mobile/app/notifications";
 import { SettingsScreen } from "../screens/SettingsScreen";
@@ -220,6 +221,11 @@ function AppRoutes() {
         <RootStack.Screen name="LiveMap" component={MyLocationScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
         <RootStack.Screen name="TravelHistory" component={MyLocationScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
         <RootStack.Screen name="FarmerMap" component={FarmerMapScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
+        <RootStack.Screen
+          name="SyncStatus"
+          component={SyncStatusScreen}
+          options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }}
+        />
         <RootStack.Screen
           name="OfflineSync"
           component={OfflineSyncScreen}

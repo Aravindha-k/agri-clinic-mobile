@@ -154,10 +154,10 @@ export default function DiagnosticsScreen() {
           </View>
 
           <PrimaryButton
-            label={syncing ? t("home.syncing") : t("profile.syncAllNow")}
+            label={syncing ? t("home.syncing") : t("syncHealth.retryAutomatic")}
             onPress={() => void handleSyncAll()}
             loading={syncing}
-            disabled={pendingCount === 0}
+            disabled={pendingCount === 0 && pendingPoints === 0}
             style={styles.syncBtn}
           />
           <GhostButton

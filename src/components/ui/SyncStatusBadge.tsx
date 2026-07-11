@@ -1,6 +1,7 @@
-import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text } from "react-native";
-import { useOfflineSync } from "../../storage/OfflineSyncContext";
+import { Ionicons } from "@expo/vector-icons";
+import { useSyncStore } from "../../../mobile/lib/store/syncStore";
+import { getFieldPendingCounts } from "../../../mobile/lib/sync/pendingCounts";
 import { useTheme } from "../../theme";
 
 type Props = {
@@ -8,13 +9,23 @@ type Props = {
 };
 
 export function SyncStatusBadge({ onPress }: Props) {
-  const { pendingCount, syncing } = useOfflineSync();
   const { theme } = useTheme();
   const c = theme.colors;
+  const syncing = useSyncStore((s) => s.isSyncing);
+  const syncHealth = useSyncStore((s) => s.syncHealth);
+  const counts = getFieldPendingCounts();
 
-  if (!pendingCount && !syncing) {
+  if (counts.total === 0 && !syncing && syncHealth === "synced") {
     return null;
   }
+
+  const label = syncing
+    ? "Syncing…"
+    : syncHealth === "offline_saving"
+      ? "Offline"
+      : syncHealth === "auth_required"
+        ? "Sign in"
+        : `${counts.total} pending`;
 
   return (
     <Pressable
@@ -23,9 +34,7 @@ export function SyncStatusBadge({ onPress }: Props) {
       style={[styles.badge, { backgroundColor: syncing ? c.warningSoft : c.accentSoft }]}
     >
       <Ionicons name={syncing ? "sync" : "cloud-upload-outline"} size={14} color={syncing ? c.warning : c.accent} />
-      <Text style={[styles.text, { color: syncing ? c.warning : c.primaryDark }]}>
-        {syncing ? "Syncing…" : `${pendingCount} pending`}
-      </Text>
+      <Text style={[styles.text, { color: syncing ? c.warning : c.primaryDark }]}>{label}</Text>
     </Pressable>
   );
 }

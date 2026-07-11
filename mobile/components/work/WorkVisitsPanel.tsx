@@ -11,9 +11,9 @@ import {
   View
 } from "react-native";
 import { FilterPillRow } from "../FilterPillRow";
-import { ListSkeleton } from "../ui/ListSkeleton";
 import { ListStateView } from "../ui/ListStateView";
 import { InlineSeedLoader } from "../layout/InlineSeedLoader";
+import { ScreenLoader } from "../layout/ScreenLoader";
 import {
   FadeInSection,
   entranceListStagger,
@@ -30,7 +30,7 @@ import { useRefreshControlProps } from "../../../src/hooks/useRefreshControlProp
 import { useTabBarBottomInset } from "../../../src/hooks/useTabBarBottomInset";
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
 import { useI18n } from "../../../src/i18n/I18nContext";
-import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
+import { useSyncStore } from "../../lib/store/syncStore";
 import { visitDisplayIso } from "../../../src/utils/format";
 import { VisitListCard } from "../visits/VisitListCard";
 import {
@@ -67,7 +67,7 @@ export function WorkVisitsPanel({
   const tabInset = useTabBarBottomInset();
   const refreshControlProps = useRefreshControlProps();
   const { visitsVersion, bumpAfterVisitChange } = useFieldDataRefresh();
-  const { refreshQueue, syncAll } = useOfflineSync();
+  const syncing = useSyncStore((s) => s.isSyncing);
   const requestId = useRef(0);
 
   const [visits, setVisits] = useState<Visit[]>([]);
@@ -79,7 +79,6 @@ export function WorkVisitsPanel({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [dateFilter, setDateFilter] = useState<VisitDateFilter>("all");
-  const [syncing, setSyncing] = useState(false);
 
   const loadPending = useCallback(async () => {
     setPendingVisits(await readPendingVisits());
@@ -164,21 +163,6 @@ export function WorkVisitsPanel({
     void loadVisits({ refresh: true });
   }, [loadPending, loadVisits]);
 
-  const handleSync = useCallback(async () => {
-    if (syncing) return;
-    setSyncing(true);
-    try {
-      const result = await syncAll();
-      await loadPending();
-      if (result.synced > 0) {
-        bumpAfterVisitChange();
-        await loadVisits({ refresh: true });
-      }
-    } finally {
-      setSyncing(false);
-    }
-  }, [bumpAfterVisitChange, loadPending, loadVisits, syncAll, syncing]);
-
   const renderItem = useCallback(
     ({ item, index }: { item: VisitListRow; index: number }) => {
       const shouldAnimate = Boolean(entranceTick) && index < MAX_ROW_ENTRANCE;
@@ -204,7 +188,7 @@ export function WorkVisitsPanel({
       return wrap(
         <VisitListCard
           visit={item.visit}
-          onPress={() => navigation.navigate("VisitDetail", { id: item.visit.id })}
+          onPress={() => navigation.push("VisitDetail", { id: item.visit.id })}
         />,
         true
       );
@@ -250,22 +234,8 @@ export function WorkVisitsPanel({
                     count: pendingVisits.length
                   })}
             </Text>
+            <Text style={styles.pendingBannerHint}>{t("syncHealth.autoSyncHint")}</Text>
           </View>
-          <Pressable
-            onPress={() => void handleSync()}
-            disabled={syncing}
-            style={({ pressed }) => [
-              styles.syncBtn,
-              pressed && { opacity: 0.9 },
-              syncing && styles.syncBtnDisabled
-            ]}
-          >
-            {syncing ? (
-              <ActivityIndicator color={Colors.amberText} size="small" />
-            ) : (
-              <Text style={styles.syncBtnText}>{t("visits.syncNow")}</Text>
-            )}
-          </Pressable>
         </View>
       ) : null}
 
@@ -300,7 +270,7 @@ export function WorkVisitsPanel({
 
       <View style={styles.listArea}>
         {loading && visits.length === 0 && pendingVisits.length === 0 ? (
-          <ListSkeleton variant="visit" count={6} />
+          <ScreenLoader compact message={t("common.loading")} />
         ) : (
           <FlashList
             data={listRows}
@@ -361,6 +331,10 @@ const styles = StyleSheet.create({
     color: Colors.amberText,
     fontSize: FontSize.sm,
     fontWeight: FontWeight.semibold
+  },
+  pendingBannerHint: {
+    color: Colors.text3,
+    fontSize: FontSize.xs
   },
   pendingBannerError: {
     color: Colors.red,

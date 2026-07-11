@@ -3,7 +3,7 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useState } from "react";
 import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { EmptyState, PrimaryButton } from "../../mobile/components/ui";
+import { EmptyState } from "../../mobile/components/ui";
 import { useI18n } from "../i18n/I18nContext";
 import { formatRelativeTimeLocalized } from "../i18n";
 import { RootStackParamList } from "../navigation/types";
@@ -19,11 +19,12 @@ type Props = NativeStackScreenProps<RootStackParamList, "OfflineSync">;
 
 export function OfflineSyncScreen({ navigation }: Props) {
   const { t, language } = useI18n();
-  const { queue, syncing, syncAll, refreshQueue, lastSyncAt } = useOfflineSync();
+  const { queue, syncing, refreshQueue, lastSyncAt } = useOfflineSync();
   const pendingGps = useSyncStore((s) => s.pendingGPSCount);
   const pendingPhotos = useSyncStore((s) => s.pendingPhotosCount);
   const pendingWorkday = useSyncStore((s) => s.pendingWorkdayOpsCount);
   const syncPhase = useSyncStore((s) => s.syncPhase);
+  const syncHealth = useSyncStore((s) => s.syncHealth);
   const online = useConnectivityOnline();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -38,6 +39,15 @@ export function OfflineSyncScreen({ navigation }: Props) {
     count > 0
       ? t(count === 1 ? "offlineSync.subtitleQueued" : "offlineSync.subtitleQueued_plural", { count })
       : t("offlineSync.subtitleClear");
+
+  const statusMessage = (() => {
+    if (syncHealth === "auth_required") return t("fieldWorkflow.authRequired");
+    if (syncHealth === "attention_required") return t("fieldWorkflow.needsAttention");
+    if (!online) return t("syncHealth.offlineSaving");
+    if (syncing) return t("fieldWorkflow.syncing");
+    if (count > 0) return t("syncHealth.autoSyncHint");
+    return t("fieldWorkflow.syncComplete");
+  })();
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
@@ -57,18 +67,9 @@ export function OfflineSyncScreen({ navigation }: Props) {
           <Text style={styles.heroTitle}>
             {count ? t("offlineSync.heroWaiting") : t("offlineSync.heroClear")}
           </Text>
-          <Text style={styles.heroSub}>
-            {count ? t("offlineSync.heroWaitingHint") : t("offlineSync.heroClearHint")}
-          </Text>
+          <Text style={styles.heroSub}>{statusMessage}</Text>
         </FlatCard>
 
-        <PrimaryButton
-          label={syncing ? t("offlineSync.syncing") : t("offlineSync.syncNow")}
-          onPress={() => void syncAll()}
-          loading={syncing}
-          disabled={!count}
-          style={styles.syncBtn}
-        />
         <Text style={styles.meta}>
           {lastSyncAt
             ? t("offlineSync.lastSynced", { time: formatRelativeTimeLocalized(language, lastSyncAt) })
@@ -79,8 +80,8 @@ export function OfflineSyncScreen({ navigation }: Props) {
           {t("fieldWorkflow.pendingGps")}: {pendingGps} · {t("fieldWorkflow.pendingWorkday")}: {pendingWorkday}
         </Text>
         <Text style={styles.meta}>
-          {t("fieldWorkflow.networkState")}: {online ? "Online" : "Offline"} · {t("fieldWorkflow.syncState")}:{" "}
-          {syncing ? t("fieldWorkflow.syncing") : syncPhase}
+          {t("fieldWorkflow.networkState")}: {online ? t("syncHealth.online") : t("syncHealth.offline")} ·{" "}
+          {t("fieldWorkflow.syncState")}: {syncing ? t("fieldWorkflow.syncing") : syncPhase}
         </Text>
       </View>
 
@@ -152,9 +153,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.md,
     lineHeight: 20,
     textAlign: "center"
-  },
-  syncBtn: {
-    minHeight: Layout.buttonHeight
   },
   meta: {
     color: Colors.text3,

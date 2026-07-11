@@ -459,13 +459,11 @@ export default function ProfileTabScreen() {
           </FadeInSection>
 
           <FadeInSection replayKey={entranceTick} delay={entranceListStagger(2, menuRows.length + 2)} variant="card">
-          <PrimaryButton
-            label={t("profile.syncAllNow")}
-            onPress={() => void handleSyncAll()}
-            loading={syncingAll}
-            disabled={syncingAll}
-            icon={<Ionicons name="refresh" size={18} color={Colors.surface} />}
-            style={styles.syncBtnOuter}
+          <GhostButton
+            label={t("syncHealth.viewStatus")}
+            onPress={() => rootNav?.navigate("SyncStatus")}
+            icon={<Ionicons name="information-circle-outline" size={18} color={Colors.brand700} />}
+            style={styles.signOutBtnOuter}
           />
           </FadeInSection>
 

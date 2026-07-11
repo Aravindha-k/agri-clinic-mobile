@@ -135,3 +135,27 @@ for (const name of ["hydration_chime.wav"]) {
   }
 }
 console.log("[ensure-android-release-config] synced notification sounds");
+
+const APP_BG = "#FAF9F6";
+const stylesPath = resolve(androidDir, "app/src/main/res/values/styles.xml");
+if (existsSync(stylesPath)) {
+  let styles = readFileSync(stylesPath, "utf8");
+  const navItems = [
+    `<item name="android:navigationBarColor">${APP_BG}</item>`,
+    `<item name="android:windowBackground">${APP_BG}</item>`,
+    `<item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item>`
+  ];
+  for (const item of navItems) {
+    const key = item.match(/name="([^"]+)"/)?.[1];
+    if (key && styles.includes(key)) continue;
+    styles = styles.replace(/<\/style>\s*\n\s*<style name="Theme\.App\.SplashScreen"/, `${item}\n  </style>\n  <style name="Theme.App.SplashScreen"`);
+    if (!styles.includes(key)) {
+      styles = styles.replace(
+        /<style name="AppTheme" parent="[^"]+">/,
+        (match) => `${match}\n    ${item}`
+      );
+    }
+  }
+  writeFileSync(stylesPath, styles);
+  console.log("[ensure-android-release-config] patched AppTheme navigation/window background");
+}

@@ -63,6 +63,40 @@ export async function ensureForegroundPermission(): Promise<{ granted: boolean; 
   };
 }
 
+/** Foreground permission only — used when starting a workday (avoids Android Settings redirect for background). */
+export async function ensureWorkdayStartPermissions(): Promise<TrackingPermissionResult> {
+  const servicesEnabled = await readServicesEnabled();
+  if (!servicesEnabled) {
+    return {
+      foreground: false,
+      background: false,
+      message: "GPS is turned off. Please enable location services and try again."
+    };
+  }
+
+  const currentForeground = await Location.getForegroundPermissionsAsync();
+  let foregroundGranted = currentForeground.status === "granted";
+  if (!foregroundGranted) {
+    const foreground = await Location.requestForegroundPermissionsAsync();
+    trackingDevLog("foreground_permission", foreground.status);
+    foregroundGranted = foreground.status === "granted";
+  }
+
+  if (!foregroundGranted) {
+    return {
+      foreground: false,
+      background: false,
+      message: "Location permission is required for field tracking."
+    };
+  }
+
+  const currentBackground = await Location.getBackgroundPermissionsAsync();
+  return {
+    foreground: true,
+    background: currentBackground.status === "granted"
+  };
+}
+
 /** Request foreground then background location for route tracking. */
 export async function ensureTrackingPermissions(): Promise<TrackingPermissionResult> {
   const servicesEnabled = await readServicesEnabled();
@@ -145,7 +179,7 @@ export async function getForegroundLocation(): Promise<ForegroundLocationResult>
     try {
       location = await Location.getCurrentPositionAsync({
         accuracy: getForegroundTrackingAccuracy(),
-        mayShowUserSettingsDialog: true
+        mayShowUserSettingsDialog: false
       });
     } catch {
       location = await Location.getLastKnownPositionAsync();

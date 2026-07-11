@@ -280,9 +280,9 @@ export function RootNavigator() {
 
   return (
     <NavigationContainer ref={rootNavigationRef} theme={navTheme}>
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
         <GlobalStatusStrip />
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
           <AppRoutes />
         </View>
       </View>

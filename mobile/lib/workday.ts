@@ -8,7 +8,7 @@ import {
   type StartBackgroundTrackingResult
 } from "../../src/tracking/backgroundLocationService";
 import { markDutyTrackingSessionActive } from "../../src/tracking/trackingSession";
-import { ensureTrackingPermissions, getForegroundLocation } from "../../src/utils/location";
+import { ensureWorkdayStartPermissions, getForegroundLocation } from "../../src/utils/location";
 import type { LocationObject } from "expo-location";
 
 export type WorkdayLocation = {
@@ -47,7 +47,7 @@ export async function startWorkday(options: StartWorkdayOptions): Promise<StartW
     return { ok: false, reason: "blocked" };
   }
 
-  const permissions = await ensureTrackingPermissions();
+  const permissions = await ensureWorkdayStartPermissions();
   if (!permissions.foreground) {
     return {
       ok: false,
@@ -57,7 +57,7 @@ export async function startWorkday(options: StartWorkdayOptions): Promise<StartW
   }
   if (!permissions.background) {
     options.onBackgroundPermissionWarning?.(
-      permissions.message || "Allow location all the time for route tracking."
+      "Allow location all the time in Settings when you are ready for full route tracking."
     );
   }
 

@@ -87,11 +87,8 @@ async function ensureAppLocationPermission(
       return { ok: true };
     }
 
-    if (current.status === "denied" && !current.canAskAgain) {
-      await promptPermissionBlocked(copy);
-      return { ok: false, reason: "permission_blocked" };
-    }
-
+    // Always show the in-app permission dialog first — some release/OEM builds report
+    // denied + canAskAgain:false before the user has ever been prompted.
     const requested = await Location.requestForegroundPermissionsAsync();
     if (requested.status === "granted") {
       return { ok: true };

@@ -41,6 +41,7 @@ import {
   logStartup,
   patchStartupSnapshot
 } from "./src/utils/startupDiagnostics";
+import { applyAndroidChromeColors } from "./src/utils/androidChrome";
 
 LogBox.ignoreLogs([
   /expo-notifications: Android Push notifications/i,
@@ -66,6 +67,7 @@ function AppStatusBar() {
 
 function AppShell() {
   useEffect(() => {
+    void applyAndroidChromeColors();
     logReleaseStartupConstants();
     logStartup("app_mount");
     void import("./src/tracking/registerBackgroundLocationTask").then(() => {

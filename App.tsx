@@ -1,3 +1,4 @@
+import "react-native-reanimated";
 import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";

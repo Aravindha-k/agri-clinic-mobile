@@ -153,7 +153,7 @@ export default function MainTabBar({ state, descriptors, navigation }: BottomTab
 
 const styles = StyleSheet.create({
   outer: {
-    backgroundColor: "transparent",
+    backgroundColor: Colors.bg,
     overflow: "visible",
     paddingHorizontal: Grid.md,
     paddingTop: FAB_RISE_ABOVE_BAR + Spacing.xs

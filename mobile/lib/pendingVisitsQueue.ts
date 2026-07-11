@@ -1,5 +1,6 @@
 import type { VisitFormValues } from "../../src/api/visits";
 import type { PendingVisitAttachment } from "../../src/visit/pendingAttachments";
+import { persistVisitPhotoAsset, pendingPhotoToVisitAsset } from "./media/persistentVisitPhotos";
 import { addToVisitQueue, getPendingVisits, removeVisitFromQueue } from "./sync/offlineSyncManager";
 import type { VisitPhotoAsset } from "./visitPhotos";
 
@@ -14,13 +15,16 @@ export type PendingVisitRecord = {
 };
 
 function toRecord(row: ReturnType<typeof getPendingVisits>[number]): PendingVisitRecord {
-  const { __pending_attachments: _attachments, ...values } = row.payload;
+  const { __pending_attachments: _attachments, pending_photos: _photos, ...values } = row.payload;
+  const photos =
+    row.pending_photos?.map(pendingPhotoToVisitAsset) ??
+    ((_attachments as VisitPhotoAsset[] | undefined) ?? []);
   return {
     id: row.local_sync_id,
     local_sync_id: row.local_sync_id,
     createdAt: row.created_at,
     values: values as VisitFormValues,
-    photos: []
+    photos
   };
 }
 
@@ -34,19 +38,35 @@ export async function enqueuePendingVisit(
   record: PendingVisitRecord,
   extraAttachments: PendingVisitAttachment[] = []
 ): Promise<void> {
+  const persistedPhotos = [];
+  for (const photo of record.photos) {
+    const result = await persistVisitPhotoAsset({
+      asset: photo,
+      visitLocalSyncId: record.local_sync_id
+    });
+    if (!result.ok) {
+      throw new Error(result.message);
+    }
+    persistedPhotos.push(result.photo);
+  }
+
   const attachments: PendingVisitAttachment[] = [
-    ...record.photos.map((p) => ({
-      id: p.id,
+    ...persistedPhotos.map((p) => ({
+      id: p.local_photo_id,
       attachmentType: "image" as const,
-      uri: p.uri,
-      name: p.name,
-      mimeType: p.mimeType,
-      createdAt: new Date().toISOString()
+      uri: p.persistent_file_uri,
+      name: p.original_filename,
+      mimeType: p.mime_type,
+      createdAt: p.created_at
     })),
     ...extraAttachments
   ];
   await addToVisitQueue(
-    { ...record.values, __pending_attachments: attachments },
+    {
+      ...record.values,
+      __pending_attachments: attachments,
+      pending_photos: persistedPhotos
+    },
     record.values.farmer_name?.trim() || "Farmer",
     record.values.crop_name?.trim() || "Crop",
     record.local_sync_id

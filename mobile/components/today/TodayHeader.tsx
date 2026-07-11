@@ -81,6 +81,7 @@ export function TodayHeader({
           right={bell}
           entrance={{ replayKey: entranceTick, step: entranceStep }}
           scrollY={scrollY}
+          sunshineGlow
           style={styles.brandHeader}
         />
         <Animated.View style={greetingScrollStyle}>
@@ -104,14 +105,14 @@ const styles = StyleSheet.create({
   wrap: {
     borderRadius: 26,
     marginHorizontal: TODAY_PAGE_PAD,
-    overflow: "hidden",
+    overflow: "visible",
     paddingBottom: BrandHeaderSpacing.greetingToHero,
     position: "relative"
   },
   glass: {
     marginTop: Spacing.sm,
     minHeight: 288,
-    overflow: "hidden"
+    overflow: "visible"
   },
   brandHeader: {
     paddingHorizontal: Spacing.sm,

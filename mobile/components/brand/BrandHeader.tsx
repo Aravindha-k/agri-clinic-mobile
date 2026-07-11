@@ -10,6 +10,7 @@ import { FadeInSection, entranceStagger } from "../ui/FadeInSection";
 import { Grid } from "../../lib/designSystem";
 import { TODAY_PAGE_PAD } from "../../lib/todayLayout";
 import { BrandLogoBadge } from "./BrandLogoBadge";
+import { HomeLogoWithSunGlow } from "./HomeLogoWithSunGlow";
 import { BrandTagline } from "./BrandTagline";
 import { BrandTitle } from "./BrandTitle";
 import {
@@ -37,6 +38,11 @@ type Props = {
   entrance?: EntranceProps;
   style?: StyleProp<ViewStyle>;
   scrollY?: SharedValue<number>;
+  /**
+   * Home (Today) only — experimental sunshine glow behind the logo.
+   * Other screens keep the standard BrandLogoBadge.
+   */
+  sunshineGlow?: boolean;
 };
 
 function logoSizeFor(size: BrandHeaderSize) {
@@ -54,7 +60,8 @@ export function BrandHeader({
   right,
   entrance,
   style,
-  scrollY
+  scrollY,
+  sunshineGlow = false
 }: Props) {
   const compact = size !== "hero";
   const logoSize = logoSizeFor(size);
@@ -80,6 +87,16 @@ export function BrandHeader({
     };
   });
 
+  const logoBadge = sunshineGlow ? (
+    <HomeLogoWithSunGlow
+      size={logoSize}
+      animated={size === "hero"}
+      replayKey={entrance?.replayKey ?? 0}
+    />
+  ) : (
+    <BrandLogoBadge size={logoSize} animated={size === "hero"} replayKey={entrance?.replayKey ?? 0} />
+  );
+
   const wordmark = (
     <View style={[styles.wordmark, !isSplit && { marginTop: BrandHeaderSpacing.logoToTitle }, align === "center" && !isSplit && styles.wordmarkCenter]}>
       <BrandTitle align={isSplit ? "left" : align} compact={compact} />
@@ -91,7 +108,7 @@ export function BrandHeader({
   const brandCore = isSplit ? (
     <View style={styles.splitRow}>
       <Animated.View style={[styles.logoColumn, logoScrollStyle]}>
-        <BrandLogoBadge size={logoSize} animated={size === "hero"} replayKey={entrance?.replayKey ?? 0} />
+        {logoBadge}
       </Animated.View>
       <Animated.View style={[styles.splitCopy, wordmarkScrollStyle]}>
         {entrance ? (
@@ -107,7 +124,7 @@ export function BrandHeader({
   ) : (
     <View style={[styles.brandCore, align === "center" && styles.brandCoreCenter]}>
       <Animated.View style={[styles.logoRow, align === "center" && styles.logoRowCenter, logoScrollStyle]}>
-        <BrandLogoBadge size={logoSize} animated={size === "hero"} replayKey={entrance?.replayKey ?? 0} />
+        {logoBadge}
         {right && isFull ? <View style={styles.bellSlot}>{right}</View> : null}
       </Animated.View>
       {entrance ? (
@@ -164,23 +181,24 @@ const styles = StyleSheet.create({
   splitRow: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 8,
-    minHeight: 148,
+    gap: 6,
+    minHeight: 156,
     overflow: "visible",
     paddingTop: 6,
     position: "relative"
   },
   logoColumn: {
     flexShrink: 0,
-    marginLeft: -10,
+    marginLeft: -8,
     overflow: "visible",
-    width: 172
+    width: 184,
+    zIndex: 2
   },
   splitCopy: {
     flex: 1,
     justifyContent: "center",
     minWidth: 0,
-    paddingLeft: 2,
+    paddingLeft: 6,
     paddingRight: 44
   },
   splitBell: {

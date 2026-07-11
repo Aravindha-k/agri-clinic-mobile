@@ -1,6 +1,9 @@
 export { BrandHeader, type BrandHeaderSize } from "./BrandHeader";
 export { BrandHeaderDots } from "./BrandHeaderDots";
 export { BrandLogoBadge } from "./BrandLogoBadge";
+export { HomeLogoWithSunGlow } from "./HomeLogoWithSunGlow";
+export { SunGlow } from "./SunGlow";
+export { HOME_LOGO_SUNSHINE_GLOW_ENABLED } from "./homeLogoExperiment";
 export { BrandTitle } from "./BrandTitle";
 export { BrandTagline } from "./BrandTagline";
 export { BrandSubtitle } from "./BrandSubtitle";

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
-import { StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { KavyaCinematicSplash } from "./src/components/brand/KavyaCinematicSplash";
@@ -57,6 +57,7 @@ export default function App() {
     return Math.max(0, Date.now() - layoutAtRef.current);
   }, []);
 
+  /** Native splash hides only after cinematic first layout + animation kickoff. */
   const handleCinematicReady = useCallback(() => {
     layoutAtRef.current = Date.now();
     void hideNativeSplashSafe("cinematic_first_layout");
@@ -68,32 +69,44 @@ export default function App() {
   }, [elapsed]);
 
   const handleCinematicExitStart = useCallback(() => {
+    logStartup("cinematic_exit_started", `${elapsed()} ms`);
     logStartup("app_ready", `exit_started ${elapsed()} ms`);
     setPhase("revealing");
   }, [elapsed]);
 
   const handleCinematicFinish = useCallback(() => {
+    logStartup("cinematic_finished", `${elapsed()} ms`);
+    logStartup("app_revealed", `${elapsed()} ms`);
     logStartup("splash_end", `${elapsed()} ms`);
     setPhase("app");
   }, [elapsed]);
 
   const showSplash = phase === "cinematic" || phase === "revealing";
   const showShell = Providers != null || bootError != null;
+  /** Keep providers mounted for auth/fonts, but hide until exit fade so native screens cannot cover splash. */
+  const shellVisible = phase === "revealing" || phase === "app";
   const rootBg = showSplash ? CINEMATIC_SPLASH_BG : APP_BG;
 
   return (
     <GestureHandlerRootView style={[styles.root, { backgroundColor: rootBg }]}>
       <SafeAreaProvider>
         {showShell ? (
-          bootError ? (
-            <View style={[styles.root, { backgroundColor: APP_BG }]} />
-          ) : Providers ? (
-            <Providers onCriticalReady={handleCriticalReady} />
-          ) : null
+          <View
+            style={[styles.shell, !shellVisible && styles.shellHidden]}
+            pointerEvents={shellVisible ? "auto" : "none"}
+            accessibilityElementsHidden={!shellVisible}
+            importantForAccessibility={shellVisible ? "auto" : "no-hide-descendants"}
+          >
+            {bootError ? (
+              <View style={[styles.root, { backgroundColor: APP_BG }]} />
+            ) : Providers ? (
+              <Providers onCriticalReady={handleCriticalReady} />
+            ) : null}
+          </View>
         ) : null}
 
         {showSplash ? (
-          <View style={styles.splashOverlay} pointerEvents="auto">
+          <View style={styles.splashOverlay} pointerEvents="auto" collapsable={false}>
             <KavyaCinematicSplash
               key={splashKey}
               canExit={criticalReady}
@@ -112,9 +125,16 @@ const styles = StyleSheet.create({
   root: {
     flex: 1
   },
+  shell: {
+    flex: 1
+  },
+  shellHidden: {
+    opacity: 0
+  },
   splashOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: CINEMATIC_SPLASH_BG,
-    zIndex: 100
+    elevation: Platform.OS === "android" ? 1000 : 0,
+    zIndex: 1000
   }
 });

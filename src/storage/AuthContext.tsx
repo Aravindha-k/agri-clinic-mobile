@@ -336,7 +336,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const tokens = await loginRequest(username, password);
       await saveTokens(tokens);
       await establishAuthenticatedSession();
-      await saveBiometricLogin(username, password).catch(() => undefined);
+      // Enable biometric unlock flag only — never persist the password.
+      await saveBiometricLogin().catch(() => undefined);
     },
     [establishAuthenticatedSession]
   );

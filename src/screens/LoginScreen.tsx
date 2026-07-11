@@ -25,7 +25,7 @@ import {
   canUseBiometricLogin,
   clearBiometricLogin,
   getBiometricLoginStatus,
-  readBiometricCredentials,
+  unlockSessionWithBiometrics,
   type BiometricLoginStatus
 } from "../storage/biometricLoginStorage";
 import { FONTS } from "../theme/fonts";
@@ -49,7 +49,7 @@ const EMPTY_BIOMETRIC_STATUS: BiometricLoginStatus = {
 export function LoginScreen() {
   useSecureScreen();
   const insets = useSafeAreaInsets();
-  const { signIn, loginNotice, clearLoginNotice } = useAuth();
+  const { signIn, loginNotice, clearLoginNotice, retryBootstrap } = useAuth();
 
   const scrollRef = useRef<ScrollView>(null);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
@@ -142,21 +142,31 @@ export function LoginScreen() {
     setLoginError("");
 
     try {
-      const credentials = await readBiometricCredentials();
-      if (!credentials) {
-        setLoginError("Fingerprint login was cancelled.");
+      const unlocked = await unlockSessionWithBiometrics();
+      if (!unlocked) {
+        setLoginError("Biometric unlock was cancelled or is unavailable. Use your password.");
+        await refreshBiometricState();
         return;
       }
-      await signIn(credentials.username, credentials.password);
+      await retryBootstrap();
     } catch (error) {
-      if (error instanceof ApiRequestError && error.code === "INVALID_CREDENTIALS") {
+      if (
+        error instanceof ApiRequestError &&
+        (error.code === "SESSION_EXPIRED" ||
+          error.code === "ACCOUNT_DISABLED" ||
+          error.status === 403)
+      ) {
         await clearBiometricLogin();
         await refreshBiometricState();
-        setLoginError("Saved login expired. Use your password.");
+        setLoginError(
+          error.code === "ACCOUNT_DISABLED" || error.status === 403
+            ? "Your account is currently disabled. Please contact your administrator."
+            : "Saved session expired. Use your password."
+        );
       } else if (isNetworkError(error)) {
         setLoginError(getNetworkMessage());
       } else {
-        setLoginError(error instanceof Error ? error.message : "Fingerprint login failed.");
+        setLoginError(error instanceof Error ? error.message : "Biometric unlock failed.");
       }
     } finally {
       setBiometricBusy(false);

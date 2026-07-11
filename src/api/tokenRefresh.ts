@@ -78,6 +78,19 @@ export async function refreshAccessTokenShared(): Promise<string> {
     });
   }
 
+  if (response.status === 403) {
+    const data = await readResponseBody(response);
+    const code =
+      data && typeof data === "object" && typeof (data as { code?: unknown }).code === "string"
+        ? (data as { code: string }).code
+        : "ACCOUNT_DISABLED";
+    await handleSessionExpired();
+    throw new ApiRequestError(
+      "Your account is currently disabled. Please contact your administrator.",
+      { code, status: 403 }
+    );
+  }
+
   if (!response.ok) {
     if (response.status >= 500) {
       throw serverError(SERVER_MESSAGE, response.status);

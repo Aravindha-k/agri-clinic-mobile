@@ -1,7 +1,7 @@
 /** @type {import('expo/config').ExpoConfig} */
 const brand = require("./src/config/brand.config.js");
 const PRODUCTION_API_HOST = "13.207.17.117";
-const PRODUCTION_API_ORIGIN = `http://${PRODUCTION_API_HOST}`;
+const PRODUCTION_API_ORIGIN = `https://${PRODUCTION_API_HOST}`;
 const PRODUCTION_API_BASE_URL = `${PRODUCTION_API_ORIGIN}/api/v1/`;
 
 function normalizeApiUrl(raw) {
@@ -21,6 +21,12 @@ const resolvedApiUrl = normalizeApiUrl(
     PRODUCTION_API_ORIGIN
 );
 const isProductionApi = resolvedApiUrl.includes(PRODUCTION_API_HOST);
+const isProductionEnv =
+  process.env.EXPO_PUBLIC_ENV === "production" ||
+  process.env.EAS_BUILD_PROFILE === "production-apk" ||
+  process.env.EAS_BUILD_PROFILE === "production-aab";
+const allowCleartext =
+  process.env.EXPO_PUBLIC_ALLOW_CLEARTEXT === "1" || !isProductionEnv;
 
 module.exports = () => ({
   name: brand.appName,
@@ -52,7 +58,7 @@ module.exports = () => ({
     package: "com.kavya.agriclinic",
     minSdkVersion: 26,
     versionCode: 6,
-    usesCleartextTraffic: true,
+    usesCleartextTraffic: allowCleartext,
     permissions: [
       "ACCESS_COARSE_LOCATION",
       "ACCESS_FINE_LOCATION",

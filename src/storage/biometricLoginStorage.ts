@@ -1,9 +1,12 @@
 import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
+import { getRefreshToken } from "./tokenStorage";
+import { refreshAccessTokenOnce } from "../api/tokenRefresh";
 
 const ENABLED_KEY = "biometric_login_enabled";
-const USER_KEY = "biometric_login_user";
-const PASS_KEY = "biometric_login_pass";
+/** @deprecated legacy plaintext password — always cleared on migration */
+const LEGACY_PASS_KEY = "biometric_login_pass";
+const LEGACY_USER_KEY = "biometric_login_user";
 
 export type BiometricLoginStatus = {
   hardwareAvailable: boolean;
@@ -11,6 +14,18 @@ export type BiometricLoginStatus = {
   enabled: boolean;
   label: string;
 };
+
+let legacyCleared = false;
+
+/** Remove any historically stored plaintext passwords. Safe to call often. */
+export async function migrateLegacyBiometricPasswords(): Promise<void> {
+  if (legacyCleared) return;
+  await Promise.all([
+    SecureStore.deleteItemAsync(LEGACY_PASS_KEY).catch(() => undefined),
+    SecureStore.deleteItemAsync(LEGACY_USER_KEY).catch(() => undefined)
+  ]);
+  legacyCleared = true;
+}
 
 export async function getBiometricTypeLabel(): Promise<string> {
   const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
@@ -27,6 +42,7 @@ export async function getBiometricTypeLabel(): Promise<string> {
 }
 
 export async function getBiometricLoginStatus(): Promise<BiometricLoginStatus> {
+  await migrateLegacyBiometricPasswords();
   const [hardwareAvailable, enrolled, enabledFlag] = await Promise.all([
     LocalAuthentication.hasHardwareAsync(),
     LocalAuthentication.isEnrolledAsync(),
@@ -46,16 +62,17 @@ export async function canUseBiometricLogin(): Promise<boolean> {
   if (!status.hardwareAvailable || !status.enrolled || !status.enabled) {
     return false;
   }
-
-  const [username, password] = await Promise.all([
-    SecureStore.getItemAsync(USER_KEY),
-    SecureStore.getItemAsync(PASS_KEY)
-  ]);
-  return Boolean(username && password);
+  const refresh = await getRefreshToken();
+  return Boolean(refresh);
 }
 
-/** Save credentials after a successful password sign-in (no extra biometric prompt). */
-export async function saveBiometricLogin(username: string, password: string): Promise<boolean> {
+/**
+ * Enable biometric unlock after a successful password login.
+ * Stores only an enablement flag — never the password.
+ * Unlock uses the refresh token already kept in SecureStore by tokenStorage.
+ */
+export async function saveBiometricLogin(_username?: string, _password?: string): Promise<boolean> {
+  await migrateLegacyBiometricPasswords();
   const [hardwareAvailable, enrolled] = await Promise.all([
     LocalAuthentication.hasHardwareAsync(),
     LocalAuthentication.isEnrolledAsync()
@@ -63,45 +80,55 @@ export async function saveBiometricLogin(username: string, password: string): Pr
   if (!hardwareAvailable || !enrolled) {
     return false;
   }
-
-  await SecureStore.setItemAsync(USER_KEY, username.trim());
-  await SecureStore.setItemAsync(PASS_KEY, password);
+  const refresh = await getRefreshToken();
+  if (!refresh) {
+    return false;
+  }
   await SecureStore.setItemAsync(ENABLED_KEY, "1");
   return true;
 }
 
-export async function readBiometricCredentials(): Promise<{ username: string; password: string } | null> {
+/**
+ * Prompt biometrics, then refresh the access token using the stored refresh token.
+ * Returns true when the session can continue without re-entering a password.
+ */
+export async function unlockSessionWithBiometrics(): Promise<boolean> {
+  await migrateLegacyBiometricPasswords();
   const enabled = await SecureStore.getItemAsync(ENABLED_KEY);
   if (enabled !== "1") {
-    return null;
+    return false;
+  }
+
+  const refresh = await getRefreshToken();
+  if (!refresh) {
+    await clearBiometricLogin();
+    return false;
   }
 
   const auth = await LocalAuthentication.authenticateAsync({
-    promptMessage: "Sign in to your field workspace",
+    promptMessage: "Unlock your field workspace",
     cancelLabel: "Cancel",
     disableDeviceFallback: false
   });
   if (!auth.success) {
-    return null;
+    return false;
   }
 
-  const [username, password] = await Promise.all([
-    SecureStore.getItemAsync(USER_KEY),
-    SecureStore.getItemAsync(PASS_KEY)
-  ]);
+  const access = await refreshAccessTokenOnce();
+  return Boolean(access);
+}
 
-  if (!username || !password) {
-    return null;
-  }
-
-  return { username, password };
+/** @deprecated Passwords are never returned. Prefer unlockSessionWithBiometrics. */
+export async function readBiometricCredentials(): Promise<null> {
+  await migrateLegacyBiometricPasswords();
+  return null;
 }
 
 export async function clearBiometricLogin(): Promise<void> {
   await Promise.all([
     SecureStore.deleteItemAsync(ENABLED_KEY).catch(() => undefined),
-    SecureStore.deleteItemAsync(USER_KEY).catch(() => undefined),
-    SecureStore.deleteItemAsync(PASS_KEY).catch(() => undefined)
+    SecureStore.deleteItemAsync(LEGACY_PASS_KEY).catch(() => undefined),
+    SecureStore.deleteItemAsync(LEGACY_USER_KEY).catch(() => undefined)
   ]);
 }
 

@@ -1,11 +1,12 @@
-/** AWS production host (no scheme/path). */
+/** AWS production host (no scheme/path) — prefer a real domain once TLS is ready. */
 export const PRODUCTION_API_HOST = "13.207.17.117";
 
 /**
- * Production server origin — set EXPO_PUBLIC_API_BASE_URL or EXPO_PUBLIC_API_URL in builds.
- * Example: http://13.207.17.117
+ * Production API must be configured via EXPO_PUBLIC_API_BASE_URL / EXPO_PUBLIC_API_URL
+ * using HTTPS. Cleartext HTTP is blocked in release builds unless explicitly allowed
+ * for emergency diagnostics (EXPO_PUBLIC_ALLOW_INSECURE_HTTP=1).
  */
-export const PRODUCTION_API_ORIGIN = `http://${PRODUCTION_API_HOST}`;
+export const PRODUCTION_API_ORIGIN = `https://${PRODUCTION_API_HOST}`;
 
 /** Media/static files live on the server root — not under /api/v1/. */
 export const PRODUCTION_MEDIA_ORIGIN = PRODUCTION_API_ORIGIN;
@@ -18,6 +19,23 @@ export const PRODUCTION_API_BASE_URL = `${PRODUCTION_API_ORIGIN}/api/v1/`;
 
 /** Local backend for `npx expo start` only (__DEV__). */
 const LOCAL_DEV_API_BASE_URL = "http://10.0.2.2:8000/api/v1/";
+
+function assertSecureProductionUrl(url: string): void {
+  if (__DEV__) return;
+  const allowInsecure = process.env.EXPO_PUBLIC_ALLOW_INSECURE_HTTP === "1";
+  if (url.startsWith("http://") && !allowInsecure) {
+    throw new Error(
+      "Production API base URL must use HTTPS. Set EXPO_PUBLIC_API_BASE_URL to an https:// endpoint. " +
+        "See HTTPS_DEPLOYMENT_REQUIREMENTS.md. To override temporarily, set EXPO_PUBLIC_ALLOW_INSECURE_HTTP=1."
+    );
+  }
+  if (!process.env.EXPO_PUBLIC_API_BASE_URL?.trim() && !process.env.EXPO_PUBLIC_API_URL?.trim()) {
+    throw new Error(
+      "Production builds require EXPO_PUBLIC_API_BASE_URL (or EXPO_PUBLIC_API_URL) with an https:// API. " +
+        "Hardcoded cleartext fallbacks are disabled."
+    );
+  }
+}
 
 /** Normalize build env input — accepts host origin or full /api/v1/ base; never duplicates. */
 export function normalizeApiBaseUrl(raw: string): string {
@@ -65,7 +83,7 @@ export const PRODUCTION_API_ENDPOINTS = {
 } as const;
 
 function isProductionApiUrl(url: string): boolean {
-  return url.includes(PRODUCTION_API_HOST);
+  return url.includes(PRODUCTION_API_HOST) || (!__DEV__ && url.startsWith("https://"));
 }
 
 /** Read API URL from EAS / .env.production — full /api/v1/ base or host origin. */
@@ -79,12 +97,14 @@ function readBuildApiEnv(): string | undefined {
 function resolveApiBaseUrl(): string {
   const fromEnv = readBuildApiEnv();
 
-  // Release/APK: env first, then AWS fallback — never LAN/dev.
+  // Release/APK: env required + HTTPS enforced — never silent LAN/HTTP fallback.
   if (!__DEV__) {
-    if (fromEnv) {
-      return normalizeApiBaseUrl(fromEnv);
+    if (!fromEnv) {
+      assertSecureProductionUrl("");
     }
-    return PRODUCTION_API_BASE_URL;
+    const resolved = normalizeApiBaseUrl(fromEnv as string);
+    assertSecureProductionUrl(resolved);
+    return resolved;
   }
 
   if (fromEnv) {
@@ -95,7 +115,8 @@ function resolveApiBaseUrl(): string {
     process.env.EXPO_PUBLIC_USE_PRODUCTION_API === "1" ||
     process.env.EXPO_PUBLIC_USE_PRODUCTION_API === "true";
   if (useCloud) {
-    return PRODUCTION_API_BASE_URL;
+    const cloud = fromEnv ? normalizeApiBaseUrl(fromEnv) : PRODUCTION_API_BASE_URL;
+    return cloud;
   }
   const devOverride = process.env.EXPO_PUBLIC_DEV_API_URL?.trim();
   return normalizeApiBaseUrl(devOverride || LOCAL_DEV_API_BASE_URL);

@@ -9,7 +9,7 @@ import Animated, {
   withTiming
 } from "react-native-reanimated";
 import { VisitFlowParamList } from "../../../src/navigation/types";
-import { navigateMainTab, navigateVisitDetail } from "../../../src/navigation/rootNavigationRef";
+import { navigateVisitDetail, resetToMainTab, resetToVisitDetail } from "../../../src/navigation/rootNavigationRef";
 import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useVisitFormStore } from "../../store/visitFormStore";
@@ -82,29 +82,17 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
     void refreshQueue();
   }, [queued, refreshQueue]);
 
-  function exitToMain() {
-    try {
-      const root = navigation.getParent();
-      if (root?.canGoBack()) root.goBack();
-    } catch {
-      /* modal may already be dismissed */
-    }
-  }
-
   function goHome() {
-    navigateMainTab("Today");
-    exitToMain();
+    resetToMainTab("Today");
   }
 
   function viewVisit() {
     if (!visitId || visitId <= 0) return;
-    navigateVisitDetail(visitId, true);
-    exitToMain();
+    resetToVisitDetail(visitId, true);
   }
 
   function viewPendingVisits() {
-    navigateMainTab("Work", { screen: "WorkHome", params: { segment: "visits" } });
-    exitToMain();
+    resetToMainTab("Work", { screen: "WorkHome", params: { segment: "visits" } });
   }
 
   function addAnotherVisit() {

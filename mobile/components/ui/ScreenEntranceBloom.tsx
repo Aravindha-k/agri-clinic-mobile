@@ -61,7 +61,9 @@ export function ScreenEntranceBloom({
 
     scale.value = withDelay(delay, withTiming(endScale, { duration, easing }));
     opacity.value = withDelay(delay, withTiming(0, { duration, easing }));
-  }, [anchorLeft, anchorTop, coreMotion, delay, duration, easing, endScale, opacity, peakOpacity, replayKey, scale]);
+    // Animate once on mount — replayKey changes caused bloom flash on every tab refocus.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only bloom
+  }, [anchorLeft, anchorTop, coreMotion, delay, duration, easing, endScale, opacity, peakOpacity, scale]);
 
   const bloomStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,

@@ -1,18 +1,19 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useRef, useState } from "react";
 
-/** Increments on each tab revisit — first open plays once (no double-fire). */
+/**
+ * Stable entrance key — animates once per screen mount only.
+ * Refocus replay caused opacity flash ("phasing") on every tab return in release APKs.
+ */
 export function useScreenEntrance() {
-  const [tick, setTick] = useState(1);
+  const [tick] = useState(1);
   const skipFirstFocus = useRef(true);
 
   useFocusEffect(
     useCallback(() => {
       if (skipFirstFocus.current) {
         skipFirstFocus.current = false;
-        return;
       }
-      setTick((value) => value + 1);
     }, [])
   );
 

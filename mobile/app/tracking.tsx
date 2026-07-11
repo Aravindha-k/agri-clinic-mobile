@@ -381,7 +381,7 @@ function TrackingWorkspaceScreenInner() {
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: "transparent",
+    backgroundColor: Colors.bg,
     flex: 1
   },
   pendingHint: {

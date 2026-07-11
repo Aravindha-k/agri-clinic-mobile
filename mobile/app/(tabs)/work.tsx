@@ -61,7 +61,7 @@ export default function WorkTabScreen({ route }: Props) {
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: "transparent",
+    backgroundColor: Colors.bg,
     flex: 1
   },
   panel: {

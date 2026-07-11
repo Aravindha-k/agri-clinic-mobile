@@ -485,7 +485,7 @@ export default function ProfileTabScreen() {
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: "transparent",
+    backgroundColor: Colors.bg,
     flex: 1
   },
   scrollView: {

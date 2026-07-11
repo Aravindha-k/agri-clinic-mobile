@@ -59,3 +59,49 @@ export function navigateOfflineSync(): boolean {
 export function navigateMyLocation(): boolean {
   return navigateRoot("MyLocation");
 }
+
+/** Dismiss modals and land on a main tab in one transition (avoids double fade/phasing). */
+export function resetToMainTab(
+  screen: "Today" | "Work" | "Day" | "Me" = "Today",
+  params?: Record<string, unknown>
+): boolean {
+  if (!rootNavigationRef.isReady()) {
+    console.warn("[nav] root not ready: resetToMainTab");
+    return false;
+  }
+  try {
+    rootNavigationRef.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: "Main", params: { screen, params } }]
+      })
+    );
+    return true;
+  } catch (err) {
+    console.warn("[nav] resetToMainTab failed", err instanceof Error ? err.message : err);
+    return false;
+  }
+}
+
+export function resetToVisitDetail(id: number, fromSubmit?: boolean): boolean {
+  if (!rootNavigationRef.isReady()) return false;
+  try {
+    rootNavigationRef.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [
+          {
+            name: "Main",
+            params: {
+              screen: "Work",
+              params: { screen: "VisitDetail", params: { id, fromSubmit } }
+            }
+          }
+        ]
+      })
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}

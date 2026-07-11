@@ -119,23 +119,31 @@ export function VisitFabTabButton({
 
   const handlePress = useCallback(() => {
     void (async () => {
-      const allowed = await requestGpsForFieldWork();
-      if (!allowed) return;
-      if (isActive) {
-        openNewVisit();
-        return;
+      try {
+        const allowed = await requestGpsForFieldWork();
+        if (!allowed) return;
+        if (isActive) {
+          openNewVisit();
+          return;
+        }
+        workdaySheetRef.current?.open();
+      } catch {
+        /* GPS / navigation errors stay in-app */
       }
-      workdaySheetRef.current?.open();
     })();
   }, [isActive, openNewVisit]);
 
   const handleStartWorkdayFromSheet = useCallback(async () => {
-    const allowed = await requestGpsForFieldWork();
-    if (!allowed) return;
-    const started = await startDay();
-    if (!started) return;
-    workdaySheetRef.current?.close();
-    openNewVisit();
+    try {
+      const allowed = await requestGpsForFieldWork();
+      if (!allowed) return;
+      const started = await startDay();
+      if (!started) return;
+      workdaySheetRef.current?.close();
+      openNewVisit();
+    } catch {
+      /* keep sheet open for retry */
+    }
   }, [openNewVisit, startDay]);
 
   const label = t("tabs.visitShort");

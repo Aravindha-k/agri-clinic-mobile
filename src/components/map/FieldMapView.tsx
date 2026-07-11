@@ -6,7 +6,7 @@ import MapView, { Circle, Polyline } from "react-native-maps";
 import { useTheme } from "../../theme";
 import { FIELD_MAP_TYPE } from "../../types/mapType";
 import type { MapRegion } from "../../types/map";
-import { hasValidMapCoords, parseMapCoord } from "../../utils/mapCoords";
+import { hasValidMapCoords, parseMapCoord, filterMapCoordinates } from "../../utils/mapCoords";
 import { logMapDiagnostics } from "../../utils/mapDebug";
 import { sanitizeRegion } from "../../utils/mapRegion";
 import { FieldMapMarker } from "./FieldMapMarker";
@@ -114,14 +114,14 @@ export function FieldMapView({
 
   const safeRoute = useMemo(
     () =>
-      route
-        .map((p) => {
+      filterMapCoordinates(
+        route.map((p) => {
           const lat = parseMapCoord(p.latitude);
           const lng = parseMapCoord(p.longitude);
-          if (lat == null || lng == null || !hasValidMapCoords(lat, lng)) return null;
+          if (lat == null || lng == null) return null;
           return { latitude: lat, longitude: lng };
         })
-        .filter(Boolean) as MapCoordinate[],
+      ),
     [route]
   );
 

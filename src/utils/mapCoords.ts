@@ -30,3 +30,18 @@ export function toMapCoordinate(
   if (!hasValidMapCoords(latitude, longitude)) return null;
   return { latitude, longitude };
 }
+
+/** Drop malformed coordinates before native map / polyline render. */
+export function filterMapCoordinates(
+  points: Array<{ latitude: number; longitude: number } | null | undefined>
+): Array<{ latitude: number; longitude: number }> {
+  const out: Array<{ latitude: number; longitude: number }> = [];
+  for (const point of points) {
+    if (!point) continue;
+    const { latitude, longitude } = point;
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
+    if (!hasValidMapCoords(latitude, longitude)) continue;
+    out.push({ latitude, longitude });
+  }
+  return out;
+}

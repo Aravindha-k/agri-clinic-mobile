@@ -1,4 +1,4 @@
-import { Alert, Linking } from "react-native";
+import { Alert } from "react-native";
 import { ensureForegroundPermission } from "./location";
 import { isGpsAvailable, probeGpsAvailability } from "./gpsStatus";
 
@@ -15,10 +15,11 @@ export function showLocationRequiredModal(onEnable?: () => void) {
       text: ENABLE,
       onPress: () => {
         if (onEnable) {
-          onEnable();
+          void onEnable();
           return;
         }
-        void Linking.openSettings().catch(() => undefined);
+        // Re-request in-app permission — never auto-open Android Settings.
+        void ensureForegroundPermission().catch(() => undefined);
       }
     }
   ]);
@@ -29,26 +30,30 @@ const GPS_OFF_MESSAGE =
 
 /** Foreground GPS only — never re-prompts for background permission on visits. */
 export async function requestGpsForFieldWork(): Promise<boolean> {
-  const availability = await probeGpsAvailability();
-  if (isGpsAvailable(availability)) {
-    return true;
-  }
+  try {
+    const availability = await probeGpsAvailability();
+    if (isGpsAvailable(availability)) {
+      return true;
+    }
 
-  if (availability === "services_off") {
-    Alert.alert(TITLE, GPS_OFF_MESSAGE);
+    if (availability === "services_off") {
+      Alert.alert(TITLE, GPS_OFF_MESSAGE);
+      return false;
+    }
+
+    const permission = await ensureForegroundPermission();
+    if (permission.granted) {
+      return true;
+    }
+
+    if (permission.message?.includes("GPS is turned off")) {
+      Alert.alert(TITLE, GPS_OFF_MESSAGE);
+      return false;
+    }
+
+    showLocationRequiredModal();
+    return false;
+  } catch {
     return false;
   }
-
-  const permission = await ensureForegroundPermission();
-  if (permission.granted) {
-    return true;
-  }
-
-  if (permission.message?.includes("GPS is turned off")) {
-    Alert.alert(TITLE, GPS_OFF_MESSAGE);
-    return false;
-  }
-
-  showLocationRequiredModal();
-  return false;
 }

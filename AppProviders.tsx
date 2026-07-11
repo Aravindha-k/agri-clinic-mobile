@@ -102,6 +102,7 @@ export default function AppProviders({ onShellReady }: Props) {
 
   useEffect(() => {
     logStartup("fonts_loading");
+    // Shell is mounted only after cinematic splash — do not hide native splash here.
     onShellReady?.();
     const timer = setTimeout(() => {
       if (!fontsLoaded) logStartup("fonts_timeout");

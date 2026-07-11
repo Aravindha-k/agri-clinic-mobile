@@ -185,6 +185,7 @@ function AppRoutes() {
   }, [forceLogin, isAuthenticated]);
 
   if (!isReady) {
+    // Match splash exit wash — no spinner (cinematic owns startup loading).
     return <View style={{ flex: 1, backgroundColor: Colors.bg }} />;
   }
 

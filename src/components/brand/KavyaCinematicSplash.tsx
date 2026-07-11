@@ -13,6 +13,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { SplashGoldenParticles } from "./SplashGoldenParticles";
 import { SPLASH_ASSETS } from "./splashAssets";
+import { CINEMATIC_SPLASH_BG, SPLASH_EXIT_WASH } from "./splashColors";
 import { usePremiumMotion } from "../../hooks/usePremiumMotion";
 import { logStartup } from "../../utils/startupDiagnostics";
 import { qaLogAnimationFallback } from "../../utils/qaLog";
@@ -25,8 +26,6 @@ const BG_HEIGHT = BG_SOURCE?.height ?? 1024;
 const LOGO_ANCHOR_X = 0.5;
 const LOGO_ANCHOR_Y = 0.75;
 const LOGO_WIDTH_RATIO = 0.34;
-
-const LOGIN_BG = "#F8F7F2";
 
 function mapCoverAnchorToScreen(
   screenW: number,
@@ -58,16 +57,21 @@ const HOLD_MS = KAVYA_CINEMATIC_SPLASH_MS - FADE_OUT_MS;
 
 type Props = {
   onFinish: () => void;
+  /** Called once after the splash root has completed its first layout (hide native splash here). */
   onReady?: () => void;
+  /** Called when the exit fade begins so the app shell can mount underneath. */
+  onExitStart?: () => void;
 };
 
 /**
  * Premium splash — Ken Burns background, sunburst bloom, logo rise, golden particles.
+ * Root background matches native splash so handoff has no flash.
  */
-export function KavyaCinematicSplash({ onFinish, onReady }: Props) {
+export function KavyaCinematicSplash({ onFinish, onReady, onExitStart }: Props) {
   const { reduced, enabled } = usePremiumMotion();
   const { width: screenW, height: screenH } = useWindowDimensions();
-  const mountedRef = useRef(false);
+  const readyNotifiedRef = useRef(false);
+  const exitStartedRef = useRef(false);
   const finishedRef = useRef(false);
   const [bgFailed, setBgFailed] = useState(false);
 
@@ -110,19 +114,29 @@ export function KavyaCinematicSplash({ onFinish, onReady }: Props) {
     [anchor.x, anchor.y, bloomSize]
   );
 
+  const notifyReady = () => {
+    if (readyNotifiedRef.current) return;
+    readyNotifiedRef.current = true;
+    logStartup("cinematic_ready");
+    onReady?.();
+  };
+
+  const beginExit = () => {
+    if (exitStartedRef.current) return;
+    exitStartedRef.current = true;
+    onExitStart?.();
+  };
+
   const finishSplash = () => {
     if (finishedRef.current) return;
     finishedRef.current = true;
-    console.warn("[KavyaCinematicSplash] finished");
+    logStartup("cinematic_finished");
     onFinish();
   };
 
   useEffect(() => {
-    if (mountedRef.current) return;
-    mountedRef.current = true;
-    console.warn("[KavyaCinematicSplash] mounted");
-    onReady?.();
-  }, [onReady]);
+    logStartup("cinematic_mounted");
+  }, []);
 
   useEffect(() => {
     const easeInOut = Easing.inOut(Easing.cubic);
@@ -133,7 +147,10 @@ export function KavyaCinematicSplash({ onFinish, onReady }: Props) {
       logoOpacity.value = 1;
       logoScale.value = 1;
       logoTranslateY.value = 0;
-      const quick = setTimeout(() => finishSplash(), 900);
+      const quick = setTimeout(() => {
+        beginExit();
+        finishSplash();
+      }, 900);
       return () => clearTimeout(quick);
     }
 
@@ -177,6 +194,7 @@ export function KavyaCinematicSplash({ onFinish, onReady }: Props) {
     );
 
     const fadeTimer = setTimeout(() => {
+      runOnJS(beginExit)();
       exitWash.value = withTiming(1, { duration: FADE_OUT_MS, easing: easeInOut });
       screenOpacity.value = withTiming(0, { duration: FADE_OUT_MS, easing: easeInOut }, (done) => {
         if (done) {
@@ -186,6 +204,7 @@ export function KavyaCinematicSplash({ onFinish, onReady }: Props) {
     }, HOLD_MS);
 
     const forceTimer = setTimeout(() => {
+      runOnJS(beginExit)();
       runOnJS(finishSplash)();
     }, KAVYA_CINEMATIC_SPLASH_MS + 600);
 
@@ -232,7 +251,7 @@ export function KavyaCinematicSplash({ onFinish, onReady }: Props) {
   }));
 
   return (
-    <Animated.View style={[styles.screen, rootStyle]}>
+    <Animated.View style={[styles.screen, rootStyle]} onLayout={notifyReady}>
       <StatusBar style="light" translucent backgroundColor="transparent" />
 
       <View style={[styles.artworkClip, bgFailed && styles.artworkFallback]}>
@@ -306,7 +325,7 @@ export function KavyaCinematicSplash({ onFinish, onReady }: Props) {
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: "#B8DCF5",
+    backgroundColor: CINEMATIC_SPLASH_BG,
     flex: 1
   },
   artworkClip: {
@@ -314,7 +333,7 @@ const styles = StyleSheet.create({
     overflow: "hidden"
   },
   artworkFallback: {
-    backgroundColor: "#B8DCF5"
+    backgroundColor: CINEMATIC_SPLASH_BG
   },
   artworkMotion: {
     ...StyleSheet.absoluteFillObject
@@ -348,6 +367,6 @@ const styles = StyleSheet.create({
   },
   exitWash: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: LOGIN_BG
+    backgroundColor: SPLASH_EXIT_WASH
   }
 });

@@ -7,7 +7,12 @@ import {
 
 export type StartupPhase =
   | "first_render"
+  | "native_splash_hold"
   | "native_splash_hide_attempt"
+  | "native_splash_hidden"
+  | "cinematic_mounted"
+  | "cinematic_ready"
+  | "cinematic_finished"
   | "app_ready"
   | "startup_error"
   | "app_mount"
@@ -95,9 +100,10 @@ export function logStartup(phase: StartupPhase, detail?: string) {
   if (snapshot.phases.length > MAX_PHASE_LOG) {
     snapshot.phases.shift();
   }
-  console.warn(
-    `[Startup] ${phase}${detail ? ` — ${detail}` : ""} | release=${!__DEV__} api=${API_BASE_URL}`
-  );
+  // Successful lifecycle events are informational — not warnings.
+  if (__DEV__) {
+    console.log(`[Startup] ${phase}${detail ? ` — ${detail}` : ""}`);
+  }
 }
 
 export function patchStartupSnapshot(
@@ -123,11 +129,16 @@ export function getStartupSnapshot(): Readonly<StartupSnapshot> {
   return { ...snapshot, phases: [...snapshot.phases] };
 }
 
-/** Release-safe API constants — visible in logcat on APK cold start. */
+/** Release-safe API constants — URLs only in development logs. */
 export function logReleaseStartupConstants() {
-  console.warn("[Startup] release mode:", !__DEV__);
-  console.warn("[Startup] API base URL:", API_BASE_URL);
-  console.warn("[Startup] Login URL:", PRODUCTION_API_ENDPOINTS.login);
-  console.warn("[Startup] Build env EXPO_PUBLIC_API_BASE_URL:", process.env.EXPO_PUBLIC_API_BASE_URL ?? "(unset)");
-  console.warn("[Startup] Build env EXPO_PUBLIC_API_URL:", process.env.EXPO_PUBLIC_API_URL ?? "(unset)");
+  console.log("[Startup] release mode:", !__DEV__);
+  if (__DEV__) {
+    console.log("[Startup] API base URL:", API_BASE_URL);
+    console.log("[Startup] Login URL:", PRODUCTION_API_ENDPOINTS.login);
+    console.log(
+      "[Startup] Build env EXPO_PUBLIC_API_BASE_URL:",
+      process.env.EXPO_PUBLIC_API_BASE_URL ?? "(unset)"
+    );
+    console.log("[Startup] Build env EXPO_PUBLIC_API_URL:", process.env.EXPO_PUBLIC_API_URL ?? "(unset)");
+  }
 }

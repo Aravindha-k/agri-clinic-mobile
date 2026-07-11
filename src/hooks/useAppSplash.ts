@@ -1,21 +1,13 @@
-import { useEffect, useRef } from "react";
 import { hideNativeSplashSafe } from "../bootstrap/nativeSplash";
 
-/** Hide native Expo splash once the app shell is ready to paint. */
-export function useAppSplash(hideWhenReady = false) {
-  const hidden = useRef(false);
-
-  useEffect(() => {
-    if (hideWhenReady || hidden.current) return;
-    hidden.current = true;
-    void hideNativeSplashSafe("useAppSplash_effect");
-  }, [hideWhenReady]);
-
+/**
+ * @deprecated Native splash is hidden from KavyaCinematicSplash first layout only.
+ * Kept for any legacy callers — no longer auto-hides on mount.
+ */
+export function useAppSplash(_hideWhenReady = false) {
   const hideNativeSplash = () => {
-    if (hidden.current) return;
-    hidden.current = true;
-    void hideNativeSplashSafe("app_shell_ready");
+    void hideNativeSplashSafe("useAppSplash_manual");
   };
 
   return { hideNativeSplash };
-};
+}

@@ -9,6 +9,7 @@ import Animated, {
   withTiming
 } from "react-native-reanimated";
 import { VisitFlowParamList } from "../../../src/navigation/types";
+import { navigateMainTab, navigateVisitDetail } from "../../../src/navigation/rootNavigationRef";
 import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useVisitFormStore } from "../../store/visitFormStore";
@@ -82,29 +83,27 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
   }, [queued, refreshQueue]);
 
   function exitToMain() {
-    const root = navigation.getParent();
-    if (root?.canGoBack()) root.goBack();
+    try {
+      const root = navigation.getParent();
+      if (root?.canGoBack()) root.goBack();
+    } catch {
+      /* modal may already be dismissed */
+    }
   }
 
   function goHome() {
-    navigation.getParent()?.navigate("Main", { screen: "Today" });
+    navigateMainTab("Today");
     exitToMain();
   }
 
   function viewVisit() {
     if (!visitId || visitId <= 0) return;
-    navigation.getParent()?.navigate("Main", {
-      screen: "Work",
-      params: { screen: "VisitDetail", params: { id: visitId, fromSubmit: true } }
-    });
+    navigateVisitDetail(visitId, true);
     exitToMain();
   }
 
   function viewPendingVisits() {
-    navigation.getParent()?.navigate("Main", {
-      screen: "Work",
-      params: { screen: "WorkHome", params: { segment: "visits" } }
-    });
+    navigateMainTab("Work", { screen: "WorkHome", params: { segment: "visits" } });
     exitToMain();
   }
 

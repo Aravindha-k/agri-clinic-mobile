@@ -1,4 +1,5 @@
 import type { NavigationProp, ParamListBase } from "@react-navigation/native";
+import { navigateVisitFlow as navigateVisitFlowRoot } from "./rootNavigationRef";
 
 type VisitFlowParams = {
   screen?: string;
@@ -14,10 +15,14 @@ export function navigateToVisitFlow(
   for (let depth = 0; depth < 6 && nav; depth += 1) {
     const routeNames = nav.getState?.().routeNames;
     if (routeNames?.includes("VisitFlow")) {
-      nav.navigate("VisitFlow", params);
-      return true;
+      try {
+        nav.navigate("VisitFlow", params);
+        return true;
+      } catch {
+        break;
+      }
     }
     nav = nav.getParent?.() as NavigationProp<ParamListBase> | undefined;
   }
-  return false;
+  return navigateVisitFlowRoot(params);
 }

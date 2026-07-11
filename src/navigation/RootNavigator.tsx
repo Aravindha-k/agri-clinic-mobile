@@ -1,4 +1,4 @@
-import { NavigationContainer, DefaultTheme, createNavigationContainerRef } from "@react-navigation/native";
+import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -31,6 +31,7 @@ import VisitDetailScreen from "../../mobile/app/visit/[id]";
 import { VisitFlowNavigator } from "./VisitFlowNavigator";
 import { logStartup, patchStartupSnapshot } from "../utils/startupDiagnostics";
 import { registerNavigateHome } from "./navigationRecovery";
+import { rootNavigationRef } from "./rootNavigationRef";
 import { NavigationErrorBoundary } from "../components/NavigationErrorBoundary";
 import { withScreenErrorBoundary } from "../components/withScreenErrorBoundary";
 import {
@@ -52,13 +53,20 @@ const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const WorkStack = createNativeStackNavigator<WorkStackParamList>();
 const MeStack = createNativeStackNavigator<MeStackParamList>();
-const rootNavigationRef = createNavigationContainerRef<RootStackParamList>();
 
 const SafeTodayScreen = withScreenErrorBoundary(HomeTabScreen, "Today");
 const SafeWorkHomeScreen = withScreenErrorBoundary(WorkTabScreen, "Work");
 const SafeProfileScreen = withScreenErrorBoundary(ProfileTabScreen, "Profile");
+const SafeDayScreen = withScreenErrorBoundary(TrackingWorkspaceScreen, "Day");
 const SafeVisitDetailScreen = withScreenErrorBoundary(VisitDetailScreen, "VisitDetail");
 const SafeVisitFlowNavigator = withScreenErrorBoundary(VisitFlowNavigator, "VisitFlow");
+const SafeFarmerDetailScreen = withScreenErrorBoundary(FarmerProfileScreen, "FarmerDetail");
+const SafeFarmerMapScreen = withScreenErrorBoundary(FarmerMapScreen, "FarmerMap");
+const SafeMyLocationScreen = withScreenErrorBoundary(MyLocationScreen, "MyLocation");
+const SafeNotificationsScreen = withScreenErrorBoundary(NotificationsScreen, "Notifications");
+const SafeDiagnosticsScreen = withScreenErrorBoundary(DiagnosticsScreen, "Diagnostics");
+const SafeOfflineSyncScreen = withScreenErrorBoundary(OfflineSyncScreen, "OfflineSync");
+const SafeSyncStatusScreen = withScreenErrorBoundary(SyncStatusScreen, "SyncStatus");
 
 function AuthNavigator() {
   return (
@@ -79,8 +87,8 @@ function WorkNavigator() {
       }}
     >
       <WorkStack.Screen name="WorkHome" component={SafeWorkHomeScreen} />
-      <WorkStack.Screen name="FarmerDetail" component={FarmerProfileScreen} />
-      <WorkStack.Screen name="FarmerMap" component={FarmerMapScreen} />
+      <WorkStack.Screen name="FarmerDetail" component={SafeFarmerDetailScreen} />
+      <WorkStack.Screen name="FarmerMap" component={SafeFarmerMapScreen} />
       <WorkStack.Screen name="VisitDetail" component={SafeVisitDetailScreen} />
     </WorkStack.Navigator>
   );
@@ -98,7 +106,7 @@ function MeNavigator() {
     >
       <MeStack.Screen name="ProfileMain" component={SafeProfileScreen} />
       <MeStack.Screen name="ProblemsCatalog" component={ProblemsCatalogScreen} />
-      <MeStack.Screen name="Diagnostics" component={DiagnosticsScreen} />
+      <MeStack.Screen name="Diagnostics" component={SafeDiagnosticsScreen} />
       <MeStack.Screen name="Settings" component={SettingsScreen} />
       <MeStack.Screen name="Help" component={HelpScreen} />
     </MeStack.Navigator>
@@ -148,7 +156,7 @@ function MainTabs() {
       />
       <Tab.Screen
         name="Day"
-        component={TrackingWorkspaceScreen}
+        component={SafeDayScreen}
         options={{ tabBarLabel: t("tabs.day") }}
       />
       <Tab.Screen
@@ -217,23 +225,23 @@ function AppRoutes() {
           component={SafeVisitFlowNavigator}
           options={stackScreenOptionsModal}
         />
-        <RootStack.Screen name="MyLocation" component={MyLocationScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
-        <RootStack.Screen name="LiveMap" component={MyLocationScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
-        <RootStack.Screen name="TravelHistory" component={MyLocationScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
-        <RootStack.Screen name="FarmerMap" component={FarmerMapScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
+        <RootStack.Screen name="MyLocation" component={SafeMyLocationScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
+        <RootStack.Screen name="LiveMap" component={SafeMyLocationScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
+        <RootStack.Screen name="TravelHistory" component={SafeMyLocationScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
+        <RootStack.Screen name="FarmerMap" component={SafeFarmerMapScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
         <RootStack.Screen
           name="SyncStatus"
-          component={SyncStatusScreen}
+          component={SafeSyncStatusScreen}
           options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }}
         />
         <RootStack.Screen
           name="OfflineSync"
-          component={OfflineSyncScreen}
+          component={SafeOfflineSyncScreen}
           options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }}
         />
         <RootStack.Screen
           name="Notifications"
-          component={NotificationsScreen}
+          component={SafeNotificationsScreen}
           options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }}
         />
       </RootStack.Navigator>

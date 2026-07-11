@@ -21,6 +21,7 @@ import { useI18n } from "../../src/i18n/I18nContext";
 import { useOfflineSync } from "../../src/storage/OfflineSyncContext";
 import { useTracking } from "../../src/storage/TrackingContext";
 import { ensureLocationForWorkdayStart } from "../../src/utils/workdayLocationGate";
+import { navigateMyLocation } from "../../src/navigation/rootNavigationRef";
 import { workdayStartGateCopy } from "../../src/utils/workdayStartCopy";
 import { autoFlushPendingGps } from "../lib/sync/offlineSyncManager";
 import { readPendingVisits } from "../lib/pendingVisitsQueue";
@@ -74,7 +75,6 @@ export default function TrackingWorkspaceScreen() {
 function TrackingWorkspaceScreenInner() {
   const { t } = useI18n();
   const navigation = useNavigation<any>();
-  const rootNav = navigation.getParent();
   const { pendingCount } = useOfflineSync();
   const tabInset = useTabBarBottomInset();
   const refreshControlProps = useRefreshControlProps();
@@ -307,7 +307,7 @@ function TrackingWorkspaceScreenInner() {
             showVisitActions={false}
             onStart={() => void handleStartWorkday()}
             onRetryStart={() => void handleStartWorkday()}
-            onMyRoute={() => rootNav?.navigate("MyLocation")}
+            onMyRoute={() => navigateMyLocation()}
           />
         </FadeInSection>
 
@@ -353,7 +353,7 @@ function TrackingWorkspaceScreenInner() {
           distanceValue={`${formatDistanceKm(distanceKm)} km`}
           workdayId={resolvedWorkdayId}
           refreshToken={lastSyncTime}
-          onPress={() => rootNav?.navigate("MyLocation")}
+          onPress={() => navigateMyLocation()}
         />
         </FadeInSection>
 

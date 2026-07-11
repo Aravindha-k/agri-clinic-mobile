@@ -12,10 +12,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRefreshControlProps } from "../../src/hooks/useRefreshControlProps";
-import { useSecureScreen } from "../../src/hooks/useSecureScreen";
 import { useI18n } from "../../src/i18n/I18nContext";
 import { formatRelativeTimeLocalized, type AppLanguage } from "../../src/i18n";
 import { requestGpsForFieldWork } from "../../src/utils/locationRequiredModal";
+import {
+  navigateOfflineSync,
+  navigateVisitDetail,
+  navigateVisitFlow
+} from "../../src/navigation/rootNavigationRef";
 import { EmptyState, FilterChipRow, PressableCard } from "../components/ui";
 import { FlatCard, ScreenCanvas, StackScreenHeader } from "../components/layout";
 import { InlineSeedLoader } from "../components/layout/InlineSeedLoader";
@@ -85,9 +89,7 @@ function NotificationRow({
 }
 
 export default function NotificationsScreen() {
-  useSecureScreen();
   const navigation = useNavigation<any>();
-  const rootNav = navigation.getParent();
   const { t, language } = useI18n();
   const topEdges = useScreenTopEdges();
   const refreshControlProps = useRefreshControlProps();
@@ -195,47 +197,48 @@ export default function NotificationsScreen() {
   }
 
   async function handleRowPress(item: AppNotification) {
-    if (!item.is_read) {
-      setItems((prev) => {
-        const next = prev.map((row) => (row.id === item.id ? { ...row, is_read: true } : row));
-        setUnreadNotifCount(Math.max(0, useSyncStore.getState().unreadNotifCount - 1));
-        return next;
-      });
-      void markNotificationRead(item.id).catch(() => undefined);
-    }
-
-    switch (item.notification_type) {
-      case "visit": {
-        if (item.reference_id) {
-          rootNav?.navigate("Main", {
-            screen: "Work",
-            params: { screen: "VisitDetail", params: { id: item.reference_id } }
-          });
-        }
-        break;
-      }
-      case "follow_up": {
-        const allowed = await requestGpsForFieldWork();
-        if (!allowed) break;
-        rootNav?.navigate("VisitFlow", {
-          screen: "NewVisitFarmer",
-          params: {
-            prefill: {
-              farmer_id: item.farmer_id != null ? String(item.farmer_id) : undefined,
-              farmer_name: item.farmer_name ?? undefined,
-              crop_name: item.crop_name ?? undefined
-            },
-            fastRevisit: true
-          }
+    try {
+      if (!item.is_read) {
+        setItems((prev) => {
+          const next = prev.map((row) => (row.id === item.id ? { ...row, is_read: true } : row));
+          setUnreadNotifCount(Math.max(0, useSyncStore.getState().unreadNotifCount - 1));
+          return next;
         });
-        break;
+        void markNotificationRead(item.id).catch(() => undefined);
       }
-      case "sync_fail": {
-        rootNav?.navigate("OfflineSync");
-        break;
+
+      switch (item.notification_type) {
+        case "visit": {
+          if (item.reference_id) {
+            navigateVisitDetail(item.reference_id);
+          }
+          break;
+        }
+        case "follow_up": {
+          const allowed = await requestGpsForFieldWork();
+          if (!allowed) break;
+          navigateVisitFlow({
+            screen: "NewVisitFarmer",
+            params: {
+              prefill: {
+                farmer_id: item.farmer_id != null ? String(item.farmer_id) : undefined,
+                farmer_name: item.farmer_name ?? undefined,
+                crop_name: item.crop_name ?? undefined
+              },
+              fastRevisit: true
+            }
+          });
+          break;
+        }
+        case "sync_fail": {
+          navigateOfflineSync();
+          break;
+        }
+        default:
+          break;
       }
-      default:
-        break;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("notifications.loadError"));
     }
   }
 

@@ -202,9 +202,10 @@ export function buildFarmerDirectoryRows(
     (a, b) => collator.compare(a.name || "", b.name || "") || a.id - b.id
   );
 
-  const followUps = sorted.filter((farmer) => isFollowUpDue(farmer, ref));
-  const followUpIds = new Set(followUps.map((farmer) => farmer.id));
-  const directoryFarmers = sorted.filter((farmer) => !followUpIds.has(farmer.id));
+  // Phase 1: hide follow-up section (FOLLOW_UP_DECISION.md). Keep sorting by name only.
+  const followUps: MobileFarmer[] = [];
+  const followUpIds = new Set<number>();
+  const directoryFarmers = sorted;
 
   const rows: FarmerWorkQueueRow[] = [];
 

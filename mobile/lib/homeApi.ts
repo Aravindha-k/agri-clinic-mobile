@@ -128,8 +128,9 @@ function mergeDashboard(api: DashboardData, fromVisits: DashboardData | null): D
   return {
     visits_today: Math.max(api.visits_today, fromVisits.visits_today),
     farmers_covered: Math.max(api.farmers_covered, fromVisits.farmers_covered),
-    follow_ups_due: api.follow_ups_due || fromVisits.follow_ups_due,
-    follow_ups: api.follow_ups.length > 0 ? api.follow_ups : fromVisits.follow_ups,
+    // Phase 1: follow-ups stripped — see FOLLOW_UP_DECISION.md
+    follow_ups_due: 0,
+    follow_ups: [],
     recent_visits: recent
   };
 }

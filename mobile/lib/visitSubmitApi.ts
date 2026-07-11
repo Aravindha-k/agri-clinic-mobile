@@ -78,7 +78,7 @@ export function buildVisitFormValuesFromStore(
     problem_description: problemText,
     pest_issue: state.pestIssue,
     disease_issue: state.diseaseIssue,
-    follow_up_required: false,
+    // Follow-up capture deferred to v1.1 — do not send a silent false that implies UI support.
     recommendation: advice || undefined,
     action_taken: advice || undefined,
     fertilizer_advice: state.fertilizerAdvice.trim() || undefined,

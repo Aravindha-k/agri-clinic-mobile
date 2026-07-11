@@ -21,7 +21,8 @@ type Props = {
 function planProgress(dashboard: DashboardData | null) {
   if (!dashboard) return { ratio: 0, completed: 0, pending: 0 };
   const completed = dashboard.visits_today;
-  const pending = dashboard.follow_ups_due;
+  // Follow-up workflow deferred (FOLLOW_UP_DECISION.md) — ring reflects visits only.
+  const pending = 0;
   const total = completed + pending;
   const ratio = total > 0 ? completed / total : completed > 0 ? 1 : 0;
   return { ratio, completed, pending };

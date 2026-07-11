@@ -1,7 +1,7 @@
 /**
  * Agri Clinic mobile design tokens — enterprise field workforce system.
  */
-import { Platform, StyleSheet, type ViewStyle } from "react-native";
+import { Platform, StyleSheet, type TextStyle, type ViewStyle } from "react-native";
 import { BRAND_COLORS } from "../../src/config/brand";
 
 export const Colors = {
@@ -51,7 +51,35 @@ export const Colors = {
   photoOverlay: "rgba(0, 0, 0, 0.55)",
   scrim: "rgba(17, 24, 39, 0.92)",
   placeholder: "#9CA3AF",
-  inputFill: "#F3F4F6"
+  inputFill: "#F3F4F6",
+  disabled: "#9CA3AF",
+  disabledBg: "#F3F4F6"
+} as const;
+
+/**
+ * Semantic color aliases — prefer these in new UI.
+ * Values point at the same palette (no random hex).
+ */
+export const Semantic = {
+  primary: Colors.brand700,
+  secondary: Colors.brand500,
+  background: Colors.bg,
+  surface: Colors.surface,
+  border: Colors.border,
+  success: Colors.green,
+  successBg: Colors.greenBg,
+  warning: Colors.amber,
+  warningBg: Colors.amberBg,
+  error: Colors.red,
+  errorBg: Colors.redBg,
+  info: Colors.blue,
+  infoBg: Colors.blueBg,
+  disabled: Colors.disabled,
+  disabledBg: Colors.disabledBg,
+  textPrimary: Colors.text1,
+  textSecondary: Colors.text2,
+  textMuted: Colors.text3,
+  textDisabled: Colors.text4
 } as const;
 
 export type ColorToken = keyof typeof Colors;
@@ -97,12 +125,17 @@ export const Radius = {
   sheet: Enterprise.radius.sheet,
   chip: 8,
   pill: 50,
+  /** Named aliases for enterprise guidelines */
+  small: 8,
+  medium: 12,
+  large: 16,
+  xl: 18,
+  xxl: 20,
+  full: 999,
   xs: 6,
   sm: 8,
   md: 12,
   lg: 16,
-  xl: 18,
-  xxl: 20,
   avatarSm: 12,
   avatarLg: 16
 } as const;
@@ -125,18 +158,22 @@ export const Spacing = {
 export const FontSize = {
   caption: 13,
   body: 16,
+  bodyLarge: 17,
   md: 16,
   lg: 16,
   section: 18,
   subtitle: 18,
-  h2: 18,
+  h4: 16,
+  h3: 18,
+  h2: 20,
   title: 22,
-  h1: 22,
+  h1: 24,
   heading: 26,
   display: 32,
   hero: 32,
   stat: 28,
   label: 12,
+  small: 14,
   /** Legacy — avoid for new UI */
   xs: 13,
   sm: 13,
@@ -150,6 +187,79 @@ export const FontWeight = {
   semibold: "600" as const,
   bold: "700" as const
 };
+
+/** Reusable text styles — prefer these over ad-hoc fontSize/fontWeight. */
+export const TextStyles = {
+  display: {
+    color: Colors.text1,
+    fontSize: FontSize.display,
+    fontWeight: FontWeight.bold,
+    letterSpacing: -0.4
+  } satisfies TextStyle,
+  h1: {
+    color: Colors.text1,
+    fontSize: FontSize.h1,
+    fontWeight: FontWeight.bold,
+    letterSpacing: -0.2
+  } satisfies TextStyle,
+  h2: {
+    color: Colors.text1,
+    fontSize: FontSize.h2,
+    fontWeight: FontWeight.semibold
+  } satisfies TextStyle,
+  h3: {
+    color: Colors.text1,
+    fontSize: FontSize.h3,
+    fontWeight: FontWeight.semibold
+  } satisfies TextStyle,
+  h4: {
+    color: Colors.text1,
+    fontSize: FontSize.h4,
+    fontWeight: FontWeight.semibold
+  } satisfies TextStyle,
+  bodyLarge: {
+    color: Colors.text1,
+    fontSize: FontSize.bodyLarge,
+    fontWeight: FontWeight.regular,
+    lineHeight: 24
+  } satisfies TextStyle,
+  body: {
+    color: Colors.text1,
+    fontSize: FontSize.body,
+    fontWeight: FontWeight.regular,
+    lineHeight: 22
+  } satisfies TextStyle,
+  small: {
+    color: Colors.text2,
+    fontSize: FontSize.small,
+    fontWeight: FontWeight.regular,
+    lineHeight: 20
+  } satisfies TextStyle,
+  caption: {
+    color: Colors.text3,
+    fontSize: FontSize.caption,
+    fontWeight: FontWeight.medium
+  } satisfies TextStyle,
+  label: {
+    color: Colors.text2,
+    fontSize: FontSize.label,
+    fontWeight: FontWeight.semibold,
+    letterSpacing: 0.2,
+    textTransform: "uppercase"
+  } satisfies TextStyle,
+  button: {
+    color: Colors.onPrimary,
+    fontSize: FontSize.body,
+    fontWeight: FontWeight.semibold
+  } satisfies TextStyle
+} as const;
+
+export const IconSize = {
+  sm: 16,
+  md: 20,
+  lg: 24,
+  xl: 28
+} as const;
 
 /** Very soft elevation — enterprise cards only. */
 export const Shadow = {
@@ -180,7 +290,43 @@ export const Shadow = {
       shadowRadius: 20
     },
     default: { elevation: 6 }
+  }),
+  sheet: Platform.select<ViewStyle>({
+    ios: {
+      shadowColor: "#0F172A",
+      shadowOffset: { width: 0, height: -4 },
+      shadowOpacity: 0.12,
+      shadowRadius: 16
+    },
+    default: { elevation: 8 }
+  }),
+  dialog: Platform.select<ViewStyle>({
+    ios: {
+      shadowColor: "#0F172A",
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 0.18,
+      shadowRadius: 24
+    },
+    default: { elevation: 12 }
+  }),
+  fab: Platform.select<ViewStyle>({
+    ios: {
+      shadowColor: "#062818",
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.2,
+      shadowRadius: 12
+    },
+    default: { elevation: 8 }
   })
+} as const;
+
+/** Elevation aliases matching enterprise guidelines. */
+export const Elevation = {
+  card: Shadow.card,
+  floating: Shadow.float,
+  bottomSheet: Shadow.sheet,
+  dialog: Shadow.dialog,
+  fab: Shadow.fab
 } as const;
 
 /** Layout constants from design system */
@@ -194,8 +340,17 @@ export const Layout = {
   /** Extra scroll padding below tab bar inset */
   scrollBottomExtra: Spacing.xl,
   /** Bottom padding on stack screens (gesture nav clearance) */
-  stackScrollBottom: Spacing.xxxl
+  stackScrollBottom: Spacing.xxxl,
+  iconHitSlop: 12
 } as const;
+
+/** Minimum 48dp touch target — apply to icon-only controls. */
+export const minTouchStyle: ViewStyle = {
+  minWidth: Layout.touchTargetMin,
+  minHeight: Layout.touchTargetMin,
+  alignItems: "center",
+  justifyContent: "center"
+};
 
 const AVATAR_GREEN: [string, string] = [BRAND_COLORS.primarySoft, BRAND_COLORS.secondary];
 

@@ -485,7 +485,7 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     color: Colors.text1,
-    fontSize: FontSize.hero,
+    fontSize: FontSize.h1,
     fontWeight: FontWeight.bold,
     letterSpacing: -0.3
   },
@@ -652,9 +652,12 @@ const styles = StyleSheet.create({
     gap: 6
   },
   langPill: {
+    alignItems: "center",
     borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4
+    justifyContent: "center",
+    minHeight: 48,
+    paddingHorizontal: 12,
+    paddingVertical: 8
   },
   langPillActive: {
     backgroundColor: PROFILE_DS.accent

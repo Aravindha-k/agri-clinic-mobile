@@ -43,7 +43,7 @@ Classification key:
 | **Farmer details** | `GET mobile/farmers/{id}/` | **RO** if farmer in cache; else **RN** | N/A | Fetch and cache |
 | **Create farmer** | `POST mobile/farmers/` | **RN** — not queued today | N/A | N/A |
 | **Edit farmer** | `PATCH mobile/farmers/{id}/` | **RN** | N/A | N/A |
-| **Create visit** | Direct `POST mobile/visits/` | **SL** — `enqueuePendingVisit` → `pending_visits_v1` | **BLK** at submit — visit requires GPS fix (`visitValidation.ts`) | Auto `syncAll()` |
+| **Create visit** | Direct `POST mobile/visits/` | **SL** — `enqueuePendingVisit` → `pending_visits_v1` | **BLK** at submit — visit requires GPS fix (`visitValidation.ts`) | Auto `runAutomaticSync()` — no manual Sync for field officers |
 | **Add visit photos** | Upload with visit or evidence queue | **SL** — URIs in `__pending_attachments` (fragile until P0 durable copy) | Same as offline if visit creatable | Retry via `flushVisitQueue` / `pendingEvidenceQueue` |
 | **Submit visit** | Online POST | **SL** — queued with `local_sync_id` | **BLK** without GPS fix at submit | Idempotent sync via `local_sync_id` |
 | **GPS tracking** | Live `POST tracking/location/update/` | **SL** after online duty start — `pending_gps_v1` | Points not recorded; workday stays active; warn user | `flushOfflineLocationQueue()` |

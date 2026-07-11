@@ -188,6 +188,8 @@ Automatic sync **does exist** for visits + GPS + evidence when NetInfo reports o
 | GPS queue | `src/storage/locationPushQueue.ts`, `mobile/lib/gps/trackingService.ts` |
 | Workday start | `mobile/lib/workday.ts`, `src/storage/TrackingContext.tsx` |
 | Offline UI context | `src/storage/OfflineSyncContext.tsx` |
-| Init | `AppProviders.tsx` → `initOfflineSync()` |
+| Init | `AppProviders.tsx` → `initOfflineSync()` + `AutomaticSyncProvider` |
+| Automatic coordinator | `mobile/lib/sync/automaticSyncCoordinator.ts` |
+| Background worker | `expo-background-task` → `registerBackgroundFieldSyncTask.ts` |
 | Backend visits | `d:\agri_clinic\mobile_api\visits.py` |
 | Backend duty GPS | `d:\agri_clinic\tracking\duty_service.py` |

@@ -17,11 +17,11 @@ type Props = {
 
 /** Subtle top glow that washes in when a screen opens — completes the modern entrance. */
 export function ScreenEntranceWash({ replayKey }: Props) {
-  const { reduced } = usePremiumMotion();
-  const wash = useSharedValue(reduced ? 0.4 : 0);
+  const { coreMotion } = usePremiumMotion();
+  const wash = useSharedValue(coreMotion ? 0 : 0.4);
 
   useEffect(() => {
-    if (reduced) {
+    if (!coreMotion) {
       wash.value = 0.4;
       return;
     }
@@ -30,7 +30,7 @@ export function ScreenEntranceWash({ replayKey }: Props) {
       withTiming(1, { duration: 320, easing: Easing.out(Easing.quad) }),
       withTiming(0.42, { duration: 700, easing: Easing.out(Easing.cubic) })
     );
-  }, [reduced, replayKey, wash]);
+  }, [coreMotion, replayKey, wash]);
 
   const style = useAnimatedStyle(() => ({ opacity: wash.value }));
 

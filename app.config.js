@@ -51,7 +51,7 @@ module.exports = () => ({
       NSLocationAlwaysAndWhenInUseUsageDescription:
         "Allow location all the time for route tracking during your workday.",
       NSUserNotificationsUsageDescription:
-        "Send hydration, heat, and low-battery reminders during your field workday."
+        "Send hourly hydration reminders during your field workday."
     }
   },
   android: {
@@ -135,7 +135,7 @@ module.exports = () => ({
     [
       "expo-notifications",
       {
-        sounds: ["./assets/sounds/water_pour.wav", "./assets/sounds/heat.wav"]
+        sounds: ["./assets/sounds/hydration_chime.wav"]
       }
     ]
   ],

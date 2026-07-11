@@ -1,11 +1,9 @@
-import { BlurView } from "expo-blur";
 import { useEffect } from "react";
 import { Image, Platform, StyleSheet, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
   withRepeat,
   withSequence,
   withTiming
@@ -13,246 +11,229 @@ import Animated, {
 import { usePremiumMotion } from "../../../src/hooks/usePremiumMotion";
 import { LOGO_IMAGE } from "../../../src/config/brand";
 import { PremiumShadow } from "../../lib/designSystem";
-import { Colors, Shadow } from "../../lib/theme";
-import { AgriNatureMark, AgriNatureOrbit } from "./AgriNatureMark";
-import { BRAND_LOGO_FILL, BRAND_LOGO_HERO, BrandHeaderSpacing } from "./brandHeaderSpacing";
+import { Shadow } from "../../lib/theme";
+import {
+  AgriNatureMark,
+  AgriNatureOrbit,
+  computeOrbitGap,
+  computeOrbitStageSize
+} from "./AgriNatureMark";
+import {
+  BRAND_LOGO_COVER_SCALE,
+  BRAND_LOGO_FILL,
+  BRAND_LOGO_HERO,
+  BRAND_LOGO_ZOOM_MAX,
+  BRAND_LOGO_ZOOM_MIN,
+  BRAND_LOGO_ZOOM_MS,
+  BRAND_ORBIT_GAP_RATIO,
+  BrandHeaderSpacing
+} from "./brandHeaderSpacing";
 
-const FLOAT_MS = 2600;
-const GLOW_MS = 3200;
-const SHADOW_FLOAT_MS = 3000;
-/** Orbit, glow, and glass activate at this diameter and above. */
+/** Orbit + glass activate at this diameter and above. */
 const LOGO_PREMIUM_MIN = 56;
 
 type Props = {
   size?: number;
   animated?: boolean;
   replayKey?: number | string;
+  showOrbit?: boolean;
+  /** Pin orbit + badge to the left edge of the header column. */
+  alignLeft?: boolean;
 };
 
-/** Glass circular logo with orbit halo and breathing glow. */
+/**
+ * Circular brand logo with service icons orbiting around it.
+ * Logo zooms in/out inside the orbit; the orbit band stays fixed.
+ */
 export function BrandLogoBadge({
   size = BRAND_LOGO_HERO,
   animated = false,
-  replayKey = 0
+  replayKey = 0,
+  showOrbit = true,
+  alignLeft = false
 }: Props) {
-  const { reduced } = usePremiumMotion();
-  const logoSize = Math.round(size * BRAND_LOGO_FILL);
+  const { coreMotion } = usePremiumMotion();
   const isPremium = size >= LOGO_PREMIUM_MIN;
-  const shouldAnimate = animated && isPremium && !reduced;
-  const ringPad = isPremium ? 8 : 3;
+  const logoVisual = Math.round(size * BRAND_LOGO_FILL);
+  const logoSize = logoVisual;
+  const logoCover = Math.round(logoVisual * BRAND_LOGO_COVER_SCALE);
+  const shouldOrbit = showOrbit && isPremium;
+  const shouldZoom = animated && isPremium && coreMotion;
+  const ringPad = isPremium ? 0 : 3;
+  const outer = isPremium ? logoVisual : size + ringPad * 2;
+  const orbitShiftLeft = Math.round(computeOrbitGap(logoVisual));
 
-  const scale = useSharedValue(shouldAnimate ? 0.9 : 1);
-  const translateY = useSharedValue(shouldAnimate ? 6 : 0);
-  const opacity = useSharedValue(shouldAnimate ? 0 : 1);
-  const glow = useSharedValue(0.35);
-  const shadowY = useSharedValue(4);
+  const zoom = useSharedValue(BRAND_LOGO_ZOOM_MIN);
 
   useEffect(() => {
-    if (!shouldAnimate) {
-      scale.value = 1;
-      translateY.value = 0;
-      opacity.value = 1;
-      glow.value = 0.35;
-      shadowY.value = 4;
+    if (!shouldZoom) {
+      zoom.value = 1;
       return;
     }
 
-    scale.value = 0.9;
-    translateY.value = 6;
-    opacity.value = 0;
-    glow.value = 0.35;
-    shadowY.value = 4;
-
-    opacity.value = withTiming(1, { duration: 280, easing: Easing.out(Easing.cubic) });
-    translateY.value = withDelay(
-      200,
-      withRepeat(
-        withSequence(
-          withTiming(-3, { duration: FLOAT_MS, easing: Easing.inOut(Easing.ease) }),
-          withTiming(0, { duration: FLOAT_MS, easing: Easing.inOut(Easing.ease) })
-        ),
-        -1,
-        false
-      )
-    );
-    scale.value = withDelay(
-      200,
-      withRepeat(
-        withSequence(
-          withTiming(1.03, { duration: FLOAT_MS, easing: Easing.inOut(Easing.ease) }),
-          withTiming(1, { duration: FLOAT_MS, easing: Easing.inOut(Easing.ease) })
-        ),
-        -1,
-        false
-      )
-    );
-    glow.value = withRepeat(
+    zoom.value = BRAND_LOGO_ZOOM_MIN;
+    zoom.value = withRepeat(
       withSequence(
-        withTiming(0.55, { duration: GLOW_MS, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0.28, { duration: GLOW_MS, easing: Easing.inOut(Easing.ease) })
+        withTiming(BRAND_LOGO_ZOOM_MAX, {
+          duration: BRAND_LOGO_ZOOM_MS,
+          easing: Easing.inOut(Easing.ease)
+        }),
+        withTiming(BRAND_LOGO_ZOOM_MIN, {
+          duration: BRAND_LOGO_ZOOM_MS,
+          easing: Easing.inOut(Easing.ease)
+        })
       ),
       -1,
       false
     );
-    shadowY.value = withRepeat(
-      withSequence(
-        withTiming(8, { duration: SHADOW_FLOAT_MS, easing: Easing.inOut(Easing.ease) }),
-        withTiming(3, { duration: SHADOW_FLOAT_MS, easing: Easing.inOut(Easing.ease) })
-      ),
-      -1,
-      false
-    );
-  }, [glow, opacity, replayKey, scale, shadowY, shouldAnimate, translateY]);
+  }, [replayKey, shouldZoom, zoom]);
 
-  const motionStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateY: translateY.value }, { scale: scale.value }]
-  }));
-
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: glow.value
-  }));
-
-  const shadowFloatStyle = useAnimatedStyle(() => ({
-    opacity: 0.12 + glow.value * 0.08,
-    transform: [{ translateY: shadowY.value }]
+  const logoZoomStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: zoom.value }]
   }));
 
   const heroShadow = isPremium ? PremiumShadow.hero : Shadow.cardRaised;
-  const outer = size + ringPad * 2;
-  const orbitStageSize = size + Math.round(size * 0.95);
+  const orbitStageSize = computeOrbitStageSize(outer, { gapRatio: BRAND_ORBIT_GAP_RATIO, compact: true });
+  const stagePadH = BrandHeaderSpacing.logoStageHorizontal;
+  const stagePadV = BrandHeaderSpacing.logoStageVertical;
+  const stageWidth = orbitStageSize + (alignLeft ? stagePadH : stagePadH * 2);
+  const stageHeight = orbitStageSize + stagePadV * 2;
 
   const badge = (
-    <View style={[styles.glassShell, { width: outer, height: outer, borderRadius: outer / 2 }, heroShadow]}>
-      {isPremium ? (
-        <Animated.View
-          style={[
-            styles.floatShadow,
-            { width: outer * 0.7, height: outer * 0.12, borderRadius: outer * 0.06 },
-            shadowFloatStyle
-          ]}
-        />
-      ) : null}
-      {isPremium ? (
-        <Animated.View
-          style={[
-            styles.glowHalo,
-            { width: outer + 16, height: outer + 16, borderRadius: (outer + 16) / 2 },
-            glowStyle
-          ]}
-        />
-      ) : null}
-      {isPremium && Platform.OS === "ios" ? (
-        <BlurView intensity={42} tint="light" style={[styles.blur, { borderRadius: outer / 2 }]} />
-      ) : null}
-      {isPremium ? (
+    <View
+      style={[
+        styles.glassShell,
+        { width: outer, height: outer, borderRadius: outer / 2 },
+        heroShadow
+      ]}
+    >
+      {LOGO_IMAGE ? (
         <View
           style={[
-            styles.gearRing,
+            styles.logoClip,
             {
-              width: outer + 10,
-              height: outer + 10,
-              borderRadius: (outer + 10) / 2
+              width: outer,
+              height: outer,
+              borderRadius: outer / 2
             }
           ]}
-        />
-      ) : null}
-      <View
-        style={[
-          styles.badge,
-          isPremium && styles.badgeHero,
-          {
-            width: size,
-            height: size,
-            borderRadius: size / 2,
-            backgroundColor: isPremium ? "rgba(255,255,255,0.94)" : Colors.surface
-          }
-        ]}
-      >
-        {LOGO_IMAGE ? (
+        >
           <Image
             source={LOGO_IMAGE}
-            style={{ width: logoSize, height: logoSize }}
-            resizeMode="contain"
+            style={{ width: logoCover, height: logoCover }}
+            resizeMode="cover"
+            accessibilityLabel="Kavya Agri Clinic"
             accessibilityIgnoresInvertColors
           />
-        ) : (
+        </View>
+      ) : (
+        <View
+          style={[
+            styles.badge,
+            isPremium && styles.badgeHero,
+            {
+              width: size,
+              height: size,
+              borderRadius: size / 2
+            }
+          ]}
+        >
           <AgriNatureMark size={logoSize} variant="hero" />
-        )}
-      </View>
+        </View>
+      )}
     </View>
+  );
+
+  const logoMark = shouldZoom ? (
+    <Animated.View style={[styles.logoZoomWrap, logoZoomStyle]}>{badge}</Animated.View>
+  ) : (
+    badge
   );
 
   const core = (
     <View
       style={[
         styles.stage,
-        isPremium && {
-          minWidth: orbitStageSize,
-          minHeight: orbitStageSize,
-          paddingHorizontal: BrandHeaderSpacing.logoStageHorizontal,
-          paddingVertical: BrandHeaderSpacing.logoStageVertical
+        shouldOrbit && {
+          width: stageWidth,
+          height: stageHeight,
+          alignSelf: alignLeft ? "flex-start" : "center",
+          marginLeft: alignLeft ? -orbitShiftLeft : 0,
+          paddingLeft: alignLeft ? 0 : stagePadH,
+          paddingRight: stagePadH,
+          paddingVertical: stagePadV
         }
       ]}
     >
-      {isPremium ? <AgriNatureOrbit diameter={size} animate={!reduced} showTrack /> : null}
-      <View style={styles.badgeLayer}>{badge}</View>
+      {shouldOrbit ? (
+        <View pointerEvents="none" style={styles.orbitSlot}>
+          <AgriNatureOrbit
+            diameter={outer}
+            animate={animated && coreMotion}
+            showTrack
+            gapRatio={BRAND_ORBIT_GAP_RATIO}
+            compact
+          />
+        </View>
+      ) : null}
+      <View style={styles.badgeLayer}>{logoMark}</View>
     </View>
   );
 
-  return shouldAnimate ? <Animated.View style={motionStyle}>{core}</Animated.View> : core;
+  return core;
 }
 
 const styles = StyleSheet.create({
   stage: {
     alignItems: "center",
     justifyContent: "center",
-    overflow: "visible"
+    overflow: "visible",
+    position: "relative"
+  },
+  orbitSlot: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "visible",
+    zIndex: 1
   },
   badgeLayer: {
     alignItems: "center",
     justifyContent: "center",
     zIndex: 2
   },
+  logoZoomWrap: {
+    alignItems: "center",
+    justifyContent: "center"
+  },
   glassShell: {
     alignItems: "center",
-    borderColor: "rgba(255,255,255,0.85)",
+    backgroundColor: "#E8F3EC",
+    borderColor: "rgba(15, 107, 67, 0.28)",
     borderWidth: 2,
+    justifyContent: "center",
+    overflow: "hidden",
+    position: "relative"
+  },
+  logoClip: {
+    alignItems: "center",
+    backgroundColor: "#E8F3EC",
     justifyContent: "center",
     overflow: "hidden"
   },
-  gearRing: {
-    borderColor: "rgba(255,255,255,0.95)",
-    borderWidth: 3,
-    position: "absolute",
-    zIndex: -1
-  },
-  blur: {
-    ...StyleSheet.absoluteFillObject
-  },
-  glowHalo: {
-    backgroundColor: "rgba(46, 155, 100, 0.32)",
-    position: "absolute",
-    zIndex: -1
-  },
   badge: {
     alignItems: "center",
-    borderColor: "rgba(15, 107, 67, 0.14)",
+    backgroundColor: "#E8F3EC",
+    borderColor: "rgba(15, 107, 67, 0.2)",
     borderWidth: StyleSheet.hairlineWidth,
     justifyContent: "center",
     overflow: "hidden",
     ...Platform.select({
-      android: { elevation: 3 }
+      android: { elevation: 8 }
     })
   },
   badgeHero: {
-    borderColor: "rgba(15, 107, 67, 0.22)",
+    borderColor: "rgba(15, 107, 67, 0.32)",
     borderWidth: 1.5
-  },
-  floatShadow: {
-    backgroundColor: "#0B3D28",
-    bottom: -8,
-    position: "absolute",
-    zIndex: -2
   }
 });

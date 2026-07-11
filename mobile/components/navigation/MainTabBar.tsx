@@ -10,12 +10,11 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FAB_RISE_ABOVE_BAR } from "../../../src/theme/tabBar";
 import { useI18n } from "../../../src/i18n/I18nContext";
-import { Grid, Motion, PremiumShadow } from "../../lib/designSystem";
-import { FieldPalette } from "../../lib/fieldTheme";
+import { Grid, Motion } from "../../lib/designSystem";
 import { LucideGlyph } from "../ui/AppIcon";
 import { Colors, FontSize, FontWeight, Layout, Spacing } from "../../lib/theme";
 
-const TAB_RADIUS = 30;
+const TAB_RADIUS = 28;
 
 const TAB_META: Record<string, { Icon: LucideIcon; labelKey?: string }> = {
   Today: { Icon: Calendar, labelKey: "tabs.today" },
@@ -35,20 +34,27 @@ function TabItem({
   Icon: LucideIcon;
   badge?: string | number;
 }) {
-  const pillStyle = useAnimatedStyle(() => ({
+  const indicatorStyle = useAnimatedStyle(() => ({
     opacity: withTiming(focused ? 1 : 0, { duration: Motion.fast }),
-    transform: [{ scale: withSpring(focused ? 1 : 0.94, Motion.springSoft) }]
+    transform: [{ scale: withSpring(focused ? 1 : 0.85, Motion.springSoft) }]
   }));
 
   const iconStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: withSpring(focused ? 1.04 : 1, Motion.springSnappy) }]
+    transform: [{ scale: withSpring(focused ? 1.05 : 1, Motion.springSnappy) }]
   }));
 
   return (
     <View style={styles.tabItem}>
-      <Animated.View style={[styles.activePill, pillStyle]} />
       <Animated.View style={iconStyle}>
-        <LucideGlyph icon={Icon} size={21} color={focused ? Colors.brand700 : Colors.text3} strokeWidth={focused ? 2.2 : 1.8} />
+        <View style={styles.iconWrap}>
+          <Animated.View style={[styles.activeDot, indicatorStyle]} />
+          <LucideGlyph
+            icon={Icon}
+            size={21}
+            color={focused ? Colors.brand700 : Colors.text3}
+            strokeWidth={focused ? 2.2 : 1.8}
+          />
+        </View>
       </Animated.View>
       <Text style={[styles.tabLabel, focused && styles.tabLabelActive]} numberOfLines={1}>
         {label}
@@ -71,11 +77,15 @@ export default function MainTabBar({ state, descriptors, navigation }: BottomTab
       style={[styles.outer, { paddingBottom: Math.max(insets.bottom, Spacing.sm) }]}
       pointerEvents="box-none"
     >
-      <View style={[styles.barShell, PremiumShadow.float]}>
-        {Platform.OS === "ios" ? (
-          <BlurView intensity={36} tint="light" style={[StyleSheet.absoluteFill, styles.barBlur]} />
-        ) : null}
-        <View style={styles.glassTint} pointerEvents="none" />
+      <View style={styles.barShell} pointerEvents="box-none">
+        {/* Clipped background — overflow:hidden so Android doesn't show a square fill */}
+        <View style={styles.barBackground} pointerEvents="none">
+          {Platform.OS === "ios" ? (
+            <BlurView intensity={28} tint="light" style={StyleSheet.absoluteFill} />
+          ) : null}
+          <View style={styles.glassTint} />
+        </View>
+
         <View style={styles.barRow}>
           {state.routes.map((route, index) => {
             const focused = state.index === index;
@@ -149,34 +159,41 @@ const styles = StyleSheet.create({
     paddingTop: FAB_RISE_ABOVE_BAR + Spacing.xs
   },
   barShell: {
-    borderColor: FieldPalette.glassBorder,
-    borderRadius: TAB_RADIUS,
-    borderWidth: 1,
     minHeight: Layout.tabBarHeight - 4,
     overflow: "visible",
     position: "relative"
   },
-  barBlur: {
-    borderRadius: TAB_RADIUS
+  barBackground: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
+    borderRadius: TAB_RADIUS,
+    borderWidth: StyleSheet.hairlineWidth,
+    elevation: Platform.OS === "android" ? 8 : 0,
+    overflow: "hidden",
+    shadowColor: "#0B3D28",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12
   },
   glassTint: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: Platform.OS === "ios" ? "rgba(255, 252, 247, 0.55)" : "rgba(255, 252, 247, 0.88)",
-    borderRadius: TAB_RADIUS
+    backgroundColor: Platform.OS === "ios" ? "rgba(255, 255, 255, 0.42)" : "rgba(255, 255, 255, 0.92)"
   },
   barRow: {
     alignItems: "flex-end",
     flexDirection: "row",
     justifyContent: "space-between",
     minHeight: Layout.tabBarHeight - 4,
-    paddingHorizontal: Grid.xs
+    paddingHorizontal: Grid.xs,
+    zIndex: 2
   },
   tabSlot: {
     alignItems: "center",
     flex: 1,
     justifyContent: "flex-end",
     minHeight: 50,
-    paddingBottom: 4
+    paddingBottom: 6
   },
   fabSlot: {
     alignItems: "center",
@@ -195,21 +212,25 @@ const styles = StyleSheet.create({
   },
   tabItem: {
     alignItems: "center",
-    gap: 4,
+    gap: 3,
     justifyContent: "flex-end",
     minHeight: 44,
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
     position: "relative",
     width: "100%"
   },
-  activePill: {
-    backgroundColor: "rgba(15, 107, 67, 0.11)",
+  iconWrap: {
+    alignItems: "center",
+    height: 28,
+    justifyContent: "center",
+    width: 28
+  },
+  activeDot: {
+    backgroundColor: "rgba(15, 107, 67, 0.14)",
     borderRadius: 14,
-    bottom: 0,
-    left: 2,
+    height: 28,
     position: "absolute",
-    right: 2,
-    top: 0
+    width: 28
   },
   tabLabel: {
     color: Colors.text3,

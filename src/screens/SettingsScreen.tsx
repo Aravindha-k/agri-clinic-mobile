@@ -21,12 +21,12 @@ export function SettingsScreen() {
     useAppPreferences();
   const { t, language, setLanguage } = useI18n();
 
-  async function testReminderSound(kind: "water" | "heat" | "battery") {
-    if (reminderSoundsEnabled && (kind === "water" || kind === "heat")) {
-      void playFieldReminderSound(kind);
+  async function testReminderSound() {
+    if (reminderSoundsEnabled) {
+      void playFieldReminderSound();
     }
 
-    const result = await scheduleReminderSoundTest(kind, reminderSoundsEnabled, 5);
+    const result = await scheduleReminderSoundTest(reminderSoundsEnabled, 5);
     if (result === "web") {
       Alert.alert(t("settings.reminderTestTitle"), t("settings.reminderTestWeb"));
       return;
@@ -125,12 +125,7 @@ export function SettingsScreen() {
           <View style={styles.divider} />
           <Text style={styles.testHint}>{t("settings.reminderTestHint")}</Text>
           <View style={styles.testRow}>
-            <ReminderTestButton label={t("settings.reminderTestWater")} onPress={() => void testReminderSound("water")} />
-            <ReminderTestButton label={t("settings.reminderTestHeat")} onPress={() => void testReminderSound("heat")} />
-            <ReminderTestButton
-              label={t("settings.reminderTestBattery")}
-              onPress={() => void testReminderSound("battery")}
-            />
+            <ReminderTestButton label={t("settings.reminderTestWater")} onPress={() => void testReminderSound()} />
           </View>
         </FlatCard>
 

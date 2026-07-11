@@ -69,13 +69,11 @@ export default function App() {
   }, [elapsed]);
 
   const handleCinematicExitStart = useCallback(() => {
-    logStartup("cinematic_exit_started", `${elapsed()} ms`);
     logStartup("app_ready", `exit_started ${elapsed()} ms`);
     setPhase("revealing");
   }, [elapsed]);
 
   const handleCinematicFinish = useCallback(() => {
-    logStartup("cinematic_finished", `${elapsed()} ms`);
     logStartup("app_revealed", `${elapsed()} ms`);
     logStartup("splash_end", `${elapsed()} ms`);
     setPhase("app");

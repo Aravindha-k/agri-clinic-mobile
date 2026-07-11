@@ -9,7 +9,7 @@ import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContex
 import { useTracking } from "../../../src/storage/TrackingContext";
 import { getForegroundLocation } from "../../../src/utils/location";
 import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal";
-import { hasValidGps, hasVisitObservationOrAdvice } from "../../../src/visit/visitValidation";
+import { hasValidGps } from "../../../src/visit/visitValidation";
 import { FlatCard } from "../../components/layout/FlatCard";
 import { LocationPreviewMap } from "../../../src/components/map/LocationPreviewMap";
 import { PrimaryButton, StatusChip } from "../../components/ui";
@@ -65,8 +65,7 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
   const selectedProblem = useVisitFormStore((s) => s.selectedProblem);
   const otherProblemDescription = useVisitFormStore((s) => s.otherProblemDescription);
   const gpsCoords = useVisitFormStore((s) => s.gpsCoords);
-  const observation = useVisitFormStore((s) => s.observation);
-  const recommendation = useVisitFormStore((s) => s.recommendation);
+  const fieldNotes = useVisitFormStore((s) => s.fieldNotes);
   const photos = useVisitFormStore((s) => s.photos);
   const extraAttachments = useVisitFormStore((s) => s.extraAttachments);
 
@@ -85,10 +84,6 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
   const evidenceCount = photos.length + extraAttachments.length;
 
   function validateSubmit(): boolean {
-    if (!hasVisitObservationOrAdvice(observation, recommendation)) {
-      setSubmitHint(t("visitFlow.errObservationOrAdvice"));
-      return false;
-    }
     setSubmitHint("");
     return true;
   }
@@ -319,10 +314,8 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
               <Text style={styles.editLink}>{t("visitFlow.change")}</Text>
             </Pressable>
           </View>
-          <Text style={styles.reviewBlockLabel}>{t("visitFlow.observation")}</Text>
-          <Text style={styles.reviewValue}>{observation.trim() || "—"}</Text>
-          <Text style={styles.reviewBlockLabel}>{t("visitFlow.recommendation")}</Text>
-          <Text style={styles.reviewValue}>{recommendation.trim() || "—"}</Text>
+          <Text style={styles.reviewBlockLabel}>{t("visitFlow.fieldNotes")}</Text>
+          <Text style={styles.reviewValue}>{fieldNotes.trim() || "—"}</Text>
           <Text style={styles.reviewBlockLabel}>{t("visitFlow.evidencePhotos")}</Text>
           <Text style={styles.reviewValue}>
             {evidenceCount > 0

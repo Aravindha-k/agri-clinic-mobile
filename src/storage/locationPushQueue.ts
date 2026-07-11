@@ -9,9 +9,9 @@ import {
   removeAcknowledgedGpsPoints,
   replaceActiveUserGpsQueue,
   writeFullGpsQueue
-} from "../../mobile/lib/sync/gpsQueueStore";
-import type { PendingGPSPoint } from "../../mobile/lib/sync/fieldQueueTypes";
-import { getActiveSyncUserId } from "../../mobile/lib/sync/queueOwnership";
+} from "./gpsQueueStore";
+import type { PendingGPSPoint } from "./fieldQueueTypes";
+import { getActiveSyncUserId } from "./queueOwnership";
 import { getDeviceSessionId } from "./deviceSessionStorage";
 
 export async function readLocationPushQueue(): Promise<LocationPushPayload[]> {

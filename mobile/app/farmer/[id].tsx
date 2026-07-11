@@ -27,7 +27,8 @@ import type { WorkStackParamList } from "../../../src/navigation/types";
 import { ScreenErrorBoundary } from "../../../src/components/ScreenErrorBoundary";
 import { qaLogNavParamsMissing, qaLogScreenOpen } from "../../../src/utils/qaLog";
 import { FarmerPhotoAvatar } from "../../components/farmers/FarmerPhotoAvatar";
-import { EmptyState, GhostButton, PrimaryButton, SectionHeader, Skeleton, StatusChip } from "../../components/ui";
+import { EmptyState, GhostButton, PrimaryButton, SectionHeader, StatusChip } from "../../components/ui";
+import { ScreenLoader } from "../../components/layout/ScreenLoader";
 import { FadeInSection, entranceListStagger, entranceStagger } from "../../components/ui/FadeInSection";
 import { ScreenEntranceShell, StackScreenHeader } from "../../components/layout";
 import {
@@ -300,11 +301,7 @@ function FarmerProfileScreenInner() {
           onBack={() => navigation.goBack()}
           includeSafeTop={false}
         />
-        <View style={styles.loadingWrap}>
-          <Skeleton width="100%" height={160} borderRadius={Radius.card} />
-          <Skeleton width="100%" height={72} />
-          <Skeleton width="100%" height={120} borderRadius={Radius.card} />
-        </View>
+        <ScreenLoader message={t("common.loading")} />
       </SafeAreaView>
     );
   }
@@ -491,10 +488,8 @@ function FarmerProfileScreenInner() {
                 onPress={() => {
                   const visitId = Number(visit?.id);
                   if (!Number.isFinite(visitId) || visitId <= 0) return;
-                  rootNav?.navigate("Main", {
-                    screen: "Work",
-                    params: { screen: "VisitDetail", params: { id: visitId } }
-                  });
+                  // Stay on Work stack so back returns to farmer detail / Work list.
+                  navigation.push("VisitDetail", { id: visitId });
                 }}
               >
                 <TimelineItem visit={visit} isLast={index === visitsPreview.length - 1} />
@@ -593,10 +588,6 @@ const styles = StyleSheet.create({
   },
   scroll: {
     gap: 14
-  },
-  loadingWrap: {
-    gap: 12,
-    paddingHorizontal: Spacing.screen
   },
   heroCard: {
     backgroundColor: Colors.brand700,

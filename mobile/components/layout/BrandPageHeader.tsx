@@ -24,7 +24,7 @@ export function BrandPageHeader({ title, subtitle, right, style }: Props) {
 }
 
 /** @deprecated Use BRAND_LOGO_COMPACT from brand module */
-export const HEADER_LOGO_SIZE = 40;
+export const HEADER_LOGO_SIZE = 50;
 
 /** @deprecated Use HEADER_LOGO_SIZE */
 export const HOME_LOGO_SIZE = HEADER_LOGO_SIZE;

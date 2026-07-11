@@ -1,18 +1,17 @@
-import { useEffect, useRef, useState } from "react";
-import { Animated, StyleSheet, Text, View, type ViewStyle } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Animated, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { AppLoadingLogo } from "../../src/components/brand/AppLoadingLogo";
 import { LOGO_SIZES } from "../../src/brand/logoSizing";
 import { BRAND, BRAND_COLORS } from "../../src/config/brand";
+import { useI18n } from "../../src/i18n/I18nContext";
 import { Colors } from "../lib/theme";
 import { FONTS } from "../../src/theme/fonts";
-
-const MESSAGES = ["Loading…", "Preparing your field day…", "Syncing records…", "Almost ready…"];
 
 type Props = {
   fullScreen?: boolean;
   compact?: boolean;
   message?: string;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 };
 
 function LoadingDots() {
@@ -53,25 +52,36 @@ function LoadingDots() {
   );
 }
 
-/** App data loader — animated logo pulse (reliable on all devices). */
+/** App data loader — animated logo pulse (standard for every screen). */
 export function KavyaLoader({ fullScreen = false, compact = false, message, style }: Props) {
+  const { t } = useI18n();
   const textOpacity = useRef(new Animated.Value(1)).current;
   const [msgIndex, setMsgIndex] = useState(0);
   const showRotatingMessage = !compact && !message;
   const logoSize = compact ? LOGO_SIZES.appLogo.md : LOGO_SIZES.appLogo.xl;
 
+  const rotatingMessages = useMemo(
+    () => [
+      t("common.loading"),
+      t("common.loadingFieldDay"),
+      t("common.loadingSyncing"),
+      t("common.loadingAlmostReady")
+    ],
+    [t]
+  );
+
   useEffect(() => {
     if (!showRotatingMessage) return;
     const interval = setInterval(() => {
       Animated.timing(textOpacity, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => {
-        setMsgIndex((i) => (i + 1) % MESSAGES.length);
+        setMsgIndex((i) => (i + 1) % rotatingMessages.length);
         Animated.timing(textOpacity, { toValue: 1, duration: 180, useNativeDriver: true }).start();
       });
     }, 2800);
     return () => clearInterval(interval);
-  }, [showRotatingMessage, textOpacity]);
+  }, [rotatingMessages.length, showRotatingMessage, textOpacity]);
 
-  const label = message ?? MESSAGES[msgIndex];
+  const label = message ?? rotatingMessages[msgIndex] ?? t("common.loading");
 
   return (
     <View style={[styles.wrap, fullScreen && styles.wrapFull, compact && styles.wrapCompact, style]}>

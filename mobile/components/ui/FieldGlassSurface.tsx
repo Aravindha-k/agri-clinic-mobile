@@ -34,6 +34,7 @@ const styles = StyleSheet.create({
     backgroundColor: Platform.OS === "ios" ? "rgba(255, 255, 255, 0.22)" : "rgba(255, 255, 255, 0.12)"
   },
   content: {
+    overflow: "visible",
     position: "relative",
     zIndex: 3
   }

@@ -16,9 +16,7 @@ import { VisitFlowHeader } from "../../components/visit/VisitFlowHeader";
 import { pickVisitPhotoFromCamera, pickVisitPhotoFromGallery } from "../../lib/visitPhotos";
 import { useVisitFormStore } from "../../store/visitFormStore";
 import { EntranceBlocks } from "../../components/ui/EntranceBlocks";
-import { FadeInSection, entranceStagger } from "../../components/ui/FadeInSection";
 import { useVisitEntranceKey } from "../../context/VisitEntranceContext";
-import { hasVisitObservationOrAdvice } from "../../../src/visit/visitValidation";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 
 const MAX_PHOTOS = 5;
@@ -31,28 +29,17 @@ export function VisitCreateStep3({ onBack }: Props) {
   const { t } = useI18n();
   const replayKey = useVisitEntranceKey();
   const setStep = useVisitFormStore((s) => s.setStep);
-  const observation = useVisitFormStore((s) => s.observation);
-  const recommendation = useVisitFormStore((s) => s.recommendation);
+  const fieldNotes = useVisitFormStore((s) => s.fieldNotes);
   const photos = useVisitFormStore((s) => s.photos);
 
-  const setObservation = useVisitFormStore((s) => s.setObservation);
-  const setCombinedAdvice = useVisitFormStore((s) => s.setCombinedAdvice);
+  const setFieldNotes = useVisitFormStore((s) => s.setFieldNotes);
   const addPhoto = useVisitFormStore((s) => s.addPhoto);
   const removePhoto = useVisitFormStore((s) => s.removePhoto);
 
   const [hint, setHint] = useState("");
 
-  function validateContinue(): boolean {
-    if (!hasVisitObservationOrAdvice(observation, recommendation)) {
-      setHint(t("visitFlow.errObservationOrAdvice"));
-      return false;
-    }
-    setHint("");
-    return true;
-  }
-
   function continueToReview() {
-    if (!validateContinue()) return;
+    setHint("");
     setStep(4);
   }
 
@@ -92,27 +79,12 @@ export function VisitCreateStep3({ onBack }: Props) {
         <View>
         <Text style={styles.notesHint}>{t("visitFlow.step3NotesHint")}</Text>
 
-        <Text style={styles.sectionLabel}>{t("visitFlow.recommendationOptional")}</Text>
+        <Text style={styles.sectionLabel}>{t("visitFlow.fieldNotes")}</Text>
         <View style={styles.notesWrap}>
           <TextInput
-            value={recommendation}
-            onChangeText={setCombinedAdvice}
-            placeholder={t("visitFlow.recommendationPlaceholder")}
-            placeholderTextColor={Colors.text4}
-            multiline
-            style={styles.notesInput}
-            textAlignVertical="top"
-          />
-        </View>
-        </View>
-
-        <View>
-        <Text style={styles.sectionLabel}>{t("visitFlow.observationOptional")}</Text>
-        <View style={styles.notesWrap}>
-          <TextInput
-            value={observation}
-            onChangeText={setObservation}
-            placeholder={t("visitFlow.observationPlaceholder")}
+            value={fieldNotes}
+            onChangeText={setFieldNotes}
+            placeholder={t("visitFlow.fieldNotesPlaceholder")}
             placeholderTextColor={Colors.text4}
             multiline
             style={styles.notesInput}

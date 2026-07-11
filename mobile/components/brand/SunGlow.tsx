@@ -11,29 +11,29 @@ import Animated, {
 } from "react-native-reanimated";
 import { usePremiumMotion } from "../../../src/hooks/usePremiumMotion";
 
-/** Full breath cycle — early-morning sun, not a pulse flash. */
+/** Full breath cycle — early-morning sun. */
 const CYCLE_MS = 7000;
 const HALF_MS = CYCLE_MS / 2;
 
-const OPACITY_MIN = 0.15;
-const OPACITY_MAX = 0.35;
-const SCALE_MIN = 0.9;
-const SCALE_MAX = 1.1;
+/** Slightly stronger than first experiment so glow reads on blue glass. */
+const OPACITY_MIN = 0.28;
+const OPACITY_MAX = 0.55;
+const SCALE_MIN = 0.92;
+const SCALE_MAX = 1.12;
 
 type Props = {
-  /** Diameter of the glow disc (should be larger than the logo badge). */
+  /** Diameter of the glow disc (larger than the logo badge). */
   size: number;
 };
 
 /**
- * Soft golden sunlight glow for the Home logo.
- * Logo stays separate — this only renders behind it.
+ * Soft golden sunlight glow for the Home logo — sits behind the mark.
  */
 export function SunGlow({ size }: Props) {
-  const { reduced, enabled } = usePremiumMotion();
-  const animate = enabled && !reduced;
+  const { coreMotion } = usePremiumMotion();
+  const animate = coreMotion;
 
-  const opacity = useSharedValue(animate ? OPACITY_MIN : 0.18);
+  const opacity = useSharedValue(animate ? OPACITY_MIN : 0.32);
   const scale = useSharedValue(1);
 
   useEffect(() => {
@@ -41,14 +41,13 @@ export function SunGlow({ size }: Props) {
     cancelAnimation(scale);
 
     if (!animate) {
-      opacity.value = 0.18;
+      opacity.value = 0.32;
       scale.value = 1;
       return;
     }
 
     opacity.value = OPACITY_MIN;
     scale.value = SCALE_MIN;
-
     const ease = Easing.inOut(Easing.sin);
 
     opacity.value = withRepeat(
@@ -80,81 +79,76 @@ export function SunGlow({ size }: Props) {
     transform: [{ scale: scale.value }]
   }));
 
-  const outer = size;
-  const mid = Math.round(size * 0.72);
-  const core = Math.round(size * 0.42);
+  const mid = Math.round(size * 0.7);
+  const core = Math.round(size * 0.4);
 
   return (
-    <Animated.View
+    <View
       pointerEvents="none"
-      style={[
-        styles.stage,
-        motionStyle,
-        {
-          width: outer,
-          height: outer,
-          marginLeft: -outer / 2,
-          marginTop: -outer / 2
-        }
-      ]}
+      style={[styles.host, { width: size, height: size }]}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
-      {/* Soft layered discs — large “blur” without BlurView cost */}
-      <View
-        style={[
-          styles.disc,
-          styles.outerDisc,
-          { width: outer, height: outer, borderRadius: outer / 2 }
-        ]}
-      />
-      <View
-        style={[
-          styles.disc,
-          styles.midDisc,
-          {
-            width: mid,
-            height: mid,
-            borderRadius: mid / 2,
-            left: (outer - mid) / 2,
-            top: (outer - mid) / 2
-          }
-        ]}
-      />
-      <View
-        style={[
-          styles.disc,
-          styles.coreDisc,
-          {
-            width: core,
-            height: core,
-            borderRadius: core / 2,
-            left: (outer - core) / 2,
-            top: (outer - core) / 2
-          }
-        ]}
-      />
-    </Animated.View>
+      <Animated.View style={[styles.stage, motionStyle, { width: size, height: size }]}>
+        <View
+          style={[
+            styles.disc,
+            styles.outerDisc,
+            { width: size, height: size, borderRadius: size / 2 }
+          ]}
+        />
+        <View
+          style={[
+            styles.disc,
+            styles.midDisc,
+            {
+              width: mid,
+              height: mid,
+              borderRadius: mid / 2,
+              left: (size - mid) / 2,
+              top: (size - mid) / 2
+            }
+          ]}
+        />
+        <View
+          style={[
+            styles.disc,
+            styles.coreDisc,
+            {
+              width: core,
+              height: core,
+              borderRadius: core / 2,
+              left: (size - core) / 2,
+              top: (size - core) / 2
+            }
+          ]}
+        />
+      </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  stage: {
-    left: "50%",
-    position: "absolute",
-    top: "50%",
+  host: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
     zIndex: 0
+  },
+  stage: {
+    alignItems: "center",
+    justifyContent: "center"
   },
   disc: {
     position: "absolute"
   },
   outerDisc: {
-    backgroundColor: "rgba(245, 215, 140, 0.28)"
+    backgroundColor: "rgba(242, 196, 96, 0.55)"
   },
   midDisc: {
-    backgroundColor: "rgba(250, 224, 160, 0.38)"
+    backgroundColor: "rgba(255, 220, 140, 0.65)"
   },
   coreDisc: {
-    backgroundColor: "rgba(255, 236, 185, 0.45)"
+    backgroundColor: "rgba(255, 236, 190, 0.8)"
   }
 });

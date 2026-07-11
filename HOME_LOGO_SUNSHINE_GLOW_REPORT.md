@@ -90,21 +90,12 @@ Physical outdoor / low-end device checks should still be eyeballed after a cold 
 
 ---
 
-## Recommendation
+## Recommendation (updated)
 
-**Trial OK for internal QA — not a clear “keep forever” yet.**
+**Revert / do not ship sunshine glow.** Prefer the classic orbit logo.
 
-The glow is subtle and on-brief (morning light, not spinner/neon). Whether it feels *significantly* more premium than the current orbit-forward logo is subjective:
+Home Today now uses `BrandLogoBadge` with orbit again (sunshine disabled via `HOME_LOGO_SUNSHINE_GLOW_ENABLED = false` and removed from `TodayHeader`).
 
-- On soft blue glass, warm gold can add depth.
-- Combined with the existing service **orbit**, the hero can feel busy; if so, prefer glow **or** orbit, not both.
-
-**Suggestion after visual QA:**
-
-1. If glow reads premium and calm → keep flag `true`, consider dimming/removing orbit later in a separate change.  
-2. If it looks muddy or less sharp outdoors → set `HOME_LOGO_SUNSHINE_GLOW_ENABLED = false` (instant revert).
-
-Default for this commit: **enabled** for the experiment.
 
 ---
 

@@ -6,7 +6,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const sounds = ["water_pour.wav", "heat.wav"];
+const sounds = ["hydration_chime.wav"];
 const rawDir = resolve(root, "android/app/src/main/res/raw");
 
 if (!existsSync(resolve(root, "android"))) {
@@ -25,4 +25,4 @@ for (const name of sounds) {
   copyFileSync(source, target);
 }
 
-console.log("[sync-notification-sounds] copied water_pour.wav and heat.wav to android res/raw");
+console.log("[sync-notification-sounds] copied hydration_chime.wav to android res/raw");

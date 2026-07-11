@@ -22,9 +22,9 @@ import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal
 import { FarmerDirectoryCard } from "../farmers/FarmerDirectoryCard";
 import { VillageFilterSheet, type VillageFilterSheetRef } from "../farmers/VillageFilterSheet";
 import { FlatProgressBar } from "../ui/FlatProgressBar";
-import { ListSkeleton } from "../ui/ListSkeleton";
 import { ListStateView } from "../ui/ListStateView";
 import { InlineSeedLoader } from "../layout/InlineSeedLoader";
+import { ScreenLoader } from "../layout/ScreenLoader";
 import {
   FadeInSection,
   entranceListStagger,
@@ -297,14 +297,13 @@ export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
 
       {showUpdatingBar ? (
         <View style={styles.updatingBar}>
-          <ActivityIndicator size="small" color={Colors.brand700} />
-          <Text style={styles.updatingText}>{t("home.syncing")}</Text>
+          <InlineSeedLoader label={t("home.syncing")} />
         </View>
       ) : null}
 
       <View style={styles.listArea}>
         {showBlockingLoader ? (
-          <ListSkeleton variant="farmer" count={6} />
+          <ScreenLoader compact message={t("common.loading")} />
         ) : (
           <FlashList
             data={directory.listData}

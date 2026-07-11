@@ -10,22 +10,27 @@ type Props = {
 };
 
 /**
- * Home logo with optional experimental sunshine glow behind the mark.
- * Toggle off via `HOME_LOGO_SUNSHINE_GLOW_ENABLED` to restore prior look.
+ * Home logo with experimental sunshine glow (orbit disabled so glow is visible).
+ * Toggle off via `HOME_LOGO_SUNSHINE_GLOW_ENABLED` to restore prior orbit logo.
  */
 export function HomeLogoWithSunGlow({ size, animated = false, replayKey = 0 }: Props) {
   if (!HOME_LOGO_SUNSHINE_GLOW_ENABLED) {
     return <BrandLogoBadge size={size} animated={animated} replayKey={replayKey} />;
   }
 
-  const glowSize = Math.round(size * 1.85);
+  const glowSize = Math.round(size * 2.15);
+  const stage = Math.max(glowSize, size + 24);
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { width: stage, height: stage }]}>
       <SunGlow size={glowSize} />
       <View style={styles.logoLayer}>
-        {/* Logo mark stays still — glow carries the motion. */}
-        <BrandLogoBadge size={size} animated={false} replayKey={replayKey} />
+        <BrandLogoBadge
+          size={size}
+          animated={false}
+          replayKey={replayKey}
+          showOrbit={false}
+        />
       </View>
     </View>
   );
@@ -38,6 +43,8 @@ const styles = StyleSheet.create({
     overflow: "visible"
   },
   logoLayer: {
+    alignItems: "center",
+    justifyContent: "center",
     zIndex: 2
   }
 });

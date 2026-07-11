@@ -10,9 +10,35 @@ import Animated, {
   withTiming
 } from "react-native-reanimated";
 import { AgriProductIcon, AGRI_CLUSTER_ICONS, AGRI_ORBIT_ICONS } from "./agriProductIcons";
+import { BRAND_ORBIT_GAP_RATIO } from "./brandHeaderSpacing";
 
 const ORBIT_DURATION_MS = 28_000;
 const ORBIT_CHIP_PADDING = 8;
+
+/** Orbit gap in px from logo edge (20% of logo diameter by default). */
+export function computeOrbitGap(diameter: number, gapRatio = BRAND_ORBIT_GAP_RATIO) {
+  return diameter * gapRatio;
+}
+
+export function computeOrbitChipSize(diameter: number, compact = true) {
+  const chipPad = compact ? 5 : ORBIT_CHIP_PADDING;
+  const iconSize = Math.max(
+    compact ? 12 : 15,
+    Math.round(diameter * (compact ? 0.1 : 0.13))
+  );
+  return iconSize + chipPad * 2 + 2;
+}
+
+export function computeOrbitStageSize(
+  diameter: number,
+  options?: { gapRatio?: number; compact?: boolean }
+) {
+  const gapRatio = options?.gapRatio ?? BRAND_ORBIT_GAP_RATIO;
+  const gap = computeOrbitGap(diameter, gapRatio);
+  const compact = options?.compact ?? true;
+  const chipSize = computeOrbitChipSize(diameter, compact);
+  return diameter + chipSize * 2 + gap * 2 + (compact ? 8 : 32);
+}
 
 type OrbitIcon = (typeof AGRI_ORBIT_ICONS)[number];
 
@@ -40,7 +66,7 @@ function RoundIconChip({
           width: chipSize,
           height: chipSize,
           borderRadius: chipSize / 2,
-          borderColor: `${icon.color}44`
+          borderColor: `${icon.color}66`
         }
       ]}
     >
@@ -92,7 +118,8 @@ function OrbitGlyph({
   chipSize,
   phase,
   radius,
-  rotation
+  rotation,
+  animate
 }: {
   icon: OrbitIcon;
   iconSize: number;
@@ -100,7 +127,18 @@ function OrbitGlyph({
   phase: number;
   radius: number;
   rotation: SharedValue<number>;
+  animate: boolean;
 }) {
+  if (!animate) {
+    const x = Math.cos(phase) * radius;
+    const y = Math.sin(phase) * radius;
+    return (
+      <View style={[styles.orbitGlyph, { transform: [{ translateX: x }, { translateY: y }] }]}>
+        <RoundIconChip icon={icon} iconSize={iconSize} chipSize={chipSize} />
+      </View>
+    );
+  }
+
   const motion = useAnimatedStyle(() => {
     const angle = rotation.value + phase;
     return {
@@ -122,16 +160,33 @@ function OrbitGlyph({
 export function AgriNatureOrbit({
   diameter,
   animate = true,
-  showTrack = false
+  showTrack = false,
+  /** Gap from logo edge as a ratio of logo diameter (0.1 = 10%). */
+  gapRatio = BRAND_ORBIT_GAP_RATIO,
+  /** Tighter chips for a compact orbit band. */
+  compact = false,
+  /** Single dashed ring — used on Home hero. */
+  minimalTrack = false
 }: {
   diameter: number;
   animate?: boolean;
   showTrack?: boolean;
+  gapRatio?: number;
+  compact?: boolean;
+  minimalTrack?: boolean;
 }) {
-  const iconSize = Math.max(15, Math.round(diameter * 0.13));
-  const chipSize = iconSize + ORBIT_CHIP_PADDING * 2 + 2;
-  const radius = diameter / 2 + chipSize * 0.5;
-  const stage = diameter + chipSize * 2 + 32;
+  const chipPad = compact ? 5 : ORBIT_CHIP_PADDING;
+  const iconSize = Math.max(
+    compact ? 12 : 15,
+    Math.round(diameter * (compact ? 0.1 : 0.13))
+  );
+  const chipSize = iconSize + chipPad * 2 + 2;
+  const logoRadius = diameter / 2;
+  const gap = computeOrbitGap(diameter, gapRatio);
+  // Orbit track and chips run 20% of logo diameter away from the filled logo edge.
+  const trackRadius = logoRadius + gap;
+  const chipRadius = logoRadius + gap + chipSize * 0.5;
+  const stage = computeOrbitStageSize(diameter, { gapRatio, compact });
   const orbitPhaseOffset = Math.PI / 4;
   const rotation = useSharedValue(0);
   const trackCenter = stage / 2;
@@ -153,15 +208,49 @@ export function AgriNatureOrbit({
     <View pointerEvents="none" style={[styles.orbitStage, { width: stage, height: stage }]}>
       {showTrack ? (
         <Svg width={stage} height={stage} style={styles.orbitTrack}>
-          <Circle
-            cx={trackCenter}
-            cy={trackCenter}
-            r={radius}
-            stroke="rgba(46, 155, 100, 0.32)"
-            strokeWidth={1.5}
-            strokeDasharray="5 7"
-            fill="none"
-          />
+          {minimalTrack ? (
+            <Circle
+              cx={trackCenter}
+              cy={trackCenter}
+              r={trackRadius}
+              stroke="rgba(15, 107, 67, 0.36)"
+              strokeWidth={Math.max(1.25, diameter * 0.012)}
+              strokeDasharray={`${Math.max(3, Math.round(diameter * 0.035))} ${Math.max(5, Math.round(diameter * 0.055))}`}
+              strokeLinecap="round"
+              fill="none"
+            />
+          ) : (
+            <>
+              <Circle
+                cx={trackCenter}
+                cy={trackCenter}
+                r={trackRadius}
+                stroke="rgba(15, 107, 67, 0.1)"
+                strokeWidth={Math.max(2.5, diameter * 0.028)}
+                fill="none"
+              />
+              <Circle
+                cx={trackCenter}
+                cy={trackCenter}
+                r={trackRadius}
+                stroke="rgba(15, 107, 67, 0.42)"
+                strokeWidth={Math.max(1.25, diameter * 0.012)}
+                strokeDasharray={`${Math.max(3, Math.round(diameter * 0.035))} ${Math.max(5, Math.round(diameter * 0.055))}`}
+                strokeLinecap="round"
+                fill="none"
+              />
+              <Circle
+                cx={trackCenter}
+                cy={trackCenter}
+                r={trackRadius}
+                stroke="rgba(212, 184, 106, 0.38)"
+                strokeWidth={Math.max(1, diameter * 0.01)}
+                strokeDasharray={`${Math.max(18, Math.round(diameter * 0.22))} ${Math.max(90, Math.round(diameter * 1.4))}`}
+                strokeLinecap="round"
+                fill="none"
+              />
+            </>
+          )}
         </Svg>
       ) : null}
       <View style={styles.orbitOrigin}>
@@ -172,8 +261,9 @@ export function AgriNatureOrbit({
             iconSize={iconSize}
             chipSize={chipSize}
             phase={(index / AGRI_ORBIT_ICONS.length) * Math.PI * 2 - Math.PI / 2 + orbitPhaseOffset}
-            radius={radius}
+            radius={chipRadius}
             rotation={rotation}
+            animate={animate}
           />
         ))}
       </View>
@@ -192,30 +282,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     aspectRatio: 1,
     backgroundColor: "#FFFFFF",
-    borderWidth: 1,
+    borderWidth: 1.5,
     justifyContent: "center",
     overflow: "hidden",
     ...Platform.select({
       ios: {
         shadowColor: "#0A3D28",
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.14,
-        shadowRadius: 6
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.16,
+        shadowRadius: 5
       },
-      default: { elevation: 3 }
+      default: { elevation: 4 }
     })
   },
   iconWell: {
     alignItems: "center",
-    backgroundColor: "rgba(247, 251, 248, 0.95)",
+    backgroundColor: "rgba(248, 252, 249, 0.98)",
     justifyContent: "center"
   },
   orbitStage: {
     alignItems: "center",
     justifyContent: "center",
-    overflow: "visible",
-    position: "absolute",
-    zIndex: 1
+    overflow: "visible"
   },
   orbitTrack: {
     ...StyleSheet.absoluteFillObject

@@ -7,8 +7,7 @@ import {
   View,
   Pressable,
   Linking,
-  RefreshControl,
-  Alert
+  RefreshControl
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { API_BASE_URL, buildApiUrl } from "../../src/api/config";
@@ -34,8 +33,8 @@ import { ScreenCanvas, ScreenEntranceBloom, ScreenPageHeader } from "../componen
 import { FadeInSection, entranceStagger } from "../components/ui/FadeInSection";
 import { RecentActivitySection } from "../components/today/RecentActivitySection";
 import { TodayKpiRow } from "../components/today/TodayKpiRow";
-import { TabDashboardSkeleton } from "../components/today/TabDashboardSkeleton";
 import { WorkdayStartPanel } from "../components/workday/WorkdayStartPanel";
+import { ScreenLoader } from "../components/layout/ScreenLoader";
 import { useScreenEntrance } from "../hooks/useScreenEntrance";
 import {
   countVillagesFromVisitsToday,
@@ -87,7 +86,6 @@ function TrackingWorkspaceScreenInner() {
     busy,
     error: trackingError,
     startDay,
-    endDay,
     workday,
     refreshTracking,
     lastSyncTime,
@@ -250,24 +248,6 @@ function TrackingWorkspaceScreenInner() {
     }
   }
 
-  function confirmEndWorkday() {
-    Alert.alert(t("daySummary.endWorkdayTitle"), t("daySummary.endWorkdayBody"), [
-      { text: t("common.cancel"), style: "cancel" },
-      {
-        text: t("daySummary.endWorkday"),
-        style: "destructive",
-        onPress: () => {
-          void (async () => {
-            setDismissedError("");
-            await endDay();
-            await refreshTracking().catch(() => undefined);
-            await loadSummary();
-          })();
-        }
-      }
-    ]);
-  }
-
   function openBuildApkPage() {
     void Linking.openURL(getExpoBuildUrl()).catch(() => undefined);
   }
@@ -326,24 +306,15 @@ function TrackingWorkspaceScreenInner() {
             distanceKm={displayDistanceKm}
             visitsToday={visitsToday}
             pendingSync={pendingSyncCount + pendingCount}
+            showVisitActions={false}
             onStart={() => void handleStartWorkday()}
-            onEnd={isActive ? confirmEndWorkday : undefined}
             onRetryStart={() => void handleStartWorkday()}
-            onNewVisit={() =>
-              rootNav?.navigate("VisitFlow", {
-                screen: "NewVisitFarmer",
-                params: { fresh: true }
-              })
-            }
-            onFarmers={() =>
-              navigation.navigate("Work", { screen: "WorkHome", params: { segment: "queue" } })
-            }
             onMyRoute={() => rootNav?.navigate("MyLocation")}
           />
         </FadeInSection>
 
         {summaryLoading ? (
-          <TabDashboardSkeleton />
+          <ScreenLoader message={t("common.loading")} />
         ) : (
           <>
         <FadeInSection replayKey={entranceTick} delay={entranceStagger(2)}>

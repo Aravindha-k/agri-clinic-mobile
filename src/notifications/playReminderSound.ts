@@ -1,18 +1,10 @@
 import { Audio } from "expo-av";
 import { isExpoGo } from "../utils/expoRuntime";
 
-export type PlayableReminderKind = "water" | "heat";
-
-const REMINDER_SOUND_FILES: Record<PlayableReminderKind, number> = {
-  water: require("../../assets/sounds/water_pour.wav"),
-  heat: require("../../assets/sounds/heat.wav")
-};
+const HYDRATION_CHIME = require("../../assets/sounds/hydration_chime.wav");
 
 /** Softer playback for in-app preview (Expo Go fallback). */
-const IN_APP_VOLUME: Record<PlayableReminderKind, number> = {
-  water: 0.72,
-  heat: 0.78
-};
+const IN_APP_VOLUME = 0.82;
 
 let audioReady = false;
 let activeSound: Audio.Sound | null = null;
@@ -48,7 +40,7 @@ async function stopActiveSound(): Promise<void> {
   activeSound = null;
 }
 
-export async function playFieldReminderSound(kind: PlayableReminderKind): Promise<void> {
+export async function playFieldReminderSound(): Promise<void> {
   const now = Date.now();
   if (now - lastPlayAt < 900) {
     return;
@@ -59,9 +51,9 @@ export async function playFieldReminderSound(kind: PlayableReminderKind): Promis
     await ensureAudioMode();
     await stopActiveSound();
 
-    const { sound } = await Audio.Sound.createAsync(REMINDER_SOUND_FILES[kind], {
+    const { sound } = await Audio.Sound.createAsync(HYDRATION_CHIME, {
       shouldPlay: true,
-      volume: IN_APP_VOLUME[kind]
+      volume: IN_APP_VOLUME
     });
     activeSound = sound;
     sound.setOnPlaybackStatusUpdate((status) => {
@@ -77,9 +69,9 @@ export async function playFieldReminderSound(kind: PlayableReminderKind): Promis
   }
 }
 
-export function parseFieldReminderKind(value: unknown): PlayableReminderKind | "battery" | null {
-  if (value === "water" || value === "heat" || value === "battery") {
-    return value;
+export function parseFieldReminderKind(value: unknown): "water" | null {
+  if (value === "water") {
+    return "water";
   }
   return null;
 }

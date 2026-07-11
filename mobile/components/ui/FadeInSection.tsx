@@ -52,13 +52,13 @@ export function FadeInSection({
   variant = "section",
   scaleFrom = SCALE_FROM
 }: Props) {
-  const { reduced } = usePremiumMotion();
-  const opacity = useSharedValue(reduced ? 1 : 0);
-  const translateY = useSharedValue(reduced ? 0 : FALL_FROM_PX);
-  const scale = useSharedValue(reduced ? 1 : scaleFrom);
+  const { coreMotion } = usePremiumMotion();
+  const opacity = useSharedValue(coreMotion ? 0 : 1);
+  const translateY = useSharedValue(coreMotion ? FALL_FROM_PX : 0);
+  const scale = useSharedValue(coreMotion ? scaleFrom : 1);
 
   useEffect(() => {
-    if (reduced) {
+    if (!coreMotion) {
       opacity.value = 1;
       translateY.value = 0;
       scale.value = 1;
@@ -74,7 +74,7 @@ export function FadeInSection({
     );
     translateY.value = withDelay(delay, withTiming(0, { duration, easing: LANDING_EASING }));
     scale.value = withDelay(delay, withTiming(1, { duration, easing: LANDING_EASING }));
-  }, [delay, duration, opacity, reduced, replayKey, scale, scaleFrom, translateY, variant]);
+  }, [coreMotion, delay, duration, opacity, replayKey, scale, scaleFrom, translateY, variant]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,

@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     gap: Spacing.md,
-    minHeight: 48
+    minHeight: 52
   },
   backBtn: {
     ...minTouchStyle,

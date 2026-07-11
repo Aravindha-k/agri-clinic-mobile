@@ -8,6 +8,7 @@ import Animated, {
 import { useLiveClock } from "../../../src/hooks/useLiveClock";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { BrandHeader, BrandHeaderDots, BrandHeaderSpacing, GreetingHeader } from "../brand";
+import { HomeLogoHero } from "./HomeLogoHero";
 import { AppIcon } from "../ui/AppIcon";
 import { FadeInSection, entranceStagger } from "../ui/FadeInSection";
 import { FieldGlassSurface } from "../ui/FieldGlassSurface";
@@ -79,9 +80,9 @@ export function TodayHeader({
           layout="split"
           align="left"
           right={bell}
+          logo={<HomeLogoHero replayKey={entranceTick} />}
           entrance={{ replayKey: entranceTick, step: entranceStep }}
           scrollY={scrollY}
-          sunshineGlow
           style={styles.brandHeader}
         />
         <Animated.View style={greetingScrollStyle}>
@@ -115,8 +116,9 @@ const styles = StyleSheet.create({
     overflow: "visible"
   },
   brandHeader: {
-    paddingHorizontal: Spacing.sm,
-    paddingTop: Spacing.sm,
+    paddingLeft: 4,
+    paddingRight: 8,
+    paddingTop: 8,
     zIndex: 4
   },
   bell: {

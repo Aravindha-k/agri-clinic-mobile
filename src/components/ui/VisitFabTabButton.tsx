@@ -13,7 +13,7 @@ import { navigateToVisitFlow } from "../../navigation/navigateVisitFlow";
 import { useActiveWorkday } from "../../hooks/useActiveWorkday";
 import { useTracking } from "../../storage/TrackingContext";
 import { requestGpsForFieldWork } from "../../utils/locationRequiredModal";
-import { FAB_HALO_SIZE, FAB_RISE_ABOVE_BAR, FAB_SIZE } from "../../theme/tabBar";
+import { FAB_RISE_ABOVE_BAR, FAB_SIZE } from "../../theme/tabBar";
 import { LucideGlyph } from "../../../mobile/components/ui/AppIcon";
 import { Colors, FontSize, FontWeight } from "../../../mobile/lib/theme";
 
@@ -206,30 +206,36 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "flex-end",
     minHeight: 50,
-    width: FAB_HALO_SIZE + 16
+    width: FAB_SIZE + 28
   },
   dock: {
     alignItems: "center",
-    height: FAB_HALO_SIZE + 8,
+    height: FAB_SIZE + 10,
     justifyContent: "center",
-    marginBottom: 3,
-    width: FAB_HALO_SIZE + 8
+    marginBottom: 4,
+    width: FAB_SIZE + 10
   },
   glowRing: {
-    borderColor: "rgba(46, 155, 100, 0.45)",
-    borderRadius: FAB_HALO_SIZE,
-    borderWidth: 2,
-    height: FAB_HALO_SIZE,
+    borderColor: "rgba(46, 155, 100, 0.35)",
+    borderRadius: FAB_SIZE,
+    borderWidth: 1.5,
+    height: FAB_SIZE + 10,
     position: "absolute",
-    width: FAB_HALO_SIZE
+    width: FAB_SIZE + 10
   },
   outerRing: {
-    borderColor: "rgba(255, 255, 255, 0.85)",
-    borderRadius: (FAB_HALO_SIZE + 6) / 2,
-    borderWidth: 2,
-    height: FAB_HALO_SIZE + 6,
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
+    borderRadius: (FAB_SIZE + 8) / 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    elevation: 2,
+    height: FAB_SIZE + 8,
     position: "absolute",
-    width: FAB_HALO_SIZE + 6
+    shadowColor: "#0B3D28",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    width: FAB_SIZE + 8
   },
   fabWrap: {
     borderRadius: FAB_SIZE / 2,

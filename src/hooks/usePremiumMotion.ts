@@ -1,12 +1,17 @@
 import * as Battery from "expo-battery";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Platform } from "react-native";
 
 export type PremiumMotionState = {
-  /** Heavy cinematic effects (aurora drift, particles, glow pulses). */
+  /**
+   * Heavy decorative effects only (particles, Lottie, glass sheen, splash golden dust).
+   * May be off during battery saver — core logo/screen motion still runs.
+   */
   enabled: boolean;
-  /** User or system prefers reduced motion. */
+  /** User or system prefers reduced motion — disables all motion. */
   reduced: boolean;
+  /** Core UI motion (screen entrances, logo zoom, splash orbit). Inverse of `reduced`. */
+  coreMotion: boolean;
 };
 
 let cachedState: PremiumMotionState | null = null;
@@ -16,13 +21,13 @@ const BATTERY_SUPPORTED =
   typeof Battery.isLowPowerModeEnabledAsync === "function" &&
   typeof Battery.addLowPowerModeListener === "function";
 
-function isLowEndDevice(): boolean {
-  if (Platform.OS === "android") {
-    const version = typeof Platform.Version === "number" ? Platform.Version : parseInt(String(Platform.Version), 10);
-    // Oreo/Pie devices — lighter animation path for GPU stability.
-    if (!Number.isNaN(version) && version <= 28) return true;
-  }
-  return false;
+function buildMotionState(reduced: boolean, batterySaver: boolean): PremiumMotionState {
+  const heavyEffects = !reduced && !batterySaver;
+  return {
+    reduced,
+    enabled: heavyEffects,
+    coreMotion: !reduced
+  };
 }
 
 async function resolveMotionState(): Promise<PremiumMotionState> {
@@ -42,29 +47,28 @@ async function resolveMotionState(): Promise<PremiumMotionState> {
     }
   }
 
-  const lowEnd = isLowEndDevice();
-  const enabled = !reduced && !batterySaver && !lowEnd;
-
-  return { enabled, reduced };
+  return buildMotionState(reduced, batterySaver);
 }
 
-/** Gates premium animations — never blocks GPS, sync, or form logic. */
+const DEFAULT_MOTION: PremiumMotionState = buildMotionState(false, false);
+
+/** Gates animations — core logo/screen motion runs on all devices unless reduce-motion is on. */
 export function usePremiumMotion(): PremiumMotionState {
-  const [state, setState] = useState<PremiumMotionState>(
-    cachedState ?? { enabled: Platform.OS !== "web", reduced: false }
-  );
+  const [state, setState] = useState<PremiumMotionState>(cachedState ?? DEFAULT_MOTION);
+  const batterySaverRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
 
     void resolveMotionState().then((next) => {
       cachedState = next;
+      batterySaverRef.current = !next.enabled && !next.reduced;
       if (mounted) setState(next);
     });
 
     const reduceSub = AccessibilityInfo.addEventListener("reduceMotionChanged", (reduced) => {
       setState((prev) => {
-        const next = { ...prev, reduced, enabled: !reduced && prev.enabled };
+        const next = buildMotionState(reduced, batterySaverRef.current);
         cachedState = next;
         return next;
       });
@@ -72,11 +76,9 @@ export function usePremiumMotion(): PremiumMotionState {
 
     const batterySub = BATTERY_SUPPORTED
       ? Battery.addLowPowerModeListener(({ lowPowerMode }) => {
+          batterySaverRef.current = lowPowerMode;
           setState((prev) => {
-            const next = {
-              ...prev,
-              enabled: !prev.reduced && !lowPowerMode && !isLowEndDevice()
-            };
+            const next = buildMotionState(prev.reduced, lowPowerMode);
             cachedState = next;
             return next;
           });
@@ -94,5 +96,9 @@ export function usePremiumMotion(): PremiumMotionState {
 }
 
 export function getPremiumMotionEnabled(): boolean {
-  return cachedState?.enabled ?? Platform.OS !== "web";
+  return cachedState?.enabled ?? true;
+}
+
+export function getCoreMotionEnabled(): boolean {
+  return cachedState?.coreMotion ?? true;
 }

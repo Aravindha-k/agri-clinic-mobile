@@ -1,5 +1,5 @@
 /**
- * Experimental Home (Today) logo backdrop.
- * Set to `false` to restore the previous logo-only presentation instantly.
+ * Experimental Home sunshine glow — kept off; Home uses the classic orbit logo.
+ * Set `true` only to re-test SunGlow (not recommended).
  */
-export const HOME_LOGO_SUNSHINE_GLOW_ENABLED = true;
+export const HOME_LOGO_SUNSHINE_GLOW_ENABLED = false;

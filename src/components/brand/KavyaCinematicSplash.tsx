@@ -1,7 +1,8 @@
-import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Image, InteractionManager, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Image, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
 import Animated, {
   Easing,
   cancelAnimation,
@@ -15,16 +16,22 @@ import Animated, {
 import { BRAND } from "../../config/brand";
 import { usePremiumMotion } from "../../hooks/usePremiumMotion";
 import { logStartup } from "../../utils/startupDiagnostics";
-import { SplashGoldenParticles } from "./SplashGoldenParticles";
-import { SplashLogoOrbit } from "./SplashLogoOrbit";
 import { SPLASH_ASSETS } from "./splashAssets";
 import {
   CINEMATIC_SPLASH_BG,
   SPLASH_EXIT_FADE_MS,
   SPLASH_EXIT_WASH,
+  SPLASH_HOLD_AFTER_ANIM_MS,
   SPLASH_MAX_VISIBLE_MS,
-  SPLASH_MIN_VISIBLE_MS
+  SPLASH_MIN_VISIBLE_MS,
+  SPLASH_NATIVE_HANDOFF_MS
 } from "./splashColors";
+
+const BLOOM_SIZE_RATIO = 1.65;
+const TITLE_GAP = 22;
+/** Logo center aligns with the background sunburst (~75% down the portrait art). */
+const SPLASH_LOGO_Y_RATIO = 0.75;
+const COPY_BLOCK_HEIGHT = 78;
 
 /** Match Expo splash plugin imageWidth (~200 logical px). */
 const LOGO_WIDTH_RATIO = 0.42;
@@ -32,14 +39,12 @@ const LOGO_MAX = 200;
 
 /**
  * Timeline from first layout (ms):
- * 0–300     static first frame (= native: solid blue + centered logo)
- * 300–1100  soft field background fade + logo rise
- * 450–1200  title / subtitle reveal
- * then hold until canExit ∧ min duration
- * exit fade ~320 ms
+ * 0         sharp full-opacity background + logo at 75%
+ * 120–900   logo scale / bloom
+ * 480–1220  title / subtitle reveal
+ * then hold SPLASH_HOLD_AFTER_ANIM_MS until canExit
+ * exit fade ~400 ms
  */
-const STATIC_HOLD_MS = 300;
-const BG_FADE_MS = 700;
 const LOGO_ANIM_MS = 780;
 const TITLE_START_MS = 480;
 const TITLE_ANIM_MS = 560;
@@ -50,7 +55,7 @@ const BLOOM_ANIM_MS = 750;
 
 type Props = {
   onFinish: () => void;
-  /** Called once after first layout + animation start — hide native splash here. */
+  /** Called once cinematic layer is painted — hide native splash here. */
   onReady?: () => void;
   /** Called when exit fade begins so the app shell can show under the fade. */
   onExitStart?: () => void;
@@ -62,12 +67,13 @@ type Props = {
 };
 
 /**
- * Continuous splash: first frame matches native (solid bg + centered logo),
+ * Continuous splash: logo + title sit on the background yellow sunburst,
  * then a clearly visible cinematic beat, then exit when ready.
  */
 export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit = false }: Props) {
-  const { reduced, enabled } = usePremiumMotion();
+  const { reduced } = usePremiumMotion();
   const { width: screenW, height: screenH } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const layoutAtRef = useRef<number | null>(null);
   const readyNotifiedRef = useRef(false);
   const exitStartedRef = useRef(false);
@@ -86,16 +92,14 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
   onExitStartRef.current = onExitStart;
   onFinishRef.current = onFinish;
 
-  const bgOpacity = useSharedValue(0);
-  const bgScale = useSharedValue(1.04);
   const logoOpacity = useSharedValue(1);
   const logoScale = useSharedValue(1);
   const logoTranslateY = useSharedValue(0);
   const titleOpacity = useSharedValue(0);
   const titleTranslateY = useSharedValue(14);
   const subtitleOpacity = useSharedValue(0);
-  const bloomOpacity = useSharedValue(0);
-  const bloomScale = useSharedValue(0.85);
+  const bloomOpacity = useSharedValue(0.12);
+  const bloomScale = useSharedValue(0.92);
   const exitWash = useSharedValue(0);
   const screenOpacity = useSharedValue(1);
 
@@ -104,33 +108,16 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     return Math.min(screenW * LOGO_WIDTH_RATIO, LOGO_MAX, shortEdge * 0.45);
   }, [screenH, screenW]);
 
-  const bloomSize = useMemo(() => logoSize * 1.5, [logoSize]);
-  /** Orbit stage larger than logo so the ring is not clipped by the mark. */
-  const orbitSize = useMemo(() => Math.round(logoSize * 1.48), [logoSize]);
+  const bloomSize = useMemo(() => Math.round(logoSize * BLOOM_SIZE_RATIO), [logoSize]);
 
-  const center = useMemo(
-    () => ({
-      left: (screenW - logoSize) / 2,
-      top: (screenH - logoSize) / 2 - screenH * 0.06
-    }),
-    [logoSize, screenH, screenW]
-  );
+  const logoCenterY = useMemo(() => {
+    const desired = screenH * SPLASH_LOGO_Y_RATIO;
+    const maxCenter =
+      screenH - insets.bottom - COPY_BLOCK_HEIGHT - TITLE_GAP - logoSize / 2 - 12;
+    return Math.min(desired, Math.max(logoSize / 2 + insets.top + 12, maxCenter));
+  }, [insets.bottom, insets.top, logoSize, screenH]);
 
-  const bloomCenter = useMemo(
-    () => ({
-      left: (screenW - bloomSize) / 2,
-      top: center.top + (logoSize - bloomSize) / 2
-    }),
-    [bloomSize, center.top, logoSize, screenW]
-  );
-
-  const orbitCenter = useMemo(
-    () => ({
-      left: (screenW - orbitSize) / 2,
-      top: center.top + (logoSize - orbitSize) / 2
-    }),
-    [center.top, logoSize, orbitSize, screenW]
-  );
+  const heroTop = useMemo(() => logoCenterY - logoSize / 2, [logoCenterY, logoSize]);
 
   const elapsed = useCallback(() => {
     const start = layoutAtRef.current ?? Date.now();
@@ -148,7 +135,6 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     if (exitStartedRef.current) return;
     exitStartedRef.current = true;
     logStartup("cinematic_exit_started", `${elapsed()} ms`);
-    logStartup("cinematic_exit_start", `${elapsed()} ms`);
     onExitStartRef.current?.();
 
     const easeInOut = Easing.inOut(Easing.cubic);
@@ -171,8 +157,6 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
   tryExitRef.current = tryExit;
   const beginExitRef = useRef(beginExit);
   beginExitRef.current = beginExit;
-  const finishSplashRef = useRef(finishSplash);
-  finishSplashRef.current = finishSplash;
 
   useEffect(() => {
     logStartup("cinematic_component_rendered", "0 ms");
@@ -187,7 +171,7 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
   }, []);
 
   const preferLightRef = useRef(false);
-  preferLightRef.current = reduced || !enabled;
+  preferLightRef.current = reduced;
 
   useEffect(() => {
     if (!layoutReady || animationStartedRef.current) return;
@@ -196,10 +180,10 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     const easeOut = Easing.out(Easing.cubic);
     const easeInOut = Easing.inOut(Easing.cubic);
     const preferLight = preferLightRef.current;
-    const minMs = preferLight ? Math.min(1600, SPLASH_MIN_VISIBLE_MS) : SPLASH_MIN_VISIBLE_MS;
+    const minMs = preferLight
+      ? Math.min(SPLASH_MIN_VISIBLE_MS - 800, SPLASH_HOLD_AFTER_ANIM_MS + 900)
+      : SPLASH_MIN_VISIBLE_MS;
 
-    cancelAnimation(bgOpacity);
-    cancelAnimation(bgScale);
     cancelAnimation(logoOpacity);
     cancelAnimation(logoScale);
     cancelAnimation(logoTranslateY);
@@ -211,41 +195,24 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     cancelAnimation(exitWash);
     cancelAnimation(screenOpacity);
 
-    // Native-matching first frame.
-    bgOpacity.value = 0;
-    bgScale.value = 1.04;
     logoOpacity.value = 1;
     logoScale.value = 1;
     logoTranslateY.value = 0;
     titleOpacity.value = 0;
     titleTranslateY.value = 14;
     subtitleOpacity.value = 0;
-    bloomOpacity.value = 0;
-    bloomScale.value = 0.85;
     exitWash.value = 0;
     screenOpacity.value = 1;
 
-    // Soft field backdrop — visibly different from static native splash after the hold.
-    if (!bgFailed) {
-      bgOpacity.value = withDelay(
-        STATIC_HOLD_MS,
-        withTiming(preferLight ? 0.55 : 0.82, { duration: BG_FADE_MS, easing: easeOut })
-      );
-      bgScale.value = withDelay(
-        STATIC_HOLD_MS,
-        withTiming(1, { duration: SPLASH_MIN_VISIBLE_MS, easing: easeInOut })
-      );
-    }
-
     logoScale.value = withDelay(
-      STATIC_HOLD_MS,
-      withTiming(preferLight ? 1.05 : 1.1, { duration: LOGO_ANIM_MS, easing: easeOut })
+      120,
+      withTiming(preferLight ? 1.05 : 1.08, { duration: LOGO_ANIM_MS, easing: easeOut })
     );
     logoTranslateY.value = withDelay(
-      STATIC_HOLD_MS,
+      120,
       withSequence(
-        withTiming(preferLight ? -12 : -22, { duration: LOGO_ANIM_MS * 0.55, easing: easeOut }),
-        withTiming(preferLight ? -8 : -14, { duration: LOGO_ANIM_MS * 0.45, easing: easeInOut })
+        withTiming(preferLight ? -8 : -12, { duration: LOGO_ANIM_MS * 0.55, easing: easeOut }),
+        withTiming(preferLight ? -4 : -6, { duration: LOGO_ANIM_MS * 0.45, easing: easeInOut })
       )
     );
 
@@ -265,8 +232,8 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     bloomOpacity.value = withDelay(
       BLOOM_START_MS,
       withSequence(
-        withTiming(preferLight ? 0.22 : 0.4, { duration: BLOOM_ANIM_MS * 0.5, easing: easeOut }),
-        withTiming(preferLight ? 0.1 : 0.18, { duration: BLOOM_ANIM_MS * 0.5, easing: easeInOut })
+        withTiming(preferLight ? 0.28 : 0.48, { duration: BLOOM_ANIM_MS * 0.5, easing: easeOut }),
+        withTiming(preferLight ? 0.14 : 0.22, { duration: BLOOM_ANIM_MS * 0.5, easing: easeInOut })
       )
     );
     bloomScale.value = withDelay(
@@ -276,12 +243,11 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
 
     logStartup("cinematic_animation_started", `${elapsed()} ms`);
 
-    // Hide native splash after the next frame so the cinematic layer is painted.
-    const hideTask = InteractionManager.runAfterInteractions(() => {
+    const handoffTimer = setTimeout(() => {
       requestAnimationFrame(() => {
         onReadyRef.current?.();
       });
-    });
+    }, SPLASH_NATIVE_HANDOFF_MS);
 
     const floorTimer = setTimeout(() => {
       animationFloorDoneRef.current = true;
@@ -293,11 +259,10 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
       animationFloorDoneRef.current = true;
       logStartup("splash_timeout", `${elapsed()} ms`);
       beginExitRef.current();
-      setTimeout(() => finishSplashRef.current(), SPLASH_EXIT_FADE_MS + 80);
     }, SPLASH_MAX_VISIBLE_MS);
 
     return () => {
-      hideTask.cancel?.();
+      clearTimeout(handoffTimer);
       clearTimeout(floorTimer);
       clearTimeout(maxTimer);
     };
@@ -308,11 +273,6 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
   useEffect(() => {
     tryExit();
   }, [canExit, tryExit]);
-
-  const bgStyle = useAnimatedStyle(() => ({
-    opacity: bgOpacity.value,
-    transform: [{ scale: bgScale.value }]
-  }));
 
   const logoStyle = useAnimatedStyle(() => ({
     opacity: logoOpacity.value,
@@ -341,99 +301,67 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     opacity: screenOpacity.value
   }));
 
-  const showParticles = enabled && !reduced;
-  const titleTop = center.top + logoSize + 22;
-
   return (
     <Animated.View style={[styles.screen, rootStyle]} onLayout={onFirstLayout} collapsable={false}>
       <StatusBar style="dark" translucent backgroundColor={CINEMATIC_SPLASH_BG} />
 
       {!bgFailed ? (
-        <Animated.Image
+        <Image
           source={SPLASH_ASSETS.background}
-          style={[styles.background, bgStyle]}
+          style={styles.background}
           resizeMode="cover"
+          fadeDuration={0}
           onError={() => setBgFailed(true)}
           accessibilityIgnoresInvertColors
         />
       ) : null}
 
-      {showParticles ? (
-        <SplashGoldenParticles originX={screenW / 2} originY={center.top + logoSize / 2} />
-      ) : null}
-
       <View style={styles.logoLayer} pointerEvents="none">
-        <Animated.View
-          style={[
-            styles.bloomWrap,
-            bloomStyle,
-            {
-              width: bloomSize,
-              height: bloomSize,
-              left: bloomCenter.left,
-              top: bloomCenter.top
-            }
-          ]}
-        >
-          <LinearGradient
-            colors={["rgba(255, 220, 150, 0.4)", "rgba(255, 200, 120, 0.14)", "rgba(255, 200, 120, 0)"]}
-            style={styles.bloomGradient}
-            start={{ x: 0.5, y: 0.5 }}
-            end={{ x: 0.5, y: 1 }}
-          />
-        </Animated.View>
-
-        {/* Orbit + logo share one transform so the ring stays centered while the mark rises. */}
-        <Animated.View
-          style={[
-            styles.logoCluster,
-            logoStyle,
-            {
-              width: orbitSize,
-              height: orbitSize,
-              left: orbitCenter.left,
-              top: orbitCenter.top
-            }
-          ]}
-        >
-          <SplashLogoOrbit
-            size={orbitSize}
-            left={0}
-            top={0}
-            active={layoutReady}
-            startDelayMs={STATIC_HOLD_MS}
-            reducedMotion={reduced || !enabled}
-          />
-          <View
-            style={[
-              styles.logoInner,
-              {
-                width: logoSize,
-                height: logoSize,
-                left: (orbitSize - logoSize) / 2,
-                top: (orbitSize - logoSize) / 2
-              }
-            ]}
+        <View style={[styles.heroColumn, { top: heroTop, width: screenW }]}>
+          <Animated.View
+            style={[styles.logoCluster, logoStyle, { width: logoSize, height: logoSize }]}
           >
+            <Animated.View
+              style={[
+                styles.bloomWrap,
+                bloomStyle,
+                {
+                  width: bloomSize,
+                  height: bloomSize,
+                  left: (logoSize - bloomSize) / 2,
+                  top: (logoSize - bloomSize) / 2
+                }
+              ]}
+            >
+              <Svg width={bloomSize} height={bloomSize}>
+                <Defs>
+                  <RadialGradient id="splashLogoGlow" cx="50%" cy="50%" rx="50%" ry="50%">
+                    <Stop offset="0%" stopColor="#FFE08A" stopOpacity={0.62} />
+                    <Stop offset="40%" stopColor="#FFC96B" stopOpacity={0.28} />
+                    <Stop offset="100%" stopColor="#FFC96B" stopOpacity={0} />
+                  </RadialGradient>
+                </Defs>
+                <Circle cx={bloomSize / 2} cy={bloomSize / 2} r={bloomSize / 2} fill="url(#splashLogoGlow)" />
+              </Svg>
+            </Animated.View>
+
             <Image
               source={SPLASH_ASSETS.logo}
-              style={styles.logoImage}
+              style={[styles.logoImage, { width: logoSize, height: logoSize }]}
               resizeMode="contain"
               accessibilityLabel="Kavya Agri-Horti Clinic logo"
             />
-          </View>
-        </Animated.View>
+          </Animated.View>
 
-        <Animated.View style={[styles.copyBlock, titleStyle, { top: titleTop, width: screenW }]}>
-          <Text style={styles.title} accessibilityRole="header">
-            {BRAND.splashTitle}
-          </Text>
-        </Animated.View>
-        <Animated.View
-          style={[styles.copyBlock, subtitleStyle, { top: titleTop + 36, width: screenW }]}
-        >
-          <Text style={styles.subtitle}>{BRAND.splashSubtitle}</Text>
-        </Animated.View>
+          <Animated.View style={[styles.copyBlock, titleStyle, { marginTop: TITLE_GAP }]}>
+            <Text style={styles.title} accessibilityRole="header">
+              {BRAND.splashTitle}
+            </Text>
+          </Animated.View>
+          <Animated.View style={[styles.copyBlock, subtitleStyle, { marginTop: 8 }]}>
+            <Text style={styles.subtitle}>{BRAND.splashSubtitle}</Text>
+          </Animated.View>
+        </View>
       </View>
 
       <Animated.View style={[styles.exitWash, exitWashStyle]} pointerEvents="none" />
@@ -452,63 +380,49 @@ const styles = StyleSheet.create({
   },
   background: {
     ...StyleSheet.absoluteFillObject,
-    width: "100%",
-    height: "100%"
+    height: "100%",
+    width: "100%"
   },
   logoLayer: {
     ...StyleSheet.absoluteFillObject,
     overflow: "visible"
   },
+  heroColumn: {
+    alignItems: "center",
+    left: 0,
+    position: "absolute"
+  },
   bloomWrap: {
     position: "absolute",
     zIndex: 1
   },
-  bloomGradient: {
-    borderRadius: 9999,
-    flex: 1
-  },
   logoCluster: {
+    alignItems: "center",
+    justifyContent: "center",
     overflow: "visible",
-    position: "absolute",
     zIndex: 4
   },
-  logoInner: {
-    elevation: 8,
-    position: "absolute",
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    zIndex: 5
-  },
   logoImage: {
-    height: "100%",
-    width: "100%"
+    aspectRatio: 1,
+    zIndex: 5
   },
   copyBlock: {
     alignItems: "center",
-    paddingHorizontal: 24,
-    position: "absolute"
+    paddingHorizontal: 24
   },
   title: {
     color: "#0B3D2E",
     fontSize: 24,
     fontWeight: "800",
     letterSpacing: 0.2,
-    textAlign: "center",
-    textShadowColor: "rgba(255,255,255,0.65)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4
+    textAlign: "center"
   },
   subtitle: {
     color: "#1F4F40",
     fontSize: 15,
     fontWeight: "600",
     letterSpacing: 0.3,
-    textAlign: "center",
-    textShadowColor: "rgba(255,255,255,0.55)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3
+    textAlign: "center"
   },
   exitWash: {
     ...StyleSheet.absoluteFillObject,

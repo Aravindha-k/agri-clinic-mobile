@@ -35,7 +35,7 @@ export function ScreenEntranceBloom({
   anchorLeft = ANCHOR_LEFT,
   anchorTop = ANCHOR_TOP
 }: Props) {
-  const { reduced } = usePremiumMotion();
+  const { coreMotion } = usePremiumMotion();
   const { width, height } = useWindowDimensions();
   const scale = useSharedValue(0.5);
   const opacity = useSharedValue(0);
@@ -50,7 +50,7 @@ export function ScreenEntranceBloom({
   const easing = Easing.out(Easing.quad);
 
   useEffect(() => {
-    if (reduced) {
+    if (!coreMotion) {
       scale.value = 0.5;
       opacity.value = 0;
       return;
@@ -61,14 +61,14 @@ export function ScreenEntranceBloom({
 
     scale.value = withDelay(delay, withTiming(endScale, { duration, easing }));
     opacity.value = withDelay(delay, withTiming(0, { duration, easing }));
-  }, [anchorLeft, anchorTop, delay, duration, easing, endScale, opacity, peakOpacity, reduced, replayKey, scale]);
+  }, [anchorLeft, anchorTop, coreMotion, delay, duration, easing, endScale, opacity, peakOpacity, replayKey, scale]);
 
   const bloomStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
     transform: [{ scale: scale.value }]
   }));
 
-  if (reduced) {
+  if (!coreMotion) {
     return null;
   }
 

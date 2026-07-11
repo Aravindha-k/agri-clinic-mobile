@@ -22,9 +22,9 @@ type FlankProps = {
 };
 
 function ServiceFlankSeal({ flank, animate, delayMs = 0 }: FlankProps) {
-  const { reduced } = usePremiumMotion();
+  const { coreMotion } = usePremiumMotion();
   const drift = useSharedValue(0);
-  const shouldAnimate = animate && !reduced;
+  const shouldAnimate = animate && coreMotion;
 
   useEffect(() => {
     if (!shouldAnimate) {

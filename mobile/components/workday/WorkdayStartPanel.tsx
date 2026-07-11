@@ -25,11 +25,12 @@ type Props = {
   pendingSync?: number;
   trackingActiveLabel?: string | null;
   onStart: () => void;
-  onEnd?: () => void;
   onRetryStart?: () => void;
-  onNewVisit: () => void;
-  onFarmers: () => void;
+  onNewVisit?: () => void;
+  onFarmers?: () => void;
   onMyRoute: () => void;
+  /** When false, hide New Visit / Farmers (Day tab). Default true. */
+  showVisitActions?: boolean;
 };
 
 function readinessMeta(
@@ -100,11 +101,11 @@ export function WorkdayStartPanel({
   pendingSync = 0,
   trackingActiveLabel,
   onStart,
-  onEnd,
   onRetryStart,
   onNewVisit,
   onFarmers,
-  onMyRoute
+  onMyRoute,
+  showVisitActions = true
 }: Props) {
   const { t } = useI18n();
   const [readiness, setReadiness] = useState<LocationReadiness>("checking");
@@ -243,43 +244,42 @@ export function WorkdayStartPanel({
         </View>
       ) : null}
 
-      <PrimaryButton
-        label={t("workdayUx.newVisit")}
-        onPress={onNewVisit}
-        disabled={busy}
-        style={styles.primaryBtn}
-        accessibilityLabel={t("workdayUx.newVisit")}
-      />
-
-      <View style={styles.secondaryRow}>
-        <GhostButton
-          label={t("workdayUx.farmers")}
-          onPress={onFarmers}
+      {showVisitActions && onNewVisit ? (
+        <PrimaryButton
+          label={t("workdayUx.newVisit")}
+          onPress={onNewVisit}
           disabled={busy}
-          style={styles.secondaryBtn}
-          accessibilityLabel={t("workdayUx.farmers")}
+          style={styles.primaryBtn}
+          accessibilityLabel={t("workdayUx.newVisit")}
         />
-        <GhostButton
+      ) : null}
+
+      {showVisitActions && onFarmers ? (
+        <View style={styles.secondaryRow}>
+          <GhostButton
+            label={t("workdayUx.farmers")}
+            onPress={onFarmers}
+            disabled={busy}
+            style={styles.secondaryBtn}
+            accessibilityLabel={t("workdayUx.farmers")}
+          />
+          <GhostButton
+            label={t("workdayUx.myRoute")}
+            onPress={onMyRoute}
+            disabled={busy}
+            style={styles.secondaryBtn}
+            accessibilityLabel={t("workdayUx.myRoute")}
+          />
+        </View>
+      ) : (
+        <PrimaryButton
           label={t("workdayUx.myRoute")}
           onPress={onMyRoute}
           disabled={busy}
-          style={styles.secondaryBtn}
+          style={styles.primaryBtn}
           accessibilityLabel={t("workdayUx.myRoute")}
         />
-      </View>
-
-      {onEnd ? (
-        <Pressable
-          onPress={onEnd}
-          disabled={busy}
-          accessibilityRole="button"
-          accessibilityLabel={t("daySummary.endWorkday")}
-          accessibilityState={{ disabled: busy }}
-          style={({ pressed }) => [styles.endLink, (pressed || busy) && { opacity: 0.7 }]}
-        >
-          <Text style={styles.endLinkText}>{t("daySummary.endWorkday")}</Text>
-        </Pressable>
-      ) : null}
+      )}
     </View>
   );
 }
@@ -382,16 +382,6 @@ const styles = StyleSheet.create({
   secondaryBtn: {
     flex: 1,
     minWidth: 0
-  },
-  endLink: {
-    alignItems: "center",
-    minHeight: Layout.touchTargetMin,
-    justifyContent: "center"
-  },
-  endLinkText: {
-    color: Colors.redText,
-    fontSize: FontSize.body,
-    fontWeight: FontWeight.semibold
   },
   errorBanner: {
     backgroundColor: Colors.redBg,

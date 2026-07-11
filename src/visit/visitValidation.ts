@@ -127,13 +127,6 @@ export function getDetailsStepIssues(values: VisitFormValues): VisitValidationIs
   if (!hasValidCrop(normalized)) {
     issues.push({ field: "crop", message: "Crop is required", step: "details" });
   }
-  if (!hasObservation(normalized)) {
-    issues.push({
-      field: "observation",
-      message: "Add an observation or recommendation (at least one)",
-      step: "details"
-    });
-  }
   if (!hasValidGps(normalized)) {
     issues.push({ field: "gps", message: "GPS location is required", step: "details" });
   }
@@ -178,14 +171,6 @@ export function getSubmitIssues(values: VisitFormValues): VisitValidationIssue[]
     Number.isFinite(Number(lng));
   if (!gpsOk) {
     issues.push({ field: "gps", message: "GPS location is required", step: "summary" });
-  }
-
-  if (!hasObservation(normalized)) {
-    issues.push({
-      field: "observation",
-      message: "Add an observation or recommendation (at least one)",
-      step: "details"
-    });
   }
 
   return issues;

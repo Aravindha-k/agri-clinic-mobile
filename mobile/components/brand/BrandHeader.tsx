@@ -10,15 +10,24 @@ import { FadeInSection, entranceStagger } from "../ui/FadeInSection";
 import { Grid } from "../../lib/designSystem";
 import { TODAY_PAGE_PAD } from "../../lib/todayLayout";
 import { BrandLogoBadge } from "./BrandLogoBadge";
-import { HomeLogoWithSunGlow } from "./HomeLogoWithSunGlow";
 import { BrandTagline } from "./BrandTagline";
 import { BrandTitle } from "./BrandTitle";
+import { computeOrbitStageSize } from "./AgriNatureMark";
+import { homeLogoHeroColumnWidth, homeLogoHeroStageHeight } from "../today/HomeLogoHero";
 import {
   BRAND_LOGO_COMPACT,
+  BRAND_LOGO_FILL,
   BRAND_LOGO_HERO,
   BRAND_LOGO_MINI,
+  BRAND_ORBIT_GAP_RATIO,
   BrandHeaderSpacing
 } from "./brandHeaderSpacing";
+
+function heroLogoColumnWidth() {
+  const logoVisual = Math.round(BRAND_LOGO_HERO * BRAND_LOGO_FILL);
+  const orbitStage = computeOrbitStageSize(logoVisual, { gapRatio: BRAND_ORBIT_GAP_RATIO, compact: true });
+  return orbitStage + BrandHeaderSpacing.logoStageHorizontal;
+}
 
 export type BrandHeaderSize = "hero" | "compact" | "mini";
 export type BrandHeaderVariant = "full" | "plain";
@@ -38,11 +47,8 @@ type Props = {
   entrance?: EntranceProps;
   style?: StyleProp<ViewStyle>;
   scrollY?: SharedValue<number>;
-  /**
-   * Home (Today) only — experimental sunshine glow behind the logo.
-   * Other screens keep the standard BrandLogoBadge.
-   */
-  sunshineGlow?: boolean;
+  /** Replace default badge — used by Today HomeLogoHero. */
+  logo?: ReactNode;
 };
 
 function logoSizeFor(size: BrandHeaderSize) {
@@ -61,7 +67,7 @@ export function BrandHeader({
   entrance,
   style,
   scrollY,
-  sunshineGlow = false
+  logo
 }: Props) {
   const compact = size !== "hero";
   const logoSize = logoSizeFor(size);
@@ -87,15 +93,15 @@ export function BrandHeader({
     };
   });
 
-  const logoBadge = sunshineGlow ? (
-    <HomeLogoWithSunGlow
+  const logoBadge = logo ?? (
+    <BrandLogoBadge
       size={logoSize}
       animated={size === "hero"}
       replayKey={entrance?.replayKey ?? 0}
+      alignLeft={isSplit}
     />
-  ) : (
-    <BrandLogoBadge size={logoSize} animated={size === "hero"} replayKey={entrance?.replayKey ?? 0} />
   );
+  const usesHomeLogo = Boolean(logo);
 
   const wordmark = (
     <View style={[styles.wordmark, !isSplit && { marginTop: BrandHeaderSpacing.logoToTitle }, align === "center" && !isSplit && styles.wordmarkCenter]}>
@@ -107,7 +113,12 @@ export function BrandHeader({
 
   const brandCore = isSplit ? (
     <View style={styles.splitRow}>
-      <Animated.View style={[styles.logoColumn, logoScrollStyle]}>
+      <Animated.View
+        style={[
+          usesHomeLogo ? styles.logoColumnHome : styles.logoColumn,
+          logoScrollStyle
+        ]}
+      >
         {logoBadge}
       </Animated.View>
       <Animated.View style={[styles.splitCopy, wordmarkScrollStyle]}>
@@ -172,7 +183,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: TODAY_PAGE_PAD
   },
   wrapSplit: {
-    paddingHorizontal: TODAY_PAGE_PAD
+    paddingHorizontal: 0
   },
   brandPanel: {
     overflow: "visible",
@@ -181,24 +192,35 @@ const styles = StyleSheet.create({
   splitRow: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 6,
-    minHeight: 156,
+    gap: 2,
+    minHeight: 196,
     overflow: "visible",
     paddingTop: 6,
     position: "relative"
   },
   logoColumn: {
+    alignItems: "flex-start",
     flexShrink: 0,
-    marginLeft: -8,
+    justifyContent: "flex-start",
+    marginLeft: -4,
     overflow: "visible",
-    width: 184,
+    width: heroLogoColumnWidth(),
+    zIndex: 2
+  },
+  logoColumnHome: {
+    alignItems: "flex-start",
+    flexShrink: 0,
+    justifyContent: "center",
+    minHeight: homeLogoHeroStageHeight(),
+    overflow: "visible",
+    width: homeLogoHeroColumnWidth(),
     zIndex: 2
   },
   splitCopy: {
     flex: 1,
     justifyContent: "center",
     minWidth: 0,
-    paddingLeft: 6,
+    paddingLeft: 4,
     paddingRight: 44
   },
   splitBell: {

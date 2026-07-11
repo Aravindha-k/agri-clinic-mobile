@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Linking,
   Modal,
   Platform,
@@ -22,8 +23,7 @@ import type { VisitAttachment } from "../../../src/api/visitAttachments";
 import { useRefreshControlProps } from "../../../src/hooks/useRefreshControlProps";
 import { useSafeAreaInsetsCompat } from "../../../src/hooks/useSafeAreaInsetsCompat";
 import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
-import { VisitsStackParamList } from "../../../src/navigation/types";
-import { TAB_BAR_CONTENT_HEIGHT } from "../../../src/theme/tabBar";
+import { WorkStackParamList } from "../../../src/navigation/types";
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
 import { formatDisplayDateTime, visitDisplayIso } from "../../../src/utils/format";
 import { formatVisitPlaceLine } from "../../../src/utils/visitStatus";
@@ -54,9 +54,9 @@ import {
 } from "../../lib/visitDetailApi";
 import { Avatar, EmptyState, GhostButton, PrimaryButton, SectionHeader, StatusChip } from "../../components/ui";
 import { LocationPreviewMap } from "../../../src/components/map/LocationPreviewMap";
-import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
+import { Colors, FontSize, FontWeight, Layout, Radius, Spacing, minTouchStyle } from "../../lib/theme";
 
-type Props = NativeStackScreenProps<VisitsStackParamList, "VisitDetail">;
+type Props = NativeStackScreenProps<WorkStackParamList, "VisitDetail">;
 
 function visitHeaderDate(visit: Visit) {
   const iso = visitDisplayIso(visit);
@@ -84,11 +84,18 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
   const visitId = route.params.id;
   const fromSubmit = route.params.fromSubmit === true;
   const { width } = useWindowDimensions();
-  const { top: safeTop, bottom: safeBottom } = useSafeAreaInsetsCompat();
-  const tabBarInset = TAB_BAR_CONTENT_HEIGHT + safeBottom;
-  const editFooterHeight = 64;
+  const { top: safeTop } = useSafeAreaInsetsCompat();
   const refreshControlProps = useRefreshControlProps();
   const { bumpAfterVisitChange } = useFieldDataRefresh();
+
+  const handleBack = useCallback(() => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    // Nested navigate to VisitDetail can leave no stack history — return to Work visits.
+    navigation.navigate("WorkHome", { segment: "visits" });
+  }, [navigation]);
 
   const [visit, setVisit] = useState<Visit | null>(null);
   const [attachments, setAttachments] = useState<VisitAttachment[]>([]);
@@ -255,7 +262,12 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
         {() => (
           <>
             <View style={styles.header}>
-              <Pressable onPress={() => navigation.goBack()} style={styles.iconBtn}>
+              <Pressable
+                onPress={handleBack}
+                style={styles.iconBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+              >
                 <Ionicons name="arrow-back" size={18} color={Colors.text1} />
               </Pressable>
               <Text style={styles.headerDate}>{t("visitFlow.visitDetail")}</Text>
@@ -274,7 +286,12 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
         {(entranceTick) => (
           <>
             <View style={styles.header}>
-              <Pressable onPress={() => navigation.goBack()} style={styles.iconBtn}>
+              <Pressable
+                onPress={handleBack}
+                style={styles.iconBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+              >
                 <Ionicons name="arrow-back" size={18} color={Colors.text1} />
               </Pressable>
               <Text style={styles.headerDate}>Visit</Text>
@@ -300,14 +317,23 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
   const recommendationText = editMode ? draftRecommendation : visitRecommendationText(visit);
   const statusLabel = "Submitted";
   const statusVariant = "green" as const;
-  const scrollBottomPad = editMode ? tabBarInset + editFooterHeight + 16 : tabBarInset + 16;
+  const scrollBottomPad = editMode ? Layout.buttonHeight + Spacing.xxl : Spacing.xxl;
 
   return (
     <ScreenEntranceShell style={[styles.screen, { paddingTop: safeTop }]}>
       {(entranceTick) => (
-        <>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
+        >
       <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.iconBtn}>
+        <Pressable
+          onPress={handleBack}
+          style={styles.iconBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name="arrow-back" size={18} color={Colors.text1} />
         </Pressable>
         <Text style={styles.headerDate} numberOfLines={1}>
@@ -315,24 +341,16 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
         </Text>
         <View style={styles.headerRight}>
           <StatusChip label={statusLabel} variant={statusVariant} />
-          {editMode ? (
-            <>
-              <Pressable onPress={cancelEdit} style={styles.headerTextBtn}>
-                <Text style={styles.headerCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => void handleSave()}
-                disabled={saving}
-                style={[styles.headerSaveBtn, saving && styles.headerSaveBtnDisabled]}
-              >
-                <Text style={styles.headerSaveText}>{saving ? "Saving…" : "Save"}</Text>
-              </Pressable>
-            </>
-          ) : (
-            <Pressable onPress={() => setEditMode(true)} style={styles.iconBtn}>
+          {!editMode ? (
+            <Pressable
+              onPress={() => setEditMode(true)}
+              style={styles.iconBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Edit visit"
+            >
               <Ionicons name="create-outline" size={18} color={Colors.text1} />
             </Pressable>
-          )}
+          ) : null}
         </View>
       </View>
       {fromSubmit ? (
@@ -566,7 +584,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
       </ScrollView>
 
       {editMode ? (
-        <View style={[styles.editFooter, { bottom: tabBarInset }]}>
+        <View style={styles.editFooter}>
           <GhostButton label="Cancel" onPress={cancelEdit} style={styles.editFooterBtn} />
           <PrimaryButton
             label={saving ? t("common.saving") : t("visitFlow.saveChanges")}
@@ -588,7 +606,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
           </Pressable>
         </Pressable>
       </Modal>
-        </>
+        </KeyboardAvoidingView>
       )}
     </ScreenEntranceShell>
   );
@@ -597,6 +615,9 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   screen: {
     backgroundColor: Colors.bg,
+    flex: 1
+  },
+  flex: {
     flex: 1
   },
   scrollView: {
@@ -615,28 +636,47 @@ const styles = StyleSheet.create({
     fontSize: FontSize.lg,
     fontWeight: FontWeight.bold
   },
-  headerTextBtn: {
-    paddingHorizontal: 4,
-    paddingVertical: 6
+  headerRight: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexShrink: 0,
+    gap: 8
   },
-  headerCancelText: {
-    color: Colors.text3,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold
-  },
-  headerSaveBtn: {
-    backgroundColor: Colors.brand700,
+  iconBtn: {
+    ...minTouchStyle,
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
     borderRadius: Radius.md,
-    paddingHorizontal: 12,
-    paddingVertical: 7
+    borderWidth: 1,
+    justifyContent: "center"
   },
-  headerSaveBtnDisabled: {
-    opacity: 0.6
+  iconBtnActive: {
+    backgroundColor: Colors.brand700,
+    borderColor: Colors.brand700
   },
-  headerSaveText: {
-    color: Colors.surface,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold
+  scroll: {
+    gap: 14,
+    paddingHorizontal: Spacing.screen,
+    paddingTop: 4
+  },
+  editFooter: {
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderTopColor: Colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.screen,
+    paddingVertical: Spacing.md
+  },
+  editFooterBtn: {
+    flex: 1,
+    minWidth: 0
+  },
+  editFooterBtnPrimary: {
+    flex: 1.35,
+    minWidth: 0
   },
   submittedBanner: {
     alignItems: "center",
@@ -655,30 +695,6 @@ const styles = StyleSheet.create({
     color: Colors.greenText,
     fontSize: FontSize.sm,
     fontWeight: FontWeight.semibold
-  },
-  headerRight: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 8
-  },
-  iconBtn: {
-    alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    height: 32,
-    justifyContent: "center",
-    width: 32
-  },
-  iconBtnActive: {
-    backgroundColor: Colors.brand700,
-    borderColor: Colors.brand700
-  },
-  scroll: {
-    gap: 14,
-    paddingHorizontal: Spacing.screen,
-    paddingTop: 4
   },
   heroCard: {
     backgroundColor: Colors.brand700,
@@ -891,25 +907,6 @@ const styles = StyleSheet.create({
   },
   editedChipWrap: {
     alignItems: "flex-start"
-  },
-  editFooter: {
-    backgroundColor: Colors.surface,
-    borderTopColor: Colors.border,
-    borderTopWidth: 1,
-    bottom: 0,
-    flexDirection: "row",
-    gap: 10,
-    left: 0,
-    padding: 12,
-    paddingHorizontal: Spacing.screen,
-    position: "absolute",
-    right: 0
-  },
-  editFooterBtn: {
-    flex: 1
-  },
-  editFooterBtnPrimary: {
-    flex: 1.4
   },
   viewerBackdrop: {
     alignItems: "center",

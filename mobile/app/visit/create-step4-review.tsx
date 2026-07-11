@@ -25,7 +25,7 @@ import {
 import { farmerDisplayName, useVisitFormStore } from "../../store/visitFormStore";
 import { EntranceBlocks } from "../../components/ui/EntranceBlocks";
 import { useVisitEntranceKey } from "../../context/VisitEntranceContext";
-import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
+import { Colors, FontSize, FontWeight, Layout, Radius, Spacing, TextStyles, minTouchStyle } from "../../lib/theme";
 
 type Props = {
   onBack: () => void;
@@ -270,7 +270,13 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
         <FlatCard style={styles.reviewCard}>
           <View style={styles.reviewHead}>
             <Text style={styles.reviewLabel}>{t("visitFlow.farmerSummary")}</Text>
-            <Pressable onPress={onEditStep1} hitSlop={8}>
+            <Pressable
+              onPress={onEditStep1}
+              accessibilityRole="button"
+              accessibilityLabel={t("visitFlow.change")}
+              style={styles.editChip}
+            >
+              <Ionicons name="create-outline" size={14} color={Colors.brand700} />
               <Text style={styles.editLink}>{t("visitFlow.change")}</Text>
             </Pressable>
           </View>
@@ -284,21 +290,32 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
         <FlatCard style={styles.reviewCard}>
           <View style={styles.reviewHead}>
             <Text style={styles.reviewLabel}>{t("visitFlow.cropProblem")}</Text>
-            <Pressable onPress={onEditStep2} hitSlop={8}>
+            <Pressable
+              onPress={onEditStep2}
+              accessibilityRole="button"
+              accessibilityLabel={t("visitFlow.change")}
+              style={styles.editChip}
+            >
+              <Ionicons name="create-outline" size={14} color={Colors.brand700} />
               <Text style={styles.editLink}>{t("visitFlow.change")}</Text>
             </Pressable>
           </View>
           <View style={styles.chipRow}>
             {cropName ? <StatusChip label={cropName} variant="gray" /> : null}
-            {problemCategoryCode ? <StatusChip label={problemCategoryCode} variant="blue" /> : null}
+            {problemLabel ? <StatusChip label={problemLabel} variant="blue" /> : null}
           </View>
-          <Text style={styles.reviewValue}>{problemLabel}</Text>
         </FlatCard>
 
         <FlatCard style={styles.reviewCard}>
           <View style={styles.reviewHead}>
             <Text style={styles.reviewLabel}>{t("visitFlow.adviceSummary")}</Text>
-            <Pressable onPress={onEditStep3} hitSlop={8}>
+            <Pressable
+              onPress={onEditStep3}
+              accessibilityRole="button"
+              accessibilityLabel={t("visitFlow.change")}
+              style={styles.editChip}
+            >
+              <Ionicons name="create-outline" size={14} color={Colors.brand700} />
               <Text style={styles.editLink}>{t("visitFlow.change")}</Text>
             </Pressable>
           </View>
@@ -386,14 +403,26 @@ const styles = StyleSheet.create({
     justifyContent: "space-between"
   },
   reviewLabel: {
+    ...TextStyles.label,
     color: Colors.text4,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold,
     textTransform: "uppercase"
+  },
+  editChip: {
+    ...minTouchStyle,
+    alignItems: "center",
+    backgroundColor: Colors.brand50,
+    borderColor: Colors.brand100,
+    borderRadius: Radius.chip,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    gap: 4,
+    justifyContent: "center",
+    minWidth: Layout.touchTargetMin,
+    paddingHorizontal: Spacing.sm
   },
   editLink: {
     color: Colors.brand700,
-    fontSize: FontSize.sm,
+    fontSize: FontSize.caption,
     fontWeight: FontWeight.semibold
   },
   reviewTitle: {

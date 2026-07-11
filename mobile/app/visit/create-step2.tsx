@@ -17,6 +17,7 @@ import { ProblemSelectCard } from "../../components/visit/step2/ProblemSelectCar
 import { SelectedProblemSummary } from "../../components/visit/step2/SelectedProblemSummary";
 import { StepIndicator } from "../../components/visit/StepIndicator";
 import { PrimaryButton, SearchBar } from "../../components/ui";
+import { VisitFlowHeader } from "../../components/visit/VisitFlowHeader";
 import {
   cropHasMappedProblems,
   filterStep2Problems,
@@ -326,16 +327,11 @@ export function VisitCreateStep2({ onBack }: Props) {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.topBar}>
-        <Pressable onPress={onBack} style={styles.iconBtn}>
-          <Ionicons name="arrow-back" size={18} color={Colors.text1} />
-        </Pressable>
-        <View style={styles.topBarCopy}>
-          <Text style={styles.topBarTitle}>{t("visitFlow.cropAndProblem")}</Text>
-          <Text style={styles.topBarSub}>{t("visitFlow.step2of4")}</Text>
-        </View>
-        <View style={styles.iconBtn} />
-      </View>
+      <VisitFlowHeader
+        title={t("visitFlow.cropAndProblem")}
+        subtitle={t("visitFlow.step2of4")}
+        onBack={onBack}
+      />
 
       <FadeInSection replayKey={replayKey} delay={entranceStagger(0)} variant="card">
       <VisitFarmerSummaryCard farmer={farmer} newFarmer={newFarmer} />
@@ -505,38 +501,6 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1
-  },
-  topBar: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 10,
-    paddingBottom: 4,
-    paddingHorizontal: Spacing.screen,
-    paddingTop: 8
-  },
-  iconBtn: {
-    alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    height: 32,
-    justifyContent: "center",
-    width: 32
-  },
-  topBarCopy: {
-    flex: 1,
-    gap: 1,
-    minWidth: 0
-  },
-  topBarTitle: {
-    color: Colors.text1,
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.bold
-  },
-  topBarSub: {
-    color: Colors.text3,
-    fontSize: FontSize.sm
   },
   stepWrap: {
     paddingBottom: 8,

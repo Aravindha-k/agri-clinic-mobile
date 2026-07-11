@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Colors, Enterprise, FontSize, FontWeight, Layout, Radius, Spacing } from "../../lib/theme";
+import { Colors, FontSize, FontWeight, Layout, Radius, Spacing, TextStyles, minTouchStyle } from "../../lib/theme";
 
 type Props = {
   title: string;
@@ -12,15 +12,25 @@ type Props = {
   gpsDotColor?: string;
 };
 
-const BTN = Layout.touchTargetMin - 8;
-
 export function VisitFlowHeader({ title, subtitle, onClose, onBack, gpsAccuracy, gpsLabel, gpsDotColor }: Props) {
   const leadingAction = onBack ? (
-    <Pressable onPress={onBack} style={styles.iconBtn} accessibilityRole="button" hitSlop={8}>
+    <Pressable
+      onPress={onBack}
+      style={styles.iconBtn}
+      accessibilityRole="button"
+      accessibilityLabel="Go back"
+      hitSlop={8}
+    >
       <Ionicons name="chevron-back" size={22} color={Colors.brand700} />
     </Pressable>
   ) : onClose ? (
-    <Pressable onPress={onClose} style={styles.iconBtn} accessibilityRole="button" hitSlop={8}>
+    <Pressable
+      onPress={onClose}
+      style={styles.iconBtn}
+      accessibilityRole="button"
+      accessibilityLabel="Close"
+      hitSlop={8}
+    >
       <Ionicons name="close" size={22} color={Colors.text2} />
     </Pressable>
   ) : (
@@ -53,7 +63,7 @@ export function VisitFlowHeader({ title, subtitle, onClose, onBack, gpsAccuracy,
 const styles = StyleSheet.create({
   header: {
     alignItems: "center",
-    backgroundColor: Colors.bg,
+    backgroundColor: Colors.surface,
     borderBottomColor: Colors.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
@@ -63,18 +73,17 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.sm
   },
   iconBtn: {
+    ...minTouchStyle,
     alignItems: "center",
     backgroundColor: Colors.surface,
     borderColor: Colors.border,
     borderRadius: Radius.inner,
     borderWidth: StyleSheet.hairlineWidth,
-    height: BTN,
-    justifyContent: "center",
-    width: BTN
+    justifyContent: "center"
   },
   iconBtnSpacer: {
-    height: BTN,
-    width: BTN
+    height: Layout.touchTargetMin,
+    width: Layout.touchTargetMin
   },
   copy: {
     flex: 1,
@@ -82,14 +91,12 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   title: {
-    color: Colors.text1,
-    fontSize: FontSize.title,
-    fontWeight: FontWeight.bold
+    ...TextStyles.h3,
+    color: Colors.text1
   },
   subtitle: {
-    color: Colors.text3,
-    fontSize: FontSize.body,
-    fontWeight: FontWeight.medium
+    ...TextStyles.caption,
+    color: Colors.text3
   },
   gpsPill: {
     alignItems: "center",
@@ -100,8 +107,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 5,
     maxWidth: 120,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 6
+    minHeight: Layout.touchTargetMin,
+    paddingHorizontal: Spacing.sm
   },
   gpsDot: {
     borderRadius: 4,

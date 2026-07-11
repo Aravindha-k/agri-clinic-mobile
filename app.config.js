@@ -131,6 +131,7 @@ module.exports = () => ({
     ],
     "@react-native-community/datetimepicker",
     "expo-secure-store",
+    "expo-background-task",
     [
       "expo-notifications",
       {

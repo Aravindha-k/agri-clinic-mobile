@@ -2,22 +2,23 @@ import { Ionicons } from "@expo/vector-icons";
 import { memo } from "react";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { useI18n } from "../../../src/i18n/I18nContext";
-import { Colors, Enterprise, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
+import { Colors, Enterprise, FontSize, FontWeight, Layout, Spacing } from "../../lib/theme";
 import type { FarmerWorkflowMeta, VisitPriorityLabel } from "../../lib/workQueue";
 import type { MobileFarmer } from "../../lib/farmersApi";
 import { farmerVisitCount } from "../../lib/farmerStatus";
 import { buildFarmerWorkflowMeta } from "../../lib/workQueue";
 import { FlatCard } from "../layout/FlatCard";
 import { PressableCard } from "../ui/PressableCard";
+import { StatusChip } from "../ui/StatusChip";
 
-function priorityStyles(label: VisitPriorityLabel) {
+function priorityVariant(label: VisitPriorityLabel): "error" | "warning" | "blue" {
   switch (label) {
     case "Overdue":
-      return { bg: Colors.redBg, text: Colors.redText, border: Colors.red };
+      return "error";
     case "Today":
-      return { bg: Colors.amberBg, text: Colors.amberText, border: Colors.amber };
+      return "warning";
     default:
-      return { bg: Colors.blueBg, text: Colors.blueText, border: Colors.blue };
+      return "blue";
   }
 }
 
@@ -61,7 +62,6 @@ export const FarmerDirectoryCard = memo(function FarmerDirectoryCard({
   const neverVisited = farmerVisitCount(farmer) === 0;
   const canCall = Boolean(phone);
   const displayName = farmer.name || t("visitFlow.farmer");
-  const priority = priorityStyles(meta.priorityLabel);
   const lastVisitLabel = meta.lastVisitDateLabel || t("work.neverVisited");
 
   function handleCall() {
@@ -83,11 +83,10 @@ export const FarmerDirectoryCard = memo(function FarmerDirectoryCard({
             <Text style={styles.name} numberOfLines={1}>
               {displayName}
             </Text>
-            <View style={[styles.priorityBadge, { backgroundColor: priority.bg, borderColor: priority.border }]}>
-              <Text style={[styles.priorityText, { color: priority.text }]}>
-                {t(priorityLabelKey(meta.priorityLabel))}
-              </Text>
-            </View>
+            <StatusChip
+              label={t(priorityLabelKey(meta.priorityLabel))}
+              variant={priorityVariant(meta.priorityLabel)}
+            />
           </View>
 
           {village ? (
@@ -186,16 +185,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.md,
     fontWeight: FontWeight.bold
   },
-  priorityBadge: {
-    borderRadius: Radius.chip,
-    borderWidth: 1,
-    paddingHorizontal: 6,
-    paddingVertical: 1
-  },
-  priorityText: {
-    fontSize: 10,
-    fontWeight: FontWeight.semibold
-  },
   village: {
     color: Colors.text2,
     fontSize: FontSize.sm,
@@ -229,9 +218,9 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     gap: 4,
-    height: 40,
+    height: Layout.touchTargetMin,
     justifyContent: "center",
-    minHeight: 40
+    minHeight: Layout.touchTargetMin
   },
   outlineBtnText: {
     color: Colors.text2,
@@ -248,9 +237,9 @@ const styles = StyleSheet.create({
     flex: 1.5,
     flexDirection: "row",
     gap: 4,
-    height: 44,
+    height: Layout.touchTargetMin,
     justifyContent: "center",
-    minHeight: 44
+    minHeight: Layout.touchTargetMin
   },
   primaryBtnText: {
     color: Colors.onPrimary,

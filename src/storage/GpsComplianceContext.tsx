@@ -12,9 +12,7 @@ import {
   GPS_BLOCK_AFTER_MS,
   GPS_BLOCKED_MESSAGE,
   GPS_PERMISSION_MESSAGE,
-  GPS_PROBE_INTERVAL_MS,
-  GPS_REMINDER_INTERVAL_MS,
-  GPS_REMINDER_MESSAGE
+  GPS_PROBE_INTERVAL_MS
 } from "../constants/gpsCompliance";
 import { GpsAvailability, isGpsAvailable, probeGpsAvailability } from "../utils/gpsStatus";
 import { readCachedActiveWorkday } from "./workdaySessionStorage";
@@ -34,7 +32,7 @@ type GpsComplianceContextValue = {
   notifyGpsGranted: () => void;
   /** Returns false when work actions must not run (30+ min without GPS). */
   ensureWorkAllowed: (actionLabel?: string) => boolean;
-  /** Shows permission settings guidance (does not block unless status is blocked). */
+  /** Shows permission settings guidance (user-initiated only). */
   showPermissionHelp: () => void;
 };
 
@@ -57,7 +55,6 @@ export function GpsComplianceProvider({ children }: { children: React.ReactNode 
   const [availability, setAvailability] = useState<GpsAvailability>("permission_undetermined");
   const [status, setStatus] = useState<GpsComplianceStatus>("active");
   const offlineSinceRef = useRef<number | null>(null);
-  const lastReminderAtRef = useRef<number>(0);
   const probingRef = useRef(false);
 
   const applyAvailability = useCallback((next: GpsAvailability) => {
@@ -66,7 +63,6 @@ export function GpsComplianceProvider({ children }: { children: React.ReactNode 
 
     if (isGpsAvailable(next)) {
       offlineSinceRef.current = null;
-      lastReminderAtRef.current = 0;
       setStatus("active");
       return;
     }
@@ -82,20 +78,10 @@ export function GpsComplianceProvider({ children }: { children: React.ReactNode 
     }
 
     setStatus("required");
-
-    if (now - lastReminderAtRef.current >= GPS_REMINDER_INTERVAL_MS) {
-      lastReminderAtRef.current = now;
-      if (next === "permission_denied") {
-        promptOpenSettings();
-      } else {
-        Alert.alert("GPS required", GPS_REMINDER_MESSAGE);
-      }
-    }
   }, []);
 
   const notifyGpsGranted = useCallback(() => {
     offlineSinceRef.current = null;
-    lastReminderAtRef.current = 0;
     setAvailability("active");
     setStatus("active");
   }, []);
@@ -108,7 +94,6 @@ export function GpsComplianceProvider({ children }: { children: React.ReactNode 
     const activeWorkday = await readCachedActiveWorkday();
     if (!activeWorkday) {
       offlineSinceRef.current = null;
-      lastReminderAtRef.current = 0;
       setStatus("active");
       return;
     }
@@ -127,7 +112,6 @@ export function GpsComplianceProvider({ children }: { children: React.ReactNode 
   useEffect(() => {
     if (!sessionReady) {
       offlineSinceRef.current = null;
-      lastReminderAtRef.current = 0;
       setAvailability("permission_undetermined");
       setStatus("active");
       return;

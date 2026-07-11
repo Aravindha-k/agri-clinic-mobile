@@ -2,15 +2,10 @@ import { BlurView } from "expo-blur";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { Briefcase, Calendar, CalendarDays, User, type LucideIcon } from "lucide-react-native";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
-import Animated, {
-  useAnimatedStyle,
-  withSpring,
-  withTiming
-} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FAB_RISE_ABOVE_BAR } from "../../../src/theme/tabBar";
 import { useI18n } from "../../../src/i18n/I18nContext";
-import { Grid, Motion } from "../../lib/designSystem";
+import { Grid } from "../../lib/designSystem";
 import { LucideGlyph } from "../ui/AppIcon";
 import { Colors, FontSize, FontWeight, Layout, Spacing } from "../../lib/theme";
 
@@ -34,28 +29,17 @@ function TabItem({
   Icon: LucideIcon;
   badge?: string | number;
 }) {
-  const indicatorStyle = useAnimatedStyle(() => ({
-    opacity: withTiming(focused ? 1 : 0, { duration: Motion.fast }),
-    transform: [{ scale: withSpring(focused ? 1 : 0.85, Motion.springSoft) }]
-  }));
-
-  const iconStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: withSpring(focused ? 1.05 : 1, Motion.springSnappy) }]
-  }));
-
   return (
     <View style={styles.tabItem}>
-      <Animated.View style={iconStyle}>
-        <View style={styles.iconWrap}>
-          <Animated.View style={[styles.activeDot, indicatorStyle]} />
-          <LucideGlyph
-            icon={Icon}
-            size={21}
-            color={focused ? Colors.brand700 : Colors.text3}
-            strokeWidth={focused ? 2.2 : 1.8}
-          />
-        </View>
-      </Animated.View>
+      <View style={[styles.iconWrap, focused && styles.iconWrapFocused]}>
+        <View style={[styles.activeDot, focused ? styles.activeDotVisible : styles.activeDotHidden]} />
+        <LucideGlyph
+          icon={Icon}
+          size={21}
+          color={focused ? Colors.brand700 : Colors.text3}
+          strokeWidth={focused ? 2.2 : 1.8}
+        />
+      </View>
       <Text style={[styles.tabLabel, focused && styles.tabLabelActive]} numberOfLines={1}>
         {label}
       </Text>
@@ -225,12 +209,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 28
   },
+  iconWrapFocused: {
+    transform: [{ scale: 1.05 }]
+  },
   activeDot: {
     backgroundColor: "rgba(15, 107, 67, 0.14)",
     borderRadius: 14,
     height: 28,
     position: "absolute",
     width: 28
+  },
+  activeDotVisible: {
+    opacity: 1,
+    transform: [{ scale: 1 }]
+  },
+  activeDotHidden: {
+    opacity: 0,
+    transform: [{ scale: 0.85 }]
   },
   tabLabel: {
     color: Colors.text3,

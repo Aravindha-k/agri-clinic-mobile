@@ -16,7 +16,6 @@ import { getExpoBuildUrl, shouldShowExpoGoDevWarning } from "../../src/utils/exp
 import { logDayTabApi, logDayTabError, logDayTabOpen } from "../../src/utils/dayTabDiagnostics";
 import { useRefreshControlProps } from "../../src/hooks/useRefreshControlProps";
 import { useWorkdayTimer } from "../../src/hooks/useLiveClock";
-import { useSecureScreen } from "../../src/hooks/useSecureScreen";
 import { useTabBarBottomInset } from "../../src/hooks/useTabBarBottomInset";
 import { useI18n } from "../../src/i18n/I18nContext";
 import { useOfflineSync } from "../../src/storage/OfflineSyncContext";
@@ -73,7 +72,6 @@ export default function TrackingWorkspaceScreen() {
 }
 
 function TrackingWorkspaceScreenInner() {
-  useSecureScreen();
   const { t } = useI18n();
   const navigation = useNavigation<any>();
   const rootNav = navigation.getParent();

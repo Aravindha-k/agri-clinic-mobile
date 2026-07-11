@@ -10,6 +10,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withDelay,
+  withRepeat,
   withSequence,
   withTiming
 } from "react-native-reanimated";
@@ -36,6 +37,11 @@ const COPY_BLOCK_HEIGHT = 78;
 /** Match Expo splash plugin imageWidth (~200 logical px). */
 const LOGO_WIDTH_RATIO = 0.42;
 const LOGO_MAX = 200;
+
+/** Classic logo breathe — visible zoom in / out on splash. */
+const SPLASH_LOGO_ZOOM_MIN = 0.92;
+const SPLASH_LOGO_ZOOM_MAX = 1.1;
+const SPLASH_LOGO_ZOOM_HALF_MS = 900;
 
 /**
  * Timeline from first layout (ms):
@@ -196,7 +202,7 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     cancelAnimation(screenOpacity);
 
     logoOpacity.value = 1;
-    logoScale.value = 1;
+    logoScale.value = SPLASH_LOGO_ZOOM_MIN;
     logoTranslateY.value = 0;
     titleOpacity.value = 0;
     titleTranslateY.value = 14;
@@ -204,9 +210,20 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     exitWash.value = 0;
     screenOpacity.value = 1;
 
+    const zoomHalfMs = preferLight ? SPLASH_LOGO_ZOOM_HALF_MS + 120 : SPLASH_LOGO_ZOOM_HALF_MS;
+    const zoomMin = preferLight ? 0.94 : SPLASH_LOGO_ZOOM_MIN;
+    const zoomMax = preferLight ? 1.06 : SPLASH_LOGO_ZOOM_MAX;
+
     logoScale.value = withDelay(
       120,
-      withTiming(preferLight ? 1.05 : 1.08, { duration: LOGO_ANIM_MS, easing: easeOut })
+      withRepeat(
+        withSequence(
+          withTiming(zoomMax, { duration: zoomHalfMs, easing: easeOut }),
+          withTiming(zoomMin, { duration: zoomHalfMs, easing: easeInOut })
+        ),
+        -1,
+        false
+      )
     );
     logoTranslateY.value = withDelay(
       120,

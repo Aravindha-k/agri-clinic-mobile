@@ -23,7 +23,10 @@ import { useTracking } from "../../../src/storage/TrackingContext";
 import { autoFlushPendingGps } from "../../lib/sync/offlineSyncManager";
 import { updateCachedWorkdayMetrics } from "../../../src/storage/workdaySessionStorage";
 import { resolveWorkdayStartedAt } from "../../../src/utils/workdayStartedAt";
-import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal";
+import {
+  ensureLocationForWorkdayStart
+} from "../../../src/utils/workdayLocationGate";
+import { workdayStartGateCopy } from "../../../src/utils/workdayStartCopy";
 import { useFieldWeather } from "../../../src/hooks/useFieldWeather";
 import { FadeInSection, entranceStagger } from "../../components/ui/FadeInSection";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
@@ -38,7 +41,7 @@ import {
 } from "../../components/today";
 import { WorkdayInactiveBanner } from "../../../src/components/WorkdayInactiveBanner";
 import { OfflineBanner } from "../../components/ui";
-import { WorkdayHero } from "../../components/workday/WorkdayHero";
+import { WorkdayStartPanel } from "../../components/workday/WorkdayStartPanel";
 import { readDashboardCache } from "../../lib/dashboardCache";
 import { formatHeaderDate, formatShortTime } from "../../lib/format";
 import { fetchDashboard, fetchWorkStatus } from "../../lib/homeApi";
@@ -81,11 +84,13 @@ export default function TodayTabScreen() {
     startDay,
     endDay,
     busy,
+    error: trackingError,
     refreshTracking,
     workday,
     workdaySyncStatus,
     cachedDistanceKm,
-    currentLocation
+    currentLocation,
+    pendingSyncCount
   } = useTracking();
   const unreadNotifCount = useSyncStore((state) => state.unreadNotifCount);
 
@@ -94,6 +99,8 @@ export default function TodayTabScreen() {
   const [cacheHydrated, setCacheHydrated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [dismissedError, setDismissedError] = useState("");
   const dashboardRef = useRef<DashboardData | null>(null);
   dashboardRef.current = dashboard;
   const entranceTick = useScreenEntrance();
@@ -136,15 +143,6 @@ export default function TodayTabScreen() {
     transform: [
       {
         translateY: interpolate(scrollY.value, [0, 140], [0, -14], Extrapolation.CLAMP)
-      }
-    ]
-  }));
-
-  const heroCompressStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(scrollY.value, [0, 120], [1, 0.95], Extrapolation.CLAMP),
-    transform: [
-      {
-        scale: interpolate(scrollY.value, [0, 160], [1, 0.97], Extrapolation.CLAMP)
       }
     ]
   }));
@@ -229,13 +227,24 @@ export default function TodayTabScreen() {
     await Promise.all([loadAll(true), refreshTracking().catch(() => undefined)]);
   }
 
+  const visibleTrackingError =
+    trackingError && trackingError !== dismissedError ? trackingError : null;
+
   function confirmStartWorkday() {
+    if (busy || starting) return;
     void (async () => {
-      const allowed = await requestGpsForFieldWork();
-      if (!allowed) return;
-      await startDay();
-      await refreshTracking().catch(() => undefined);
-      void fetchWorkStatus().then(applyWorkStatus).catch(() => undefined);
+      setStarting(true);
+      setDismissedError("");
+      try {
+        const allowed = await ensureLocationForWorkdayStart(workdayStartGateCopy(t));
+        if (!allowed) return;
+        const started = await startDay();
+        if (!started) return;
+        await refreshTracking().catch(() => undefined);
+        void fetchWorkStatus().then(applyWorkStatus).catch(() => undefined);
+      } finally {
+        setStarting(false);
+      }
     })();
   }
 
@@ -247,6 +256,7 @@ export default function TodayTabScreen() {
         style: "destructive",
         onPress: () => {
           void (async () => {
+            setDismissedError("");
             await endDay();
             await refreshTracking().catch(() => undefined);
             void fetchWorkStatus().then(applyWorkStatus).catch(() => undefined);
@@ -262,17 +272,6 @@ export default function TodayTabScreen() {
       : workActive && workdaySyncStatus === "connecting"
         ? t("home.connectingToServer")
         : null;
-
-  const workdayHeroStats = useMemo(() => {
-    if (!workActive) return undefined;
-    const workTimeShort = workdayTimer.display.slice(0, 5);
-    return [
-      { label: t("home.distanceToday"), value: `${distanceKm.toFixed(1)} km` },
-      { label: t("home.visitsToday"), value: String(dashboard?.visits_today ?? 0) },
-      { label: t("home.routePoints"), value: String(workStatus?.route_points ?? 0) },
-      { label: t("home.hoursWorked"), value: workTimeShort }
-    ];
-  }, [dashboard?.visits_today, distanceKm, t, workActive, workStatus?.route_points, workdayTimer.display]);
 
   const quickActions: TodayQuickAction[] = useMemo(
     () => [
@@ -339,6 +338,37 @@ export default function TodayTabScreen() {
         ) : null}
 
         <Animated.View style={[styles.headerHeroZone, headerParallaxStyle]}>
+          <FadeInSection replayKey={entranceTick} delay={entranceStagger(heroStep)} duration={280}>
+            <View style={styles.workdaySection}>
+              <WorkdayStartPanel
+                active={workActive}
+                busy={busy}
+                starting={starting}
+                error={visibleTrackingError}
+                onDismissError={() => setDismissedError(trackingError || "")}
+                timerDisplay={workdayTimer.display}
+                startedAtLabel={startedAt ? formatShortTime(startedAt) : null}
+                distanceKm={distanceKm}
+                visitsToday={dashboard?.visits_today ?? 0}
+                pendingSync={pendingSyncCount + pendingCount}
+                trackingActiveLabel={workdaySyncLabel ?? t("workdayUx.locationTrackingActive")}
+                onStart={confirmStartWorkday}
+                onEnd={workActive ? confirmEndWorkday : undefined}
+                onRetryStart={confirmStartWorkday}
+                onNewVisit={() =>
+                  rootNav?.navigate("VisitFlow", {
+                    screen: "NewVisitFarmer",
+                    params: { fresh: true }
+                  })
+                }
+                onFarmers={() =>
+                  navigation.navigate("Work", { screen: "WorkHome", params: { segment: "queue" } })
+                }
+                onMyRoute={() => rootNav?.navigate("MyLocation")}
+              />
+            </View>
+          </FadeInSection>
+
           <TodayHeader
             greeting={greeting}
             name={employeeName}
@@ -352,29 +382,7 @@ export default function TodayTabScreen() {
 
           <WorkdayInactiveBanner />
 
-          {showSkeleton ? (
-            <TabDashboardSkeleton />
-          ) : (
-            <Animated.View style={[styles.workdaySection, heroCompressStyle]}>
-              <FadeInSection replayKey={entranceTick} delay={entranceStagger(heroStep)} duration={280}>
-                <WorkdayHero
-                active={workActive}
-                timerDisplay={workdayTimer.display}
-                startedAtLabel={startedAt ? formatShortTime(startedAt) : null}
-                distanceKm={distanceKm}
-                lastSyncLabel={workdaySyncLabel}
-                busy={busy}
-                onStart={confirmStartWorkday}
-                onEnd={workActive ? confirmEndWorkday : undefined}
-                startLabel={t("home.startWorkday")}
-                endLabel={t("daySummary.endWorkday")}
-                idleTitle={t("home.startWorkday")}
-                idleSubtitle={t("home.startWorkdayBody")}
-                statItems={workdayHeroStats}
-              />
-              </FadeInSection>
-            </Animated.View>
-          )}
+          {showSkeleton ? <TabDashboardSkeleton /> : null}
         </Animated.View>
 
         {showContent ? (

@@ -22,7 +22,8 @@ import { useTabBarBottomInset } from "../../src/hooks/useTabBarBottomInset";
 import { useI18n } from "../../src/i18n/I18nContext";
 import { useOfflineSync } from "../../src/storage/OfflineSyncContext";
 import { useTracking } from "../../src/storage/TrackingContext";
-import { requestGpsForFieldWork } from "../../src/utils/locationRequiredModal";
+import { ensureLocationForWorkdayStart } from "../../src/utils/workdayLocationGate";
+import { workdayStartGateCopy } from "../../src/utils/workdayStartCopy";
 import { autoFlushPendingGps } from "../lib/sync/offlineSyncManager";
 import { readPendingVisits } from "../lib/pendingVisitsQueue";
 import { isSameVisitLocalDay } from "../../src/utils/format";
@@ -34,7 +35,7 @@ import { FadeInSection, entranceStagger } from "../components/ui/FadeInSection";
 import { RecentActivitySection } from "../components/today/RecentActivitySection";
 import { TodayKpiRow } from "../components/today/TodayKpiRow";
 import { TabDashboardSkeleton } from "../components/today/TabDashboardSkeleton";
-import { WorkdayHero } from "../components/workday/WorkdayHero";
+import { WorkdayStartPanel } from "../components/workday/WorkdayStartPanel";
 import { useScreenEntrance } from "../hooks/useScreenEntrance";
 import {
   countVillagesFromVisitsToday,
@@ -84,14 +85,19 @@ function TrackingWorkspaceScreenInner() {
     isActive,
     startedAt: trackingStartedAt,
     busy,
+    error: trackingError,
     startDay,
     endDay,
     workday,
     refreshTracking,
-    lastSyncTime
+    lastSyncTime,
+    pendingSyncCount,
+    cachedDistanceKm
   } = useTracking();
 
   const [refreshing, setRefreshing] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [dismissedError, setDismissedError] = useState("");
   const [distanceKm, setDistanceKm] = useState(0);
   const [workdayId, setWorkdayId] = useState<number | undefined>();
   const [visitsToday, setVisitsToday] = useState(0);
@@ -212,11 +218,19 @@ function TrackingWorkspaceScreenInner() {
   }
 
   async function handleStartWorkday() {
-    const allowed = await requestGpsForFieldWork();
-    if (!allowed) return;
-    await startDay();
-    await refreshTracking().catch(() => undefined);
-    await loadSummary();
+    if (busy || starting) return;
+    setStarting(true);
+    setDismissedError("");
+    try {
+      const allowed = await ensureLocationForWorkdayStart(workdayStartGateCopy(t));
+      if (!allowed) return;
+      const started = await startDay();
+      if (!started) return;
+      await refreshTracking().catch(() => undefined);
+      await loadSummary();
+    } finally {
+      setStarting(false);
+    }
   }
 
   function confirmEndWorkday() {
@@ -227,6 +241,7 @@ function TrackingWorkspaceScreenInner() {
         style: "destructive",
         onPress: () => {
           void (async () => {
+            setDismissedError("");
             await endDay();
             await refreshTracking().catch(() => undefined);
             await loadSummary();
@@ -239,6 +254,10 @@ function TrackingWorkspaceScreenInner() {
   function openBuildApkPage() {
     void Linking.openURL(getExpoBuildUrl()).catch(() => undefined);
   }
+
+  const visibleTrackingError =
+    trackingError && trackingError !== dismissedError ? trackingError : null;
+  const displayDistanceKm = distanceKm || cachedDistanceKm || 0;
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
@@ -268,44 +287,38 @@ function TrackingWorkspaceScreenInner() {
 
         {shouldShowExpoGoDevWarning() ? <ExpoGoDevBanner onBuildApk={openBuildApkPage} /> : null}
 
+        <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
+          <WorkdayStartPanel
+            active={isActive}
+            busy={busy}
+            starting={starting}
+            error={visibleTrackingError}
+            onDismissError={() => setDismissedError(trackingError || "")}
+            timerDisplay={workdayTimer.display}
+            startedAtLabel={formatStartedTime(startedAt)}
+            distanceKm={displayDistanceKm}
+            visitsToday={visitsToday}
+            pendingSync={pendingSyncCount + pendingCount}
+            onStart={() => void handleStartWorkday()}
+            onEnd={isActive ? confirmEndWorkday : undefined}
+            onRetryStart={() => void handleStartWorkday()}
+            onNewVisit={() =>
+              rootNav?.navigate("VisitFlow", {
+                screen: "NewVisitFarmer",
+                params: { fresh: true }
+              })
+            }
+            onFarmers={() =>
+              navigation.navigate("Work", { screen: "WorkHome", params: { segment: "queue" } })
+            }
+            onMyRoute={() => rootNav?.navigate("MyLocation")}
+          />
+        </FadeInSection>
+
         {summaryLoading ? (
           <TabDashboardSkeleton />
         ) : (
           <>
-        <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
-          <WorkdayHero
-          active={isActive}
-          timerDisplay={workdayTimer.display}
-          startedAtLabel={formatStartedTime(startedAt)}
-          distanceKm={distanceKm}
-          busy={busy}
-          onStart={() => void handleStartWorkday()}
-          onEnd={isActive ? confirmEndWorkday : undefined}
-          startLabel={t("home.startWorkday")}
-          endLabel={t("daySummary.endWorkday")}
-          idleTitle={t("daySummary.idleTitle")}
-          idleSubtitle={t("daySummary.idleSubtitle")}
-          statItems={
-            isActive
-              ? [
-                  {
-                    label: t("daySummary.distanceTravelled"),
-                    value: `${formatDistanceKm(distanceKm)} km`
-                  },
-                  {
-                    label: t("daySummary.visitsCompleted"),
-                    value: String(visitsToday)
-                  },
-                  {
-                    label: t("daySummary.farmersCovered"),
-                    value: String(farmersCovered)
-                  }
-                ]
-              : undefined
-          }
-        />
-        </FadeInSection>
-
         <FadeInSection replayKey={entranceTick} delay={entranceStagger(2)}>
           <TodayKpiRow
           items={[

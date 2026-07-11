@@ -2,11 +2,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Colors } from "../../mobile/lib/theme";
+import { useI18n } from "../i18n/I18nContext";
 import { useTracking } from "../storage/TrackingContext";
-import { requestGpsForFieldWork } from "../utils/locationRequiredModal";
+import { ensureLocationForWorkdayStart } from "../utils/workdayLocationGate";
+import { workdayStartGateCopy } from "../utils/workdayStartCopy";
 import { space } from "../theme/layout";
 
 export function WorkdayInactiveBanner() {
+  const { t } = useI18n();
   const { workdayInactiveBanner, busy, startDay, isActive } = useTracking();
 
   if (!workdayInactiveBanner || isActive) {
@@ -21,17 +24,18 @@ export function WorkdayInactiveBanner() {
       <Text style={styles.text}>{workdayInactiveBanner}</Text>
       <Pressable
         accessibilityRole="button"
+        accessibilityLabel={t("workdayUx.startWorkday")}
         disabled={busy}
         onPress={() => {
           void (async () => {
-            const allowed = await requestGpsForFieldWork();
+            const allowed = await ensureLocationForWorkdayStart(workdayStartGateCopy(t));
             if (!allowed) return;
             await startDay().catch(() => undefined);
           })();
         }}
         style={[styles.btn, busy && styles.btnDisabled]}
       >
-        <Text style={styles.btnText}>Start day</Text>
+        <Text style={styles.btnText}>{t("workdayUx.startWorkday")}</Text>
       </Pressable>
     </View>
   );

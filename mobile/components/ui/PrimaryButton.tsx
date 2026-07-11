@@ -105,12 +105,9 @@ export function PrimaryButton({
     >
       {({ pressed }) => {
         const v = variantStyles(variant, pressed, isDisabled);
-        if (loading) {
-          return <ActivityIndicator color={v.spinner} />;
-        }
         return (
           <>
-            {icon}
+            {loading ? <ActivityIndicator color={v.spinner} /> : icon}
             <Text style={[styles.label, { color: v.labelColor }]}>{label}</Text>
           </>
         );

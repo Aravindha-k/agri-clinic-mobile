@@ -3,20 +3,9 @@ import { BackgroundTaskResult } from "expo-background-task";
 import { BACKGROUND_FIELD_SYNC_TASK } from "../../mobile/lib/sync/syncScheduler";
 import { runAutomaticSync } from "../../mobile/lib/sync/automaticSyncCoordinator";
 import { setActiveSyncUserId } from "../../mobile/lib/sync/queueOwnership";
-import { getJson, setJson } from "../../mobile/lib/storage";
+import { restoreBackgroundSyncUserId } from "./backgroundSyncUserId";
 
-const BACKGROUND_USER_KEY = "background_sync_user_id_v1";
-
-/** Persist active user id for background worker ownership checks. */
-export function persistBackgroundSyncUserId(userId: number | null) {
-  if (userId == null) return;
-  setJson(BACKGROUND_USER_KEY, { userId, savedAt: new Date().toISOString() });
-}
-
-export function restoreBackgroundSyncUserId(): number | null {
-  const row = getJson<{ userId?: number }>(BACKGROUND_USER_KEY, {});
-  return row.userId ?? null;
-}
+export { persistBackgroundSyncUserId, restoreBackgroundSyncUserId } from "./backgroundSyncUserId";
 
 if (!TaskManager.isTaskDefined(BACKGROUND_FIELD_SYNC_TASK)) {
   TaskManager.defineTask(BACKGROUND_FIELD_SYNC_TASK, async () => {

@@ -20,10 +20,22 @@ export const PRODUCTION_API_BASE_URL = `${PRODUCTION_API_ORIGIN}/api/v1/`;
 /** Local backend for `npx expo start` only (__DEV__). */
 const LOCAL_DEV_API_BASE_URL = "http://10.0.2.2:8000/api/v1/";
 
+/** Client QA APK uses HTTP to the AWS host — Android cleartext is configured in release manifest. */
+function isAllowedInsecureProductionUrl(url: string): boolean {
+  if (process.env.EXPO_PUBLIC_ALLOW_INSECURE_HTTP === "1") {
+    return true;
+  }
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" && parsed.hostname === PRODUCTION_API_HOST;
+  } catch {
+    return false;
+  }
+}
+
 function assertSecureProductionUrl(url: string): void {
   if (__DEV__) return;
-  const allowInsecure = process.env.EXPO_PUBLIC_ALLOW_INSECURE_HTTP === "1";
-  if (url.startsWith("http://") && !allowInsecure) {
+  if (url.startsWith("http://") && !isAllowedInsecureProductionUrl(url)) {
     throw new Error(
       "Production API base URL must use HTTPS. Set EXPO_PUBLIC_API_BASE_URL to an https:// endpoint. " +
         "See HTTPS_DEPLOYMENT_REQUIREMENTS.md. To override temporarily, set EXPO_PUBLIC_ALLOW_INSECURE_HTTP=1."

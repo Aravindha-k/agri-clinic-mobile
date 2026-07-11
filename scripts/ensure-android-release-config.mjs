@@ -126,10 +126,12 @@ if (!/abiFilters/.test(gradle)) {
 
 const rawDir = resolve(androidDir, "app/src/main/res/raw");
 mkdirSync(rawDir, { recursive: true });
-for (const name of ["water_pour.wav", "heat.wav"]) {
+for (const name of ["hydration_chime.wav"]) {
   const source = resolve(ROOT, "assets/sounds", name);
   if (existsSync(source)) {
     copyFileSync(source, resolve(rawDir, name));
+  } else {
+    console.warn(`[ensure-android-release-config] missing ${source}`);
   }
 }
 console.log("[ensure-android-release-config] synced notification sounds");

@@ -5,7 +5,7 @@ import { useAuth } from "./AuthContext";
 import { useConnectivityOnline } from "../hooks/useConnectivityOnline";
 import { runAutomaticSync, scheduleDebouncedAutomaticSync } from "../../mobile/lib/sync/automaticSyncCoordinator";
 import { refreshSyncStoreCounts } from "../../mobile/lib/sync/offlineSyncManager";
-import { persistBackgroundSyncUserId } from "../tracking/registerBackgroundFieldSyncTask";
+import { persistBackgroundSyncUserId } from "../tracking/backgroundSyncUserId";
 import { registerPreSignOut } from "./preSignOut";
 import {
   cancelBackgroundFieldSyncForUser,

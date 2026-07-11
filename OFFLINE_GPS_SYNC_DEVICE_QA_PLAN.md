@@ -350,6 +350,37 @@ SELECT id, visit_id, file, created_at FROM visits_visitmedia WHERE visit_id = ?;
 
 ---
 
+## Automatic sync lifecycle matrix (2026-07-11)
+
+Record for every scenario: queue before, app state, network, worker scheduled, worker execution timestamp, backend result, queue after, UI after reopen, pass/fail, evidence.
+
+| # | Scenario | Expected |
+|---|----------|----------|
+| 1 | App open, network reconnects | Coordinator runs within seconds; queues drain |
+| 2 | App minimized, network reconnects | Sync when JS/OS allows; may defer |
+| 3 | Removed from Recents, network reconnects | WorkManager may run (≥15min typical) |
+| 4 | Process killed (memory pressure) | Worker retries when OS schedules |
+| 5 | Device reboot, pending queues | Sync on next authenticated launch |
+| 6 | Settings → Force stop | **No sync** until app reopened |
+| 7 | Reopen after Force stop | Immediate sync after auth restore |
+| 8 | Battery Saver enabled | Deferred but eventual sync |
+| 9 | Background activity restricted | Deferred; document OEM behavior |
+| 10 | Manufacturer battery optimization | Deferred; whitelist may be required |
+| 11 | Wi-Fi → mobile data | Sync continues if online |
+| 12 | Mobile data → Wi-Fi | Sync continues if online |
+| 13 | Flapping network | Debounced reconnect; no duplicate workers |
+| 14 | Pending photos, minimized | Photos flush after visits in order |
+| 15 | Pending GPS, minimized | GPS uploads via coordinator |
+| 16 | Pending End Workday, minimized | Workday end after visits/GPS |
+| 17 | Token expires during worker | Refresh or auth_required; queue preserved |
+| 18 | Device session revoked | auth_required; queue preserved |
+| 19 | User disabled during worker | auth_required; queue preserved |
+| 20 | All queues empty | Worker cancelled; health = Synced |
+
+**Do not mark minimized/killed-app sync as Pass from code inspection alone.**
+
+---
+
 ## Verdict gates
 
 | Milestone | Required tests | Minimum pass rate |

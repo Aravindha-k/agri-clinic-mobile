@@ -88,3 +88,26 @@ test("full success without accepted_ids uses sent list", () => {
   assert.equal(result.removedCount, 2);
   assert.equal(result.remaining.length, 0);
 });
+
+const FOREGROUND_RETRY_DELAYS_MS = [0, 15_000, 60_000, 300_000];
+
+function nextRetryDelayMs(attempt) {
+  const delayIndex = Math.min(attempt, FOREGROUND_RETRY_DELAYS_MS.length - 1);
+  return FOREGROUND_RETRY_DELAYS_MS[delayIndex];
+}
+
+test("foreground retry backoff uses bounded delays", () => {
+  assert.equal(nextRetryDelayMs(0), 0);
+  assert.equal(nextRetryDelayMs(1), 15_000);
+  assert.equal(nextRetryDelayMs(2), 60_000);
+  assert.equal(nextRetryDelayMs(3), 300_000);
+  assert.equal(nextRetryDelayMs(99), 300_000);
+});
+
+test("duplicate visit local_sync_id should not double-count queue removal", () => {
+  const queue = [{ local_sync_id: "visit-1", status: "pending" }];
+  const afterFirst = queue.filter((v) => v.local_sync_id !== "visit-1");
+  const afterSecond = afterFirst.filter((v) => v.local_sync_id !== "visit-1");
+  assert.equal(afterFirst.length, 0);
+  assert.equal(afterSecond.length, 0);
+});

@@ -37,7 +37,7 @@ module.exports = () => ({
   scheme: "agriclinicfield",
   icon: brand.iconAsset,
   splash: {
-    image: brand.iconAsset,
+    image: brand.splashImageAsset || brand.logoAsset,
     resizeMode: "contain",
     backgroundColor: brand.splashBackgroundColor
   },
@@ -109,8 +109,8 @@ module.exports = () => ({
     [
       "expo-splash-screen",
       {
-        image: brand.iconAsset,
-        imageWidth: 120,
+        image: brand.splashImageAsset || brand.logoAsset,
+        imageWidth: 200,
         resizeMode: "contain",
         backgroundColor: brand.splashBackgroundColor
       }

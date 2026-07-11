@@ -8,7 +8,7 @@ import {
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Dimensions, LogBox, Platform, StatusBar as RNStatusBar } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
@@ -20,7 +20,7 @@ import { GpsWorkdayGate } from "./src/components/GpsWorkdayGate";
 import { NotificationBridge } from "./src/components/NotificationBridge";
 import { LanOfflineToast } from "./mobile/components/ui/LanOfflineToast";
 import { ToastHost } from "./src/components/ui/ToastHost";
-import { AuthProvider } from "./src/storage/AuthContext";
+import { AuthProvider, useAuth } from "./src/storage/AuthContext";
 import { EmployeeProvider } from "./src/storage/EmployeeContext";
 import { FieldDataRefreshProvider } from "./src/storage/FieldDataRefreshContext";
 import { MasterDataProvider } from "./src/storage/MasterDataContext";
@@ -87,11 +87,44 @@ function AppShell() {
   );
 }
 
+/** Fires once when critical local startup is done (fonts + auth restore) — not network APIs. */
+function CriticalStartupGate({
+  fontsLoaded,
+  onCriticalReady
+}: {
+  fontsLoaded: boolean;
+  onCriticalReady?: () => void;
+}) {
+  const { isReady } = useAuth();
+  const firedRef = useRef(false);
+
+  useEffect(() => {
+    if (firedRef.current || !onCriticalReady) return;
+    if (!fontsLoaded || !isReady) return;
+    firedRef.current = true;
+    onCriticalReady();
+  }, [fontsLoaded, isReady, onCriticalReady]);
+
+  useEffect(() => {
+    if (!onCriticalReady || firedRef.current) return;
+    const timer = setTimeout(() => {
+      if (firedRef.current) return;
+      firedRef.current = true;
+      logStartup("providers_ready", "soft_timeout");
+      onCriticalReady();
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [onCriticalReady]);
+
+  return null;
+}
+
 type Props = {
   onShellReady?: () => void;
+  onCriticalReady?: () => void;
 };
 
-export default function AppProviders({ onShellReady }: Props) {
+export default function AppProviders({ onShellReady, onCriticalReady }: Props) {
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -102,7 +135,6 @@ export default function AppProviders({ onShellReady }: Props) {
 
   useEffect(() => {
     logStartup("fonts_loading");
-    // Shell is mounted only after cinematic splash — do not hide native splash here.
     onShellReady?.();
     const timer = setTimeout(() => {
       if (!fontsLoaded) logStartup("fonts_timeout");
@@ -125,6 +157,7 @@ export default function AppProviders({ onShellReady }: Props) {
           <AppErrorBoundary>
             <ThemeProvider>
               <AuthProvider>
+                <CriticalStartupGate fontsLoaded={fontsLoaded} onCriticalReady={onCriticalReady} />
                 <FieldDataRefreshProvider>
                   <MasterDataProvider>
                     <EmployeeProvider>

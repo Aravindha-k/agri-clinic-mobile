@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import { StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -9,20 +9,11 @@ import { onSplashReplayRequested } from "./src/bootstrap/splashReplay";
 import { logStartup, logStartupError } from "./src/utils/startupDiagnostics";
 import { installGlobalErrorHandlers } from "./src/utils/globalErrorHandlers";
 
-type ProvidersComponent = ComponentType;
-
-/** Hard cap — splash never blocks the app beyond this. */
-const SPLASH_MAX_MS = 3000;
+type ProvidersComponent = ComponentType<{ onCriticalReady?: () => void }>;
 
 /** App shell background after splash (matches login / theme). */
 const APP_BG = "#F8F7F2";
 
-/**
- * Startup state machine:
- * - cinematic: only branded splash (native splash already held)
- * - revealing: splash fading; app shell may mount underneath
- * - app: splash gone
- */
 type StartupPhase = "cinematic" | "revealing" | "app";
 
 export default function App() {
@@ -30,21 +21,24 @@ export default function App() {
   const [splashKey, setSplashKey] = useState(0);
   const [Providers, setProviders] = useState<ProvidersComponent | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
+  const [criticalReady, setCriticalReady] = useState(false);
+  const layoutAtRef = useRef<number | null>(null);
 
   useEffect(() => {
     installGlobalErrorHandlers();
     logStartup("first_render");
     void holdNativeSplash();
 
-    // Prefetch providers while cinematic plays — mount only when revealing/app.
     void import("./AppProviders")
       .then((mod) => {
         setProviders(() => mod.default);
+        logStartup("providers_module_ready");
       })
       .catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
         logStartupError(message);
         setBootError(message);
+        setCriticalReady(true);
       });
   }, []);
 
@@ -53,38 +47,38 @@ export default function App() {
       logStartup("splash_replay", reason ?? "sign_out");
       setSplashKey((key) => key + 1);
       setPhase("cinematic");
+      setCriticalReady(false);
+      layoutAtRef.current = null;
     });
   }, []);
 
+  const elapsed = useCallback(() => {
+    if (layoutAtRef.current == null) return 0;
+    return Math.max(0, Date.now() - layoutAtRef.current);
+  }, []);
+
   const handleCinematicReady = useCallback(() => {
-    // Hide native splash as soon as cinematic root has laid out — not after animation.
+    layoutAtRef.current = Date.now();
     void hideNativeSplashSafe("cinematic_first_layout");
   }, []);
 
+  const handleCriticalReady = useCallback(() => {
+    setCriticalReady(true);
+    logStartup("providers_ready", `${elapsed()} ms`);
+  }, [elapsed]);
+
   const handleCinematicExitStart = useCallback(() => {
-    // Mount shell under the fade so login/home is ready when splash opacity hits 0.
-    logStartup("app_ready", "cinematic_exit_start");
+    logStartup("app_ready", `exit_started ${elapsed()} ms`);
     setPhase("revealing");
-  }, []);
+  }, [elapsed]);
 
   const handleCinematicFinish = useCallback(() => {
-    logStartup("splash_end", "cinematic finished");
+    logStartup("splash_end", `${elapsed()} ms`);
     setPhase("app");
-  }, []);
-
-  useEffect(() => {
-    if (phase !== "cinematic") return;
-    logStartup("splash_start");
-    const timer = setTimeout(() => {
-      logStartup("splash_timeout", `${SPLASH_MAX_MS}ms`);
-      void hideNativeSplashSafe("splash_timeout");
-      setPhase("app");
-    }, SPLASH_MAX_MS);
-    return () => clearTimeout(timer);
-  }, [phase, splashKey]);
+  }, [elapsed]);
 
   const showSplash = phase === "cinematic" || phase === "revealing";
-  const showShell = phase === "revealing" || phase === "app";
+  const showShell = Providers != null || bootError != null;
   const rootBg = showSplash ? CINEMATIC_SPLASH_BG : APP_BG;
 
   return (
@@ -94,16 +88,15 @@ export default function App() {
           bootError ? (
             <View style={[styles.root, { backgroundColor: APP_BG }]} />
           ) : Providers ? (
-            <Providers />
-          ) : (
-            <View style={[styles.root, { backgroundColor: CINEMATIC_SPLASH_BG }]} />
-          )
+            <Providers onCriticalReady={handleCriticalReady} />
+          ) : null
         ) : null}
 
         {showSplash ? (
           <View style={styles.splashOverlay} pointerEvents="auto">
             <KavyaCinematicSplash
               key={splashKey}
+              canExit={criticalReady}
               onExitStart={handleCinematicExitStart}
               onFinish={handleCinematicFinish}
               onReady={handleCinematicReady}
@@ -121,6 +114,7 @@ const styles = StyleSheet.create({
   },
   splashOverlay: {
     ...StyleSheet.absoluteFillObject,
+    backgroundColor: CINEMATIC_SPLASH_BG,
     zIndex: 100
   }
 });

@@ -13,8 +13,10 @@ module.exports = {
   loaderSubtitle: "Diagnostics • Solutions • Growth",
   employeeHint: "For field employees only",
   splashBackgroundColor: "#D8ECF8",
+  /** Native + cinematic first-frame logo (centered on splash background). */
+  splashImageAsset: "./assets/brand/logo_splash.png",
   /** Premium splash visible duration (ms) incl. crossfade. */
-  splashDurationMs: 4500,
+  splashDurationMs: 2200,
   iconBackgroundColor: "#0F5132",
   logoAsset: "./assets/brand/logo.png",
   iconAsset: "./assets/brand/app_icon.png",

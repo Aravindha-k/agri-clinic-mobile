@@ -54,7 +54,9 @@ const styles = StyleSheet.create({
   chip: {
     alignItems: "center",
     alignSelf: "flex-start",
+    borderColor: Colors.border,
     borderRadius: Radius.chip,
+    borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
     gap: 4,
     maxWidth: "100%",

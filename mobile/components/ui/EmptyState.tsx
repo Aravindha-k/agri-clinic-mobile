@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, Text, View, type ViewStyle } from "react-native";
-import { Colors, Enterprise, FontSize, FontWeight, Layout, Radius, Shadow, Spacing } from "../../lib/theme";
+import { Colors, Enterprise, Shadow, Spacing, TextStyles } from "../../lib/theme";
 import { PrimaryButton } from "./PrimaryButton";
 
 type Props = {
@@ -54,18 +54,16 @@ const styles = StyleSheet.create({
     width: 64
   },
   title: {
+    ...TextStyles.h3,
     color: Colors.text1,
-    fontSize: FontSize.section,
-    fontWeight: FontWeight.semibold,
     textAlign: "center"
   },
   titleCompact: {
-    fontSize: FontSize.body
+    ...TextStyles.body
   },
   subtitle: {
+    ...TextStyles.body,
     color: Colors.text3,
-    fontSize: FontSize.body,
-    lineHeight: 22,
     marginTop: Spacing.sm,
     maxWidth: 300,
     textAlign: "center"

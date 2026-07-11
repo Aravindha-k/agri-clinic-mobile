@@ -1,20 +1,16 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   StatusBar,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
-  ActivityIndicator,
   ScrollView
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LoginBiometricSection } from "../components/auth/LoginBiometricSection";
 import { LoginHeroHeader, LOGIN_HEADER_OVERLAP } from "../components/auth/LoginHeroHeader";
@@ -29,15 +25,14 @@ import {
   type BiometricLoginStatus
 } from "../storage/biometricLoginStorage";
 import { FONTS } from "../theme/fonts";
-import { Colors, Enterprise, FontSize, FontWeight, Layout, Radius, Shadow, Spacing } from "../../mobile/lib/theme";
+import { Colors, FontSize, Radius, Shadow, Spacing, TextStyles } from "../../mobile/lib/theme";
+import { PrimaryButton, EnterpriseTextField } from "../../mobile/components/ui";
 import { ProductionApiDiagnosticsPanel } from "../../mobile/components/diagnostics/ProductionApiDiagnosticsPanel";
 import { TechnicalDetailsCollapsible } from "../../mobile/components/layout";
 import { ApiRequestError, getNetworkMessage, isNetworkError } from "../utils/apiError";
 
 const CARD_TOP_RADIUS = 24;
 const CARD_PAD = 24;
-const INPUT_H = 52;
-const BTN_H = 52;
 
 const EMPTY_BIOMETRIC_STATUS: BiometricLoginStatus = {
   hardwareAvailable: false,
@@ -59,7 +54,6 @@ export function LoginScreen() {
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loginError, setLoginError] = useState("");
-  const [focusedField, setFocusedField] = useState<"empId" | "password" | null>(null);
   const [biometricStatus, setBiometricStatus] = useState<BiometricLoginStatus>(EMPTY_BIOMETRIC_STATUS);
   const [biometricReady, setBiometricReady] = useState(false);
   const [biometricCanLogin, setBiometricCanLogin] = useState(false);
@@ -100,7 +94,6 @@ export function LoginScreen() {
   }, []);
 
   function handleFieldFocus(field: "empId" | "password") {
-    setFocusedField(field);
     if (field === "password") {
       requestAnimationFrame(() => {
         scrollRef.current?.scrollTo({ y: 56, animated: true });
@@ -213,97 +206,51 @@ export function LoginScreen() {
             ) : null}
 
             <Text style={styles.fieldLabel}>Employee ID</Text>
-            <View
-              style={[
-                styles.inputBox,
-                focusedField === "empId" && styles.inputBoxFocused,
-                loading && styles.inputDisabled
-              ]}
-            >
-              <Ionicons name="person-outline" size={18} color={Colors.text3} style={styles.inputIcon} />
-              <TextInput
-                value={empId}
-                onChangeText={(t) => {
-                  setEmpId(t);
-                  if (loginError) setLoginError("");
-                }}
-                onFocus={() => handleFieldFocus("empId")}
-                onBlur={() => setFocusedField((f) => (f === "empId" ? null : f))}
-                placeholder="Example: AG-8821"
-                placeholderTextColor={Colors.placeholder}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!loading}
-                style={styles.input}
-                returnKeyType="next"
-              />
-            </View>
+            <EnterpriseTextField
+              leftIcon="person-outline"
+              value={empId}
+              onChangeText={(t) => {
+                setEmpId(t);
+                if (loginError) setLoginError("");
+              }}
+              onFocus={() => handleFieldFocus("empId")}
+              placeholder="Example: AG-8821"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!loading}
+              returnKeyType="next"
+              containerStyle={styles.fieldGap}
+            />
 
             <Text style={styles.fieldLabel}>Password</Text>
-            <View
-              style={[
-                styles.inputBox,
-                focusedField === "password" && styles.inputBoxFocused,
-                loading && styles.inputDisabled
-              ]}
-            >
-              <Ionicons name="lock-closed-outline" size={18} color={Colors.text3} style={styles.inputIcon} />
-              <TextInput
-                value={password}
-                onChangeText={(t) => {
-                  setPassword(t);
-                  if (loginError) setLoginError("");
-                }}
-                onFocus={() => handleFieldFocus("password")}
-                onBlur={() => setFocusedField((f) => (f === "password" ? null : f))}
-                placeholder="Enter your password"
-                placeholderTextColor={Colors.placeholder}
-                secureTextEntry={!showPw}
-                editable={!loading}
-                style={styles.input}
-                onSubmitEditing={() => void handleLogin()}
-                returnKeyType="go"
-              />
-              <TouchableOpacity
-                onPress={() => setShowPw((p) => !p)}
-                style={styles.eyeBtn}
-                disabled={loading}
-                accessibilityRole="button"
-                accessibilityLabel={showPw ? "Hide password" : "Show password"}
-              >
-                <Ionicons name={showPw ? "eye-off-outline" : "eye-outline"} size={20} color={Colors.text3} />
-              </TouchableOpacity>
-            </View>
+            <EnterpriseTextField
+              leftIcon="lock-closed-outline"
+              value={password}
+              onChangeText={(t) => {
+                setPassword(t);
+                if (loginError) setLoginError("");
+              }}
+              onFocus={() => handleFieldFocus("password")}
+              placeholder="Enter your password"
+              secureTextEntry={!showPw}
+              editable={!loading}
+              onSubmitEditing={() => void handleLogin()}
+              returnKeyType="go"
+              rightIcon={showPw ? "eye-off-outline" : "eye-outline"}
+              rightIconAccessibilityLabel={showPw ? "Hide password" : "Show password"}
+              onRightIconPress={() => setShowPw((p) => !p)}
+              containerStyle={styles.fieldGap}
+            />
 
-            <TouchableOpacity style={styles.forgotBtn} disabled={loading}>
-              <Text style={styles.forgotText}>Forgot password?</Text>
-            </TouchableOpacity>
+            <Text style={styles.forgotText}>Forgot password? Contact your administrator.</Text>
 
-            <TouchableOpacity
+            <PrimaryButton
+              label={loading ? "Logging in…" : "Login"}
               onPress={() => void handleLogin()}
+              loading={loading}
               disabled={loading}
-              activeOpacity={0.92}
-              style={[styles.signInBtnWrap, loading && styles.signInBtnBusy]}
-            >
-              <LinearGradient
-                colors={[Colors.brand700, Colors.brand500]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.signInBtn}
-              >
-                {loading ? (
-                  <View style={styles.signInInner}>
-                    <ActivityIndicator color={Colors.onPrimary} size="small" />
-                    <Text style={styles.signInBtnText}>Logging in…</Text>
-                  </View>
-                ) : (
-                  <View style={styles.signInInner}>
-                    <Text style={styles.signInBtnText}>Login</Text>
-                    <Ionicons name="arrow-forward" size={18} color={Colors.onPrimary} style={styles.signInArrow} />
-                  </View>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
+              style={styles.signInBtnWrap}
+            />
 
             {biometricReady && biometricStatus.hardwareAvailable ? (
               <LoginBiometricSection
@@ -392,83 +339,24 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md
   },
   fieldLabel: {
+    ...TextStyles.label,
     color: Colors.text1,
     fontFamily: FONTS.semibold,
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 8
+    marginBottom: Spacing.sm
   },
-  inputBox: {
-    alignItems: "center",
-    backgroundColor: Colors.inputFill,
-    borderColor: Colors.border,
-    borderRadius: Radius.input,
-    borderWidth: StyleSheet.hairlineWidth,
-    flexDirection: "row",
-    height: INPUT_H,
-    marginBottom: Spacing.md,
-    paddingHorizontal: Spacing.lg
-  },
-  inputBoxFocused: {
-    backgroundColor: Colors.surface,
-    borderColor: Colors.brand700,
-    borderWidth: 1.5
-  },
-  inputDisabled: {
-    opacity: 0.65
-  },
-  inputIcon: {
-    marginRight: 10
-  },
-  input: {
-    color: Colors.text1,
-    flex: 1,
-    fontFamily: FONTS.regular,
-    fontSize: 16,
-    paddingVertical: 0
-  },
-  eyeBtn: {
-    marginLeft: 4,
-    padding: 4
-  },
-  forgotBtn: {
-    alignSelf: "flex-end",
-    marginBottom: Spacing.lg,
-    marginTop: -4
+  fieldGap: {
+    marginBottom: Spacing.md
   },
   forgotText: {
-    color: Colors.brand700,
+    ...TextStyles.caption,
+    color: Colors.text3,
     fontFamily: FONTS.medium,
-    fontSize: 13
+    marginBottom: Spacing.lg,
+    marginTop: Spacing.xs
   },
   signInBtnWrap: {
     alignSelf: "stretch",
+    marginTop: Spacing.xs,
     width: "100%"
-  },
-  signInBtn: {
-    borderRadius: Radius.button,
-    height: BTN_H,
-    justifyContent: "center",
-    width: "100%"
-  },
-  signInInner: {
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "center",
-    paddingHorizontal: 20,
-    width: "100%"
-  },
-  signInBtnText: {
-    color: Colors.onPrimary,
-    fontFamily: FONTS.bold,
-    fontSize: FontSize.body,
-    fontWeight: FontWeight.bold
-  },
-  signInArrow: {
-    position: "absolute",
-    right: 20
-  },
-  signInBtnBusy: {
-    opacity: 0.9
   }
 });

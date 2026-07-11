@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { ReactNode } from "react";
 import {
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -9,56 +10,90 @@ import {
   type TextInputProps,
   type ViewStyle
 } from "react-native";
-import { Colors, Enterprise, FontSize, FontWeight, Layout, Radius, Spacing } from "../../lib/theme";
+import { Colors, FontSize, FontWeight, IconSize, Layout, Radius, Spacing, minTouchStyle } from "../../lib/theme";
 
 type Props = TextInputProps & {
   label?: string;
+  helperText?: string;
   error?: string;
+  required?: boolean;
   disabled?: boolean;
   leftIcon?: keyof typeof Ionicons.glyphMap;
   right?: ReactNode;
+  rightIcon?: keyof typeof Ionicons.glyphMap;
+  onRightIconPress?: () => void;
+  rightIconAccessibilityLabel?: string;
   containerStyle?: StyleProp<ViewStyle>;
+  multiline?: boolean;
 };
 
 /** Standard enterprise text field — 52px height, theme tokens only. */
 export function EnterpriseTextField({
   label,
+  helperText,
   error,
+  required,
   disabled,
   leftIcon,
   right,
+  rightIcon,
+  onRightIconPress,
+  rightIconAccessibilityLabel,
   containerStyle,
   style,
   editable = true,
   placeholderTextColor = Colors.text4,
+  multiline,
   ...inputProps
 }: Props) {
   const isDisabled = disabled || editable === false;
+  const fieldLabel = label ? `${label}${required ? " *" : ""}` : undefined;
 
   return (
     <View style={[styles.wrap, containerStyle]}>
-      {label ? <Text style={styles.label}>{label}</Text> : null}
+      {fieldLabel ? <Text style={styles.label}>{fieldLabel}</Text> : null}
       <View
         style={[
           styles.field,
+          multiline ? styles.fieldMultiline : null,
           error ? styles.fieldError : null,
           isDisabled ? styles.fieldDisabled : null
         ]}
       >
         {leftIcon ? (
-          <Ionicons name={leftIcon} size={20} color={Colors.text3} style={styles.leftIcon} />
+          <Ionicons name={leftIcon} size={IconSize.md} color={Colors.text3} style={styles.leftIcon} />
         ) : null}
         <TextInput
           {...inputProps}
+          multiline={multiline}
           editable={!isDisabled}
           placeholderTextColor={placeholderTextColor}
-          style={[styles.input, style]}
+          accessibilityLabel={fieldLabel ?? inputProps.accessibilityLabel}
+          style={[styles.input, multiline ? styles.inputMultiline : null, style]}
         />
         {right}
+        {rightIcon ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={rightIconAccessibilityLabel ?? "Field action"}
+            onPress={onRightIconPress}
+            disabled={!onRightIconPress || isDisabled}
+            hitSlop={Layout.iconHitSlop}
+            style={minTouchStyle}
+          >
+            <Ionicons name={rightIcon} size={IconSize.md} color={Colors.text3} />
+          </Pressable>
+        ) : null}
       </View>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {!error && helperText ? <Text style={styles.helperText}>{helperText}</Text> : null}
     </View>
   );
+}
+
+/** Multiline enterprise textarea — same API as EnterpriseTextField. */
+export function EnterpriseTextArea(props: Props) {
+  return <EnterpriseTextField {...props} multiline textAlignVertical="top" />;
 }
 
 const styles = StyleSheet.create({
@@ -81,12 +116,17 @@ const styles = StyleSheet.create({
     minHeight: Layout.buttonHeight,
     paddingHorizontal: Spacing.lg
   },
+  fieldMultiline: {
+    alignItems: "flex-start",
+    minHeight: 96,
+    paddingVertical: Spacing.md
+  },
   fieldError: {
     borderColor: Colors.red,
     borderWidth: 1
   },
   fieldDisabled: {
-    backgroundColor: Colors.bg,
+    backgroundColor: Colors.disabledBg,
     opacity: 0.72
   },
   leftIcon: {
@@ -98,10 +138,19 @@ const styles = StyleSheet.create({
     fontSize: FontSize.body,
     paddingVertical: Spacing.md
   },
+  inputMultiline: {
+    minHeight: 72,
+    paddingTop: 0
+  },
   errorText: {
     color: Colors.redText,
     fontSize: FontSize.caption,
     fontWeight: FontWeight.medium,
+    marginTop: -Spacing.xs
+  },
+  helperText: {
+    color: Colors.text3,
+    fontSize: FontSize.caption,
     marginTop: -Spacing.xs
   }
 });

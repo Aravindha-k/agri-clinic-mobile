@@ -8,6 +8,8 @@ import { useI18n } from "../i18n/I18nContext";
 import { formatRelativeTimeLocalized } from "../i18n";
 import { RootStackParamList } from "../navigation/types";
 import { useOfflineSync } from "../storage/OfflineSyncContext";
+import { useSyncStore } from "../../mobile/lib/store/syncStore";
+import { useConnectivityOnline } from "../../src/hooks/useConnectivityOnline";
 import { refreshControlProps } from "../theme/refresh";
 import { formatDisplayDateTime } from "../utils/format";
 import { FlatCard, ScreenCanvas, StackScreenHeader } from "../../mobile/components/layout";
@@ -18,6 +20,11 @@ type Props = NativeStackScreenProps<RootStackParamList, "OfflineSync">;
 export function OfflineSyncScreen({ navigation }: Props) {
   const { t, language } = useI18n();
   const { queue, syncing, syncAll, refreshQueue, lastSyncAt } = useOfflineSync();
+  const pendingGps = useSyncStore((s) => s.pendingGPSCount);
+  const pendingPhotos = useSyncStore((s) => s.pendingPhotosCount);
+  const pendingWorkday = useSyncStore((s) => s.pendingWorkdayOpsCount);
+  const syncPhase = useSyncStore((s) => s.syncPhase);
+  const online = useConnectivityOnline();
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = useCallback(async () => {
@@ -36,7 +43,7 @@ export function OfflineSyncScreen({ navigation }: Props) {
     <SafeAreaView style={styles.screen} edges={["top"]}>
       <ScreenCanvas />
       <StackScreenHeader
-        title={t("offlineSync.title")}
+        title={t("fieldWorkflow.syncCenterTitle")}
         subtitle={subtitle}
         onBack={() => navigation.goBack()}
         includeSafeTop={false}
@@ -66,6 +73,14 @@ export function OfflineSyncScreen({ navigation }: Props) {
           {lastSyncAt
             ? t("offlineSync.lastSynced", { time: formatRelativeTimeLocalized(language, lastSyncAt) })
             : t("offlineSync.notSyncedYet")}
+        </Text>
+        <Text style={styles.meta}>
+          {t("fieldWorkflow.pendingVisits")}: {count} · {t("fieldWorkflow.pendingPhotos")}: {pendingPhotos} ·{" "}
+          {t("fieldWorkflow.pendingGps")}: {pendingGps} · {t("fieldWorkflow.pendingWorkday")}: {pendingWorkday}
+        </Text>
+        <Text style={styles.meta}>
+          {t("fieldWorkflow.networkState")}: {online ? "Online" : "Offline"} · {t("fieldWorkflow.syncState")}:{" "}
+          {syncing ? t("fieldWorkflow.syncing") : syncPhase}
         </Text>
       </View>
 

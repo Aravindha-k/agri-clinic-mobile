@@ -18,6 +18,7 @@ import { saveBiometricLogin } from "./biometricLoginStorage";
 import { ApiRequestError, isAuthExpiredError, isNetworkError, isServerError } from "../utils/apiError";
 import { isDeviceSessionConflict } from "./sessionConflict";
 import { logStartup, patchStartupSnapshot } from "../utils/startupDiagnostics";
+import { setActiveSyncUserId } from "../../mobile/lib/sync/queueOwnership";
 
 const FIELD_EMPLOYEE_ONLY_MESSAGE = "This app is only for field employees.";
 
@@ -92,6 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearInflightRequests();
     resetApiTelemetry();
     setEmployee(null);
+    setActiveSyncUserId(null);
     setIsAuthenticated(false);
     setBootstrapIssue("none");
     setSessionValidating(false);
@@ -110,10 +112,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const token = await getAccessToken();
     if (!token) {
       setEmployee(null);
+    setActiveSyncUserId(null);
       return null;
     }
     const row = await getCurrentEmployee();
     setEmployee(row);
+    setActiveSyncUserId(row?.id ?? null);
     return row;
   }, []);
 
@@ -187,6 +191,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             return;
           }
           setEmployee(profile);
+          setActiveSyncUserId(profile.id);
           setBootstrapIssue("none");
           endedIssue = "none";
           logStartup("session_restored", `employee=${profile.id}`);
@@ -316,6 +321,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(FIELD_EMPLOYEE_ONLY_MESSAGE);
       }
       setEmployee(profile);
+      setActiveSyncUserId(profile.id);
       setBootstrapIssue("none");
       setIsAuthenticated(true);
       setIsReady(true);

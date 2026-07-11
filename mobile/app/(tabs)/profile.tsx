@@ -22,17 +22,21 @@ import { useTabBarBottomInset } from "../../../src/hooks/useTabBarBottomInset";
 import { useAuth } from "../../../src/storage/AuthContext";
 import { useEmployee } from "../../../src/storage/EmployeeContext";
 import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
+import {
+  checkLogoutAllowed,
+  showLogoutBlockedAlert,
+  trySyncBeforeLogout
+} from "../../lib/sync/logoutGuard";
 import { formatDisplayRole } from "../../../src/utils/formatRole";
 import { cacheBustPhotoUrl, extractPhotoUrl, photoCacheVersion } from "../../../src/utils/profilePhotoUrl";
 import { fetchVisitsPage } from "../../../src/api/visits";
 import { EmptyState, GhostButton, PrimaryButton } from "../../components/ui";
-import { FlatCard } from "../../components/layout";
+import { FlatCard, ScreenCanvas, ScreenEntranceBloom, ScreenLoader } from "../../components/layout";
 import { FadeInSection, entranceListStagger, entranceStagger } from "../../components/ui/FadeInSection";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
 import { getBadgeCount } from "../../lib/notificationsApi";
 import { useSyncStore } from "../../lib/store/syncStore";
 import { DS } from "../../../src/theme/globalStyles";
-import { ScreenCanvas, ScreenEntranceBloom } from "../../components/layout";
 import { Colors, FontSize, FontWeight, Layout, Radius, Spacing } from "../../lib/theme";
 import { SECTION_LABEL } from "../../lib/sectionLabel";
 import { BRAND_COLORS } from "../../../src/config/brand";
@@ -251,23 +255,37 @@ export default function ProfileTabScreen() {
   }
 
   function confirmSignOut() {
+    const blocked = checkLogoutAllowed();
+    if (!blocked.allowed) {
+      showLogoutBlockedAlert({
+        title: t("fieldWorkflow.logoutBlockedTitle"),
+        message: t("fieldWorkflow.logoutBlocked"),
+        syncNow: t("fieldWorkflow.syncNow"),
+        staySignedIn: t("fieldWorkflow.staySignedIn"),
+        onSyncNow: () => {
+          void (async () => {
+            const result = await trySyncBeforeLogout();
+            if (result.allowed) {
+              await signOut();
+              return;
+            }
+            Alert.alert(
+              t("fieldWorkflow.partialFailureTitle"),
+              t("fieldWorkflow.partialFailure")
+            );
+          })();
+        }
+      });
+      return;
+    }
+
     Alert.alert(t("profile.signOutTitle"), t("profile.signOutBody"), [
       { text: t("common.cancel"), style: "cancel" },
       {
         text: t("profile.signOut"),
         style: "destructive",
         onPress: () => {
-          void (async () => {
-            try {
-              await Promise.race([
-                syncAll(),
-                new Promise<void>((resolve) => setTimeout(resolve, SIGN_OUT_SYNC_TIMEOUT_MS))
-              ]);
-            } catch {
-              /* pending visits remain locally until next sync */
-            }
-            await signOut();
-          })();
+          void signOut();
         }
       }
     ]);
@@ -313,6 +331,14 @@ export default function ProfileTabScreen() {
     ],
     [navigation, rootNav, t, unreadNotifications]
   );
+
+  if (loading && !profile) {
+    return (
+      <View style={[styles.screen, { paddingTop: safeTop }]}>
+        <ScreenLoader message={t("common.loading")} />
+      </View>
+    );
+  }
 
   if (error && !profile) {
     return (

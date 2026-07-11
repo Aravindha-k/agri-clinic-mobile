@@ -45,6 +45,7 @@ export function buildVisitFormValuesFromStore(
     ? state.otherProblemDescription.trim()
     : problem?.tamil_name || problem?.name || "";
 
+  const visitNotes = state.fieldNotes.trim() || state.observation.trim();
   const advice = state.recommendation.trim() || state.actionTaken.trim();
   const lat = extras?.latitude ?? state.gpsCoords?.latitude;
   const lng = extras?.longitude ?? state.gpsCoords?.longitude;
@@ -70,8 +71,8 @@ export function buildVisitFormValuesFromStore(
     captured_at: capture.captured_at,
     visit_date: capture.visit_date,
     visit_time: capture.visit_time,
-    observation: state.observation.trim(),
-    field_notes: [state.fieldNotes.trim(), severityNote(state.severity)].filter(Boolean).join("\n"),
+    observation: visitNotes,
+    field_notes: [visitNotes, severityNote(state.severity)].filter(Boolean).join("\n"),
     problem_category_id: isOther ? undefined : state.problemCategoryId || undefined,
     problem_master_id: isOther ? undefined : state.problemMasterId || undefined,
     problem_seen: problemText,
@@ -185,15 +186,32 @@ async function uploadVisitMedia(visitId: number, photo: VisitPhotoAsset) {
         name: photo.name,
         type: photo.mimeType
       } as unknown as Blob);
+      if (photo.id) {
+        formData.append("client_upload_id", photo.id);
+      }
 
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", url);
         xhr.setRequestHeader("Accept", "application/json");
-        if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error("Media upload failed")));
-        xhr.onerror = () => reject(new Error("Media upload failed"));
-        xhr.send(formData);
+        void (async () => {
+          if (token) {
+            xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+            const sessionHeaders = await getDeviceSessionHeaderEntries();
+            for (const [name, value] of Object.entries(sessionHeaders)) {
+              xhr.setRequestHeader(name, value);
+            }
+          }
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve();
+              return;
+            }
+            reject(new Error("Media upload failed"));
+          };
+          xhr.onerror = () => reject(new Error("Media upload failed"));
+          xhr.send(formData);
+        })();
       });
       return;
     } catch (err) {

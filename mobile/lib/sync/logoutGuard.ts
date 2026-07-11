@@ -1,6 +1,6 @@
 import { Alert } from "react-native";
 import { getFieldPendingCounts, hasBlockingPendingFieldData } from "./pendingCounts";
-import { runOrderedFieldSync } from "./syncOrchestrator";
+import { runAutomaticSync } from "./automaticSyncCoordinator";
 
 export type LogoutPendingCheckResult =
   | { allowed: true }
@@ -18,7 +18,7 @@ export async function trySyncBeforeLogout(): Promise<LogoutPendingCheckResult> {
   if (before.total === 0) {
     return { allowed: true };
   }
-  await runOrderedFieldSync();
+  await runAutomaticSync("diagnostics_retry");
   return checkLogoutAllowed();
 }
 

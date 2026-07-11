@@ -1,8 +1,15 @@
 import type * as Location from "expo-location";
-import { pushLocation, pushLocationsBulk, type LocationPushPayload } from "../api/tracking";
 import {
+  pushLocation,
+  pushLocationsBulk,
+  type GpsBulkSyncResult,
+  type LocationPushPayload
+} from "../api/tracking";
+import {
+  acknowledgeLocationPushPoints,
   appendLocationPush,
-  clearLocationPushQueue,
+  hydrateLocationPushDeviceSession,
+  pendingPointToPayload,
   readLocationPushQueue
 } from "../storage/locationPushQueue";
 import {
@@ -19,6 +26,8 @@ import { getBatteryPercent } from "../../mobile/lib/gps/trackingService";
 import { isDutyTrackingSessionActive, restoreDutySessionFromStorage } from "./trackingSession";
 import { notifyRouteSynced } from "../utils/routeSyncBus";
 import { refreshSyncStoreCounts } from "../../mobile/lib/sync/offlineSyncManager";
+import { applyGpsBulkAcknowledgement } from "../../mobile/lib/sync/gpsBulkAck";
+import { readActiveUserGpsQueue, replaceActiveUserGpsQueue } from "../../mobile/lib/sync/gpsQueueStore";
 
 export type LocationHandleResult = "sent" | "skipped" | "queued";
 
@@ -78,6 +87,22 @@ async function buildPayload(
   };
 }
 
+function applyBulkAckToStore(ack: GpsBulkSyncResult, sentPointIds: string[]): number {
+  const owned = readActiveUserGpsQueue();
+  const { remaining, removedCount } = applyGpsBulkAcknowledgement(owned, ack, sentPointIds);
+  replaceActiveUserGpsQueue(remaining);
+  return removedCount;
+}
+
+async function flushSinglePoint(point: LocationPushPayload): Promise<number> {
+  await pushLocation(point);
+  const pointId = point.client_point_id;
+  if (pointId) {
+    return acknowledgeLocationPushPoints([pointId]);
+  }
+  return 1;
+}
+
 /** Try live upload; queue locally on failure. */
 export async function syncLocationPoint(payload: LocationPushPayload): Promise<void> {
   if (locationUploadInFlight) {
@@ -115,6 +140,7 @@ export async function syncLocationPoint(payload: LocationPushPayload): Promise<v
 
 /** Flush MMKV offline queue — used on reconnect / app foreground. */
 export async function flushOfflineLocationQueue(): Promise<number> {
+  await hydrateLocationPushDeviceSession();
   const rawQueue = await readLocationPushQueue();
   if (!rawQueue.length || locationUploadInFlight) {
     return 0;
@@ -125,37 +151,53 @@ export async function flushOfflineLocationQueue(): Promise<number> {
     ...point,
     duty_session_id: activeDutyId ?? point.duty_session_id
   }));
+  const sentPointIds = queue
+    .map((point) => point.client_point_id)
+    .filter((id): id is string => Boolean(id));
 
   locationUploadInFlight = true;
   try {
+    let removed = 0;
     if (queue.length === 1) {
-      await pushLocation(queue[0]);
+      removed = await flushSinglePoint(queue[0]);
     } else {
       try {
-        await pushLocationsBulk(queue);
+        const ack = await pushLocationsBulk(queue);
+        removed = applyBulkAckToStore(ack, sentPointIds);
+        if (removed === 0 && ack.success_count > 0 && sentPointIds.length > 0) {
+          removed = await acknowledgeLocationPushPoints(sentPointIds.slice(0, ack.success_count));
+        }
       } catch (bulkErr) {
         const bulkMessage = bulkErr instanceof Error ? bulkErr.message : "";
         if (isDutySessionMismatchMessage(bulkMessage)) {
+          trackingDevLog("duty_session_mismatch", bulkMessage);
           throw bulkErr;
         }
         for (const point of queue) {
-          await pushLocation(point);
+          try {
+            removed += await flushSinglePoint(point);
+          } catch {
+            /* retain point in queue */
+          }
         }
       }
     }
-    await clearLocationPushQueue();
-    const last = queue[queue.length - 1];
-    await setLastSentRoutePoint(payloadToRoutePoint(last));
+
+    const remaining = readActiveUserGpsQueue();
+    const lastAcked = queue.find((p) => p.client_point_id && !remaining.some(
+      (r) => r.local_point_id === p.client_point_id
+    ));
+    if (lastAcked) {
+      await setLastSentRoutePoint(payloadToRoutePoint(lastAcked));
+    }
     refreshSyncStoreCounts();
-    notifyRouteSynced();
-    trackingDevLog("offline_flush", `synced=${queue.length}`);
-    return queue.length;
+    if (removed > 0) {
+      notifyRouteSynced();
+    }
+    trackingDevLog("offline_flush", `removed=${removed} remaining=${remaining.length}`);
+    return removed;
   } catch (err) {
     const message = err instanceof Error ? err.message : "flush failed";
-    if (isDutySessionMismatchMessage(message)) {
-      await clearLocationPushQueue();
-      refreshSyncStoreCounts();
-    }
     trackingDevLog("offline_flush_failed", message);
     return 0;
   } finally {
@@ -241,3 +283,5 @@ export async function processBackgroundLocations(locations: Location.LocationObj
 export async function resetRouteTrackingState(): Promise<void> {
   await clearLastSentRoutePoint();
 }
+
+export { pendingPointToPayload };

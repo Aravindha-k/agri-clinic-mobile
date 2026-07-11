@@ -14,7 +14,15 @@ import {
   type LocationPushPayload,
   WorkdayStatus
 } from "../api/tracking";
-import { clearLocationPushQueue, readLocationPushQueue } from "./locationPushQueue";
+import NetInfo from "@react-native-community/netinfo";
+import {
+  enqueueWorkdayEndOperation,
+  markWorkdayOpSynced,
+  readActiveUserWorkdayOps
+} from "../../mobile/lib/sync/workdayOperationQueue";
+import { captureWorkdayEndContext, runOrderedFieldSync } from "../../mobile/lib/sync/syncOrchestrator";
+import { getActiveSyncUserId } from "../../mobile/lib/sync/queueOwnership";
+import { readLocationPushQueue } from "./locationPushQueue";
 import { ApiRequestError, getNetworkMessage, isNetworkError } from "../utils/apiError";
 import { isWorkdayInactiveMessage } from "../utils/workdayStatus";
 import { hasValidMapCoords } from "../utils/mapCoords";
@@ -240,7 +248,6 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       setCurrentLocation(null);
       setLastSyncTime(null);
       setPendingSyncCount(0);
-      void clearLocationPushQueue();
       void resetRouteTrackingState();
       stopGpsTrackingService();
       workdayStartedAtRef.current = null;
@@ -265,7 +272,6 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     setError("");
     setWorkdayInactiveBanner(null);
     syncInFlightRef.current = false;
-    void clearLocationPushQueue();
     void resetRouteTrackingState();
     stopGpsTrackingService();
     lastMotionRef.current = false;
@@ -803,9 +809,43 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       try {
         await flushPendingLocationQueue();
       } catch {
-        /* keep queued points for next session */
+        /* retain queued GPS points */
       }
-      await endDutySession(await getActiveDutySessionId());
+
+      const userId = getActiveSyncUserId();
+      const endCtx = await captureWorkdayEndContext();
+      if (userId != null) {
+        enqueueWorkdayEndOperation({
+          user_id: userId,
+          device_session_id: endCtx.device_session_id,
+          server_workday_id: endCtx.server_workday_id,
+          server_duty_session_id: endCtx.server_duty_session_id
+        });
+      }
+
+      const net = await NetInfo.fetch();
+      const online = Boolean(net.isConnected && net.isInternetReachable !== false);
+      if (online) {
+        try {
+          await endDutySession(await getActiveDutySessionId());
+          const pendingEnd = readActiveUserWorkdayOps().find((r) => r.operation === "end");
+          if (pendingEnd) {
+            markWorkdayOpSynced(pendingEnd.local_operation_id);
+          }
+          void runOrderedFieldSync();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "";
+          if (isWorkdayInactiveMessage(message)) {
+            const pendingEnd = readActiveUserWorkdayOps().find((r) => r.operation === "end");
+            if (pendingEnd) {
+              markWorkdayOpSynced(pendingEnd.local_operation_id);
+            }
+          } else {
+            throw err;
+          }
+        }
+      }
+
       clearWorkdayState({ showInactiveBanner: true });
     } catch (err) {
       const message = err instanceof Error ? err.message : "";

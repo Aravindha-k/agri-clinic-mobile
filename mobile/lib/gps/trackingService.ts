@@ -1,14 +1,26 @@
 import * as Battery from "expo-battery";
 import * as SecureStore from "expo-secure-store";
 import type { LocationPushPayload } from "../../../src/api/tracking";
-import { pushLocationsBulk, sendTrackingHeartbeat as postTrackingHeartbeat, syncLocationQueue } from "../../../src/api/tracking";
 import {
-  addGPSPoint,
-  flushGPSQueue,
-  refreshSyncStoreCounts,
-  type PendingGPSPoint
-} from "../sync/offlineSyncManager";
-import { getJson, setJson, storage } from "../storage";
+  pushLocationsBulk,
+  sendTrackingHeartbeat as postTrackingHeartbeat,
+  syncLocationQueue
+} from "../../../src/api/tracking";
+import {
+  appendGpsQueuePoint,
+  countActiveUserPendingGps,
+  discardAllGpsQueuePoints,
+  ensureGpsPointIdentity,
+  migrateGpsQueueRecords,
+  readActiveUserGpsQueue,
+  readFullGpsQueue,
+  writeFullGpsQueue
+} from "../sync/gpsQueueStore";
+import type { PendingGPSPoint } from "../sync/fieldQueueTypes";
+import { getActiveSyncUserId } from "../sync/queueOwnership";
+import { refreshSyncStoreCounts } from "../sync/offlineSyncManager";
+import { payloadToPendingPoint, pendingPointToPayload } from "../../../src/storage/locationPushQueue";
+import { storage } from "../storage";
 import { GPS_QUEUE_MAX_POINTS } from "../../../src/tracking/trackingConfig";
 
 const LEGACY_QUEUE_KEY = "agri_pending_location_push_v2";
@@ -36,41 +48,12 @@ let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 let serviceRunning = false;
 let gpsEnabledProbe: (() => boolean) | null = null;
 
-function readRaw(): PendingGPSPoint[] {
-  return getJson<PendingGPSPoint[]>(PENDING_GPS_KEY, []);
-}
-
-function pendingToGpsBufferPoint(point: PendingGPSPoint): GpsBufferPoint {
-  return {
-    latitude: point.latitude,
-    longitude: point.longitude,
-    accuracy: point.accuracy,
-    speed: point.speed ?? undefined,
-    heading: point.heading ?? undefined,
-    captured_at: point.recorded_at,
-    recorded_at: point.recorded_at,
-    battery_level: point.battery_level,
-    duty_session_id: point.duty_session_id,
-    workday_id: point.duty_session_id
-  };
-}
-
 export function toPendingPoint(payload: GpsBufferPoint): PendingGPSPoint {
-  return {
-    latitude: payload.latitude,
-    longitude: payload.longitude,
-    accuracy: payload.accuracy ?? 0,
-    speed: payload.speed ?? null,
-    heading: payload.heading ?? null,
-    battery_level: payload.battery_level ?? 0,
-    duty_session_id: payload.duty_session_id ?? payload.workday_id,
-    recorded_at: payload.recorded_at || payload.captured_at || new Date().toISOString(),
-    network_type: (payload as { network_type?: string }).network_type || "unknown"
-  };
+  return payloadToPendingPoint(payload);
 }
 
 export function readPendingGpsBuffer(): GpsBufferPoint[] {
-  return readRaw().map(pendingToGpsBufferPoint);
+  return readActiveUserGpsQueue().map(pendingPointToPayload);
 }
 
 async function readLegacySecureQueue(): Promise<GpsBufferPoint[]> {
@@ -85,28 +68,29 @@ async function readLegacySecureQueue(): Promise<GpsBufferPoint[]> {
 }
 
 export async function migrateLegacyGpsQueueIfNeeded() {
-  const current = readRaw();
+  const current = readFullGpsQueue();
   if (current.length) return;
   const legacy = await readLegacySecureQueue();
   if (!legacy.length) return;
   for (const point of legacy) {
-    addGPSPoint(toPendingPoint(point));
+    appendGpsQueuePoint(toPendingPoint(point));
   }
   await SecureStore.deleteItemAsync(LEGACY_QUEUE_KEY).catch(() => undefined);
 }
 
 export async function appendPendingGpsPoint(payload: GpsBufferPoint) {
   await migrateLegacyGpsQueueIfNeeded();
-  addGPSPoint(toPendingPoint(payload));
+  appendGpsQueuePoint(toPendingPoint(payload));
 }
 
+/** @deprecated Use discardAllGpsQueuePoints for explicit admin discard only. */
 export function clearPendingGpsBuffer() {
-  setJson(PENDING_GPS_KEY, []);
+  discardAllGpsQueuePoints();
   refreshSyncStoreCounts();
 }
 
 export function getGpsBufferStatus(): GpsBufferStatus {
-  const pending = readRaw().length;
+  const pending = countActiveUserPendingGps();
   const lastSyncAt = storage.getString(LAST_GPS_SYNC_KEY) ?? null;
   return {
     pending,
@@ -118,16 +102,16 @@ export function getGpsBufferStatus(): GpsBufferStatus {
 
 export async function flushGpsBuffer(): Promise<{ synced: number }> {
   await migrateLegacyGpsQueueIfNeeded();
+  const { flushGPSQueue } = await import("../sync/offlineSyncManager");
   return flushGPSQueue();
 }
 
-/** Direct bulk flush (used by UI sync button). */
 export async function flushVisitGpsQueue() {
   return flushGpsBuffer();
 }
 
 export function getLastBufferedPointTime(): string | null {
-  const points = readRaw();
+  const points = readActiveUserGpsQueue();
   const last = points[points.length - 1];
   return last?.recorded_at ?? null;
 }
@@ -189,7 +173,6 @@ export function toGpsBufferPoint(
   };
 }
 
-/** Bulk upload helper when only MMKV buffer should be sent. */
 export async function pushBufferedLocations(points: GpsBufferPoint[]) {
   if (!points.length) return;
   if (points.length === 1) {
@@ -198,3 +181,5 @@ export async function pushBufferedLocations(points: GpsBufferPoint[]) {
   }
   await pushLocationsBulk(points);
 }
+
+export { migrateGpsQueueRecords, ensureGpsPointIdentity };

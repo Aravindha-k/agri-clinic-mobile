@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { BrandInlineLogo } from "../brand/BrandInlineLogo";
-import { Colors, FontSize, FontWeight, Spacing } from "../../lib/theme";
+import { Colors, Spacing, TextStyles, minTouchStyle } from "../../lib/theme";
 
 type Props = {
   title: string;
@@ -18,7 +18,13 @@ export function CompactScreenHeader({ title, subtitle, right, onBack, style }: P
     <View style={[styles.wrap, style]}>
       <View style={styles.row}>
         {onBack ? (
-          <Pressable accessibilityRole="button" onPress={onBack} hitSlop={8} style={styles.backBtn}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={onBack}
+            hitSlop={8}
+            style={styles.backBtn}
+          >
             <Ionicons color={Colors.text1} name="chevron-back" size={22} />
           </Pressable>
         ) : null}
@@ -49,14 +55,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     gap: Spacing.md,
-    minHeight: 44
+    minHeight: 48
   },
   backBtn: {
+    ...minTouchStyle,
     alignItems: "center",
-    height: 36,
     justifyContent: "center",
-    marginLeft: -4,
-    width: 32
+    marginLeft: -4
   },
   copy: {
     flex: 1,
@@ -67,14 +72,11 @@ const styles = StyleSheet.create({
     flexShrink: 0
   },
   title: {
-    color: Colors.text1,
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.bold,
-    letterSpacing: -0.15
+    ...TextStyles.h3,
+    color: Colors.text1
   },
   subtitle: {
-    color: Colors.text3,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.medium
+    ...TextStyles.caption,
+    color: Colors.text3
   }
 });

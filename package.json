@@ -17,6 +17,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
+    "test:offline": "node --test scripts/test-offline-sync.mjs",
     "verify:api": "node scripts/verify-production-api.mjs",
     "verify:deploy": "node scripts/audit-deploy-config.mjs",
     "verify:apk": "node scripts/audit-apk-release.mjs",

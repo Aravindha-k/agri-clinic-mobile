@@ -47,6 +47,27 @@ export type LocationPushPayload = {
   location_permission_status?: string;
   /** Background permission granted and native route task running. */
   background_tracking_enabled?: boolean;
+  /** Stable client id for offline GPS dedup and partial batch ack. */
+  client_point_id?: string;
+};
+
+export type GpsBulkFailedItem = {
+  index?: number;
+  local_point_id?: string;
+  client_point_id?: string;
+  code: string;
+  message: string;
+  retryable?: boolean;
+};
+
+export type GpsBulkSyncResult = {
+  success_count: number;
+  failed_count: number;
+  accepted_ids?: string[];
+  failed_items?: GpsBulkFailedItem[];
+  route_points_saved?: number;
+  duty_session_id?: number;
+  workday_id?: number;
 };
 
 export type LocationLogPoint = TrackingLocation & {
@@ -319,6 +340,7 @@ function toBulkPoint(location: LocationPushPayload) {
     recorded_at: location.recorded_at ?? location.captured_at,
     timestamp: location.timestamp ?? location.captured_at,
     workday_id: location.workday_id ?? location.duty_session_id ?? undefined,
+    client_point_id: location.client_point_id,
     gps_enabled: location.gps_enabled,
     location_permission_status: location.location_permission_status,
     background_tracking_enabled: location.background_tracking_enabled
@@ -326,11 +348,11 @@ function toBulkPoint(location: LocationPushPayload) {
 }
 
 /** Flush offline route points via bulk endpoint (falls back to per-point location/update). */
-export async function pushLocationsBulk(locations: LocationPushPayload[]) {
+export async function pushLocationsBulk(locations: LocationPushPayload[]): Promise<GpsBulkSyncResult> {
   const { enrichLocationPushPayload } = await import("../utils/gpsStateReport");
   const device = getDeviceInfo();
   const enriched = await Promise.all(locations.map((point) => enrichLocationPushPayload(point)));
-  return dutyTrackingPost(
+  const raw = await dutyTrackingPost<Record<string, unknown>>(
     DUTY_TRACKING_ROUTES.locationBulk,
     {
       method: "POST",
@@ -342,6 +364,31 @@ export async function pushLocationsBulk(locations: LocationPushPayload[]) {
       source: "Tracking"
     }
   );
+  return normalizeGpsBulkSyncResult(raw);
+}
+
+function normalizeGpsBulkSyncResult(raw: Record<string, unknown>): GpsBulkSyncResult {
+  const data =
+    raw && typeof raw === "object" && "success_count" in raw
+      ? raw
+      : (raw?.data as Record<string, unknown> | undefined) ?? raw;
+  const acceptedRaw = data?.accepted_ids;
+  const failedRaw = data?.failed_items;
+  return {
+    success_count: Number(data?.success_count ?? 0),
+    failed_count: Number(data?.failed_count ?? 0),
+    accepted_ids: Array.isArray(acceptedRaw)
+      ? acceptedRaw.map((id) => String(id)).filter(Boolean)
+      : undefined,
+    failed_items: Array.isArray(failedRaw)
+      ? (failedRaw as GpsBulkFailedItem[])
+      : undefined,
+    route_points_saved:
+      data?.route_points_saved != null ? Number(data.route_points_saved) : undefined,
+    duty_session_id:
+      data?.duty_session_id != null ? Number(data.duty_session_id) : undefined,
+    workday_id: data?.workday_id != null ? Number(data.workday_id) : undefined
+  };
 }
 
 export async function syncLocationQueue(queue: LocationPushPayload[]) {

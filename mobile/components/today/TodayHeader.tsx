@@ -11,7 +11,7 @@ import { BrandHeader, BrandHeaderDots, BrandHeaderSpacing, GreetingHeader } from
 import { AppIcon } from "../ui/AppIcon";
 import { FadeInSection, entranceStagger } from "../ui/FadeInSection";
 import { FieldGlassSurface } from "../ui/FieldGlassSurface";
-import { Colors, FontWeight, Radius, Shadow, Spacing } from "../../lib/theme";
+import { Colors, FontWeight, Radius, Shadow, Spacing, minTouchStyle } from "../../lib/theme";
 import { TODAY_PAGE_PAD } from "../../lib/todayLayout";
 import { TodayHeroLayers } from "./hero";
 
@@ -119,14 +119,13 @@ const styles = StyleSheet.create({
     zIndex: 4
   },
   bell: {
+    ...minTouchStyle,
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.88)",
-    borderColor: "rgba(255, 255, 255, 0.7)",
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
     borderRadius: Radius.inner,
-    borderWidth: 1,
-    height: 40,
+    borderWidth: StyleSheet.hairlineWidth,
     justifyContent: "center",
-    width: 40,
     ...Shadow.card
   },
   badge: {

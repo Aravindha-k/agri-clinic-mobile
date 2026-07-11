@@ -107,7 +107,9 @@ export type WorkdayHeroProps = {
   lastSyncLabel?: string | null;
   busy?: boolean;
   onStart: () => void;
+  onEnd?: () => void;
   startLabel?: string;
+  endLabel?: string;
   idleTitle?: string;
   idleSubtitle?: string;
   statItems?: { label: string; value: string }[];
@@ -121,7 +123,9 @@ export function WorkdayHero({
   lastSyncLabel,
   busy = false,
   onStart,
+  onEnd,
   startLabel = "Start workday",
+  endLabel = "End workday",
   idleTitle = "Start your workday",
   idleSubtitle = "GPS activates when you start",
   statItems
@@ -216,6 +220,22 @@ export function WorkdayHero({
         </View>
 
         {lastSyncLabel ? <Text style={styles.syncMeta}>{lastSyncLabel}</Text> : null}
+
+        {onEnd ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={endLabel}
+            disabled={busy}
+            onPress={onEnd}
+            style={({ pressed }) => [
+              styles.endBtn,
+              pressed && { opacity: 0.9 },
+              busy && { opacity: 0.55 }
+            ]}
+          >
+            <Text style={styles.endBtnText}>{endLabel}</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -390,5 +410,21 @@ const styles = StyleSheet.create({
     color: Colors.onPrimaryMuted,
     fontSize: FontSize.caption,
     marginTop: 2
+  },
+  endBtn: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderColor: "rgba(255,255,255,0.35)",
+    borderRadius: PremiumRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    justifyContent: "center",
+    marginTop: Spacing.md,
+    minHeight: Layout.touchTargetMin,
+    paddingHorizontal: Spacing.lg
+  },
+  endBtnText: {
+    color: Colors.onPrimary,
+    fontSize: FontSize.body,
+    fontWeight: FontWeight.semibold
   }
 });

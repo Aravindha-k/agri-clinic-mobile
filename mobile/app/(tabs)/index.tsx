@@ -1,7 +1,7 @@
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { AlertTriangle, ClipboardList, Map, Users } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AppState, RefreshControl, StyleSheet, View } from "react-native";
+import { AppState, Alert, RefreshControl, StyleSheet, View } from "react-native";
 import Animated, {
   Extrapolation,
   interpolate,
@@ -79,6 +79,7 @@ export default function TodayTabScreen() {
     isActive,
     startedAt: trackingStartedAt,
     startDay,
+    endDay,
     busy,
     refreshTracking,
     workday,
@@ -238,6 +239,23 @@ export default function TodayTabScreen() {
     })();
   }
 
+  function confirmEndWorkday() {
+    Alert.alert(t("daySummary.endWorkdayTitle"), t("daySummary.endWorkdayBody"), [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("daySummary.endWorkday"),
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            await endDay();
+            await refreshTracking().catch(() => undefined);
+            void fetchWorkStatus().then(applyWorkStatus).catch(() => undefined);
+          })();
+        }
+      }
+    ]);
+  }
+
   const workdaySyncLabel =
     workActive && (workdaySyncStatus === "syncing" || workdaySyncStatus === "cached")
       ? t("home.syncing")
@@ -347,7 +365,9 @@ export default function TodayTabScreen() {
                 lastSyncLabel={workdaySyncLabel}
                 busy={busy}
                 onStart={confirmStartWorkday}
+                onEnd={workActive ? confirmEndWorkday : undefined}
                 startLabel={t("home.startWorkday")}
+                endLabel={t("daySummary.endWorkday")}
                 idleTitle={t("home.startWorkday")}
                 idleSubtitle={t("home.startWorkdayBody")}
                 statItems={workdayHeroStats}

@@ -162,10 +162,19 @@ Not ready for limited client QA or production until HTTPS is live on the API and
 
 ## Commit strategy (executed separately per repo)
 
-1. Admin selection + authentication + protected routes  
-2. Admin dashboard + visits + GPS wiring  
-3. Mobile credential security + HTTPS config + follow-up strip + photo queue  
-4. Backend auth / `can_login` / device-session hardening + tests  
-5. Decision docs (`FOLLOW_UP_DECISION`, `HTTPS_DEPLOYMENT_REQUIREMENTS`, selection/deprecation notices)
+### Mobile (`agri-clinic-mobile`)
 
-No push performed unless explicitly requested.
+1. `1864ea0` — biometric password removal + HTTPS release gate + Phase 1 docs  
+2. `5432799` — strip incomplete follow-up UI  
+3. `65395d5` — failed visit photo retry queue  
+
+### Backend (`agri_clinic`)
+
+4. `0693189` — enforce `can_login` on mobile login/refresh/APIs  
+5. `63dc78d` — device session on legacy visit/farmer list APIs + policy doc  
+
+### Admin frontends
+
+**Not git repositories** on this machine (`agri-admin-new` and `agri-admin`). Phase 1 admin changes exist on disk only. Initialize git or copy into a tracked repo before deploying. Selection/deprecation docs are present in those folders.
+
+No push performed.

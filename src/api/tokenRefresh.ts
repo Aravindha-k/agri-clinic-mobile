@@ -108,6 +108,9 @@ export async function refreshAccessTokenShared(): Promise<string> {
   }
 
   await updateAccessToken(access);
+  void import("../../mobile/lib/sync/automaticSyncCoordinator").then((mod) => {
+    mod.runAutomaticSync("authentication_restored");
+  });
   return access;
 }
 

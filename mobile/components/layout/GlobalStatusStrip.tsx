@@ -1,12 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import NetInfo from "@react-native-community/netinfo";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useConnectivityOnline } from "../../../src/hooks/useConnectivityOnline";
 import { useI18n } from "../../../src/i18n/I18nContext";
-import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
-import { autoFlushPendingGps } from "../../lib/sync/offlineSyncManager";
 import { useSyncStore } from "../../lib/store/syncStore";
 import { Colors, FontSize, FontWeight, Layout, Spacing } from "../../lib/theme";
 
@@ -23,9 +21,9 @@ export function GlobalStatusStrip() {
   const { t } = useI18n();
   const apiOnline = useConnectivityOnline();
   const [netOffline, setNetOffline] = useState(false);
-  const { pendingCount, syncAll, syncing } = useOfflineSync();
+  const pendingCount = useSyncStore((s) => s.pendingVisitsCount + s.failedVisitsCount);
   const pendingGps = useSyncStore((s) => s.pendingGPSCount);
-  const autoSyncStarted = useRef(false);
+  const syncing = useSyncStore((s) => s.isSyncing);
 
   useEffect(() => {
     const unsub = NetInfo.addEventListener((state) => {
@@ -35,27 +33,16 @@ export function GlobalStatusStrip() {
     return unsub;
   }, []);
 
-  // GPS route uploads — fully automatic, never shown to employee.
+  // GPS route uploads — fully automatic via automatic sync coordinator.
   useEffect(() => {
     if (pendingGps <= 0 || netOffline || !apiOnline) return;
     const timer = setTimeout(() => {
-      void autoFlushPendingGps();
+      void import("../../lib/sync/automaticSyncCoordinator").then((mod) =>
+        mod.runAutomaticSync("periodic_foreground")
+      );
     }, 800);
     return () => clearTimeout(timer);
   }, [apiOnline, netOffline, pendingGps]);
-
-  // Pending visits sync automatically when back online.
-  useEffect(() => {
-    if (pendingCount <= 0 || netOffline || !apiOnline || syncing) {
-      autoSyncStarted.current = false;
-      return;
-    }
-    if (autoSyncStarted.current) return;
-    autoSyncStarted.current = true;
-    void syncAll().finally(() => {
-      autoSyncStarted.current = false;
-    });
-  }, [apiOnline, netOffline, pendingCount, syncAll, syncing]);
 
   const offline = netOffline || !apiOnline;
   const mode = useMemo(

@@ -25,6 +25,7 @@ import { EmployeeProvider } from "./src/storage/EmployeeContext";
 import { FieldDataRefreshProvider } from "./src/storage/FieldDataRefreshContext";
 import { MasterDataProvider } from "./src/storage/MasterDataContext";
 import { OfflineSyncProvider } from "./src/storage/OfflineSyncContext";
+import { AutomaticSyncProvider } from "./src/storage/AutomaticSyncProvider";
 import { AppPreferencesProvider } from "./src/storage/AppPreferencesContext";
 import { I18nProvider } from "./src/i18n/I18nContext";
 import { RootNavigator } from "./src/navigation/RootNavigator";
@@ -69,6 +70,9 @@ function AppShell() {
     logStartup("app_mount");
     void import("./src/tracking/registerBackgroundLocationTask").then(() => {
       logStartup("tracking_task_deferred");
+    });
+    void import("./src/tracking/registerBackgroundFieldSyncTask").then(() => {
+      logStartup("tracking_task_deferred", "field_sync");
     });
     let cleanup: (() => void) | undefined;
     void import("./mobile/lib/offlineSyncManager").then((mod) => {
@@ -165,6 +169,7 @@ export default function AppProviders({ onShellReady, onCriticalReady }: Props) {
                         <AppPreferencesProvider>
                           <I18nProvider>
                             <OfflineSyncProvider>
+                              <AutomaticSyncProvider>
                               <GpsComplianceProvider>
                                 <TrackingProvider>
                                   <BottomSheetModalProvider>
@@ -179,6 +184,7 @@ export default function AppProviders({ onShellReady, onCriticalReady }: Props) {
                                   </BottomSheetModalProvider>
                                 </TrackingProvider>
                               </GpsComplianceProvider>
+                              </AutomaticSyncProvider>
                             </OfflineSyncProvider>
                           </I18nProvider>
                         </AppPreferencesProvider>

@@ -6,6 +6,7 @@ import {
   getActiveSyncUserId,
   quarantineOrphanQueueItems
 } from "./queueOwnership";
+import { notifyFieldQueueChanged } from "./syncQueueNotifier";
 
 export const WORKDAY_OPS_KEY = "pending_workday_ops_v1";
 
@@ -74,6 +75,7 @@ export function enqueueWorkdayEndOperation(params: {
   }
   all.push(row);
   writeAll(all);
+  notifyFieldQueueChanged("workday_end_queued");
   return row;
 }
 

@@ -20,7 +20,11 @@ import { generateLocalSyncId } from "./queueIds";
 import { appendGpsQueuePoint, ensureGpsPointIdentity, readActiveUserGpsQueue, writeFullGpsQueue } from "./gpsQueueStore";
 import { getFieldPendingCounts, readActiveUserVisits } from "./pendingCounts";
 import { getActiveSyncUserId } from "./queueOwnership";
-import { runOrderedFieldSync, scheduleDebouncedFieldSync } from "./syncOrchestrator";
+import {
+  runAutomaticSync,
+  scheduleDebouncedAutomaticSync
+} from "./automaticSyncCoordinator";
+import { notifyFieldQueueChanged } from "./syncQueueNotifier";
 import { getDeviceSessionId } from "../../../src/storage/deviceSessionStorage";
 
 export type VisitSyncProgress = {
@@ -301,6 +305,7 @@ export async function addToVisitQueue(
   });
   writeVisitQueue(queue);
   refreshSyncStoreCounts();
+  notifyFieldQueueChanged("visit_queued");
   return id;
 }
 
@@ -319,7 +324,7 @@ export function addGPSPoint(point: PendingGPSPoint) {
     })
   );
   refreshSyncStoreCounts();
-  scheduleDebouncedFieldSync(GPS_AUTO_FLUSH_DEBOUNCE_MS);
+  scheduleDebouncedAutomaticSync("periodic_foreground", GPS_AUTO_FLUSH_DEBOUNCE_MS);
 }
 
 export function getPendingVisits(): PendingVisit[] {
@@ -452,7 +457,7 @@ export async function flushGPSQueue(): Promise<{ synced: number }> {
 }
 
 export async function syncAll(): Promise<SyncAllResult> {
-  const result = await runOrderedFieldSync();
+  const result = await runAutomaticSync("diagnostics_retry", { force: true });
   refreshSyncStoreCounts();
   return {
     visits: result.visits,
@@ -471,7 +476,7 @@ export function initOfflineSync() {
     void NetInfo.fetch().then((state) => {
       const online = Boolean(state.isConnected && state.isInternetReachable !== false);
       if (online) {
-        void syncAll();
+        void runAutomaticSync("app_start");
       }
     });
   });
@@ -479,7 +484,7 @@ export function initOfflineSync() {
   netInfoUnsubscribe = NetInfo.addEventListener((state) => {
     const online = Boolean(state.isConnected && state.isInternetReachable !== false);
     if (online) {
-      scheduleDebouncedFieldSync(500);
+      scheduleDebouncedAutomaticSync("network_reconnected", 500);
     }
   });
 

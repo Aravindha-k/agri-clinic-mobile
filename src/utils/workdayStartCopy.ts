@@ -5,6 +5,7 @@ export function workdayStartGateCopy(t: (key: string) => string) {
     permissionBody: t("workdayUx.permissionBody"),
     permissionBlockedBody: t("workdayUx.permissionBlockedBody"),
     servicesOffBody: t("workdayUx.servicesOffBody"),
+    servicesResolutionUnavailable: t("workdayUx.servicesResolutionUnavailable"),
     timeoutBody: t("workdayUx.locationTimeout"),
     allowLocation: t("workdayUx.allowLocation"),
     openSettings: t("workdayUx.openSettings"),

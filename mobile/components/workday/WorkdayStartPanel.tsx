@@ -14,6 +14,8 @@ type Props = {
   active: boolean;
   busy: boolean;
   starting?: boolean;
+  /** Overrides default starting label (e.g. Getting your location…). */
+  startingLabel?: string | null;
   error?: string | null;
   onDismissError?: () => void;
   timerDisplay: string;
@@ -88,6 +90,7 @@ export function WorkdayStartPanel({
   active,
   busy,
   starting = false,
+  startingLabel,
   error,
   onDismissError,
   timerDisplay,
@@ -106,6 +109,9 @@ export function WorkdayStartPanel({
   const { t } = useI18n();
   const [readiness, setReadiness] = useState<LocationReadiness>("checking");
   const startBusy = busy || starting;
+  const startButtonLabel = startBusy
+    ? startingLabel || t("workdayUx.startingWorkday")
+    : t("workdayUx.startWorkday");
 
   const refreshReadiness = useCallback(async () => {
     setReadiness("checking");
@@ -153,10 +159,10 @@ export function WorkdayStartPanel({
                 <Pressable
                   onPress={onRetryStart}
                   accessibilityRole="button"
-                  accessibilityLabel={t("common.retry")}
+                  accessibilityLabel={t("workdayUx.tryAgain")}
                   style={styles.errorActionBtn}
                 >
-                  <Text style={styles.errorActionText}>{t("common.retry")}</Text>
+                  <Text style={styles.errorActionText}>{t("workdayUx.tryAgain")}</Text>
                 </Pressable>
               ) : null}
               {onDismissError ? (
@@ -174,11 +180,11 @@ export function WorkdayStartPanel({
         ) : null}
 
         <PrimaryButton
-          label={startBusy ? t("workdayUx.startingWorkday") : t("workdayUx.startWorkday")}
+          label={startButtonLabel}
           onPress={onStart}
           loading={startBusy}
           disabled={startBusy}
-          accessibilityLabel={startBusy ? t("workdayUx.startingWorkday") : t("workdayUx.startWorkday")}
+          accessibilityLabel={startButtonLabel}
           style={styles.primaryBtn}
         />
       </View>

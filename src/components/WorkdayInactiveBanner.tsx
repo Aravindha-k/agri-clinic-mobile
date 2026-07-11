@@ -28,8 +28,8 @@ export function WorkdayInactiveBanner() {
         disabled={busy}
         onPress={() => {
           void (async () => {
-            const allowed = await ensureLocationForWorkdayStart(workdayStartGateCopy(t));
-            if (!allowed) return;
+            const gate = await ensureLocationForWorkdayStart(workdayStartGateCopy(t));
+            if (!gate.ok) return;
             await startDay().catch(() => undefined);
           })();
         }}

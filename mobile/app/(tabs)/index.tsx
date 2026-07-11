@@ -100,6 +100,8 @@ export default function TodayTabScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [startPhase, setStartPhase] = useState<"idle" | "location" | "starting">("idle");
+  const [gateError, setGateError] = useState<string | null>(null);
   const [dismissedError, setDismissedError] = useState("");
   const dashboardRef = useRef<DashboardData | null>(null);
   dashboardRef.current = dashboard;
@@ -228,22 +230,37 @@ export default function TodayTabScreen() {
   }
 
   const visibleTrackingError =
-    trackingError && trackingError !== dismissedError ? trackingError : null;
+    gateError || (trackingError && trackingError !== dismissedError ? trackingError : null);
 
   function confirmStartWorkday() {
     if (busy || starting) return;
     void (async () => {
       setStarting(true);
+      setGateError(null);
       setDismissedError("");
+      setStartPhase("location");
       try {
-        const allowed = await ensureLocationForWorkdayStart(workdayStartGateCopy(t));
-        if (!allowed) return;
+        const gate = await ensureLocationForWorkdayStart(workdayStartGateCopy(t));
+        if (!gate.ok) {
+          if (gate.reason === "services_cancelled") {
+            setGateError(t("workdayUx.servicesOffBody"));
+          } else if (gate.reason === "permission_required") {
+            setGateError(t("workdayUx.permissionBody"));
+          } else if (gate.reason === "permission_blocked") {
+            setGateError(t("workdayUx.permissionBlockedBody"));
+          } else if (gate.reason === "services_unavailable") {
+            setGateError(t("workdayUx.servicesResolutionUnavailable"));
+          }
+          return;
+        }
+        setStartPhase("starting");
         const started = await startDay();
         if (!started) return;
         await refreshTracking().catch(() => undefined);
         void fetchWorkStatus().then(applyWorkStatus).catch(() => undefined);
       } finally {
         setStarting(false);
+        setStartPhase("idle");
       }
     })();
   }
@@ -344,8 +361,18 @@ export default function TodayTabScreen() {
                 active={workActive}
                 busy={busy}
                 starting={starting}
+                startingLabel={
+                  startPhase === "location"
+                    ? t("workdayUx.gettingLocation")
+                    : startPhase === "starting"
+                      ? t("workdayUx.startingWorkday")
+                      : null
+                }
                 error={visibleTrackingError}
-                onDismissError={() => setDismissedError(trackingError || "")}
+                onDismissError={() => {
+                  setGateError(null);
+                  setDismissedError(trackingError || "");
+                }}
                 timerDisplay={workdayTimer.display}
                 startedAtLabel={startedAt ? formatShortTime(startedAt) : null}
                 distanceKm={distanceKm}

@@ -316,6 +316,7 @@ export const en = {
     startYourWorkday: "Start your workday",
     startWorkday: "Start Workday",
     startingWorkday: "Starting workday…",
+    gettingLocation: "Getting your location…",
     startHelper: "Your location will be used to record today’s field travel and visits.",
     workdayActive: "Workday active",
     startedAt: "Started at {{time}}",
@@ -325,6 +326,7 @@ export const en = {
     turnOnDeviceLocation: "Turn on device location",
     checkingLocation: "Checking location…",
     unableToGetLocation: "Unable to get location",
+    locationNotEnabled: "Location was not enabled.",
     allowLocation: "Allow Location",
     openSettings: "Open Settings",
     openLocationSettings: "Open Location Settings",
@@ -337,8 +339,11 @@ export const en = {
     couldNotEnd: "Could not end workday",
     locationTimeout: "We could not get your location. Move to an open area and try again.",
     permissionBody: "Location permission is required to start your workday.",
-    permissionBlockedBody: "Location access is turned off for this app. Open Settings to enable it.",
+    permissionBlockedBody:
+      "Location permission is disabled for Kavya Agri Clinic. Enable it in App Settings to start work.",
     servicesOffBody: "Turn on device location to start your workday.",
+    servicesResolutionUnavailable:
+      "We couldn’t open the quick location prompt. Turn on Location in phone settings.",
     gateTitle: "Location required"
   },
   farmers: {

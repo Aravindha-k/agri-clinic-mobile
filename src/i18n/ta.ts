@@ -318,6 +318,7 @@ export const ta: TranslationTree = {
     startYourWorkday: "உங்கள் பணி நாளைத் தொடங்குங்கள்",
     startWorkday: "பணி நாள் தொடங்கு",
     startingWorkday: "பணி நாள் தொடங்குகிறது…",
+    gettingLocation: "உங்கள் இருப்பிடம் பெறப்படுகிறது…",
     startHelper: "இன்றைய வயல் பயணம் மற்றும் வருகைகளைப் பதிவு செய்ய உங்கள் இருப்பிடம் பயன்படுத்தப்படும்.",
     workdayActive: "பணி நாள் செயலில்",
     startedAt: "{{time}} மணிக்கு தொடங்கியது",
@@ -327,6 +328,7 @@ export const ta: TranslationTree = {
     turnOnDeviceLocation: "சாதன இருப்பிடத்தை இயக்கவும்",
     checkingLocation: "இருப்பிடம் சரிபார்க்கப்படுகிறது…",
     unableToGetLocation: "இருப்பிடம் கிடைக்கவில்லை",
+    locationNotEnabled: "இருப்பிடம் இயக்கப்படவில்லை.",
     allowLocation: "இருப்பிடத்தை அனுமதி",
     openSettings: "அமைப்புகளைத் திற",
     openLocationSettings: "இருப்பிட அமைப்புகளைத் திற",
@@ -339,8 +341,11 @@ export const ta: TranslationTree = {
     couldNotEnd: "பணி நாள் முடிக்க முடியவில்லை",
     locationTimeout: "இருப்பிடம் கிடைக்கவில்லை. திறந்த இடத்திற்குச் சென்று மீண்டும் முயற்சிக்கவும்.",
     permissionBody: "பணி நாளைத் தொடங்க இருப்பிட அனுமதி தேவை.",
-    permissionBlockedBody: "இந்த பயன்பாட்டிற்கு இருப்பிட அணுகல் அணைக்கப்பட்டுள்ளது. இயக்க அமைப்புகளைத் திறக்கவும்.",
+    permissionBlockedBody:
+      "Kavya Agri Clinic-க்கு இருப்பிட அனுமதி அணைக்கப்பட்டுள்ளது. பணியைத் தொடங்க ஆப் அமைப்புகளில் இயக்கவும்.",
     servicesOffBody: "பணி நாளைத் தொடங்க சாதன இருப்பிடத்தை இயக்கவும்.",
+    servicesResolutionUnavailable:
+      "விரைவு இருப்பிட அறிவிப்பைத் திறக்க முடியவில்லை. தொலைபேசி அமைப்புகளில் இருப்பிடத்தை இயக்கவும்.",
     gateTitle: "இருப்பிடம் தேவை"
   },
   farmers: {

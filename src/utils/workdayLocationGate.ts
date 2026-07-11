@@ -1,6 +1,6 @@
-import { Alert, Linking } from "react-native";
+import { Alert, Linking, Platform } from "react-native";
 import * as Location from "expo-location";
-import { ensureForegroundPermission } from "./location";
+import { ensureAndroidLocationServicesEnabled } from "./ensureAndroidLocationServices";
 import { isGpsAvailable, probeGpsAvailability } from "./gpsStatus";
 
 /** User-facing readiness for Start Workday (no prompts). */
@@ -11,6 +11,17 @@ export type LocationReadiness =
   | "permission_blocked"
   | "services_off"
   | "unavailable";
+
+export type WorkdayLocationGateReason =
+  | "permission_required"
+  | "permission_blocked"
+  | "services_cancelled"
+  | "services_unavailable"
+  | "busy";
+
+export type WorkdayLocationGateResult =
+  | { ok: true }
+  | { ok: false; reason: WorkdayLocationGateReason };
 
 export async function readLocationReadiness(): Promise<Exclude<LocationReadiness, "checking">> {
   try {
@@ -25,11 +36,12 @@ export async function readLocationReadiness(): Promise<Exclude<LocationReadiness
   }
 }
 
-type GateCopy = {
+export type WorkdayLocationGateCopy = {
   title: string;
   permissionBody: string;
   permissionBlockedBody: string;
   servicesOffBody: string;
+  servicesResolutionUnavailable: string;
   timeoutBody: string;
   allowLocation: string;
   openSettings: string;
@@ -38,44 +50,86 @@ type GateCopy = {
   cancel: string;
 };
 
+let gateInFlight = false;
+
 /**
- * Permission / GPS gate before startDay().
- * Uses existing location utilities — does not change TrackingContext.
+ * Permission → device location services → ready for existing startDay().
+ * Does not change TrackingContext. Android GPS-off uses in-app SettingsClient dialog.
  */
-export async function ensureLocationForWorkdayStart(copy: GateCopy): Promise<boolean> {
-  const availability = await probeGpsAvailability();
-
-  if (availability === "services_off") {
-    return await promptServicesOff(copy);
+export async function ensureLocationForWorkdayStart(
+  copy: WorkdayLocationGateCopy
+): Promise<WorkdayLocationGateResult> {
+  if (gateInFlight) {
+    return { ok: false, reason: "busy" };
   }
+  gateInFlight = true;
 
-  if (isGpsAvailable(availability)) {
-    return true;
+  try {
+    const permission = await ensureAppLocationPermission(copy);
+    if (!permission.ok) {
+      return permission;
+    }
+
+    const services = await ensureDeviceLocationServices(copy);
+    return services;
+  } finally {
+    gateInFlight = false;
   }
-
-  if (availability === "permission_denied") {
-    return await promptPermissionBlocked(copy);
-  }
-
-  // Undetermined / other — request foreground permission via existing helper.
-  const permission = await ensureForegroundPermission();
-  if (permission.granted) {
-    return true;
-  }
-
-  if (permission.message?.includes("GPS is turned off")) {
-    return await promptServicesOff(copy);
-  }
-
-  const current = await Location.getForegroundPermissionsAsync().catch(() => null);
-  if (current && current.status === "denied" && !current.canAskAgain) {
-    return await promptPermissionBlocked(copy);
-  }
-
-  return await promptPermissionRequired(copy);
 }
 
-function promptPermissionRequired(copy: GateCopy): Promise<boolean> {
+/** App permission only — does not require device GPS to already be on. */
+async function ensureAppLocationPermission(
+  copy: WorkdayLocationGateCopy
+): Promise<WorkdayLocationGateResult> {
+  try {
+    const current = await Location.getForegroundPermissionsAsync();
+    if (current.status === "granted") {
+      return { ok: true };
+    }
+
+    if (current.status === "denied" && !current.canAskAgain) {
+      await promptPermissionBlocked(copy);
+      return { ok: false, reason: "permission_blocked" };
+    }
+
+    const requested = await Location.requestForegroundPermissionsAsync();
+    if (requested.status === "granted") {
+      return { ok: true };
+    }
+
+    if (requested.status === "denied" && !requested.canAskAgain) {
+      await promptPermissionBlocked(copy);
+      return { ok: false, reason: "permission_blocked" };
+    }
+
+    const retry = await promptPermissionRequired(copy);
+    return retry ? { ok: true } : { ok: false, reason: "permission_required" };
+  } catch {
+    await promptPermissionBlocked(copy);
+    return { ok: false, reason: "permission_blocked" };
+  }
+}
+
+async function ensureDeviceLocationServices(
+  copy: WorkdayLocationGateCopy
+): Promise<WorkdayLocationGateResult> {
+  const result = await ensureAndroidLocationServicesEnabled();
+
+  if (result.status === "enabled" || result.status === "enabled_by_user") {
+    return { ok: true };
+  }
+
+  if (result.status === "cancelled") {
+    // Stay in-app — inline Try Again; do not open Settings.
+    return { ok: false, reason: "services_cancelled" };
+  }
+
+  // Resolution unavailable / error — Settings only as fallback.
+  await promptServicesFallback(copy);
+  return { ok: false, reason: "services_unavailable" };
+}
+
+function promptPermissionRequired(copy: WorkdayLocationGateCopy): Promise<boolean> {
   return new Promise((resolve) => {
     Alert.alert(copy.title, copy.permissionBody, [
       { text: copy.cancel, style: "cancel", onPress: () => resolve(false) },
@@ -83,8 +137,8 @@ function promptPermissionRequired(copy: GateCopy): Promise<boolean> {
         text: copy.allowLocation,
         onPress: () => {
           void (async () => {
-            const again = await ensureForegroundPermission();
-            resolve(Boolean(again.granted));
+            const again = await Location.requestForegroundPermissionsAsync().catch(() => null);
+            resolve(again?.status === "granted");
           })();
         }
       }
@@ -92,37 +146,53 @@ function promptPermissionRequired(copy: GateCopy): Promise<boolean> {
   });
 }
 
-function promptPermissionBlocked(copy: GateCopy): Promise<boolean> {
+function promptPermissionBlocked(copy: WorkdayLocationGateCopy): Promise<void> {
   return new Promise((resolve) => {
     Alert.alert(copy.title, copy.permissionBlockedBody, [
-      { text: copy.cancel, style: "cancel", onPress: () => resolve(false) },
+      { text: copy.cancel, style: "cancel", onPress: () => resolve() },
       {
         text: copy.openSettings,
         onPress: () => {
+          // App permission page — not generic location settings.
           void Linking.openSettings().catch(() => undefined);
-          resolve(false);
+          resolve();
         }
       }
     ]);
   });
 }
 
-function promptServicesOff(copy: GateCopy): Promise<boolean> {
+function promptServicesFallback(copy: WorkdayLocationGateCopy): Promise<void> {
   return new Promise((resolve) => {
-    Alert.alert(copy.title, copy.servicesOffBody, [
-      { text: copy.cancel, style: "cancel", onPress: () => resolve(false) },
+    Alert.alert(copy.title, copy.servicesResolutionUnavailable, [
+      { text: copy.cancel, style: "cancel", onPress: () => resolve() },
       {
         text: copy.openLocationSettings,
         onPress: () => {
-          void Linking.openSettings().catch(() => undefined);
-          resolve(false);
+          void openLocationSettingsFallback().finally(() => resolve());
         }
       }
     ]);
   });
 }
 
-export function locationTimeoutAlert(copy: GateCopy, onRetry: () => void) {
+async function openLocationSettingsFallback() {
+  try {
+    if (Platform.OS === "android") {
+      await Linking.sendIntent("android.settings.LOCATION_SOURCE_SETTINGS");
+      return;
+    }
+    await Linking.openSettings();
+  } catch {
+    try {
+      await Linking.openSettings();
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+export function locationTimeoutAlert(copy: WorkdayLocationGateCopy, onRetry: () => void) {
   Alert.alert(copy.title, copy.timeoutBody, [
     { text: copy.cancel, style: "cancel" },
     { text: copy.tryAgain, onPress: onRetry }

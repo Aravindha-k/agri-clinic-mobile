@@ -14,6 +14,7 @@ import { validateVisitSubmitValues } from "../../../src/visit/visitValidation";
 import { getJson, setJson, SYNC_STORAGE_KEYS } from "../storage";
 import { useSyncStore } from "../store/syncStore";
 import { GPS_QUEUE_MAX_POINTS } from "../../../src/tracking/trackingConfig";
+import { flushPendingVisitEvidence } from "./pendingEvidenceQueue";
 
 const LEGACY_SECURE_VISIT_QUEUE_KEY = "agri_offline_visit_queue";
 
@@ -63,6 +64,7 @@ let netInfoUnsubscribe: (() => void) | null = null;
 type SyncAllResult = {
   visits: { synced: number; failed: number };
   gps: { synced: number };
+  evidence: { uploaded: number; remaining: number };
 };
 
 let syncAllInFlight: Promise<SyncAllResult> | null = null;
@@ -448,12 +450,16 @@ export async function syncAll(): Promise<SyncAllResult> {
   useSyncStore.getState().setSyncing(true);
   syncAllInFlight = (async () => {
     try {
-      const [visits, gps] = await Promise.all([flushVisitQueue(), flushGPSQueue()]);
-      if (visits.synced > 0 || gps.synced > 0) {
+      const [visits, gps, evidence] = await Promise.all([
+        flushVisitQueue(),
+        flushGPSQueue(),
+        flushPendingVisitEvidence()
+      ]);
+      if (visits.synced > 0 || gps.synced > 0 || evidence.uploaded > 0) {
         useSyncStore.getState().setLastSynced(new Date().toISOString());
       }
       refreshSyncStoreCounts();
-      return { visits, gps };
+      return { visits, gps, evidence };
     } finally {
       useSyncStore.getState().setSyncing(false);
       syncAllInFlight = null;

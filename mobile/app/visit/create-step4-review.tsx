@@ -179,12 +179,23 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
       const { visit, evidenceFailed } = await submitVisitFromStore(state, localSyncId, capturedExtras);
       localSyncIdRef.current = null;
       const uploadFailures = [...evidenceFailed, ...(await uploadExtraAttachments(visit.id))];
+      if (uploadFailures.length && state.photos.length) {
+        const { enqueueFailedVisitEvidence } = await import("../../lib/sync/pendingEvidenceQueue");
+        enqueueFailedVisitEvidence({
+          visitId: visit.id,
+          photos: state.photos,
+          localSyncId,
+          failedNames: uploadFailures
+        });
+      }
       bumpAfterVisitChange();
       reset();
       navigation.navigate("VisitSuccess", {
         visitId: visit.id,
         queued: false,
-        evidenceWarning: uploadFailures.length ? `Some uploads failed: ${uploadFailures.join(", ")}` : undefined,
+        evidenceWarning: uploadFailures.length
+          ? `Some uploads failed and were queued for retry: ${uploadFailures.join(", ")}`
+          : undefined,
         farmerId: values.farmer_id,
         farmerName: values.farmer_name,
         savedCrop: cropName,

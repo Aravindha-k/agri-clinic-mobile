@@ -3,18 +3,22 @@ import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { CompactScreenHeader } from "../../../mobile/components/layout/CompactScreenHeader";
 import { useI18n } from "../../i18n/I18nContext";
-import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from "../../../mobile/lib/theme";
+import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing, minTouchStyle } from "../../../mobile/lib/theme";
 
 type Props = {
   trackingActive: boolean;
   onBack: () => void;
   onRefresh: () => void;
+  title?: string;
+  subtitle?: string;
 };
 
 export const MyLocationHeader = memo(function MyLocationHeader({
   trackingActive,
   onBack,
-  onRefresh
+  onRefresh,
+  title,
+  subtitle
 }: Props) {
   const { t } = useI18n();
   const statusLabel = trackingActive
@@ -23,7 +27,13 @@ export const MyLocationHeader = memo(function MyLocationHeader({
 
   const actions = (
     <View style={styles.actions}>
-      <Pressable accessibilityRole="button" onPress={onRefresh} style={styles.iconBtn} hitSlop={8}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t("common.retry")}
+        onPress={onRefresh}
+        style={styles.iconBtn}
+        hitSlop={8}
+      >
         <Ionicons color={Colors.text2} name="refresh-outline" size={20} />
       </Pressable>
     </View>
@@ -32,8 +42,8 @@ export const MyLocationHeader = memo(function MyLocationHeader({
   return (
     <View style={styles.wrap}>
       <CompactScreenHeader
-        title={t("myLocation.title")}
-        subtitle={t("home.fieldOperations")}
+        title={title ?? t("myLocation.title")}
+        subtitle={subtitle ?? t("home.fieldOperations")}
         onBack={onBack}
         right={actions}
         style={styles.compact}
@@ -63,14 +73,13 @@ const styles = StyleSheet.create({
     flexDirection: "row"
   },
   iconBtn: {
+    ...minTouchStyle,
     alignItems: "center",
     backgroundColor: Colors.bg,
-    borderColor: "rgba(15, 81, 50, 0.08)",
+    borderColor: Colors.border,
     borderRadius: Radius.inner,
     borderWidth: StyleSheet.hairlineWidth,
-    height: 36,
     justifyContent: "center",
-    width: 36,
     ...Shadow.card
   },
   badge: {

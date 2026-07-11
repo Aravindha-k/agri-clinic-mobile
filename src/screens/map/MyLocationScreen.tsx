@@ -20,9 +20,29 @@ import { ScreenCanvas } from "../../../mobile/components/layout";
 
 type Props = NativeStackScreenProps<RootStackParamList, "MyLocation" | "TravelHistory" | "LiveMap">;
 
-export function MyLocationScreen({ navigation }: Props) {
+function mapScreenCopy(routeName: string, t: (key: string) => string) {
+  if (routeName === "LiveMap") {
+    return {
+      title: t("myLocation.title"),
+      subtitle: t("myLocation.liveTracking")
+    };
+  }
+  if (routeName === "TravelHistory") {
+    return {
+      title: t("myLocation.title"),
+      subtitle: t("myLocation.todaysDistance")
+    };
+  }
+  return {
+    title: t("myLocation.title"),
+    subtitle: t("home.fieldOperations")
+  };
+}
+
+export function MyLocationScreen({ navigation, route }: Props) {
   useSecureScreen();
   const { t } = useI18n();
+  const headerCopy = useMemo(() => mapScreenCopy(route.name, t), [route.name, t]);
   const [mapHeight, setMapHeight] = useState(320);
   const [mapWidth, setMapWidth] = useState(0);
 
@@ -83,6 +103,8 @@ export function MyLocationScreen({ navigation }: Props) {
         trackingActive={isActive && hasLiveGps}
         onBack={() => navigation.goBack()}
         onRefresh={() => void refresh()}
+        title={headerCopy.title}
+        subtitle={headerCopy.subtitle}
       />
 
       <MyLocationMetricsRow

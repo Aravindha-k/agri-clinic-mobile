@@ -7,7 +7,8 @@ import {
   View,
   Pressable,
   Linking,
-  RefreshControl
+  RefreshControl,
+  Alert
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { API_BASE_URL, buildApiUrl } from "../../src/api/config";
@@ -84,6 +85,7 @@ function TrackingWorkspaceScreenInner() {
     startedAt: trackingStartedAt,
     busy,
     startDay,
+    endDay,
     workday,
     refreshTracking,
     lastSyncTime
@@ -217,6 +219,23 @@ function TrackingWorkspaceScreenInner() {
     await loadSummary();
   }
 
+  function confirmEndWorkday() {
+    Alert.alert(t("daySummary.endWorkdayTitle"), t("daySummary.endWorkdayBody"), [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("daySummary.endWorkday"),
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            await endDay();
+            await refreshTracking().catch(() => undefined);
+            await loadSummary();
+          })();
+        }
+      }
+    ]);
+  }
+
   function openBuildApkPage() {
     void Linking.openURL(getExpoBuildUrl()).catch(() => undefined);
   }
@@ -261,7 +280,9 @@ function TrackingWorkspaceScreenInner() {
           distanceKm={distanceKm}
           busy={busy}
           onStart={() => void handleStartWorkday()}
+          onEnd={isActive ? confirmEndWorkday : undefined}
           startLabel={t("home.startWorkday")}
+          endLabel={t("daySummary.endWorkday")}
           idleTitle={t("daySummary.idleTitle")}
           idleSubtitle={t("daySummary.idleSubtitle")}
           statItems={

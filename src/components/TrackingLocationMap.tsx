@@ -134,8 +134,8 @@ export function TrackingLocationMap({ isActive, serverLatitude, serverLongitude,
             permissionResolved={permissionResolved || hasServerPin}
             locationDenied={locDenied && !hasServerPin}
             locationGranted={locationGranted || hasServerPin}
-            showsUserLocation={locationGranted && liveLat != null}
-            followsUserLocation={false}
+            showLiveUserLocation={locationGranted && liveLat != null}
+            followLiveUserLocation={false}
             emptyMessage="Map could not load. Please enable GPS and try again."
             accuracyCircle={
               hasServerPin

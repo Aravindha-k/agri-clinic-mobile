@@ -29,10 +29,10 @@ export type MyLocationVisitRow = {
 
 export type MyLocationStatusTone = "green" | "amber" | "red";
 
-import { getWorkdayLocationsPage } from "../api/tracking";
+import { getWorkdayLocationsPage, type LocationLogPoint } from "../api/tracking";
 import { useI18n } from "../i18n/I18nContext";
 import { readPendingGpsBuffer } from "../../mobile/lib/gps/trackingService";
-import { extractWorkdayStartPoint, buildDayMarkerFitCoords, buildDayRouteMarkers } from "../utils/dayRouteMap";
+import { extractWorkdayStartPoint, buildDayMarkerFitCoords, buildDayRouteMarkers, buildWorkdayGpsRoute } from "../utils/dayRouteMap";
 import { visitRowFromApi } from "../utils/visitMapFlow";
 
 function visitToRow(visit: Visit): MyLocationVisitRow | null {
@@ -86,6 +86,7 @@ export function useMyLocationScreen() {
   const [distanceKm, setDistanceKm] = useState(cachedDistanceKm);
   const [visitsToday, setVisitsToday] = useState<MyLocationVisitRow[]>([]);
   const [startPoint, setStartPoint] = useState<MapCoordinate | null>(null);
+  const [serverTrack, setServerTrack] = useState<LocationLogPoint[]>([]);
   const [liveAccuracy, setLiveAccuracy] = useState<number | null>(null);
   const [locationGranted, setLocationGranted] = useState(() => {
     const lat = parseMapCoord(currentLocation?.latitude);
@@ -187,6 +188,7 @@ export function useMyLocationScreen() {
 
       if (workdayId) {
         const serverPoints = locationPage?.results ?? [];
+        setServerTrack(serverPoints);
         setStartPoint(
           extractWorkdayStartPoint({
             serverPoints,
@@ -195,6 +197,7 @@ export function useMyLocationScreen() {
           })
         );
       } else {
+        setServerTrack([]);
         setStartPoint(null);
       }
 
@@ -278,6 +281,17 @@ export function useMyLocationScreen() {
     if (mapFitPoints.length === 1) return mapFitPoints;
     return undefined;
   }, [liveCoordinate, mapFitPoints]);
+
+  const routeLine = useMemo(() => {
+    const workdayId = trackingWorkday?.workday_id;
+    if (!workdayId) return [];
+    return buildWorkdayGpsRoute({
+      serverPoints: serverTrack,
+      pendingPoints: readPendingGpsBuffer(),
+      workdayId,
+      live: liveCoordinate
+    });
+  }, [liveCoordinate, serverTrack, trackingWorkday?.workday_id]);
 
   const gpsConfirmedOff =
     !hasLiveGps &&
@@ -384,6 +398,7 @@ export function useMyLocationScreen() {
     accuracyCircle,
     markers,
     mapRegion,
+    routeLine,
     fitCoordinates,
     visitsToday,
     statusTone,

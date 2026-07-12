@@ -198,11 +198,22 @@ export function FarmerMapScreen({ navigation, route }: Props) {
                 fitCoordinates={fitCoordinates}
                 fitEdgePadding={FIT_PADDING}
                 permissionResolved={permissionResolved}
+                showLiveUserLocation={false}
                 locationGranted={locationGranted}
                 locationDenied={permissionResolved && !locationGranted && !farmerPin}
                 loading={loading}
-                showsUserLocation={locationGranted}
                 markers={[
+                  ...(you
+                    ? [
+                        {
+                          id: "you",
+                          lat: you.lat,
+                          lng: you.lng,
+                          title: "You",
+                          kind: "current" as const
+                        }
+                      ]
+                    : []),
                   ...(farmerPin
                     ? [
                         {

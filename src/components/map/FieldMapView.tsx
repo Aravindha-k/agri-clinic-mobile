@@ -9,6 +9,7 @@ import { MapErrorBoundary } from "./MapErrorBoundary";
 export type { MapCoordinate, MapPin, MapPinKind } from "./FieldMapView.types";
 export type { FieldMapCameraRef } from "./fieldMapCamera";
 
+/** Lazy load keeps @maplibre out of the Expo Go runtime execution path. */
 const LazyFieldMapViewMapLibre = lazy(async () => {
   const mod = await import("./FieldMapViewMapLibre");
   return { default: mod.FieldMapViewMapLibre };
@@ -19,7 +20,7 @@ type Props = FieldMapViewProps & {
 };
 
 /**
- * Shared field map — SVG preview in Expo Go only; native MapLibre in dev/release APK.
+ * Single field map entry — Expo Go uses SVG route preview; APK/dev builds use native MapLibre.
  */
 export function FieldMapView(props: Props) {
   const expoGo = useMemo(() => isExpoGo(), []);
@@ -36,11 +37,7 @@ export function FieldMapView(props: Props) {
   return (
     <Suspense
       fallback={
-        <FieldMapViewPlaceholder
-          {...props}
-          message="Loading map…"
-          showSpinner
-        />
+        <FieldMapViewPlaceholder {...props} message="Loading map…" showSpinner />
       }
     >
       <LazyFieldMapViewMapLibre {...props} />

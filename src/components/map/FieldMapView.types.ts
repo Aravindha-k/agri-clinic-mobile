@@ -33,8 +33,14 @@ export type FieldMapViewProps = {
   route?: MapCoordinate[];
   fitCoordinates?: MapCoordinate[];
   fitEdgePadding?: { top: number; right: number; bottom: number; left: number };
+  /** @deprecated Use showLiveUserLocation */
   showsUserLocation?: boolean;
+  /** @deprecated Use followLiveUserLocation */
   followsUserLocation?: boolean;
+  /** Mount native live GPS dot only when foreground permission is granted. Default false. */
+  showLiveUserLocation?: boolean;
+  /** Smoothly follow live GPS via camera easeTo (never native trackUserLocation). Default false. */
+  followLiveUserLocation?: boolean;
   loading?: boolean;
   permissionResolved?: boolean;
   locationDenied?: boolean;

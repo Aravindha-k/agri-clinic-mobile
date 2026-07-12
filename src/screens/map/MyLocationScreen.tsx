@@ -61,6 +61,7 @@ export function MyLocationScreen({ navigation, route }: Props) {
     markers,
     mapRegion,
     fitCoordinates,
+    routeLine,
     visitsToday,
     emptyStateKey,
     refresh,
@@ -129,13 +130,13 @@ export function MyLocationScreen({ navigation, route }: Props) {
               height={mapHeight}
               width={mapWidth}
               region={mapRegion}
-              route={[]}
+              route={routeLine}
               fitCoordinates={fitCoordinates}
               fitEdgePadding={{ top: 72, right: 56, bottom: 88, left: 40 }}
               markers={markers}
               mapRef={mapRef}
-              showsUserLocation={hasLiveGps}
-              followsUserLocation={followLive}
+              showLiveUserLocation={hasLiveGps}
+              followLiveUserLocation={followLive}
               liveFocus={followLive ? liveCoordinate : null}
               liveFocusDelta={0.005}
               locationGranted={hasLiveGps}

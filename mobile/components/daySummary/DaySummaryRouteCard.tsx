@@ -10,6 +10,7 @@ import { useTracking } from "../../../src/storage/TrackingContext";
 import {
   buildDayMarkerFitCoords,
   buildDayRouteMarkers,
+  buildWorkdayGpsRoute,
   extractWorkdayStartPoint
 } from "../../../src/utils/dayRouteMap";
 import { logDayTabError } from "../../../src/utils/dayTabDiagnostics";
@@ -100,6 +101,16 @@ export function DaySummaryRouteCard({
       }),
     [isActive, liveCoordinate, startPoint, t, visitsToday, workdayId]
   );
+
+  const routeLine = useMemo(() => {
+    if (!workdayId) return [];
+    return buildWorkdayGpsRoute({
+      serverPoints: serverTrack,
+      pendingPoints,
+      workdayId,
+      live: isActive ? liveCoordinate : null
+    });
+  }, [isActive, liveCoordinate, pendingPoints, serverTrack, workdayId]);
 
   const showLiveOnMap = Boolean(workdayId && isActive && liveCoordinate);
 
@@ -205,12 +216,14 @@ export function DaySummaryRouteCard({
                 height={MAP_HEIGHT}
                 width={previewWidth}
                 region={mapRegion}
-                route={[]}
+                route={routeLine}
                 markers={markers}
                 fitCoordinates={fitCoordinates}
                 fitEdgePadding={{ top: 28, right: 28, bottom: 28, left: 28 }}
-                showsUserLocation={showLiveOnMap}
+                showLiveUserLocation={showLiveOnMap}
                 locationGranted={showLiveOnMap}
+                liveFocus={showLiveOnMap ? liveCoordinate : null}
+                followLiveUserLocation={false}
                 permissionResolved
                 loading={false}
                 interactive={false}

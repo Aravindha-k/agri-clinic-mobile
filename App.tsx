@@ -1,9 +1,10 @@
 import "react-native-reanimated";
 import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View, Image } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { KavyaCinematicSplash } from "./src/components/brand/KavyaCinematicSplash";
+import { SPLASH_ASSETS } from "./src/components/brand/splashAssets";
 import { CINEMATIC_SPLASH_BG } from "./src/components/brand/splashColors";
 import { hideNativeSplashSafe, holdNativeSplash } from "./src/bootstrap/nativeSplash";
 import { onSplashReplayRequested } from "./src/bootstrap/splashReplay";
@@ -17,6 +18,15 @@ const APP_BG = "#F8F7F2";
 
 type StartupPhase = "cinematic" | "revealing" | "app";
 
+function preloadSplashAssets() {
+  const bg = Image.resolveAssetSource(SPLASH_ASSETS.background);
+  const logo = Image.resolveAssetSource(SPLASH_ASSETS.logo);
+  return Promise.all([
+    bg.uri ? Image.prefetch(bg.uri) : Promise.resolve(false),
+    logo.uri ? Image.prefetch(logo.uri) : Promise.resolve(false)
+  ]).catch(() => undefined);
+}
+
 export default function App() {
   const [phase, setPhase] = useState<StartupPhase>("cinematic");
   const [splashKey, setSplashKey] = useState(0);
@@ -29,6 +39,7 @@ export default function App() {
     installGlobalErrorHandlers();
     logStartup("first_render");
     void holdNativeSplash();
+    void preloadSplashAssets();
 
     void import("./AppProviders")
       .then((mod) => {
@@ -58,7 +69,7 @@ export default function App() {
     return Math.max(0, Date.now() - layoutAtRef.current);
   }, []);
 
-  /** Native splash hides only after cinematic first layout + animation kickoff. */
+  /** Native splash hides only after cinematic background + logo layer have painted. */
   const handleCinematicReady = useCallback(() => {
     layoutAtRef.current = Date.now();
     void hideNativeSplashSafe("cinematic_first_layout");
@@ -82,7 +93,7 @@ export default function App() {
 
   const showSplash = phase === "cinematic" || phase === "revealing";
   const showShell = Providers != null || bootError != null;
-  /** Keep providers mounted for auth/fonts, but hide until exit fade so native screens cannot cover splash. */
+  /** Keep providers mounted for auth/fonts, but hide until exit fade so login cannot flash under splash. */
   const shellVisible = phase === "revealing" || phase === "app";
   const rootBg = showSplash ? CINEMATIC_SPLASH_BG : APP_BG;
 

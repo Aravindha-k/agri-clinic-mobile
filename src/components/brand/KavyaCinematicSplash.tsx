@@ -1,3 +1,4 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Image, StyleSheet, Text, useWindowDimensions, View } from "react-native";
@@ -23,6 +24,10 @@ import {
   SPLASH_EXIT_FADE_MS,
   SPLASH_EXIT_WASH,
   SPLASH_HOLD_AFTER_ANIM_MS,
+  SPLASH_KEN_BURNS_MS,
+  SPLASH_KEN_BURNS_SCALE_MAX,
+  SPLASH_KEN_BURNS_SCALE_MIN,
+  SPLASH_LOGO_BREATHE_MS,
   SPLASH_MAX_VISIBLE_MS,
   SPLASH_MIN_VISIBLE_MS,
   SPLASH_NATIVE_HANDOFF_MS
@@ -38,21 +43,10 @@ const COPY_BLOCK_HEIGHT = 78;
 const LOGO_WIDTH_RATIO = 0.42;
 const LOGO_MAX = 200;
 
-/** Classic logo breathe — visible zoom in / out on splash. */
-const SPLASH_LOGO_ZOOM_MIN = 0.92;
-const SPLASH_LOGO_ZOOM_MAX = 1.1;
-const SPLASH_LOGO_ZOOM_HALF_MS = 900;
-
-/**
- * Timeline from first layout (ms):
- * 0         sharp full-opacity background + logo at 75%
- * 120–900   logo scale / bloom
- * 480–1220  title / subtitle reveal
- * then hold SPLASH_HOLD_AFTER_ANIM_MS until canExit
- * exit fade ~400 ms
- */
-const LOGO_ANIM_MS = 780;
-const TITLE_START_MS = 480;
+const LOGO_ENTRY_DELAY_MS = 250;
+const LOGO_ENTRY_MS = 900;
+const LOGO_BREATHE_MAX = 1.025;
+const TITLE_START_MS = 520;
 const TITLE_ANIM_MS = 560;
 const SUBTITLE_START_MS = 720;
 const SUBTITLE_ANIM_MS = 500;
@@ -73,8 +67,8 @@ type Props = {
 };
 
 /**
- * Continuous splash: logo + title sit on the background yellow sunburst,
- * then a clearly visible cinematic beat, then exit when ready.
+ * Premium product splash: agriculture artwork with Ken Burns motion,
+ * centered Kavya logo reveal, then smooth handoff to the app.
  */
 export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit = false }: Props) {
   const { reduced } = usePremiumMotion();
@@ -98,9 +92,11 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
   onExitStartRef.current = onExitStart;
   onFinishRef.current = onFinish;
 
-  const logoOpacity = useSharedValue(1);
-  const logoScale = useSharedValue(1);
-  const logoTranslateY = useSharedValue(0);
+  const bgScale = useSharedValue(SPLASH_KEN_BURNS_SCALE_MIN);
+  const bgTranslateY = useSharedValue(0);
+  const logoOpacity = useSharedValue(0);
+  const logoScale = useSharedValue(0.94);
+  const logoTranslateY = useSharedValue(8);
   const titleOpacity = useSharedValue(0);
   const titleTranslateY = useSharedValue(14);
   const subtitleOpacity = useSharedValue(0);
@@ -186,10 +182,11 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     const easeOut = Easing.out(Easing.cubic);
     const easeInOut = Easing.inOut(Easing.cubic);
     const preferLight = preferLightRef.current;
-    const minMs = preferLight
-      ? Math.min(SPLASH_MIN_VISIBLE_MS - 800, SPLASH_HOLD_AFTER_ANIM_MS + 900)
-      : SPLASH_MIN_VISIBLE_MS;
+    const minMs = preferLight ? Math.max(1600, SPLASH_MIN_VISIBLE_MS - 600) : SPLASH_MIN_VISIBLE_MS;
+    const kenBurnsHalf = preferLight ? SPLASH_KEN_BURNS_MS : SPLASH_KEN_BURNS_MS;
 
+    cancelAnimation(bgScale);
+    cancelAnimation(bgTranslateY);
     cancelAnimation(logoOpacity);
     cancelAnimation(logoScale);
     cancelAnimation(logoTranslateY);
@@ -201,36 +198,62 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     cancelAnimation(exitWash);
     cancelAnimation(screenOpacity);
 
-    logoOpacity.value = 1;
-    logoScale.value = SPLASH_LOGO_ZOOM_MIN;
-    logoTranslateY.value = 0;
+    bgScale.value = SPLASH_KEN_BURNS_SCALE_MIN;
+    bgTranslateY.value = 0;
+    logoOpacity.value = 0;
+    logoScale.value = 0.94;
+    logoTranslateY.value = preferLight ? 4 : 8;
     titleOpacity.value = 0;
     titleTranslateY.value = 14;
     subtitleOpacity.value = 0;
     exitWash.value = 0;
     screenOpacity.value = 1;
 
-    const zoomHalfMs = preferLight ? SPLASH_LOGO_ZOOM_HALF_MS + 120 : SPLASH_LOGO_ZOOM_HALF_MS;
-    const zoomMin = preferLight ? 0.94 : SPLASH_LOGO_ZOOM_MIN;
-    const zoomMax = preferLight ? 1.06 : SPLASH_LOGO_ZOOM_MAX;
-
-    logoScale.value = withDelay(
-      120,
-      withRepeat(
+    if (!preferLight) {
+      bgScale.value = withRepeat(
         withSequence(
-          withTiming(zoomMax, { duration: zoomHalfMs, easing: easeOut }),
-          withTiming(zoomMin, { duration: zoomHalfMs, easing: easeInOut })
+          withTiming(SPLASH_KEN_BURNS_SCALE_MAX, { duration: kenBurnsHalf / 2, easing: easeInOut }),
+          withTiming(SPLASH_KEN_BURNS_SCALE_MIN, { duration: kenBurnsHalf / 2, easing: easeInOut })
         ),
         -1,
         false
+      );
+      bgTranslateY.value = withRepeat(
+        withSequence(
+          withTiming(-4, { duration: kenBurnsHalf / 2, easing: easeInOut }),
+          withTiming(0, { duration: kenBurnsHalf / 2, easing: easeInOut })
+        ),
+        -1,
+        false
+      );
+    }
+
+    logoOpacity.value = withDelay(
+      LOGO_ENTRY_DELAY_MS,
+      withTiming(1, { duration: preferLight ? 500 : LOGO_ENTRY_MS, easing: easeOut })
+    );
+    logoScale.value = withDelay(
+      LOGO_ENTRY_DELAY_MS,
+      withSequence(
+        withTiming(1.02, { duration: preferLight ? 420 : 620, easing: easeOut }),
+        withTiming(1, { duration: preferLight ? 280 : 380, easing: easeInOut }),
+        ...(preferLight
+          ? []
+          : [
+              withRepeat(
+                withSequence(
+                  withTiming(LOGO_BREATHE_MAX, { duration: SPLASH_LOGO_BREATHE_MS, easing: easeInOut }),
+                  withTiming(1, { duration: SPLASH_LOGO_BREATHE_MS, easing: easeInOut })
+                ),
+                -1,
+                false
+              )
+            ])
       )
     );
     logoTranslateY.value = withDelay(
-      120,
-      withSequence(
-        withTiming(preferLight ? -8 : -12, { duration: LOGO_ANIM_MS * 0.55, easing: easeOut }),
-        withTiming(preferLight ? -4 : -6, { duration: LOGO_ANIM_MS * 0.45, easing: easeInOut })
-      )
+      LOGO_ENTRY_DELAY_MS,
+      withTiming(0, { duration: preferLight ? 520 : LOGO_ENTRY_MS, easing: easeOut })
     );
 
     titleOpacity.value = withDelay(
@@ -249,13 +272,13 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     bloomOpacity.value = withDelay(
       BLOOM_START_MS,
       withSequence(
-        withTiming(preferLight ? 0.28 : 0.48, { duration: BLOOM_ANIM_MS * 0.5, easing: easeOut }),
-        withTiming(preferLight ? 0.14 : 0.22, { duration: BLOOM_ANIM_MS * 0.5, easing: easeInOut })
+        withTiming(preferLight ? 0.24 : 0.42, { duration: BLOOM_ANIM_MS * 0.5, easing: easeOut }),
+        withTiming(preferLight ? 0.12 : 0.2, { duration: BLOOM_ANIM_MS * 0.5, easing: easeInOut })
       )
     );
     bloomScale.value = withDelay(
       BLOOM_START_MS,
-      withTiming(1.1, { duration: BLOOM_ANIM_MS, easing: easeOut })
+      withTiming(1.08, { duration: BLOOM_ANIM_MS, easing: easeOut })
     );
 
     logStartup("cinematic_animation_started", `${elapsed()} ms`);
@@ -283,13 +306,16 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
       clearTimeout(floorTimer);
       clearTimeout(maxTimer);
     };
-    // Start once when layout is ready — do not restart when motion prefs / bg resolve.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- cold-mount cinematic sequence
   }, [layoutReady]);
 
   useEffect(() => {
     tryExit();
   }, [canExit, tryExit]);
+
+  const bgStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: bgScale.value }, { translateY: bgTranslateY.value }]
+  }));
 
   const logoStyle = useAnimatedStyle(() => ({
     opacity: logoOpacity.value,
@@ -322,16 +348,33 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     <Animated.View style={[styles.screen, rootStyle]} onLayout={onFirstLayout} collapsable={false}>
       <StatusBar style="dark" translucent backgroundColor={CINEMATIC_SPLASH_BG} />
 
-      {!bgFailed ? (
-        <Image
-          source={SPLASH_ASSETS.background}
-          style={styles.background}
-          resizeMode="cover"
-          fadeDuration={0}
-          onError={() => setBgFailed(true)}
-          accessibilityIgnoresInvertColors
-        />
-      ) : null}
+      <View style={styles.backgroundClip} pointerEvents="none">
+        {!bgFailed ? (
+          <Animated.View style={[styles.backgroundMotion, bgStyle]}>
+            <Image
+              source={SPLASH_ASSETS.background}
+              style={styles.backgroundImage}
+              resizeMode="cover"
+              fadeDuration={0}
+              onError={() => setBgFailed(true)}
+              accessibilityIgnoresInvertColors
+            />
+          </Animated.View>
+        ) : (
+          <View style={[styles.backgroundFallback, { backgroundColor: CINEMATIC_SPLASH_BG }]} />
+        )}
+      </View>
+
+      <LinearGradient
+        colors={[
+          "rgba(216, 236, 248, 0.12)",
+          "rgba(186, 224, 210, 0.28)",
+          "rgba(216, 236, 248, 0.18)"
+        ]}
+        locations={[0, 0.55, 1]}
+        style={styles.readabilityOverlay}
+        pointerEvents="none"
+      />
 
       <View style={styles.logoLayer} pointerEvents="none">
         <View style={[styles.heroColumn, { top: heroTop, width: screenW }]}>
@@ -393,12 +436,28 @@ const styles = StyleSheet.create({
   screen: {
     backgroundColor: CINEMATIC_SPLASH_BG,
     flex: 1,
-    overflow: "visible"
+    overflow: "hidden"
   },
-  background: {
+  backgroundClip: {
     ...StyleSheet.absoluteFillObject,
+    overflow: "hidden"
+  },
+  backgroundMotion: {
+    height: "108%",
+    left: "-4%",
+    position: "absolute",
+    top: "-4%",
+    width: "108%"
+  },
+  backgroundImage: {
     height: "100%",
     width: "100%"
+  },
+  backgroundFallback: {
+    ...StyleSheet.absoluteFillObject
+  },
+  readabilityOverlay: {
+    ...StyleSheet.absoluteFillObject
   },
   logoLayer: {
     ...StyleSheet.absoluteFillObject,

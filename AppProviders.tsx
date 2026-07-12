@@ -118,7 +118,7 @@ function CriticalStartupGate({
       firedRef.current = true;
       logStartup("providers_ready", "soft_timeout");
       onCriticalReady();
-    }, 4000);
+    }, 2800);
     return () => clearTimeout(timer);
   }, [onCriticalReady]);
 

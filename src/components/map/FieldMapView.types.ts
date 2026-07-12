@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
 import type { MapRegion } from "../../types/map";
+import type { FieldMapCameraRef } from "./fieldMapCamera";
 
 export type MapPinKind =
   | "current"
@@ -46,7 +47,7 @@ export type FieldMapViewProps = {
     /** Softer outer ring radius — defaults to radiusMeters when omitted. */
     outerRadiusMeters?: number;
   };
-  mapRef?: RefObject<unknown | null>;
+  mapRef?: RefObject<FieldMapCameraRef | null>;
   routeStrokePrimary?: string;
   routeStrokeOutline?: string;
   /** Thinner stroke for small preview maps. */

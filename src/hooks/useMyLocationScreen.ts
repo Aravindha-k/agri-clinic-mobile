@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Location from "expo-location";
-import type MapView from "react-native-maps";
+import type { FieldMapCameraRef } from "../components/map/fieldMapCamera";
 import { Visit } from "../api/visits";
 import type { MapCoordinate } from "../components/map/FieldMapView.types";
 import { useConnectivityOnline } from "./useConnectivityOnline";
@@ -79,7 +79,7 @@ export function useMyLocationScreen() {
     workday: trackingWorkday
   } = useTracking();
 
-  const mapRef = useRef<MapView | null>(null);
+  const mapRef = useRef<FieldMapCameraRef | null>(null);
   const mountedRef = useRef(true);
   const [workdayActive, setWorkdayActive] = useState(isActive);
   const [workdayFinished, setWorkdayFinished] = useState(false);

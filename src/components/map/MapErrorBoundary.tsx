@@ -11,7 +11,8 @@ type Props = {
 
 type State = { hasError: boolean };
 
-const DEFAULT_MESSAGE = "Map could not load. Please enable GPS and try again.";
+const DEFAULT_MESSAGE =
+  "Map is temporarily unavailable.\nYour route and visit data are still being recorded.";
 
 export class MapErrorBoundary extends Component<Props, State> {
   state: State = { hasError: false };

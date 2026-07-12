@@ -15,7 +15,7 @@ type MapDiagnosticPayload = {
   routePointCount?: number;
   showsUserLocation?: boolean;
   followsUserLocation?: boolean;
-  mapType?: "satellite";
+  mapType?: string;
   note?: string;
 };
 

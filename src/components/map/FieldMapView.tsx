@@ -7,6 +7,10 @@ import { useTheme } from "../../theme";
 import { FIELD_MAP_TYPE } from "../../types/mapType";
 import type { MapRegion } from "../../types/map";
 import { hasValidMapCoords, parseMapCoord, filterMapCoordinates } from "../../utils/mapCoords";
+import {
+  isAndroidMapsNativeConfigured,
+  MAP_CONFIG_UNAVAILABLE_MESSAGE
+} from "../../utils/mapsNativeConfig";
 import { logMapDiagnostics } from "../../utils/mapDebug";
 import { sanitizeRegion } from "../../utils/mapRegion";
 import { FieldMapMarker } from "./FieldMapMarker";
@@ -155,7 +159,10 @@ export function FieldMapView({
     showsUserLocation
   ]);
 
+  const mapsNativeConfigured = Platform.OS !== "android" || isAndroidMapsNativeConfigured();
+
   const canRenderMap = useMemo(() => {
+    if (!mapsNativeConfigured) return false;
     if (errorMessage) return false;
     if (!permissionResolved || loading) return false;
     if (locationDenied) return false;
@@ -169,6 +176,7 @@ export function FieldMapView({
     loading,
     locationDenied,
     locationGranted,
+    mapsNativeConfigured,
     permissionResolved,
     safeRegion.latitude,
     safeRegion.longitude,
@@ -313,7 +321,9 @@ export function FieldMapView({
   const shellWidth = Math.max(width, 1);
 
   const placeholderMessage =
-    errorMessage ??
+    !mapsNativeConfigured
+      ? MAP_CONFIG_UNAVAILABLE_MESSAGE
+      : errorMessage ??
     emptyMessage ??
     (locationDenied
       ? "Location not available. Please enable GPS and try again."

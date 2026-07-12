@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import * as Location from "expo-location";
+import { readLocationServicesEnabled } from "./locationServicesProbe";
 
 /**
  * Result of ensuring device location / GPS services are on.
@@ -15,11 +16,7 @@ export type EnsureLocationServicesResult =
 let inFlight: Promise<EnsureLocationServicesResult> | null = null;
 
 async function servicesEnabled(): Promise<boolean> {
-  try {
-    return await Location.hasServicesEnabledAsync();
-  } catch {
-    return false;
-  }
+  return readLocationServicesEnabled();
 }
 
 /**

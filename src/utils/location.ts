@@ -3,6 +3,7 @@ import type { LocationPushPayload } from "../api/tracking";
 import { BACKGROUND_PERMISSION_MESSAGE } from "../tracking/backgroundLocationService";
 import { trackingDevLog } from "../tracking/trackingDevLog";
 import { hasValidMapCoords } from "./mapCoords";
+import { readLocationServicesEnabled } from "./locationServicesProbe";
 import { getForegroundTrackingAccuracy } from "../tracking/trackingSession";
 
 export type ForegroundLocationResult =
@@ -22,11 +23,7 @@ export type TrackingPermissionResult = {
 };
 
 async function readServicesEnabled() {
-  try {
-    return await Location.hasServicesEnabledAsync();
-  } catch {
-    return false;
-  }
+  return readLocationServicesEnabled();
 }
 
 /** Foreground permission only — does not request background (visits, quick GPS checks). */
@@ -159,7 +156,7 @@ export async function ensureTrackingPermissions(): Promise<TrackingPermissionRes
 
 export async function getForegroundLocation(): Promise<ForegroundLocationResult> {
   try {
-    const servicesEnabled = await Location.hasServicesEnabledAsync();
+    const servicesEnabled = await readLocationServicesEnabled();
     if (!servicesEnabled) {
       return {
         granted: false,

@@ -1,6 +1,7 @@
 import * as Location from "expo-location";
 import type { LocationPushPayload } from "../api/tracking";
 import { isBackgroundLocationTrackingActive } from "../tracking/backgroundLocationService";
+import { readLocationServicesEnabled } from "./locationServicesProbe";
 
 /** Values sent to backend/admin for permission diagnostics. */
 export type LocationPermissionStatus =
@@ -24,7 +25,7 @@ export type GpsStateReportOptions = {
 export async function getGpsStateReport(options?: GpsStateReportOptions): Promise<GpsStateReport> {
   let servicesEnabled = false;
   try {
-    servicesEnabled = await Location.hasServicesEnabledAsync();
+    servicesEnabled = await readLocationServicesEnabled();
   } catch {
     servicesEnabled = false;
   }

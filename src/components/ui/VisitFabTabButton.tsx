@@ -2,7 +2,7 @@ import { Plus } from "lucide-react-native";
 import { BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
 import {
   WorkdayRequiredSheet,
@@ -13,6 +13,7 @@ import { navigateToVisitFlow } from "../../navigation/navigateVisitFlow";
 import { useActiveWorkday } from "../../hooks/useActiveWorkday";
 import { useTracking } from "../../storage/TrackingContext";
 import { requestGpsForFieldWork } from "../../utils/locationRequiredModal";
+import { hasValidMapCoords, parseMapCoord } from "../../utils/mapCoords";
 import { FAB_RISE_ABOVE_BAR, FAB_SIZE } from "../../theme/tabBar";
 import { LucideGlyph } from "../../../mobile/components/ui/AppIcon";
 import { Colors, FontSize, FontWeight } from "../../../mobile/lib/theme";
@@ -44,11 +45,28 @@ export function VisitFabTabButton({
   const { t } = useI18n();
   const [visitFlowOpen, setVisitFlowOpen] = useState(false);
   const { isActive } = useActiveWorkday();
-  const { startDay, busy } = useTracking();
+  const { startDay, busy, currentLocation } = useTracking();
   const workdaySheetRef = useRef<WorkdayRequiredSheetRef>(null);
   const fabRotate = useRef(new Animated.Value(0)).current;
   const pressScale = useRef(new Animated.Value(1)).current;
   const glowPulse = useRef(new Animated.Value(0)).current;
+
+  const activeFix = useMemo(() => {
+    const lat = parseMapCoord(currentLocation?.latitude);
+    const lng = parseMapCoord(currentLocation?.longitude);
+    if (lat == null || lng == null || !hasValidMapCoords(lat, lng)) {
+      return null;
+    }
+    return { latitude: lat, longitude: lng };
+  }, [currentLocation?.latitude, currentLocation?.longitude]);
+
+  const gpsRequestOptions = useMemo(
+    () => ({
+      trustActiveWorkdayFix: isActive,
+      activeFix
+    }),
+    [activeFix, isActive]
+  );
 
   useEffect(() => {
     const glowLoop = Animated.loop(
@@ -120,7 +138,7 @@ export function VisitFabTabButton({
   const handlePress = useCallback(() => {
     void (async () => {
       try {
-        const allowed = await requestGpsForFieldWork();
+        const allowed = await requestGpsForFieldWork(gpsRequestOptions);
         if (!allowed) return;
         if (isActive) {
           openNewVisit();
@@ -131,11 +149,11 @@ export function VisitFabTabButton({
         /* GPS / navigation errors stay in-app */
       }
     })();
-  }, [isActive, openNewVisit]);
+  }, [gpsRequestOptions, isActive, openNewVisit]);
 
   const handleStartWorkdayFromSheet = useCallback(async () => {
     try {
-      const allowed = await requestGpsForFieldWork();
+      const allowed = await requestGpsForFieldWork(gpsRequestOptions);
       if (!allowed) return;
       const started = await startDay();
       if (!started) return;
@@ -144,7 +162,7 @@ export function VisitFabTabButton({
     } catch {
       /* keep sheet open for retry */
     }
-  }, [openNewVisit, startDay]);
+  }, [gpsRequestOptions, openNewVisit, startDay]);
 
   const label = t("tabs.visitShort");
   const a11yLabel = accessibilityLabel ?? t("tabs.newVisit");

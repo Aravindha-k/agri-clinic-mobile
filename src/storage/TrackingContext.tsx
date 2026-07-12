@@ -164,8 +164,10 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   const lastMotionRef = useRef(false);
   const workdayRef = useRef<WorkdayStatus | null>(null);
   const workdayStartedAtRef = useRef<number | null>(null);
+  const currentLocationRef = useRef<CurrentLocation | null>(null);
 
   workdayRef.current = workday;
+  currentLocationRef.current = currentLocation;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -572,9 +574,20 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (!result.granted) {
+        const fix = currentLocationRef.current;
+        const lat = fix?.latitude != null ? Number(fix.latitude) : NaN;
+        const lng = fix?.longitude != null ? Number(fix.longitude) : NaN;
+        const hasRecentFix = hasValidMapCoords(lat, lng);
+        const gpsOffMessage = result.message?.includes("GPS is turned off");
+
+        if (gpsOffMessage && hasRecentFix) {
+          // Transient Android services probe — keep workday usable with last fix.
+          return;
+        }
+
         setGpsState("denied");
         await sendTrackingHeartbeat({ gpsEnabledHint: false }).catch(() => undefined);
-        setError(result.message);
+        setError(result.message ?? TRACKING_SYNC_ERROR);
         return;
       }
 

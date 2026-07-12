@@ -1,9 +1,7 @@
 import Constants from "expo-constants";
+import { isExpoGo } from "./mapLibreNative";
 
-/** True when running inside the Expo Go store app (not a dev/production build). */
-export function isExpoGo(): boolean {
-  return Constants.appOwnership === "expo";
-}
+export { isExpoGo, isNativeMapRuntime, EXPO_GO_MAP_HINT } from "./mapLibreNative";
 
 /** Expo Go dev warnings are for engineers only — hide from field employees in production. */
 export function shouldShowExpoGoDevWarning(): boolean {

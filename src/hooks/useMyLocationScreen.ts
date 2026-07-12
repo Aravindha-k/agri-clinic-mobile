@@ -10,6 +10,7 @@ import { useTracking } from "../storage/TrackingContext";
 import { isBackgroundLocationTrackingActive } from "../tracking/backgroundLocationService";
 import { readCachedActiveWorkday } from "../storage/workdaySessionStorage";
 import { getForegroundLocation } from "../utils/location";
+import { readLocationServicesEnabled } from "../utils/locationServicesProbe";
 import { hasValidMapCoords, parseMapCoord } from "../utils/mapCoords";
 import { DEFAULT_MAP_REGION, fitMapRegion } from "../utils/mapRegion";
 import { isSameVisitLocalDay, visitDisplayIso } from "../utils/format";
@@ -136,7 +137,7 @@ export function useMyLocationScreen() {
   const refreshPermissionState = useCallback(async () => {
     try {
       const [servicesEnabled, permission] = await Promise.all([
-        Location.hasServicesEnabledAsync(),
+        readLocationServicesEnabled(),
         Location.getForegroundPermissionsAsync()
       ]);
       if (!mountedRef.current) return;

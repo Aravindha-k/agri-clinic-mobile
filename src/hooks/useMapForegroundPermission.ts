@@ -1,5 +1,6 @@
 import * as Location from "expo-location";
 import { useEffect, useState } from "react";
+import { readLocationServicesEnabled } from "../utils/locationServicesProbe";
 
 export type MapForegroundPermission = {
   resolved: boolean;
@@ -36,7 +37,7 @@ export function useMapForegroundPermission(enabled: boolean): MapForegroundPermi
     void (async () => {
       try {
         const [servicesEnabled, permission] = await Promise.all([
-          Location.hasServicesEnabledAsync(),
+          readLocationServicesEnabled(),
           Location.getForegroundPermissionsAsync()
         ]);
         if (cancelled) return;

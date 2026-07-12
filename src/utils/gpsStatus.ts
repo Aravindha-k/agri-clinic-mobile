@@ -1,4 +1,5 @@
 import * as Location from "expo-location";
+import { readLocationServicesEnabled } from "./locationServicesProbe";
 
 /** Device GPS / permission probe result (no permission prompt). */
 export type GpsAvailability =
@@ -11,17 +12,17 @@ export type GpsAvailability =
 
 export async function probeGpsAvailability(): Promise<GpsAvailability> {
   try {
-    const servicesEnabled = await Location.hasServicesEnabledAsync();
-    if (!servicesEnabled) {
-      return "services_off";
-    }
-
     const permission = await Location.getForegroundPermissionsAsync();
     if (permission.status !== "granted") {
       if (permission.status === "denied" && !permission.canAskAgain) {
         return "permission_denied";
       }
       return "permission_undetermined";
+    }
+
+    const servicesEnabled = await readLocationServicesEnabled();
+    if (!servicesEnabled) {
+      return "services_off";
     }
 
     const background = await Location.getBackgroundPermissionsAsync();

@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
+const QA_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 const DEMO_STYLE = "https://demotiles.maplibre.org/style.json";
 
 const issues = [];
@@ -125,10 +126,16 @@ if (prebuildIdx >= 0 && gradleIdx > prebuildIdx) {
   fail("GitHub workflow order wrong — prebuild must precede Gradle assembleRelease");
 }
 
-if (workflow.includes("EXPO_PUBLIC_MAP_STYLE_URL") && workflow.includes(DEMO_STYLE)) {
-  pass(`GitHub workflow sets EXPO_PUBLIC_MAP_STYLE_URL (${DEMO_STYLE})`);
+if (workflow.includes("EXPO_PUBLIC_MAP_STYLE_URL") && workflow.includes(QA_STYLE)) {
+  pass(`GitHub workflow sets OpenFreeMap QA style URL`);
 } else {
-  fail("GitHub workflow missing EXPO_PUBLIC_MAP_STYLE_URL with demo style fallback");
+  fail("GitHub workflow missing EXPO_PUBLIC_MAP_STYLE_URL with OpenFreeMap QA style");
+}
+
+if (workflow.includes(DEMO_STYLE)) {
+  fail("GitHub workflow still uses MapLibre demo style — use OpenFreeMap for client QA");
+} else {
+  pass("GitHub workflow does not use MapLibre demo style for QA APK");
 }
 
 if (workflow.includes("verify-maplibre-release.mjs")) {
@@ -139,31 +146,71 @@ if (workflow.includes("verify-maplibre-release.mjs")) {
 
 // 10. Runtime style resolver
 const mapStyleTs = read("src/config/mapStyle.ts") ?? "";
-if (mapStyleTs.includes("MAPLIBRE_DEMO_STYLE_URL") && mapStyleTs.includes('env === "production"')) {
-  pass("mapStyle.ts production path falls back to MapLibre demo tiles when URL unset");
+if (mapStyleTs.includes("MAPLIBRE_QA_STYLE_URL") && mapStyleTs.includes("openfreemap.org")) {
+  pass("mapStyle.ts uses OpenFreeMap QA style as production fallback");
 } else {
-  fail("mapStyle.ts missing production demo-style fallback");
+  fail("mapStyle.ts missing OpenFreeMap QA style fallback");
+}
+
+if (mapStyleTs.includes("map_style_selected") || mapStyleTs.includes("logMapStyleEvent")) {
+  pass("mapStyle.ts emits safe style selection diagnostics");
+} else {
+  fail("mapStyle.ts missing style selection diagnostics");
 }
 
 // 11–13. Expo Go only paths
 const fieldMapView = read("src/components/map/FieldMapView.tsx") ?? "";
 if (fieldMapView.includes("isExpoGo()") && fieldMapView.includes("FieldMapViewSchematic")) {
-  pass("FieldMapView uses schematic only when isExpoGo()");
+  pass("FieldMapView routes schematic only in Expo Go");
 } else {
   fail("FieldMapView must route schematic only through isExpoGo()");
 }
 
-if (!fieldMapView.includes("isMapLibreNativeAvailable")) {
-  pass("FieldMapView does not gate APK builds on TurboModule pre-check");
+if (!fieldMapView.includes("isNativeMapRuntime") && !fieldMapView.includes("isMapLibreNativeAvailable")) {
+  pass("FieldMapView does not false-negative native MapLibre in APK");
 } else {
-  fail("FieldMapView still uses isMapLibreNativeAvailable — APK may show SVG fallback");
+  fail("FieldMapView may false-route APK to schematic via extra runtime checks");
+}
+
+const mapLibre = read("src/components/map/FieldMapViewMapLibre.tsx") ?? "";
+if (mapLibre.includes("<Map") && mapLibre.includes("shouldMountMap") && !mapLibre.includes("canRenderMap")) {
+  pass("FieldMapViewMapLibre mounts native Map without canRenderMap pre-gate");
+} else {
+  fail("FieldMapViewMapLibre still uses canRenderMap gate or missing Map mount");
+}
+
+if (mapLibre.includes("useMapForegroundPermission") && mapLibre.includes("canMountUserLocation")) {
+  pass("FieldMapViewMapLibre gates UserLocation on foreground permission");
+} else {
+  fail("FieldMapViewMapLibre missing foreground permission guard for UserLocation");
+}
+
+if (mapLibre.includes("canMountUserLocation ?") && mapLibre.includes("<UserLocation")) {
+  pass("UserLocation is conditionally mounted (not unconditional)");
+} else {
+  fail("UserLocation may mount unconditionally");
+}
+
+if (!mapLibre.includes("trackUserLocation")) {
+  pass("Camera does not use native trackUserLocation follow mode");
+} else {
+  fail("Camera still uses trackUserLocation — use easeTo/fitBounds instead");
+}
+
+if (mapLibre.includes("MAP_TILES_LOAD_FAILED_MESSAGE")) {
+  pass("Tile failure shows safe fallback message (not orange blank screen)");
+} else {
+  fail("FieldMapViewMapLibre missing safe tile failure message");
 }
 
 const schematic = read("src/components/map/FieldMapViewSchematic.tsx") ?? "";
-if (schematic.includes("Route preview · live tiles in dev build") && schematic.includes("isExpoGo()")) {
-  pass("Expo Go hint text guarded by isExpoGo() in FieldMapViewSchematic");
+if (
+  schematic.includes("EXPO_GO_MAP_HINT") &&
+  (schematic.includes("live map available") || schematic.includes("EXPO_GO_MAP_HINT"))
+) {
+  pass("FieldMapViewSchematic shows Expo Go route preview caption");
 } else {
-  fail("FieldMapViewSchematic hint not guarded by isExpoGo()");
+  fail("FieldMapViewSchematic missing Expo Go route preview caption");
 }
 
 if (fieldMapView.includes("FieldMapViewMapLibre") || fieldMapView.includes("LazyFieldMapViewMapLibre")) {
@@ -186,9 +233,29 @@ for (const screen of screens) {
   else fail(`Map screen missing FieldMapView: ${screen}`);
 }
 
+// Farmer / Visit must not enable live user location
+const farmerScreen = read("src/screens/map/FarmerMapScreen.tsx") ?? "";
+if (farmerScreen.includes("showLiveUserLocation={false}")) {
+  pass("FarmerMapScreen disables native live user location");
+} else {
+  fail("FarmerMapScreen should set showLiveUserLocation={false}");
+}
+
+const visitPreview = read("src/components/map/LocationPreviewMap.tsx") ?? "";
+if (visitPreview.includes("showLiveUserLocation={false}")) {
+  pass("LocationPreviewMap disables native live user location");
+} else {
+  fail("LocationPreviewMap should set showLiveUserLocation={false}");
+}
+
 // Evaluate app.config with CI-like env when available
-if (process.env.EXPO_PUBLIC_MAP_STYLE_URL?.trim()) {
-  pass(`Build env EXPO_PUBLIC_MAP_STYLE_URL=${process.env.EXPO_PUBLIC_MAP_STYLE_URL.trim()}`);
+const buildStyle = process.env.EXPO_PUBLIC_MAP_STYLE_URL?.trim();
+if (buildStyle) {
+  if (buildStyle.includes("demotiles.maplibre.org")) {
+    fail("Build env uses demo MapLibre style — use OpenFreeMap for QA");
+  } else {
+    pass("Build env EXPO_PUBLIC_MAP_STYLE_URL is set (non-demo)");
+  }
 } else {
   issues.push("WARN: EXPO_PUBLIC_MAP_STYLE_URL not set in current shell (CI job env sets it)");
 }

@@ -10,8 +10,11 @@ import {
 import type { TrackingErrorSource } from "../../../src/types/trackingError";
 import { PrimaryButton, GhostButton } from "../ui";
 import { Colors, FontSize, FontWeight, Layout, Radius, Semantic, Spacing, TextStyles } from "../../lib/theme";
+import type { WorkdaySessionStatus } from "../../../src/storage/workdaySessionStorage";
 
 type Props = {
+  workdayStatus: WorkdaySessionStatus;
+  hydrating?: boolean;
   active: boolean;
   busy: boolean;
   starting?: boolean;
@@ -27,6 +30,8 @@ type Props = {
   pendingSync?: number;
   trackingActiveLabel?: string | null;
   onStart: () => void;
+  onEnd?: () => void;
+  ending?: boolean;
   onRetryStart?: () => void;
   onNewVisit?: () => void;
   onFarmers?: () => void;
@@ -90,6 +95,8 @@ function readinessMeta(
  * Solid, outdoor-readable Start / Active workday panel — primary Today/Day CTA.
  */
 export function WorkdayStartPanel({
+  workdayStatus,
+  hydrating = false,
   active,
   busy,
   starting = false,
@@ -104,6 +111,8 @@ export function WorkdayStartPanel({
   pendingSync = 0,
   trackingActiveLabel,
   onStart,
+  onEnd,
+  ending = false,
   onRetryStart,
   onNewVisit,
   onFarmers,
@@ -113,9 +122,33 @@ export function WorkdayStartPanel({
   const { t } = useI18n();
   const [readiness, setReadiness] = useState<LocationReadiness>("checking");
   const startBusy = busy || starting;
+  const endBusy = busy || ending;
   const startButtonLabel = startBusy
     ? startingLabel || t("workdayUx.startingWorkday")
     : t("workdayUx.startWorkday");
+
+  const statusMeta = (() => {
+    switch (workdayStatus) {
+      case "in_progress":
+        return {
+          label: t("workdayUx.statusWorking"),
+          color: Colors.greenText,
+          bg: Colors.greenBg
+        };
+      case "completed":
+        return {
+          label: t("workdayUx.statusCompleted"),
+          color: Colors.brand700,
+          bg: Colors.brand50
+        };
+      default:
+        return {
+          label: t("workdayUx.statusNotStarted"),
+          color: Colors.text3,
+          bg: Colors.bg
+        };
+    }
+  })();
 
   const refreshReadiness = useCallback(async () => {
     setReadiness("checking");
@@ -136,10 +169,33 @@ export function WorkdayStartPanel({
     return () => sub.remove();
   }, [refreshReadiness]);
 
+  if (hydrating) {
+    return (
+      <View style={styles.card} accessibilityRole="summary">
+        <Text style={styles.title}>{t("workdayUx.loadingWorkday")}</Text>
+        <Text style={styles.helper}>{t("workdayUx.checkingWorkday")}</Text>
+        <Text style={styles.timer}>--:--:--</Text>
+        <Text style={styles.timerCaption}>{t("workdayUx.todaysWorkTime")}</Text>
+      </View>
+    );
+  }
+
   if (!active) {
     const meta = readinessMeta(readiness, t);
     return (
       <View style={styles.card} accessibilityRole="summary">
+        <View style={styles.statusRow}>
+          <Text style={styles.statusLabel}>{t("workdayUx.status")}</Text>
+          <View style={[styles.statusPill, { backgroundColor: statusMeta.bg }]}>
+            <Text style={[styles.statusPillText, { color: statusMeta.color }]}>{statusMeta.label}</Text>
+          </View>
+        </View>
+
+        <Text style={styles.timer} accessibilityLabel={t("workdayUx.todaysWorkTime")}>
+          {timerDisplay || "00:00:00"}
+        </Text>
+        <Text style={styles.timerCaption}>{t("workdayUx.todaysWorkTime")}</Text>
+
         <Text style={styles.title}>{t("workdayUx.startYourWorkday")}</Text>
         <Text style={styles.helper}>{t("workdayUx.startHelper")}</Text>
 
@@ -187,7 +243,7 @@ export function WorkdayStartPanel({
           label={startButtonLabel}
           onPress={onStart}
           loading={startBusy}
-          disabled={startBusy}
+          disabled={startBusy || workdayStatus === "completed"}
           accessibilityLabel={startButtonLabel}
           style={styles.primaryBtn}
         />
@@ -195,11 +251,61 @@ export function WorkdayStartPanel({
     );
   }
 
+  if (workdayStatus === "completed") {
+    return (
+      <View style={[styles.card, styles.cardActive]} accessibilityRole="summary">
+        <View style={styles.statusRow}>
+          <Text style={styles.statusLabel}>{t("workdayUx.status")}</Text>
+          <View style={[styles.statusPill, { backgroundColor: statusMeta.bg }]}>
+            <Text style={[styles.statusPillText, { color: statusMeta.color }]}>{statusMeta.label}</Text>
+          </View>
+        </View>
+
+        <Text style={styles.timer} accessibilityLabel={t("workdayUx.todaysWorkTime")}>
+          {timerDisplay || "00:00:00"}
+        </Text>
+        <Text style={styles.timerCaption}>{t("workdayUx.todaysWorkTime")}</Text>
+
+        {startedAtLabel ? (
+          <Text style={styles.activeMeta}>
+            {t("workdayUx.startedAt", { time: startedAtLabel })}
+          </Text>
+        ) : null}
+
+        <View style={styles.statRow}>
+          <View style={styles.stat}>
+            <Text style={styles.statValue}>{distanceKm.toFixed(1)} km</Text>
+            <Text style={styles.statLabel}>{t("home.distanceToday")}</Text>
+          </View>
+          <View style={styles.stat}>
+            <Text style={styles.statValue}>{visitsToday}</Text>
+            <Text style={styles.statLabel}>{t("home.visitsToday")}</Text>
+          </View>
+        </View>
+
+        <PrimaryButton
+          label={t("workdayUx.myRoute")}
+          onPress={onMyRoute}
+          disabled={busy}
+          style={styles.primaryBtn}
+          accessibilityLabel={t("workdayUx.myRoute")}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.card, styles.cardActive]} accessibilityRole="summary">
+      <View style={styles.statusRow}>
+        <Text style={styles.statusLabel}>{t("workdayUx.status")}</Text>
+        <View style={[styles.statusPill, { backgroundColor: statusMeta.bg }]}>
+          <Text style={[styles.statusPillText, { color: statusMeta.color }]}>{statusMeta.label}</Text>
+        </View>
+      </View>
+
       <View style={styles.activeHeader}>
         <View style={styles.activeDot} />
-        <Text style={styles.activeTitle}>{t("workdayUx.workdayActive")}</Text>
+        <Text style={styles.activeTitle}>{t("workdayUx.workdayInProgress")}</Text>
       </View>
 
       {startedAtLabel ? (
@@ -212,9 +318,10 @@ export function WorkdayStartPanel({
         {trackingActiveLabel ?? t("workdayUx.locationTrackingActive")}
       </Text>
 
-      <Text style={styles.timer} accessibilityLabel={`${t("workdayUx.workdayActive")} ${timerDisplay}`}>
+      <Text style={styles.timer} accessibilityLabel={`${t("workdayUx.todaysWorkTime")} ${timerDisplay}`}>
         {timerDisplay}
       </Text>
+      <Text style={styles.timerCaption}>{t("workdayUx.todaysWorkTime")}</Text>
 
       <View style={styles.statRow}>
         <View style={styles.stat}>
@@ -253,6 +360,17 @@ export function WorkdayStartPanel({
             </Pressable>
           ) : null}
         </View>
+      ) : null}
+
+      {onEnd ? (
+        <GhostButton
+          label={ending ? t("workdayUx.endingWorkday") : t("workdayUx.endWorkday")}
+          onPress={onEnd}
+          loading={endBusy}
+          disabled={endBusy}
+          style={styles.endBtn}
+          accessibilityLabel={t("workdayUx.endWorkday")}
+        />
       ) : null}
 
       {showVisitActions && onNewVisit ? (
@@ -307,6 +425,34 @@ const styles = StyleSheet.create({
   },
   cardActive: {
     borderColor: Colors.brand100
+  },
+  statusRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  statusLabel: {
+    ...TextStyles.caption,
+    color: Semantic.textMuted,
+    fontWeight: FontWeight.semibold
+  },
+  statusPill: {
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs
+  },
+  statusPillText: {
+    fontSize: FontSize.caption,
+    fontWeight: FontWeight.bold
+  },
+  timerCaption: {
+    ...TextStyles.caption,
+    color: Semantic.textMuted,
+    marginTop: -Spacing.sm
+  },
+  endBtn: {
+    alignSelf: "stretch",
+    width: "100%"
   },
   title: {
     ...TextStyles.h2,

@@ -12,7 +12,6 @@ import { registerSessionExpiredTeardown } from "./sessionExpired";
 import { registerSessionTeardown } from "./sessionConflict";
 import { runPreSignOutHandlers } from "./preSignOut";
 import { getAccessToken, saveTokens, clearTokens, type StoredTokens } from "./tokenStorage";
-import { clearCachedActiveWorkday } from "./workdaySessionStorage";
 import { canUseBiometricLogin } from "./biometricLoginStorage";
 import { ApiRequestError, isAuthExpiredError, isNetworkError, isServerError } from "../utils/apiError";
 import { isDeviceSessionConflict } from "./sessionConflict";
@@ -88,7 +87,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     invalidateBootstrap();
     await clearTokens();
     await clearDeviceSessionId();
-    await clearCachedActiveWorkday().catch(() => undefined);
     await clearMasterDataCache().catch(() => undefined);
     clearInflightRequests();
     resetApiTelemetry();

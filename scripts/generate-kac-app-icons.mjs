@@ -12,9 +12,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 
 const EMERALD = "#0B3D2E";
+const EMERALD_RGB = { r: 11, g: 61, b: 46 };
 const KAC_DIR = path.join(root, "assets/brand/kac");
 const SOURCE_SOLID = path.join(KAC_DIR, "app_icon_1024_solid.png");
 const SOURCE_MONOGRAM = path.join(KAC_DIR, "monogram_transparent.png");
+const OUT_MONOGRAM_CLEAN = path.join(KAC_DIR, "monogram_transparent.png");
 
 const OUT_APP_ICON = path.join(root, "assets/brand/app_icon.png");
 const OUT_APP_ICON_1024 = path.join(KAC_DIR, "app_icon_1024.png");
@@ -53,6 +55,45 @@ async function ensureSources() {
   }
 }
 
+async function stripNearWhiteCanvas(input) {
+  const { data, info } = await sharp(input).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const out = Buffer.from(data);
+  for (let i = 0; i < out.length; i += 4) {
+    const r = out[i];
+    const g = out[i + 1];
+    const b = out[i + 2];
+    const a = out[i + 3];
+    if (a === 0) continue;
+    const isNearWhite = r > 235 && g > 235 && b > 235;
+    const isPaperGray = r > 210 && g > 210 && b > 200 && Math.abs(r - g) < 24;
+    const isEmeraldField = r < 40 && g > 40 && b < 70;
+    if (isNearWhite || isPaperGray || isEmeraldField) {
+      out[i + 3] = 0;
+    }
+  }
+  return sharp(out, { raw: { width: info.width, height: info.height, channels: 4 } }).png().toBuffer();
+}
+
+async function inspectForegroundAlpha(file) {
+  const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  let transparent = 0;
+  let whiteOpaque = 0;
+  const total = info.width * info.height;
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const a = data[i + 3];
+    if (a < 16) transparent += 1;
+    else if (r > 235 && g > 235 && b > 235) whiteOpaque += 1;
+  }
+  return {
+    file,
+    transparentPct: (transparent / total) * 100,
+    whiteOpaquePct: (whiteOpaque / total) * 100
+  };
+}
+
 async function normalizeSolid1024() {
   await sharp(SOURCE_SOLID)
     .resize(1024, 1024, { fit: "cover" })
@@ -62,7 +103,10 @@ async function normalizeSolid1024() {
 }
 
 async function buildAdaptiveForeground() {
-  const monogram = await sharp(SOURCE_MONOGRAM)
+  const cleanedMonogram = await stripNearWhiteCanvas(SOURCE_MONOGRAM);
+  await sharp(cleanedMonogram).png().toFile(OUT_MONOGRAM_CLEAN);
+
+  const monogram = await sharp(cleanedMonogram)
     .resize(MONOGRAM_SAFE_PX, MONOGRAM_SAFE_PX, {
       fit: "contain",
       background: { r: 0, g: 0, b: 0, alpha: 0 }
@@ -84,9 +128,14 @@ async function buildAdaptiveForeground() {
 }
 
 async function buildAdaptiveBackground() {
-  await sharp(SOURCE_SOLID)
-    .resize(1024, 1024, { fit: "cover" })
-    .blur(0.3)
+  await sharp({
+    create: {
+      width: 1024,
+      height: 1024,
+      channels: 3,
+      background: EMERALD_RGB
+    }
+  })
     .png()
     .toFile(OUT_ADAPTIVE_BG);
   await fs.copyFile(OUT_ADAPTIVE_BG, OUT_ADAPTIVE_BG_ALIAS);
@@ -175,6 +224,20 @@ async function main() {
   await writeSvg();
   await writeAndroidMipmaps();
   await writeMaskPreviews();
+
+  const fgAudit = await inspectForegroundAlpha(OUT_ADAPTIVE_FG);
+  console.log(
+    `  foreground audit: transparent=${fgAudit.transparentPct.toFixed(1)}% whiteOpaque=${fgAudit.whiteOpaquePct.toFixed(1)}%`
+  );
+  if (fgAudit.whiteOpaquePct > 1) {
+    throw new Error(
+      `Adaptive foreground still contains ${fgAudit.whiteOpaquePct.toFixed(1)}% white pixels — white launcher halo risk`
+    );
+  }
+  if (fgAudit.transparentPct < 50) {
+    throw new Error("Adaptive foreground lacks sufficient transparency for emerald background layer");
+  }
+
   console.log("KAC Variant A icons generated:");
   console.log(`  ${path.relative(root, OUT_APP_ICON)}`);
   console.log(`  ${path.relative(root, OUT_ADAPTIVE_FG)}`);

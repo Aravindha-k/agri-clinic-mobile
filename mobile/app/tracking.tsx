@@ -1,6 +1,7 @@
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useCallback, useMemo, useState } from "react";
 import {
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -81,11 +82,15 @@ function TrackingWorkspaceScreenInner() {
   const refreshControlProps = useRefreshControlProps();
   const {
     isActive,
+    workdaySessionStatus,
+    workdaySessionHydrated,
+    timerDisplay,
     startedAt: trackingStartedAt,
     busy,
     error: trackingError,
     errorSource: trackingErrorSource,
     startDay,
+    endDay,
     workday,
     refreshTracking,
     lastSyncTime,
@@ -94,6 +99,7 @@ function TrackingWorkspaceScreenInner() {
   } = useTracking();
 
   const [refreshing, setRefreshing] = useState(false);
+  const [ending, setEnding] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startPhase, setStartPhase] = useState<"idle" | "location" | "starting">("idle");
   const [gateError, setGateError] = useState<string | null>(null);
@@ -112,7 +118,9 @@ function TrackingWorkspaceScreenInner() {
     () => resolveWorkdayStartedAt(workday) || trackingStartedAt || null,
     [trackingStartedAt, workday]
   );
-  const workdayTimer = useWorkdayTimer(startedAt, isActive);
+  const workdayTimer = useWorkdayTimer(startedAt, workdaySessionStatus === "in_progress");
+  const panelTimerDisplay =
+    workdaySessionStatus === "in_progress" ? workdayTimer.display : timerDisplay;
 
   const resolvedWorkdayId = workdayId ?? workday?.workday_id;
 
@@ -249,6 +257,29 @@ function TrackingWorkspaceScreenInner() {
     }
   }
 
+  async function handleEndWorkday() {
+    if (busy || ending) return;
+    Alert.alert(t("home.endWorkdayTitle"), t("home.endWorkdayBody"), [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("home.endWorkday"),
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            setEnding(true);
+            try {
+              await endDay();
+              await refreshTracking().catch(() => undefined);
+              await loadSummary();
+            } finally {
+              setEnding(false);
+            }
+          })();
+        }
+      }
+    ]);
+  }
+
   function openBuildApkPage() {
     void Linking.openURL(getExpoBuildUrl()).catch(() => undefined);
   }
@@ -303,9 +334,12 @@ function TrackingWorkspaceScreenInner() {
 
         <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
           <WorkdayStartPanel
-            active={isActive}
+            workdayStatus={workdaySessionStatus}
+            hydrating={!workdaySessionHydrated}
+            active={isActive || workdaySessionStatus === "completed"}
             busy={busy}
             starting={starting}
+            ending={ending}
             startingLabel={
               startPhase === "location"
                 ? t("workdayUx.gettingLocation")
@@ -320,13 +354,14 @@ function TrackingWorkspaceScreenInner() {
               setDismissedError(trackingError || "");
               setDismissedErrorSource(trackingErrorSource);
             }}
-            timerDisplay={workdayTimer.display}
+            timerDisplay={panelTimerDisplay}
             startedAtLabel={formatStartedTime(startedAt)}
             distanceKm={displayDistanceKm}
             visitsToday={visitsToday}
             pendingSync={pendingSyncCount + pendingCount}
             showVisitActions={false}
             onStart={() => void handleStartWorkday()}
+            onEnd={isActive ? () => void handleEndWorkday() : undefined}
             onRetryStart={() => void handleStartWorkday()}
             onMyRoute={() => navigateMyLocation()}
           />

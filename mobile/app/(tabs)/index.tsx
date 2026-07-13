@@ -1,7 +1,7 @@
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { AlertTriangle, ClipboardList, Map, Users } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AppState, RefreshControl, StyleSheet, View } from "react-native";
+import { Alert, AppState, RefreshControl, StyleSheet, View } from "react-native";
 import Animated, {
   Extrapolation,
   interpolate,
@@ -42,7 +42,8 @@ import { SyncHealthIndicator } from "../../components/sync/SyncHealthIndicator";
 import { WorkdayStartPanel } from "../../components/workday/WorkdayStartPanel";
 import { ScreenLoader } from "../../components/layout/ScreenLoader";
 import { readDashboardCache } from "../../lib/dashboardCache";
-import { formatHeaderDate } from "../../lib/format";
+import { resolveWorkdayStartedAt } from "../../../src/utils/workdayStartedAt";
+import { formatHeaderDate, formatShortTime } from "../../lib/format";
 import { fetchDashboard, fetchWorkStatus } from "../../lib/homeApi";
 import { getBadgeCount } from "../../lib/notificationsApi";
 import { useSyncStore } from "../../lib/store/syncStore";
@@ -80,12 +81,20 @@ export default function TodayTabScreen() {
   const { visitsVersion } = useFieldDataRefresh();
   const {
     isActive,
+    workdaySessionStatus,
+    workdaySessionHydrated,
+    timerDisplay,
     startDay,
+    endDay,
     busy,
+    startedAt: trackingStartedAt,
+    workday,
     error: trackingError,
     errorSource: trackingErrorSource,
     refreshTracking,
-    currentLocation
+    currentLocation,
+    cachedDistanceKm,
+    pendingSyncCount
   } = useTracking();
   const unreadNotifCount = useSyncStore((state) => state.unreadNotifCount);
 
@@ -94,6 +103,7 @@ export default function TodayTabScreen() {
   const [cacheHydrated, setCacheHydrated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [ending, setEnding] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startPhase, setStartPhase] = useState<"idle" | "location" | "starting">("idle");
   const [gateError, setGateError] = useState<string | null>(null);
@@ -114,7 +124,12 @@ export default function TodayTabScreen() {
   const weatherLng = parseCoord(currentLocation?.longitude);
   const { weather: fieldWeather, loading: weatherLoading } = useFieldWeather(weatherLat, weatherLng);
 
-  const workActive = isActive || Boolean(workStatus?.is_active);
+  const workActive = workdaySessionStatus === "in_progress";
+  const workdayStartedAt = useMemo(
+    () => resolveWorkdayStartedAt(workday) || trackingStartedAt || null,
+    [trackingStartedAt, workday]
+  );
+  const startedAtLabel = workdayStartedAt ? formatShortTime(workdayStartedAt) : null;
 
   const employeeName = employee?.full_name || employee?.name || employee?.username || null;
   const dateLabel = formatHeaderDate();
@@ -231,7 +246,7 @@ export default function TodayTabScreen() {
     if (workActive && trackingErrorSource === "start_workday") {
       return null;
     }
-    if (workActive && trackingErrorSource === "end_workday") {
+    if (workdaySessionStatus === "completed" && trackingErrorSource === "end_workday") {
       return null;
     }
     return { message: trackingError, source: trackingErrorSource };
@@ -268,6 +283,29 @@ export default function TodayTabScreen() {
         setStartPhase("idle");
       }
     })();
+  }
+
+  function confirmEndWorkday() {
+    if (busy || ending) return;
+    Alert.alert(t("home.endWorkdayTitle"), t("home.endWorkdayBody"), [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("home.endWorkday"),
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            setEnding(true);
+            try {
+              await endDay();
+              await refreshTracking().catch(() => undefined);
+              void fetchWorkStatus().then(applyWorkStatus).catch(() => undefined);
+            } finally {
+              setEnding(false);
+            }
+          })();
+        }
+      }
+    ]);
   }
 
   const quickActions: TodayQuickAction[] = useMemo(
@@ -337,44 +375,51 @@ export default function TodayTabScreen() {
         <SyncHealthIndicator onPress={() => rootNav?.navigate("SyncStatus")} />
 
         <Animated.View style={[styles.headerHeroZone, headerParallaxStyle]}>
-          {!workActive ? (
-            <FadeInSection replayKey={entranceTick} delay={entranceStagger(heroStep)} duration={280}>
-              <View style={styles.workdaySection}>
-                <WorkdayStartPanel
-                  active={false}
-                  busy={busy}
-                  starting={starting}
-                  startingLabel={
-                    startPhase === "location"
-                      ? t("workdayUx.gettingLocation")
-                      : startPhase === "starting"
-                        ? t("workdayUx.startingWorkday")
-                        : null
-                  }
-                  error={visibleTrackingError?.message ?? null}
-                  errorSource={visibleTrackingError?.source ?? null}
-                  onDismissError={() => {
-                    setGateError(null);
-                    setDismissedError(trackingError || "");
-                    setDismissedErrorSource(trackingErrorSource);
-                  }}
-                  timerDisplay=""
-                  onStart={confirmStartWorkday}
-                  onRetryStart={confirmStartWorkday}
-                  onNewVisit={() =>
-                    rootNav?.navigate("VisitFlow", {
-                      screen: "NewVisitFarmer",
-                      params: { fresh: true }
-                    })
-                  }
-                  onFarmers={() =>
-                    navigation.navigate("Work", { screen: "WorkHome", params: { segment: "queue" } })
-                  }
-                  onMyRoute={() => rootNav?.navigate("MyLocation")}
-                />
-              </View>
-            </FadeInSection>
-          ) : null}
+          <FadeInSection replayKey={entranceTick} delay={entranceStagger(heroStep)} duration={280}>
+            <View style={styles.workdaySection}>
+              <WorkdayStartPanel
+                workdayStatus={workdaySessionStatus}
+                hydrating={!workdaySessionHydrated}
+                active={workActive || workdaySessionStatus === "completed"}
+                busy={busy}
+                starting={starting}
+                ending={ending}
+                startingLabel={
+                  startPhase === "location"
+                    ? t("workdayUx.gettingLocation")
+                    : startPhase === "starting"
+                      ? t("workdayUx.startingWorkday")
+                      : null
+                }
+                error={visibleTrackingError?.message ?? null}
+                errorSource={visibleTrackingError?.source ?? null}
+                onDismissError={() => {
+                  setGateError(null);
+                  setDismissedError(trackingError || "");
+                  setDismissedErrorSource(trackingErrorSource);
+                }}
+                timerDisplay={timerDisplay}
+                startedAtLabel={startedAtLabel}
+                distanceKm={workStatus?.distance_km ?? cachedDistanceKm ?? 0}
+                visitsToday={dashboard?.visits_today ?? 0}
+                pendingSync={pendingSyncCount}
+                onStart={confirmStartWorkday}
+                onEnd={workActive ? confirmEndWorkday : undefined}
+                onRetryStart={confirmStartWorkday}
+                onNewVisit={() =>
+                  rootNav?.navigate("VisitFlow", {
+                    screen: "NewVisitFarmer",
+                    params: { fresh: true }
+                  })
+                }
+                onFarmers={() =>
+                  navigation.navigate("Work", { screen: "WorkHome", params: { segment: "queue" } })
+                }
+                onMyRoute={() => rootNav?.navigate("MyLocation")}
+                showVisitActions={workActive}
+              />
+            </View>
+          </FadeInSection>
 
           <TodayHeader
             greeting={greeting}

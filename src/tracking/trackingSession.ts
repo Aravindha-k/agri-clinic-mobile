@@ -17,7 +17,7 @@ export async function restoreDutySessionFromStorage(): Promise<boolean> {
     return true;
   }
   const cached = await readCachedActiveWorkday();
-  if (cached?.status === "working") {
+  if (cached?.status === "in_progress") {
     dutySessionActive = true;
     return true;
   }

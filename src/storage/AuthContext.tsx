@@ -7,14 +7,13 @@ import { logApiTelemetrySummary, resetApiTelemetry } from "../api/apiTelemetry";
 import { SESSION_EXPIRED_MESSAGE } from "../constants/authMessages";
 import { SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
 import { registerGoToLogin } from "./authRecovery";
-import { requestSplashReplay } from "../bootstrap/splashReplay";
 import { clearDeviceSessionId, DEVICE_SESSION_STORAGE_ERROR, ensureDeviceSessionLoaded, getDeviceSessionId } from "./deviceSessionStorage";
 import { registerSessionExpiredTeardown } from "./sessionExpired";
 import { registerSessionTeardown } from "./sessionConflict";
 import { runPreSignOutHandlers } from "./preSignOut";
 import { getAccessToken, saveTokens, clearTokens, type StoredTokens } from "./tokenStorage";
 import { clearCachedActiveWorkday } from "./workdaySessionStorage";
-import { saveBiometricLogin } from "./biometricLoginStorage";
+import { canUseBiometricLogin } from "./biometricLoginStorage";
 import { ApiRequestError, isAuthExpiredError, isNetworkError, isServerError } from "../utils/apiError";
 import { isDeviceSessionConflict } from "./sessionConflict";
 import { logStartup, patchStartupSnapshot } from "../utils/startupDiagnostics";
@@ -38,6 +37,7 @@ type AuthContextValue = {
   refreshUser: () => Promise<Employee | null>;
   signIn: (username: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  completeBiometricUnlock: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -260,6 +260,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      const biometricLocked = await canUseBiometricLogin();
+      if (biometricLocked) {
+        setIsAuthenticated(false);
+        endedAuthenticated = false;
+        logStartup("session_cleared", "biometric unlock required");
+        return;
+      }
+
       setIsAuthenticated(true);
       endedAuthenticated = true;
       logStartup("session_restored", "token present — home unlocked");
@@ -342,11 +350,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const tokens = await loginRequest(username, password);
       await saveTokens(tokens);
       await establishAuthenticatedSession();
-      // Enable biometric unlock flag only — never persist the password.
-      await saveBiometricLogin().catch(() => undefined);
     },
     [establishAuthenticatedSession]
   );
+
+  const completeBiometricUnlock = useCallback(async () => {
+    await establishAuthenticatedSession();
+  }, [establishAuthenticatedSession]);
 
   const signOut = useCallback(async () => {
     await runPreSignOutHandlers();
@@ -354,7 +364,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await logoutRequest();
     } finally {
       await performLocalSignOut();
-      requestSplashReplay("sign_out");
     }
   }, [performLocalSignOut]);
 
@@ -372,7 +381,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       resetLocalSession,
       refreshUser,
       signIn,
-      signOut
+      signOut,
+      completeBiometricUnlock
     }),
     [
       isReady,
@@ -387,7 +397,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       resetLocalSession,
       refreshUser,
       signIn,
-      signOut
+      signOut,
+      completeBiometricUnlock
     ]
   );
 

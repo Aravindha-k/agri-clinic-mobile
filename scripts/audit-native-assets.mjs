@@ -90,7 +90,12 @@ const appConfig = read("app.config.js") ?? "";
 if (appConfig.includes("expo-splash-screen")) pass("app.config.js expo-splash-screen plugin");
 else fail("app.config.js missing expo-splash-screen plugin");
 
-if (appConfig.includes("logo.png") || appConfig.includes("logoAsset")) {
+if (
+  appConfig.includes("logo.png") ||
+  appConfig.includes("logoAsset") ||
+  appConfig.includes("splashImageAsset") ||
+  appConfig.includes("logo_splash.png")
+) {
   pass("app.config.js splash image configured");
 } else {
   fail("app.config.js splash image not configured");

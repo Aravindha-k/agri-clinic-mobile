@@ -99,6 +99,9 @@ jobs:
       - name: Apply Android release config
         run: node scripts/ensure-android-release-config.mjs
 
+      - name: Regenerate KAC launcher mipmaps
+        run: node scripts/generate-kac-app-icons.mjs
+
       - name: Print signing certificate fingerprints (safe)
         run: node scripts/print-signing-cert-fingerprints.mjs
 

@@ -5,6 +5,7 @@
  * - Notification sounds in res/raw
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -184,4 +185,22 @@ if (existsSync(stylesPath)) {
   }
   writeFileSync(stylesPath, styles);
   console.log("[ensure-android-release-config] patched AppTheme navigation/window background");
+}
+
+const splashScript = resolve(ROOT, "scripts/generate-splash-logo.mjs");
+if (existsSync(splashScript)) {
+  execSync(`node "${splashScript}"`, { stdio: "inherit", cwd: ROOT });
+  console.log("[ensure-android-release-config] generated splashscreen_logo drawables");
+}
+
+const launcherBgPath = resolve(androidDir, "app/src/main/res/drawable/ic_launcher_background.xml");
+if (existsSync(launcherBgPath)) {
+  writeFileSync(
+    launcherBgPath,
+    `<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+  <item android:drawable="@color/iconBackground"/>
+</layer-list>
+`
+  );
+  console.log("[ensure-android-release-config] fixed ic_launcher_background (icon color only)");
 }

@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FlatCard, ScreenCanvas, StackScreenHeader } from "../../mobile/components/layout";
+import { StatusChip } from "../../mobile/components/ui";
 import { useConnectivityOnline } from "../hooks/useConnectivityOnline";
 import { useI18n } from "../i18n/I18nContext";
 import { formatRelativeTimeLocalized } from "../i18n";
@@ -11,11 +12,56 @@ import { RootStackParamList } from "../navigation/types";
 import { refreshSyncStoreCounts } from "../../mobile/lib/sync/offlineSyncManager";
 import { getBackgroundSchedulerStatus } from "../../mobile/lib/sync/syncScheduler";
 import { getFieldPendingCounts } from "../../mobile/lib/sync/pendingCounts";
-import { useSyncStore } from "../../mobile/lib/store/syncStore";
+import { useSyncStore, type SyncHealthState } from "../../mobile/lib/store/syncStore";
 import { refreshControlProps } from "../theme/refresh";
 import { Colors, FontSize, FontWeight, Layout, Spacing } from "../../mobile/lib/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "SyncStatus">;
+
+function healthChipVariant(health: SyncHealthState): "success" | "warning" | "error" | "pending" | "offline" | "blue" {
+  switch (health) {
+    case "synced":
+      return "success";
+    case "offline_saving":
+    case "waiting_internet":
+      return "warning";
+    case "syncing":
+      return "blue";
+    case "auth_required":
+    case "attention_required":
+      return "error";
+    default:
+      return "offline";
+  }
+}
+
+function healthIcon(health: SyncHealthState): keyof typeof Ionicons.glyphMap {
+  switch (health) {
+    case "synced":
+      return "checkmark-circle";
+    case "offline_saving":
+      return "cloud-offline";
+    case "syncing":
+      return "sync";
+    case "waiting_internet":
+      return "wifi-outline";
+    case "auth_required":
+      return "lock-closed";
+    case "attention_required":
+      return "alert-circle";
+    default:
+      return "cloud-outline";
+  }
+}
+
+function DetailRow({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+  return (
+    <View style={styles.detailRow}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={[styles.detailValue, warn ? styles.warn : null]}>{value}</Text>
+    </View>
+  );
+}
 
 export function SyncStatusScreen({ navigation }: Props) {
   const { t, language } = useI18n();
@@ -25,19 +71,15 @@ export function SyncStatusScreen({ navigation }: Props) {
   const lastAttemptAt = useSyncStore((s) => s.lastAutomaticAttemptAt);
   const nextRetryAt = useSyncStore((s) => s.nextScheduledRetryAt);
   const syncHealth = useSyncStore((s) => s.syncHealth);
-  const syncPhase = useSyncStore((s) => s.syncPhase);
   const isSyncing = useSyncStore((s) => s.isSyncing);
   const counts = getFieldPendingCounts();
   const scheduler = getBackgroundSchedulerStatus();
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    refreshSyncStoreCounts();
-    setRefreshing(false);
-  }, []);
+  const effectiveHealth: SyncHealthState =
+    !online && counts.total > 0 ? "offline_saving" : isSyncing ? "syncing" : syncHealth;
 
   const healthLabel = (() => {
-    switch (syncHealth) {
+    switch (effectiveHealth) {
       case "synced":
         return t("syncHealth.synced");
       case "offline_saving":
@@ -51,9 +93,15 @@ export function SyncStatusScreen({ navigation }: Props) {
       case "attention_required":
         return t("syncHealth.attentionRequired");
       default:
-        return syncPhase;
+        return t("syncHealth.synced");
     }
   })();
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    refreshSyncStoreCounts();
+    setRefreshing(false);
+  }, []);
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
@@ -66,62 +114,83 @@ export function SyncStatusScreen({ navigation }: Props) {
       />
       <ScrollView
         contentContainerStyle={styles.body}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} {...refreshControlProps} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} {...refreshControlProps} />
+        }
       >
-        <FlatCard style={styles.card}>
-          <View style={styles.row}>
-            <Ionicons
-              name={isSyncing ? "sync" : online ? "cloud-done-outline" : "cloud-offline-outline"}
-              size={22}
-              color={Colors.brand700}
-            />
-            <Text style={styles.statusTitle}>{healthLabel}</Text>
-          </View>
+        <FlatCard style={styles.heroCard}>
+          <StatusChip
+            label={healthLabel}
+            variant={healthChipVariant(effectiveHealth)}
+            icon={healthIcon(effectiveHealth)}
+            style={styles.statusChip}
+          />
           <Text style={styles.hint}>{t("syncHealth.readOnlyHint")}</Text>
         </FlatCard>
 
+        <Text style={styles.sectionTitle}>{t("fieldWorkflow.pendingData")}</Text>
         <FlatCard style={styles.card}>
-          <Text style={styles.section}>{t("fieldWorkflow.pendingVisits")}</Text>
-          <Text style={styles.value}>{counts.visits}</Text>
-          <Text style={styles.section}>{t("fieldWorkflow.pendingPhotos")}</Text>
-          <Text style={styles.value}>{counts.photos}</Text>
-          <Text style={styles.section}>{t("fieldWorkflow.pendingGps")}</Text>
-          <Text style={styles.value}>{counts.gps}</Text>
-          <Text style={styles.section}>{t("fieldWorkflow.pendingWorkday")}</Text>
-          <Text style={styles.value}>{counts.workdayOps}</Text>
+          <DetailRow label={t("fieldWorkflow.pendingVisits")} value={String(counts.visits)} />
+          <View style={styles.rowDivider} />
+          <DetailRow label={t("fieldWorkflow.pendingPhotos")} value={String(counts.photos)} />
+          <View style={styles.rowDivider} />
+          <DetailRow label={t("fieldWorkflow.pendingGps")} value={String(counts.gps)} />
+          <View style={styles.rowDivider} />
+          <DetailRow label={t("fieldWorkflow.pendingWorkday")} value={String(counts.workdayOps)} />
           {counts.permanentFailures > 0 ? (
             <>
-              <Text style={styles.section}>{t("fieldWorkflow.needsAttention")}</Text>
-              <Text style={[styles.value, styles.warn]}>{counts.permanentFailures}</Text>
+              <View style={styles.rowDivider} />
+              <DetailRow
+                label={t("fieldWorkflow.needsAttention")}
+                value={String(counts.permanentFailures)}
+                warn
+              />
             </>
           ) : null}
         </FlatCard>
 
+        <Text style={styles.sectionTitle}>{t("syncHealth.syncDetails")}</Text>
         <FlatCard style={styles.card}>
-          <Text style={styles.section}>{t("fieldWorkflow.lastSynced")}</Text>
-          <Text style={styles.value}>
-            {lastSyncedAt
-              ? formatRelativeTimeLocalized(language, lastSyncedAt)
-              : t("offlineSync.notSyncedYet")}
-          </Text>
-          <Text style={styles.section}>{t("syncHealth.lastAttempt")}</Text>
-          <Text style={styles.value}>
-            {lastAttemptAt
-              ? formatRelativeTimeLocalized(language, lastAttemptAt)
-              : t("common.never")}
-          </Text>
-          <Text style={styles.section}>{t("syncHealth.nextRetry")}</Text>
-          <Text style={styles.value}>
-            {nextRetryAt
-              ? formatRelativeTimeLocalized(language, nextRetryAt)
-              : t("syncHealth.notScheduled")}
-          </Text>
-          <Text style={styles.section}>{t("fieldWorkflow.networkState")}</Text>
-          <Text style={styles.value}>{online ? t("syncHealth.online") : t("syncHealth.offline")}</Text>
-          <Text style={styles.section}>{t("syncHealth.backgroundWorker")}</Text>
-          <Text style={styles.value}>
-            {scheduler.workerScheduled ? t("syncHealth.workerScheduled") : t("syncHealth.workerIdle")}
-          </Text>
+          <DetailRow
+            label={t("fieldWorkflow.lastSynced")}
+            value={
+              lastSyncedAt
+                ? formatRelativeTimeLocalized(language, lastSyncedAt)
+                : t("offlineSync.notSyncedYet")
+            }
+          />
+          <View style={styles.rowDivider} />
+          <DetailRow
+            label={t("syncHealth.lastAttempt")}
+            value={
+              lastAttemptAt
+                ? formatRelativeTimeLocalized(language, lastAttemptAt)
+                : t("common.never")
+            }
+          />
+          <View style={styles.rowDivider} />
+          <DetailRow
+            label={t("syncHealth.nextRetry")}
+            value={
+              nextRetryAt
+                ? formatRelativeTimeLocalized(language, nextRetryAt)
+                : t("syncHealth.notScheduled")
+            }
+          />
+          <View style={styles.rowDivider} />
+          <DetailRow
+            label={t("fieldWorkflow.networkState")}
+            value={online ? t("syncHealth.online") : t("syncHealth.offline")}
+          />
+          <View style={styles.rowDivider} />
+          <DetailRow
+            label={t("syncHealth.backgroundWorker")}
+            value={
+              scheduler.workerScheduled
+                ? t("syncHealth.workerScheduled")
+                : t("syncHealth.workerIdle")
+            }
+          />
         </FlatCard>
       </ScrollView>
     </SafeAreaView>
@@ -131,34 +200,58 @@ export function SyncStatusScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   screen: { backgroundColor: Colors.bg, flex: 1 },
   body: {
-    gap: Spacing.md,
+    gap: Spacing.sm,
     padding: Spacing.screen,
     paddingBottom: Layout.stackScrollBottom
   },
-  card: { gap: Spacing.xs },
-  row: { alignItems: "center", flexDirection: "row", gap: Spacing.sm },
-  statusTitle: {
-    color: Colors.text1,
-    flex: 1,
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.bold
+  heroCard: {
+    gap: Spacing.sm,
+    padding: Spacing.md
+  },
+  statusChip: {
+    alignSelf: "flex-start"
   },
   hint: {
     color: Colors.text3,
     fontSize: FontSize.sm,
-    lineHeight: 18,
-    marginTop: Spacing.xs
+    lineHeight: 20
   },
-  section: {
+  sectionTitle: {
     color: Colors.text3,
     fontSize: FontSize.sm,
-    fontWeight: FontWeight.medium,
-    marginTop: Spacing.sm
+    fontWeight: FontWeight.semibold,
+    marginTop: Spacing.xs,
+    textTransform: "uppercase"
   },
-  value: {
+  card: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs
+  },
+  detailRow: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: Spacing.md,
+    paddingVertical: Spacing.sm
+  },
+  detailLabel: {
+    color: Colors.text3,
+    flexShrink: 0,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.medium,
+    lineHeight: 20,
+    minWidth: 120,
+    width: 120
+  },
+  detailValue: {
     color: Colors.text1,
+    flex: 1,
     fontSize: FontSize.md,
-    fontWeight: FontWeight.semibold
+    fontWeight: FontWeight.semibold,
+    lineHeight: 22
+  },
+  rowDivider: {
+    backgroundColor: Colors.border,
+    height: StyleSheet.hairlineWidth
   },
   warn: { color: Colors.amberText }
 });

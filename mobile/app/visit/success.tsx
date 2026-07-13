@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useEffect } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -9,14 +10,15 @@ import Animated, {
   withTiming
 } from "react-native-reanimated";
 import { VisitFlowParamList } from "../../../src/navigation/types";
-import { navigateVisitDetail, resetToMainTab, resetToVisitDetail } from "../../../src/navigation/rootNavigationRef";
+import { resetToMainTab, resetToVisitDetail } from "../../../src/navigation/rootNavigationRef";
 import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
 import { useI18n } from "../../../src/i18n/I18nContext";
-import { useVisitFormStore } from "../../store/visitFormStore";
+import type { SubmittedVisitSummary } from "../../../src/types/submittedVisitSummary";
+import { beginNewVisit } from "../../lib/beginNewVisit";
 import { GhostButton, PrimaryButton } from "../../components/ui";
 import { EntranceBlocks } from "../../components/ui/EntranceBlocks";
 import { FlatCard, ScreenEntranceShell } from "../../components/layout";
-import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
+import { Colors, FontSize, FontWeight, Layout, Radius, Spacing } from "../../lib/theme";
 
 type Props = NativeStackScreenProps<VisitFlowParamList, "VisitSuccess">;
 
@@ -49,32 +51,35 @@ function AnimatedHeroIcon({ queued }: { queued: boolean }) {
   );
 }
 
-function SummaryLine({ label, value }: { label: string; value: string }) {
+function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
-    <View style={styles.summaryLine}>
+    <View style={styles.summaryRow}>
       <Text style={styles.summaryLabel}>{label}</Text>
-      <Text style={styles.summaryValue} numberOfLines={2}>
-        {value}
-      </Text>
+      <Text style={styles.summaryValue}>{value}</Text>
     </View>
   );
 }
 
+function gpsLabelFromSummary(
+  summary: SubmittedVisitSummary,
+  t: (key: string) => string
+): string {
+  switch (summary.gpsStatus) {
+    case "captured":
+      return t("visitFlow.gpsConfirmed");
+    case "pending":
+      return t("visitFlow.gpsPending");
+    default:
+      return t("visitFlow.gpsNotCaptured");
+  }
+}
+
 export default function VisitSuccessScreen({ navigation, route }: Props) {
   const { t } = useI18n();
-  const {
-    visitId,
-    queued,
-    evidenceWarning,
-    farmerName,
-    savedCrop,
-    savedProblemSeen,
-    savedRecommendation,
-    savedActionTaken,
-    gpsConfirmed
-  } = route.params;
+  const insets = useSafeAreaInsets();
+  const summary = route.params.summary;
+  const { visitId, queued, evidenceWarning } = summary;
 
-  const reset = useVisitFormStore((s) => s.reset);
   const { pendingCount, refreshQueue } = useOfflineSync();
 
   useEffect(() => {
@@ -96,75 +101,97 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
   }
 
   function addAnotherVisit() {
-    reset();
+    beginNewVisit();
     navigation.reset({
       index: 0,
       routes: [{ name: "NewVisitFarmer", params: { fresh: true } }]
     });
   }
 
-  const farmerLabel = farmerName?.trim() || "—";
-  const cropLabel = savedCrop?.trim() || "—";
-  const problemLabel = savedProblemSeen?.trim() || "—";
-  const adviceLabel = savedRecommendation?.trim() || savedActionTaken?.trim() || "";
-  const gpsLabel = gpsConfirmed ? t("visitFlow.gpsConfirmed") : t("visitFlow.gpsNotCaptured");
+  const farmerLabel = summary.farmerName?.trim() || "—";
+  const cropLabel = summary.cropName?.trim() || "—";
+  const problemLabel = summary.problemText?.trim() || "—";
+  const adviceLabel =
+    summary.recommendationText?.trim() ||
+    summary.observationText?.trim() ||
+    "";
+  const gpsLabel = gpsLabelFromSummary(summary, t);
 
   return (
     <ScreenEntranceShell style={styles.screen}>
       {(entranceTick) => (
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.body}
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
-        <EntranceBlocks replayKey={entranceTick} startStep={0} variant="card">
-        <AnimatedHeroIcon queued={Boolean(queued)} />
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.body,
+            { paddingBottom: Math.max(insets.bottom, 24) + Layout.stackScrollBottom }
+          ]}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          <EntranceBlocks replayKey={entranceTick} startStep={0} variant="card">
+            <AnimatedHeroIcon queued={Boolean(queued)} />
 
-        {queued ? (
-          <>
-            <Text style={styles.title}>{t("visitFlow.savedForSync")}</Text>
-            <Text style={styles.subtitle}>{t("visitFlow.willUploadWhenConnected")}</Text>
-            <Text style={styles.pendingCount}>
-              {t(pendingCount === 1 ? "visitFlow.visitsInQueue" : "visitFlow.visitsInQueue_plural", {
-                count: pendingCount
-              })}
-            </Text>
-          </>
-        ) : (
-          <>
-            <Text style={styles.title}>{t("visitFlow.visitSubmitted")}</Text>
-            {visitId > 0 ? (
-              <Text style={styles.visitId}>{t("visitFlow.visitNumber", { id: visitId })}</Text>
-            ) : null}
-            <FlatCard style={styles.summaryGlow}>
-            <View style={styles.summaryCard}>
-              <SummaryLine label={t("visitFlow.farmerSummary")} value={farmerLabel} />
-              <SummaryLine label={t("visitFlow.cropSummary")} value={cropLabel} />
-              <SummaryLine label={t("visitFlow.problemSummary")} value={problemLabel} />
-              {adviceLabel ? <SummaryLine label={t("visitFlow.adviceSummary")} value={adviceLabel} /> : null}
-              <SummaryLine label={t("visitFlow.gpsSummary")} value={gpsLabel} />
+            {queued ? (
+              <>
+                <Text style={styles.title}>{t("visitFlow.savedForSync")}</Text>
+                <Text style={styles.subtitle}>{t("visitFlow.willUploadWhenConnected")}</Text>
+                <Text style={styles.pendingCount}>
+                  {t(pendingCount === 1 ? "visitFlow.visitsInQueue" : "visitFlow.visitsInQueue_plural", {
+                    count: pendingCount
+                  })}
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.title}>{t("visitFlow.visitSubmitted")}</Text>
+                {visitId > 0 ? (
+                  <Text style={styles.visitId}>{t("visitFlow.visitNumber", { id: visitId })}</Text>
+                ) : null}
+                <FlatCard style={styles.summaryCard}>
+                  <View style={styles.summaryInner}>
+                    <SummaryRow label={t("visitFlow.farmerSummary")} value={farmerLabel} />
+                    <View style={styles.summaryDivider} />
+                    <SummaryRow label={t("visitFlow.cropSummary")} value={cropLabel} />
+                    <View style={styles.summaryDivider} />
+                    <SummaryRow label={t("visitFlow.problemSummary")} value={problemLabel} />
+                    {adviceLabel ? (
+                      <>
+                        <View style={styles.summaryDivider} />
+                        <SummaryRow label={t("visitFlow.adviceSummary")} value={adviceLabel} />
+                      </>
+                    ) : null}
+                    <View style={styles.summaryDivider} />
+                    <SummaryRow label={t("visitFlow.gpsSummary")} value={gpsLabel} />
+                  </View>
+                </FlatCard>
+                {evidenceWarning ? <Text style={styles.evidenceWarn}>{evidenceWarning}</Text> : null}
+              </>
+            )}
+
+            <View style={styles.actions}>
+              <PrimaryButton
+                label={t("visitFlow.addAnotherVisit")}
+                onPress={addAnotherVisit}
+                style={styles.actionBtn}
+              />
+              {queued ? (
+                <GhostButton
+                  label={t("visitFlow.viewPendingVisits")}
+                  onPress={viewPendingVisits}
+                  style={styles.actionBtn}
+                />
+              ) : visitId > 0 ? (
+                <GhostButton label={t("visitFlow.viewVisit")} onPress={viewVisit} style={styles.actionBtn} />
+              ) : null}
+              {!queued ? (
+                <Pressable onPress={goHome} style={styles.homeLink} accessibilityRole="button">
+                  <Text style={styles.homeLinkText}>{t("visitFlow.goHome")}</Text>
+                </Pressable>
+              ) : null}
             </View>
-            </FlatCard>
-            {evidenceWarning ? <Text style={styles.evidenceWarn}>{evidenceWarning}</Text> : null}
-          </>
-        )}
-
-        <View style={styles.actions}>
-          <PrimaryButton label={t("visitFlow.addAnotherVisit")} onPress={addAnotherVisit} style={styles.actionBtn} />
-          {queued ? (
-            <GhostButton label={t("visitFlow.viewPendingVisits")} onPress={viewPendingVisits} style={styles.actionBtn} />
-          ) : visitId > 0 ? (
-            <GhostButton label={t("visitFlow.viewVisit")} onPress={viewVisit} style={styles.actionBtn} />
-          ) : null}
-          {!queued ? (
-            <Pressable onPress={goHome} style={styles.homeLink}>
-              <Text style={styles.homeLinkText}>{t("visitFlow.goHome")}</Text>
-            </Pressable>
-          ) : null}
-        </View>
-        </EntranceBlocks>
-      </ScrollView>
+          </EntranceBlocks>
+        </ScrollView>
       )}
     </ScreenEntranceShell>
   );
@@ -179,15 +206,16 @@ const styles = StyleSheet.create({
     flex: 1
   },
   body: {
-    alignItems: "center",
+    alignItems: "stretch",
     flexGrow: 1,
     justifyContent: "center",
-    paddingBottom: 32,
     paddingHorizontal: Spacing.screen,
-    paddingTop: 24
+    paddingTop: 24,
+    width: "100%"
   },
   heroWrap: {
     alignItems: "center",
+    alignSelf: "center",
     height: 100,
     justifyContent: "center",
     width: 100
@@ -225,29 +253,41 @@ const styles = StyleSheet.create({
     marginTop: 6,
     textAlign: "center"
   },
-  summaryGlow: {
-    alignSelf: "stretch",
-    marginTop: 20
-  },
   summaryCard: {
     alignSelf: "stretch",
-    gap: 10,
-    padding: 16
+    marginTop: 20,
+    width: "100%"
   },
-  summaryLine: {
+  summaryInner: {
+    gap: 0,
+    padding: Spacing.md
+  },
+  summaryRow: {
+    alignItems: "flex-start",
     flexDirection: "row",
-    gap: 10
+    gap: Spacing.md,
+    paddingVertical: Spacing.sm
   },
   summaryLabel: {
     color: Colors.text3,
+    flexShrink: 0,
     fontSize: FontSize.sm,
-    minWidth: 64
+    fontWeight: FontWeight.medium,
+    lineHeight: 22,
+    minWidth: 88,
+    width: 88
   },
   summaryValue: {
     color: Colors.text1,
     flex: 1,
+    flexShrink: 1,
     fontSize: FontSize.md,
-    fontWeight: FontWeight.semibold
+    fontWeight: FontWeight.semibold,
+    lineHeight: 22
+  },
+  summaryDivider: {
+    backgroundColor: Colors.border,
+    height: StyleSheet.hairlineWidth
   },
   evidenceWarn: {
     alignSelf: "stretch",
@@ -257,21 +297,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     color: Colors.amber,
     fontSize: FontSize.sm,
+    lineHeight: 20,
     marginTop: 12,
     padding: 12,
     textAlign: "center"
   },
   actions: {
     alignSelf: "stretch",
-    gap: 10,
+    gap: Spacing.sm,
     marginTop: 24
   },
   actionBtn: {
+    minHeight: Layout.touchTargetMin,
     width: "100%"
   },
   homeLink: {
     alignItems: "center",
-    paddingVertical: 10
+    minHeight: Layout.touchTargetMin,
+    justifyContent: "center",
+    paddingVertical: Spacing.sm
   },
   homeLinkText: {
     color: Colors.brand700,

@@ -8,6 +8,7 @@ import { useI18n } from "../../../src/i18n/I18nContext";
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
 import { useTracking } from "../../../src/storage/TrackingContext";
 import { getForegroundLocation } from "../../../src/utils/location";
+import { buildSubmittedVisitSummary } from "../../../src/types/submittedVisitSummary";
 import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal";
 import { hasValidGps } from "../../../src/visit/visitValidation";
 import { FlatCard } from "../../components/layout/FlatCard";
@@ -16,6 +17,7 @@ import { PrimaryButton, StatusChip } from "../../components/ui";
 import { StepIndicator } from "../../components/visit/StepIndicator";
 import { VisitFlowHeader } from "../../components/visit/VisitFlowHeader";
 import { enqueuePendingVisit, generateLocalSyncId } from "../../lib/pendingVisitsQueue";
+import { beginNewVisit } from "../../lib/beginNewVisit";
 import { getVisitDutyFields } from "../../lib/visitDutyContext";
 import {
   buildVisitFormValuesFromStore,
@@ -51,7 +53,6 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
   const online = useConnectivityOnline();
   const { bumpAfterVisitChange } = useFieldDataRefresh();
   const { isActive, startDay, busy: workdayBusy } = useTracking();
-  const reset = useVisitFormStore((s) => s.reset);
   const setGpsCoords = useVisitFormStore((s) => s.setGpsCoords);
 
   const submitInFlightRef = useRef(false);
@@ -184,23 +185,22 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
         });
       }
       bumpAfterVisitChange();
-      reset();
-      navigation.navigate("VisitSuccess", {
+      const summary = buildSubmittedVisitSummary({
         visitId: visit.id,
         queued: false,
+        farmerName: values.farmer_name,
+        cropName: cropName,
+        problemText: values.problem_seen,
+        observationText: values.observation,
+        recommendationText: values.recommendation || values.action_taken,
+        gpsConfirmed,
+        submittedAt: capturedAt.toISOString(),
         evidenceWarning: uploadFailures.length
           ? `Some uploads failed and were queued for retry: ${uploadFailures.join(", ")}`
-          : undefined,
-        farmerId: values.farmer_id,
-        farmerName: values.farmer_name,
-        savedCrop: cropName,
-        savedObservation: values.observation,
-        savedProblemSeen: values.problem_seen,
-        savedRecommendation: values.recommendation,
-        savedActionTaken: values.action_taken,
-        submittedAt: capturedAt.toISOString(),
-        gpsConfirmed
+          : undefined
       });
+      beginNewVisit();
+      navigation.navigate("VisitSuccess", { summary });
     } catch (err) {
       if (!isOfflineSubmitError(err) && (err as Error)?.message !== "offline") {
         setSubmitHint(err instanceof Error ? err.message : t("visitFlow.submitFailed"));
@@ -227,21 +227,20 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
       localSyncIdRef.current = null;
 
       bumpAfterVisitChange();
-      reset();
-      navigation.navigate("VisitSuccess", {
+      const summary = buildSubmittedVisitSummary({
         visitId: 0,
         queued: true,
         queueId: localSyncId,
-        farmerId: values.farmer_id,
         farmerName: values.farmer_name,
-        savedCrop: cropName,
-        savedObservation: values.observation,
-        savedProblemSeen: values.problem_seen,
-        savedRecommendation: values.recommendation,
-        savedActionTaken: values.action_taken,
-        submittedAt: values.captured_at ?? new Date().toISOString(),
-        gpsConfirmed: hasValidGps(values)
+        cropName: cropName,
+        problemText: values.problem_seen,
+        observationText: values.observation,
+        recommendationText: values.recommendation || values.action_taken,
+        gpsConfirmed: hasValidGps(values),
+        submittedAt: values.captured_at ?? new Date().toISOString()
       });
+      beginNewVisit();
+      navigation.navigate("VisitSuccess", { summary });
     } finally {
       submitInFlightRef.current = false;
       setSubmitting(false);

@@ -1,5 +1,6 @@
 import { NavigatorScreenParams } from "@react-navigation/native";
 import type { VisitFormPrefill } from "../utils/farmerPrefill";
+import type { SubmittedVisitSummary } from "../types/submittedVisitSummary";
 
 export type AuthStackParamList = {
   Login: undefined;
@@ -27,21 +28,7 @@ export type WorkStackParamList = {
 export type VisitFlowParamList = {
   NewVisitFarmer: { prefill?: VisitFormPrefill; fresh?: boolean; fastRevisit?: boolean } | undefined;
   VisitSuccess: {
-    visitId: number;
-    queued: boolean;
-    queueId?: string;
-    evidenceWarning?: string;
-    farmerId?: string;
-    farmerName?: string;
-    village?: string;
-    savedCrop?: string;
-    savedObservation?: string;
-    savedProblemSeen?: string;
-    savedRecommendation?: string;
-    savedActionTaken?: string;
-    savedFollowUpDate?: string;
-    submittedAt?: string;
-    gpsConfirmed?: boolean;
+    summary: SubmittedVisitSummary;
   };
 };
 

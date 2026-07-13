@@ -135,8 +135,8 @@ export function MyLocationScreen({ navigation, route }: Props) {
               fitEdgePadding={{ top: 72, right: 56, bottom: 88, left: 40 }}
               markers={markers}
               mapRef={mapRef}
-              showLiveUserLocation={hasLiveGps}
-              followLiveUserLocation={followLive}
+              showsUserLocation={hasLiveGps}
+              followsUserLocation={followLive}
               liveFocus={followLive ? liveCoordinate : null}
               liveFocusDelta={0.005}
               locationGranted={hasLiveGps}

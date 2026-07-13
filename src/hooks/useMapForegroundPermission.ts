@@ -17,7 +17,7 @@ const IDLE: MapForegroundPermission = {
 };
 
 /**
- * Runtime foreground location permission — source of truth for MapLibre UserLocation.
+ * Runtime foreground location permission — used by map screens when live GPS is enabled.
  * Only polls when `enabled` (showLiveUserLocation) is true.
  */
 export function useMapForegroundPermission(enabled: boolean): MapForegroundPermission {

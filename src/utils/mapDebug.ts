@@ -11,12 +11,12 @@ type MapDiagnosticPayload = {
   region?: MapRegion | null;
   mapReady?: boolean;
   shouldMountMap?: boolean;
+  canRenderMap?: boolean;
   markerCount?: number;
   routePointCount?: number;
   showsUserLocation?: boolean;
   followsUserLocation?: boolean;
   mapType?: string;
-  mapStyleUrl?: string;
   note?: string;
 };
 

@@ -157,7 +157,7 @@ export function LocationPreviewMap({
         markers={markers}
         fitCoordinates={fitCoordinates}
         fitEdgePadding={{ top: 48, right: 48, bottom: 48, left: 48 }}
-        showLiveUserLocation={false}
+        showsUserLocation={false}
         locationGranted={locationGranted || hasPin}
         permissionResolved={permissionResolved}
         loading={loading}

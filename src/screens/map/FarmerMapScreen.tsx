@@ -198,7 +198,7 @@ export function FarmerMapScreen({ navigation, route }: Props) {
                 fitCoordinates={fitCoordinates}
                 fitEdgePadding={FIT_PADDING}
                 permissionResolved={permissionResolved}
-                showLiveUserLocation={false}
+                showsUserLocation={false}
                 locationGranted={locationGranted}
                 locationDenied={permissionResolved && !locationGranted && !farmerPin}
                 loading={loading}

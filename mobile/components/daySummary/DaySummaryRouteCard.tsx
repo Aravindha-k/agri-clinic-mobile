@@ -220,10 +220,10 @@ export function DaySummaryRouteCard({
                 markers={markers}
                 fitCoordinates={fitCoordinates}
                 fitEdgePadding={{ top: 28, right: 28, bottom: 28, left: 28 }}
-                showLiveUserLocation={showLiveOnMap}
+                showsUserLocation={showLiveOnMap}
                 locationGranted={showLiveOnMap}
                 liveFocus={showLiveOnMap ? liveCoordinate : null}
-                followLiveUserLocation={false}
+                followsUserLocation={false}
                 permissionResolved
                 loading={false}
                 interactive={false}

@@ -1,6 +1,5 @@
 import type { RefObject } from "react";
 import type { MapRegion } from "../../types/map";
-import type { FieldMapCameraRef } from "./fieldMapCamera";
 
 export type MapPinKind =
   | "current"
@@ -33,14 +32,8 @@ export type FieldMapViewProps = {
   route?: MapCoordinate[];
   fitCoordinates?: MapCoordinate[];
   fitEdgePadding?: { top: number; right: number; bottom: number; left: number };
-  /** @deprecated Use showLiveUserLocation */
   showsUserLocation?: boolean;
-  /** @deprecated Use followLiveUserLocation */
   followsUserLocation?: boolean;
-  /** Mount native live GPS dot only when foreground permission is granted. Default false. */
-  showLiveUserLocation?: boolean;
-  /** Smoothly follow live GPS via camera easeTo (never native trackUserLocation). Default false. */
-  followLiveUserLocation?: boolean;
   loading?: boolean;
   permissionResolved?: boolean;
   locationDenied?: boolean;
@@ -53,7 +46,7 @@ export type FieldMapViewProps = {
     /** Softer outer ring radius — defaults to radiusMeters when omitted. */
     outerRadiusMeters?: number;
   };
-  mapRef?: RefObject<FieldMapCameraRef | null>;
+  mapRef?: RefObject<unknown | null>;
   routeStrokePrimary?: string;
   routeStrokeOutline?: string;
   /** Thinner stroke for small preview maps. */

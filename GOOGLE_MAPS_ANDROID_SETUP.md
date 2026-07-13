@@ -20,13 +20,17 @@ The key is injected at build time from the environment variable **`GOOGLE_MAPS_A
 
 ## 1. Create / configure the key in Google Cloud
 
-1. Open [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services** → **Credentials**.
-2. Create or edit an **API key** for Android.
-3. Enable **Maps SDK for Android** for the project (APIs & Services → Library).
-4. Restrict the key:
+1. Create or select a [Google Cloud project](https://console.cloud.google.com/).
+2. Enable **billing** (Pay as you go) for the project.
+3. Open **APIs & Services → Library** and enable **Maps SDK for Android** only.
+   Do **not** enable Places, Routes, Geocoding, Navigation, or Directions unless the app code genuinely calls those APIs (it does not today).
+4. Open **APIs & Services → Credentials** → **Create credentials** → **API key**.
+5. Restrict the key:
    - **Application restrictions:** Android apps
    - **Package name:** `com.kavya.agriclinic`
-   - **SHA-1 certificate fingerprint:** see section 2 below (use the fingerprint that matches how the APK is signed)
+   - **SHA-1 certificate fingerprint:** see section 2 (must match the keystore that signs the APK users install)
+6. Under **API restrictions**, choose **Restrict key** and select **Maps SDK for Android** only.
+7. In Google Cloud **Billing → Budgets & alerts**, add a small monthly budget alert.
 
 If the key exists but restrictions are wrong, maps usually show blank tiles or an authorization error — **not** the fatal “API key not found” crash. That crash means the manifest metadata was never injected.
 
@@ -130,12 +134,18 @@ After prebuild:
 
 ```bash
 npm run verify:android-maps
+node scripts/verify-google-maps-release.mjs
 ```
 
 Expected output (masked, no full key):
 
 ```text
 [verify-android-maps-config] OK — com.google.android.geo.API_KEY present (39 chars, AIza…xyz9)
+=== Google Maps release verification ===
+  ✓ package.json lists react-native-maps
+  ...
 ```
 
 On device, confirm Day → My Route and all map screens open without `IllegalStateException: API key not found` in `adb logcat`.
+
+**Expo Go** may show maps using Expo’s bundled native environment, but **final map QA must use the GitHub-built APK** — not Expo Go alone.

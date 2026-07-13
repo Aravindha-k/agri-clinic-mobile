@@ -1,13 +1,20 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { ReactNode } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigation } from "@react-navigation/native";
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSecureScreen } from "../hooks/useSecureScreen";
 import { useI18n } from "../i18n/I18nContext";
 import { scheduleReminderSoundTest } from "../notifications/fieldReminderNotifications";
 import { playFieldReminderSound } from "../notifications/playReminderSound";
 import { useAppPreferences } from "../storage/AppPreferencesContext";
+import {
+  clearBiometricLogin,
+  enableBiometricLoginWithVerification,
+  getBiometricLoginStatus,
+  type BiometricLoginStatus
+} from "../storage/biometricLoginStorage";
 import { useTheme } from "../theme";
 import type { AppLanguage } from "../i18n";
 import { FlatCard, ScreenCanvas, StackScreenHeader } from "../../mobile/components/layout";
@@ -20,6 +27,15 @@ export function SettingsScreen() {
   const { autoSyncOnReconnect, wifiOnlySync, trackingBatterySaver, reminderSoundsEnabled, setPreference } =
     useAppPreferences();
   const { t, language, setLanguage } = useI18n();
+  const [biometricStatus, setBiometricStatus] = useState<BiometricLoginStatus | null>(null);
+
+  const refreshBiometricStatus = useCallback(async () => {
+    setBiometricStatus(await getBiometricLoginStatus());
+  }, []);
+
+  useEffect(() => {
+    void refreshBiometricStatus();
+  }, [refreshBiometricStatus]);
 
   async function testReminderSound() {
     if (reminderSoundsEnabled) {
@@ -36,6 +52,31 @@ export function SettingsScreen() {
       return;
     }
     Alert.alert(t("settings.reminderTestTitle"), t("settings.reminderTestScheduled"));
+  }
+
+  async function toggleFingerprintLogin() {
+    if (!biometricStatus) return;
+    if (!biometricStatus.hardwareAvailable) return;
+    if (!biometricStatus.enrolled) return;
+
+    if (biometricStatus.enabled) {
+      await clearBiometricLogin();
+      Alert.alert(t("settings.fingerprintLogin"), t("settings.fingerprintDisabled"));
+      await refreshBiometricStatus();
+      return;
+    }
+
+    const enabled = await enableBiometricLoginWithVerification();
+    if (enabled) {
+      Alert.alert(t("settings.fingerprintLogin"), t("settings.fingerprintEnabled"));
+    } else {
+      Alert.alert(t("settings.fingerprintLogin"), t("settings.fingerprintEnableFailed"));
+    }
+    await refreshBiometricStatus();
+  }
+
+  function openDeviceSecuritySettings() {
+    void Linking.openSettings();
   }
 
   return (
@@ -90,6 +131,42 @@ export function SettingsScreen() {
               />
             }
           />
+        </FlatCard>
+
+        <Text style={styles.sectionLabel}>{t("settings.security")}</Text>
+        <FlatCard padded={false}>
+          {!biometricStatus?.hardwareAvailable ? (
+            <SettingRow
+              icon="finger-print-outline"
+              title={t("settings.fingerprintLogin")}
+              subtitle={t("settings.fingerprintNotSupported")}
+            />
+          ) : !biometricStatus.enrolled ? (
+            <>
+              <SettingRow
+                icon="finger-print-outline"
+                title={t("settings.fingerprintLogin")}
+                subtitle={t("settings.fingerprintNotEnrolled")}
+              />
+              <View style={styles.divider} />
+              <Pressable onPress={openDeviceSecuritySettings} style={({ pressed }) => [styles.reset, pressed && { opacity: 0.9 }]}>
+                <Text style={styles.resetText}>{t("settings.fingerprintOpenSettings")}</Text>
+              </Pressable>
+            </>
+          ) : (
+            <SettingRow
+              icon="finger-print-outline"
+              title={t("settings.fingerprintLogin")}
+              subtitle={biometricStatus.enabled ? t("settings.fingerprintOn") : t("settings.fingerprintOff")}
+              right={
+                <Switch
+                  value={biometricStatus.enabled}
+                  onValueChange={() => void toggleFingerprintLogin()}
+                  trackColor={{ true: Colors.brand700 }}
+                />
+              }
+            />
+          )}
         </FlatCard>
 
         <Text style={styles.sectionLabel}>{t("settings.tracking")}</Text>
@@ -211,7 +288,7 @@ function SettingRow({
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle: string;
-  right: ReactNode;
+  right?: ReactNode;
 }) {
   return (
     <View style={styles.row}>

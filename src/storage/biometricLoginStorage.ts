@@ -4,6 +4,7 @@ import { getRefreshToken } from "./tokenStorage";
 import { refreshAccessTokenOnce } from "../api/tokenRefresh";
 
 const ENABLED_KEY = "biometric_login_enabled";
+const PROMPT_DISMISSED_KEY = "biometric_login_prompt_dismissed";
 /** @deprecated legacy plaintext password — always cleared on migration */
 const LEGACY_PASS_KEY = "biometric_login_pass";
 const LEGACY_USER_KEY = "biometric_login_user";
@@ -66,12 +67,37 @@ export async function canUseBiometricLogin(): Promise<boolean> {
   return Boolean(refresh);
 }
 
+export async function isBiometricEnrollmentDismissed(): Promise<boolean> {
+  const dismissed = await SecureStore.getItemAsync(PROMPT_DISMISSED_KEY);
+  return dismissed === "1";
+}
+
+export async function dismissBiometricEnrollmentPrompt(): Promise<void> {
+  await SecureStore.setItemAsync(PROMPT_DISMISSED_KEY, "1");
+}
+
+export async function clearBiometricEnrollmentDismissed(): Promise<void> {
+  await SecureStore.deleteItemAsync(PROMPT_DISMISSED_KEY).catch(() => undefined);
+}
+
+/** True when we may show the one-time enrollment prompt after password login. */
+export async function shouldOfferBiometricEnrollment(): Promise<boolean> {
+  const [status, dismissed] = await Promise.all([
+    getBiometricLoginStatus(),
+    isBiometricEnrollmentDismissed()
+  ]);
+  if (!status.hardwareAvailable || !status.enrolled || status.enabled || dismissed) {
+    return false;
+  }
+  const refresh = await getRefreshToken();
+  return Boolean(refresh);
+}
+
 /**
- * Enable biometric unlock after a successful password login.
- * Stores only an enablement flag — never the password.
- * Unlock uses the refresh token already kept in SecureStore by tokenStorage.
+ * Verify biometric once, then persist the enablement flag.
+ * Never stores the password.
  */
-export async function saveBiometricLogin(_username?: string, _password?: string): Promise<boolean> {
+export async function enableBiometricLoginWithVerification(): Promise<boolean> {
   await migrateLegacyBiometricPasswords();
   const [hardwareAvailable, enrolled] = await Promise.all([
     LocalAuthentication.hasHardwareAsync(),
@@ -84,7 +110,18 @@ export async function saveBiometricLogin(_username?: string, _password?: string)
   if (!refresh) {
     return false;
   }
+
+  const auth = await LocalAuthentication.authenticateAsync({
+    promptMessage: "Confirm fingerprint to enable faster login",
+    cancelLabel: "Cancel",
+    disableDeviceFallback: false
+  });
+  if (!auth.success) {
+    return false;
+  }
+
   await SecureStore.setItemAsync(ENABLED_KEY, "1");
+  await clearBiometricEnrollmentDismissed();
   return true;
 }
 
@@ -127,12 +164,18 @@ export async function readBiometricCredentials(): Promise<null> {
 export async function clearBiometricLogin(): Promise<void> {
   await Promise.all([
     SecureStore.deleteItemAsync(ENABLED_KEY).catch(() => undefined),
+    SecureStore.deleteItemAsync(PROMPT_DISMISSED_KEY).catch(() => undefined),
     SecureStore.deleteItemAsync(LEGACY_PASS_KEY).catch(() => undefined),
     SecureStore.deleteItemAsync(LEGACY_USER_KEY).catch(() => undefined)
   ]);
 }
 
-/** @deprecated Use saveBiometricLogin */
+/** @deprecated Use enableBiometricLoginWithVerification */
+export async function saveBiometricLogin(_username?: string, _password?: string): Promise<boolean> {
+  return enableBiometricLoginWithVerification();
+}
+
+/** @deprecated Use enableBiometricLoginWithVerification */
 export async function enableBiometricLogin(username: string, password: string): Promise<boolean> {
-  return saveBiometricLogin(username, password);
+  return enableBiometricLoginWithVerification();
 }

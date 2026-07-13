@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Alert,
   View,
   Text,
   StatusBar,
@@ -20,10 +21,14 @@ import { useAuth } from "../storage/AuthContext";
 import {
   canUseBiometricLogin,
   clearBiometricLogin,
+  dismissBiometricEnrollmentPrompt,
+  enableBiometricLoginWithVerification,
   getBiometricLoginStatus,
+  shouldOfferBiometricEnrollment,
   unlockSessionWithBiometrics,
   type BiometricLoginStatus
 } from "../storage/biometricLoginStorage";
+import { useI18n } from "../i18n/I18nContext";
 import { FONTS } from "../theme/fonts";
 import { Colors, FontSize, Radius, Shadow, Spacing, TextStyles } from "../../mobile/lib/theme";
 import { PrimaryButton, EnterpriseTextField } from "../../mobile/components/ui";
@@ -44,10 +49,12 @@ const EMPTY_BIOMETRIC_STATUS: BiometricLoginStatus = {
 export function LoginScreen() {
   useSecureScreen();
   const insets = useSafeAreaInsets();
-  const { signIn, loginNotice, clearLoginNotice, retryBootstrap } = useAuth();
+  const { t } = useI18n();
+  const { signIn, loginNotice, clearLoginNotice, completeBiometricUnlock } = useAuth();
 
   const scrollRef = useRef<ScrollView>(null);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const autoBiometricAttempted = useRef(false);
 
   const [empId, setEmpId] = useState("");
   const [password, setPassword] = useState("");
@@ -71,6 +78,31 @@ export function LoginScreen() {
       void refreshBiometricState();
     }, [refreshBiometricState])
   );
+
+  async function offerBiometricEnrollmentIfNeeded() {
+    if (!(await shouldOfferBiometricEnrollment())) return;
+    Alert.alert(t("settings.fingerprintEnableTitle"), t("settings.fingerprintEnableBody"), [
+      {
+        text: t("settings.fingerprintNotNow"),
+        style: "cancel",
+        onPress: () => {
+          void dismissBiometricEnrollmentPrompt();
+        }
+      },
+      {
+        text: t("settings.fingerprintEnableConfirm"),
+        onPress: () => {
+          void (async () => {
+            const enabled = await enableBiometricLoginWithVerification();
+            if (!enabled) {
+              Alert.alert(t("settings.fingerprintEnableTitle"), t("settings.fingerprintEnableFailed"));
+            }
+            await refreshBiometricState();
+          })();
+        }
+      }
+    ]);
+  }
 
   useEffect(() => {
     if (loginNotice) {
@@ -113,6 +145,7 @@ export function LoginScreen() {
 
     try {
       await signIn(user, password);
+      await offerBiometricEnrollmentIfNeeded();
     } catch (error) {
       if (error instanceof ApiRequestError && error.code === "INVALID_CREDENTIALS") {
         setLoginError(error.message || "Please check your ID and password.");
@@ -141,7 +174,7 @@ export function LoginScreen() {
         await refreshBiometricState();
         return;
       }
-      await retryBootstrap();
+      await completeBiometricUnlock();
     } catch (error) {
       if (
         error instanceof ApiRequestError &&
@@ -165,6 +198,13 @@ export function LoginScreen() {
       setBiometricBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (!biometricReady || !biometricCanLogin || biometricBusy || loading) return;
+    if (autoBiometricAttempted.current) return;
+    autoBiometricAttempted.current = true;
+    void handleBiometricLogin();
+  }, [biometricBusy, biometricCanLogin, biometricReady, loading]);
 
   return (
     <View style={styles.screen}>

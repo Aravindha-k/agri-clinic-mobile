@@ -102,7 +102,7 @@ export function FarmerDetailScreen({ route, navigation }: Props) {
     if (!canRunWorkAction()) return;
     navigation.getParent()?.getParent()?.navigate("VisitFlow", {
       screen: "NewVisitFarmer",
-      params: { prefill: prefillFromFarmer(farmer), fastRevisit: true }
+      params: { fresh: true, prefill: prefillFromFarmer(farmer) }
     });
   }
 

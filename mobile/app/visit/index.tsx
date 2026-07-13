@@ -16,6 +16,7 @@ import {
 import { ScreenCanvas, ScreenEntranceBloom } from "../../components/layout";
 import { VisitEntranceProvider } from "../../context/VisitEntranceContext";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
+import { beginNewVisit } from "../../lib/beginNewVisit";
 import { useVisitFormStore } from "../../store/visitFormStore";
 import VisitCreateStep, { VisitCreateStep2, VisitCreateStep3, VisitCreateStep4 } from "./create";
 
@@ -33,7 +34,6 @@ export default function VisitFlowShell() {
   const step = useVisitFormStore((s) => s.step);
   const setStep = useVisitFormStore((s) => s.setStep);
   const applyRevisitPrefill = useVisitFormStore((s) => s.applyRevisitPrefill);
-  const reset = useVisitFormStore((s) => s.reset);
   const fastRevisitStarted = useRef(false);
 
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -63,11 +63,11 @@ export default function VisitFlowShell() {
   }, [slideAnim, step]);
 
   useEffect(() => {
-    if (route.params?.fresh) {
-      reset();
-      navigation.setParams({ fresh: undefined, prefill: undefined });
-    }
-  }, [navigation, reset, route.params?.fresh]);
+    if (!route.params?.fresh) return;
+    const prefill = route.params.prefill;
+    beginNewVisit(prefill ? { farmerPrefill: prefill, step: 2 } : undefined);
+    navigation.setParams({ fresh: undefined, prefill: undefined });
+  }, [navigation, route.params?.fresh, route.params?.prefill]);
 
   useEffect(() => {
     if (!route.params?.fastRevisit || !route.params?.prefill) return;
@@ -141,7 +141,7 @@ export default function VisitFlowShell() {
   const entranceKey = `${entranceTick}-${displayedStep}`;
 
   function closeFlow() {
-    reset();
+    beginNewVisit();
     navigation.goBack();
   }
 

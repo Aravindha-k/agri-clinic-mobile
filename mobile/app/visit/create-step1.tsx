@@ -15,7 +15,6 @@ import { getOptionLabel } from "../../../src/api/masters";
 import { useConnectivityOnline } from "../../../src/hooks/useConnectivityOnline";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useMasterData } from "../../../src/storage/MasterDataContext";
-import { loadRevisitPrefill } from "../../../src/utils/farmerPrefill";
 import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal";
 import { FlatCard } from "../../components/layout/FlatCard";
 import { PrimaryButton, SearchBar, StatusChip } from "../../components/ui";
@@ -62,7 +61,6 @@ export default function VisitCreateStep1({ onClose }: Props) {
   const replayKey = useVisitEntranceKey();
   const online = useConnectivityOnline();
   const { districts, villages } = useMasterData();
-  const applyRevisitPrefill = useVisitFormStore((s) => s.applyRevisitPrefill);
   const setFarmer = useVisitFormStore((s) => s.setFarmer);
   const setNewFarmer = useVisitFormStore((s) => s.setNewFarmer);
   const clearNewFarmer = useVisitFormStore((s) => s.clearNewFarmer);
@@ -261,17 +259,8 @@ export default function VisitCreateStep1({ onClose }: Props) {
       await pushRecentFarmer(farmer);
       setRecentFarmers(await readRecentFarmers());
 
-      const hasVisitHistory = farmer.id != null && farmerVisitCount(farmer) > 0;
-      if (hasVisitHistory) {
-        const loaded = await loadRevisitPrefill(farmer, { districts, villages });
-        applyRevisitPrefill(loaded);
-        setVisitKind("revisit");
-        setStep(2);
-        return;
-      }
-
       setFarmer(farmer);
-      setVisitKind("first");
+      setVisitKind(farmer.id != null && farmerVisitCount(farmer) > 0 ? "revisit" : "first");
       setStep(2);
     } catch {
       setFarmer(farmer);

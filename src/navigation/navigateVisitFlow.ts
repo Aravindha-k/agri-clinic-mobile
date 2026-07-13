@@ -1,4 +1,6 @@
 import type { NavigationProp, ParamListBase } from "@react-navigation/native";
+import { beginNewVisit } from "../../mobile/lib/beginNewVisit";
+import type { VisitFormPrefill } from "../utils/farmerPrefill";
 import { navigateVisitFlow as navigateVisitFlowRoot } from "./rootNavigationRef";
 
 type VisitFlowParams = {
@@ -11,6 +13,10 @@ export function navigateToVisitFlow(
   navigation: NavigationProp<ParamListBase>,
   params: VisitFlowParams = { screen: "NewVisitFarmer", params: { fresh: true } }
 ): boolean {
+  if (params.params?.fresh) {
+    const prefill = params.params.prefill as VisitFormPrefill | undefined;
+    beginNewVisit(prefill?.farmer_id ? { farmerPrefill: prefill, step: 2 } : undefined);
+  }
   let nav: NavigationProp<ParamListBase> | undefined = navigation;
   for (let depth = 0; depth < 6 && nav; depth += 1) {
     const routeNames = nav.getState?.().routeNames;

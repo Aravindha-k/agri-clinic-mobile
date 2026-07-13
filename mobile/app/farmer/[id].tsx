@@ -272,7 +272,7 @@ function FarmerProfileScreenInner() {
       if (!allowed) return;
       rootNav?.navigate("VisitFlow", {
         screen: "NewVisitFarmer",
-        params: { prefill: prefillFromFarmer(profile.farmer), fastRevisit: true }
+        params: { fresh: true, prefill: prefillFromFarmer(profile.farmer) }
       });
     })();
   }

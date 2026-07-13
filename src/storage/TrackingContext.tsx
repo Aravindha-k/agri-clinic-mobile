@@ -5,7 +5,7 @@ import {
   WORKDAY_INACTIVE_BANNER_MESSAGE,
   WORKDAY_REQUIRED_MESSAGE
 } from "../constants/workdayMessages";
-import { TRACKING_LOAD_ERROR, TRACKING_SYNC_ERROR } from "../constants/trackingMessages";
+import { TRACKING_LOAD_ERROR, TRACKING_SIGNAL_LOST, TRACKING_SYNC_ERROR } from "../constants/trackingMessages";
 import {
   endDutySession,
   fetchCurrentWorkday,
@@ -73,6 +73,8 @@ import {
   setTrackingBatterySaverEnabled
 } from "../tracking/trackingConfig";
 import { getBatteryPercent } from "../../mobile/lib/gps/trackingService";
+import type { TrackingErrorSource, TrackingErrorState } from "../types/trackingError";
+import { trackingErrorMessage, trackingErrorSource } from "../types/trackingError";
 
 const MAX_WORKDAY_DURATION_MS = FIELD_MAX_WORKDAY_MS;
 const WORKDAY_SYNC_MIN_INTERVAL_MS = 30_000;
@@ -93,6 +95,7 @@ type TrackingContextValue = {
   busy: boolean;
   currentLocation: CurrentLocation | null;
   error: string;
+  errorSource: TrackingErrorSource | null;
   gpsState: GpsState;
   isActive: boolean;
   fieldLocationBlocked: boolean;
@@ -147,7 +150,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(false);
   const mountedRef = useRef(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [trackedError, setTrackedError] = useState<TrackingErrorState>(null);
   const [workdayInactiveBanner, setWorkdayInactiveBanner] = useState<string | null>(null);
   const [workdaySyncStatus, setWorkdaySyncStatus] = useState<WorkdaySyncStatus>("idle");
   const [usingCachedWorkday, setUsingCachedWorkday] = useState(false);
@@ -168,6 +171,18 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
 
   workdayRef.current = workday;
   currentLocationRef.current = currentLocation;
+
+  const clearTrackedError = useCallback((source?: TrackingErrorSource) => {
+    setTrackedError((prev) => {
+      if (!prev) return null;
+      if (source && prev.source !== source) return prev;
+      return null;
+    });
+  }, []);
+
+  const setTrackedErrorFor = useCallback((source: TrackingErrorSource, message: string) => {
+    setTrackedError({ source, message });
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -253,7 +268,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       void resetRouteTrackingState();
       stopGpsTrackingService();
       workdayStartedAtRef.current = null;
-      setError("");
+      setTrackedError(null);
       if (options?.showInactiveBanner) {
         setWorkdayInactiveBanner(WORKDAY_INACTIVE_BANNER_MESSAGE);
       }
@@ -271,7 +286,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     setLastSyncTime(null);
     setPendingSyncCount(0);
     setGpsState("unknown");
-    setError("");
+    setTrackedError(null);
     setWorkdayInactiveBanner(null);
     syncInFlightRef.current = false;
     void resetRouteTrackingState();
@@ -394,15 +409,15 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      setError("");
+      setTrackedError(null);
       await syncWorkdayFromServer({ force: true });
     } catch {
-      setError(TRACKING_LOAD_ERROR);
+      setTrackedErrorFor("sync", TRACKING_LOAD_ERROR);
       if (isWorkdayActive(workdayRef.current)) {
         setWorkdaySyncStatus("connecting");
       }
     }
-  }, [syncWorkdayFromServer, workdayApiReady]);
+  }, [syncWorkdayFromServer, setTrackedErrorFor, workdayApiReady]);
 
   const applyLastQueuedLocation = useCallback((payload: LocationPushPayload) => {
     if (!mountedRef.current) return;
@@ -413,8 +428,9 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       accuracy: payload.accuracy ?? null
     });
     setLastSyncTime(payload.captured_at || payload.recorded_at || null);
-    setError("");
-  }, []);
+    clearTrackedError("tracking");
+    clearTrackedError("sync");
+  }, [clearTrackedError]);
 
   const flushPendingLocationQueue = useCallback(async () => {
     if (!isWorkdayActive(workdayRef.current) && !isWorkdayActive(workday)) {
@@ -569,7 +585,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       try {
         result = await getForegroundLocation();
       } catch {
-        setError(TRACKING_SYNC_ERROR);
+        setTrackedErrorFor("sync", TRACKING_SYNC_ERROR);
         return;
       }
 
@@ -587,20 +603,21 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
 
         setGpsState("denied");
         await sendTrackingHeartbeat({ gpsEnabledHint: false }).catch(() => undefined);
-        setError(result.message ?? TRACKING_SYNC_ERROR);
+        setTrackedErrorFor("tracking", TRACKING_SIGNAL_LOST);
         return;
       }
 
       try {
         await pushCapturedLocation(result.location);
-        setError("");
+        clearTrackedError("tracking");
+        clearTrackedError("sync");
       } catch (err) {
         const message = err instanceof Error ? err.message : "";
         if (isWorkdayInactiveMessage(message)) {
           clearWorkdayState({ showInactiveBanner: /auto-ended|9 hours/i.test(message) });
           return;
         }
-        setError(TRACKING_SYNC_ERROR);
+        setTrackedErrorFor("sync", TRACKING_SYNC_ERROR);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
@@ -608,11 +625,11 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
         clearWorkdayState({ showInactiveBanner: /auto-ended|9 hours/i.test(message) });
         return;
       }
-      setError(TRACKING_SYNC_ERROR);
+      setTrackedErrorFor("sync", TRACKING_SYNC_ERROR);
     } finally {
       syncInFlightRef.current = false;
     }
-  }, [clearWorkdayState, enforceMaxWorkdayDuration, flushPendingLocationQueue, isWorkBlocked, pushCapturedLocation, workday]);
+  }, [clearWorkdayState, enforceMaxWorkdayDuration, flushPendingLocationQueue, isWorkBlocked, pushCapturedLocation, setTrackedErrorFor, clearTrackedError, workday]);
 
   const scheduleForegroundSync = useCallback(() => {
     stopForegroundLoop();
@@ -671,7 +688,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   const startDay = useCallback(async (): Promise<boolean> => {
     setBusy(true);
     try {
-      setError("");
+      setTrackedError(null);
 
       if (isWorkdayActive(workdayRef.current)) {
         await syncWorkdayFromServer({ force: true });
@@ -706,7 +723,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
           );
         } else if (started.reason === "api") {
           const message = started.message || TRACKING_SYNC_ERROR;
-          setError(message);
+          setTrackedErrorFor("start_workday", message);
           Alert.alert("Unable to start work", message);
         }
         return false;
@@ -786,7 +803,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
             : err instanceof Error && err.message.trim()
               ? err.message
               : TRACKING_SYNC_ERROR;
-      setError(message);
+      setTrackedErrorFor("start_workday", message);
       Alert.alert("Unable to start work", message);
       return false;
     } finally {
@@ -803,6 +820,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     startForegroundLoop,
     stopForegroundLoop,
     resumeActiveWorkdayTracking,
+    setTrackedErrorFor,
     syncWorkdayFromServer
   ]);
 
@@ -866,11 +884,11 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
         clearWorkdayState({ showInactiveBanner: true });
         return;
       }
-      setError(TRACKING_SYNC_ERROR);
+      setTrackedErrorFor("end_workday", TRACKING_SYNC_ERROR);
     } finally {
       setBusy(false);
     }
-  }, [clearWorkdayState, flushPendingLocationQueue, stopAllTrackingLoops]);
+  }, [clearWorkdayState, flushPendingLocationQueue, setTrackedErrorFor, stopAllTrackingLoops]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1017,7 +1035,8 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       busy,
       currentLocation,
       elapsedDuration: formatElapsedDuration(startedAt, elapsedNow),
-      error,
+      error: trackingErrorMessage(trackedError),
+      errorSource: trackingErrorSource(trackedError),
       gpsState,
       isActive: isWorkdayActive(workday),
       fieldLocationBlocked: isWorkdayActive(workday) && gpsState === "denied",
@@ -1044,7 +1063,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       busy,
       currentLocation,
       elapsedNow,
-      error,
+      trackedError,
       gpsState,
       lastSyncTime,
       loading,

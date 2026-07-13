@@ -7,6 +7,7 @@ import {
   readLocationReadiness,
   type LocationReadiness
 } from "../../../src/utils/workdayLocationGate";
+import type { TrackingErrorSource } from "../../../src/types/trackingError";
 import { PrimaryButton, GhostButton } from "../ui";
 import { Colors, FontSize, FontWeight, Layout, Radius, Semantic, Spacing, TextStyles } from "../../lib/theme";
 
@@ -17,6 +18,7 @@ type Props = {
   /** Overrides default starting label (e.g. Getting your location…). */
   startingLabel?: string | null;
   error?: string | null;
+  errorSource?: TrackingErrorSource | null;
   onDismissError?: () => void;
   timerDisplay: string;
   startedAtLabel?: string | null;
@@ -93,6 +95,7 @@ export function WorkdayStartPanel({
   starting = false,
   startingLabel,
   error,
+  errorSource,
   onDismissError,
   timerDisplay,
   startedAtLabel,
@@ -233,7 +236,15 @@ export function WorkdayStartPanel({
       {error ? (
         <View style={styles.errorBanner} accessibilityLiveRegion="polite">
           <View style={styles.errorCopy}>
-            <Text style={styles.errorTitle}>{t("workdayUx.couldNotEnd")}</Text>
+            <Text style={styles.errorTitle}>
+              {errorSource === "end_workday"
+                ? t("workdayUx.couldNotEnd")
+                : errorSource === "tracking"
+                  ? t("workdayUx.locationSignalTitle")
+                  : errorSource === "sync"
+                    ? t("workdayUx.syncIssueTitle")
+                    : t("workdayUx.couldNotStart")}
+            </Text>
             <Text style={styles.errorBody}>{error}</Text>
           </View>
           {onDismissError ? (

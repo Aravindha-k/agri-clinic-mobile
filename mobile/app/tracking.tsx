@@ -20,6 +20,7 @@ import { useTabBarBottomInset } from "../../src/hooks/useTabBarBottomInset";
 import { useI18n } from "../../src/i18n/I18nContext";
 import { useOfflineSync } from "../../src/storage/OfflineSyncContext";
 import { useTracking } from "../../src/storage/TrackingContext";
+import type { TrackingErrorSource } from "../../src/types/trackingError";
 import { ensureLocationForWorkdayStart } from "../../src/utils/workdayLocationGate";
 import { navigateMyLocation } from "../../src/navigation/rootNavigationRef";
 import { workdayStartGateCopy } from "../../src/utils/workdayStartCopy";
@@ -83,6 +84,7 @@ function TrackingWorkspaceScreenInner() {
     startedAt: trackingStartedAt,
     busy,
     error: trackingError,
+    errorSource: trackingErrorSource,
     startDay,
     workday,
     refreshTracking,
@@ -96,6 +98,7 @@ function TrackingWorkspaceScreenInner() {
   const [startPhase, setStartPhase] = useState<"idle" | "location" | "starting">("idle");
   const [gateError, setGateError] = useState<string | null>(null);
   const [dismissedError, setDismissedError] = useState("");
+  const [dismissedErrorSource, setDismissedErrorSource] = useState<TrackingErrorSource | null>(null);
   const [distanceKm, setDistanceKm] = useState(0);
   const [workdayId, setWorkdayId] = useState<number | undefined>();
   const [visitsToday, setVisitsToday] = useState(0);
@@ -250,8 +253,24 @@ function TrackingWorkspaceScreenInner() {
     void Linking.openURL(getExpoBuildUrl()).catch(() => undefined);
   }
 
-  const visibleTrackingError =
-    gateError || (trackingError && trackingError !== dismissedError ? trackingError : null);
+  const visibleTrackingError = (() => {
+    if (gateError) {
+      return { message: gateError, source: "start_workday" as const };
+    }
+    if (!trackingError) {
+      return null;
+    }
+    if (trackingError === dismissedError && trackingErrorSource === dismissedErrorSource) {
+      return null;
+    }
+    if (!isActive && trackingErrorSource && trackingErrorSource !== "start_workday") {
+      return null;
+    }
+    if (isActive && trackingErrorSource === "start_workday") {
+      return null;
+    }
+    return { message: trackingError, source: trackingErrorSource };
+  })();
   const displayDistanceKm = distanceKm || cachedDistanceKm || 0;
 
   return (
@@ -294,10 +313,12 @@ function TrackingWorkspaceScreenInner() {
                   ? t("workdayUx.startingWorkday")
                   : null
             }
-            error={visibleTrackingError}
+            error={visibleTrackingError?.message ?? null}
+            errorSource={visibleTrackingError?.source ?? null}
             onDismissError={() => {
               setGateError(null);
               setDismissedError(trackingError || "");
+              setDismissedErrorSource(trackingErrorSource);
             }}
             timerDisplay={workdayTimer.display}
             startedAtLabel={formatStartedTime(startedAt)}

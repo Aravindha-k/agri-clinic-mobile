@@ -391,6 +391,8 @@ export const en = {
     pendingSync: "Pending sync",
     couldNotStart: "Could not start workday",
     couldNotEnd: "Could not end workday",
+    locationSignalTitle: "Location signal",
+    syncIssueTitle: "Sync issue",
     locationTimeout: "We could not get your location. Move to an open area and try again.",
     permissionBody: "Location permission is required to start your workday.",
     permissionBlockedBody:

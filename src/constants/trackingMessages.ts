@@ -2,3 +2,7 @@
 export const TRACKING_SYNC_ERROR = "Unable to sync tracking right now. Please try again.";
 
 export const TRACKING_LOAD_ERROR = "Unable to load tracking status. Pull to refresh and try again.";
+
+/** Active workday — transient GPS / permission loss during foreground sync. */
+export const TRACKING_SIGNAL_LOST =
+  "Location signal lost. Tracking will resume automatically.";

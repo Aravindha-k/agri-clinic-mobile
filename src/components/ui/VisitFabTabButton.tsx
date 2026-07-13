@@ -12,7 +12,7 @@ import { useI18n } from "../../i18n/I18nContext";
 import { navigateToVisitFlow } from "../../navigation/navigateVisitFlow";
 import { useActiveWorkday } from "../../hooks/useActiveWorkday";
 import { useTracking } from "../../storage/TrackingContext";
-import { requestGpsForFieldWork } from "../../utils/locationRequiredModal";
+import { requestGpsForFieldWork, requestVisitLocationAccess } from "../../utils/locationRequiredModal";
 import { hasValidMapCoords, parseMapCoord } from "../../utils/mapCoords";
 import { FAB_RISE_ABOVE_BAR, FAB_SIZE } from "../../theme/tabBar";
 import { LucideGlyph } from "../../../mobile/components/ui/AppIcon";
@@ -47,6 +47,7 @@ export function VisitFabTabButton({
   const { isActive } = useActiveWorkday();
   const { startDay, busy, currentLocation } = useTracking();
   const workdaySheetRef = useRef<WorkdayRequiredSheetRef>(null);
+  const visitGateRef = useRef(false);
   const fabRotate = useRef(new Animated.Value(0)).current;
   const pressScale = useRef(new Animated.Value(1)).current;
   const glowPulse = useRef(new Animated.Value(0)).current;
@@ -136,17 +137,25 @@ export function VisitFabTabButton({
   }, [navigation]);
 
   const handlePress = useCallback(() => {
+    if (visitGateRef.current) return;
+    visitGateRef.current = true;
     void (async () => {
       try {
-        const allowed = await requestGpsForFieldWork(gpsRequestOptions);
-        if (!allowed) return;
-        if (isActive) {
-          openNewVisit();
+        if (!isActive) {
+          workdaySheetRef.current?.open();
           return;
         }
-        workdaySheetRef.current?.open();
+
+        const allowed = await requestVisitLocationAccess({
+          workdayActive: true,
+          ...gpsRequestOptions
+        });
+        if (!allowed) return;
+        openNewVisit();
       } catch {
         /* GPS / navigation errors stay in-app */
+      } finally {
+        visitGateRef.current = false;
       }
     })();
   }, [gpsRequestOptions, isActive, openNewVisit]);

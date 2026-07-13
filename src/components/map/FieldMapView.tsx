@@ -165,10 +165,9 @@ export function FieldMapView({
     if (!mapsNativeConfigured) return false;
     if (errorMessage) return false;
     if (!permissionResolved || loading) return false;
-    if (locationDenied) return false;
+    if (locationDenied && !hasRenderableCoordinates) return false;
     if (!hasValidMapCoords(safeRegion.latitude, safeRegion.longitude)) return false;
     if (!hasRenderableCoordinates) return false;
-    if (showsUserLocation && !locationGranted) return false;
     return true;
   }, [
     errorMessage,

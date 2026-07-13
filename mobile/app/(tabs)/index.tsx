@@ -49,6 +49,7 @@ import { useSyncStore } from "../../lib/store/syncStore";
 import { useScreenTopEdges } from "../../hooks/useScreenTopEdges";
 import { Colors, Layout, Spacing } from "../../lib/theme";
 import { TODAY_SECTION_GAP } from "../../lib/todayLayout";
+import type { TrackingErrorSource } from "../../../src/types/trackingError";
 import type { DashboardData, MobileWorkStatus } from "../../lib/types";
 
 function greetingKey(hour: number) {
@@ -82,6 +83,7 @@ export default function TodayTabScreen() {
     startDay,
     busy,
     error: trackingError,
+    errorSource: trackingErrorSource,
     refreshTracking,
     currentLocation
   } = useTracking();
@@ -96,6 +98,7 @@ export default function TodayTabScreen() {
   const [startPhase, setStartPhase] = useState<"idle" | "location" | "starting">("idle");
   const [gateError, setGateError] = useState<string | null>(null);
   const [dismissedError, setDismissedError] = useState("");
+  const [dismissedErrorSource, setDismissedErrorSource] = useState<TrackingErrorSource | null>(null);
   const dashboardRef = useRef<DashboardData | null>(null);
   dashboardRef.current = dashboard;
   const entranceTick = useScreenEntrance();
@@ -212,8 +215,27 @@ export default function TodayTabScreen() {
     await Promise.all([loadAll(true), refreshTracking().catch(() => undefined)]);
   }
 
-  const visibleTrackingError =
-    gateError || (trackingError && trackingError !== dismissedError ? trackingError : null);
+  const visibleTrackingError = (() => {
+    if (gateError) {
+      return { message: gateError, source: "start_workday" as const };
+    }
+    if (!trackingError) {
+      return null;
+    }
+    if (trackingError === dismissedError && trackingErrorSource === dismissedErrorSource) {
+      return null;
+    }
+    if (!workActive && trackingErrorSource && trackingErrorSource !== "start_workday") {
+      return null;
+    }
+    if (workActive && trackingErrorSource === "start_workday") {
+      return null;
+    }
+    if (workActive && trackingErrorSource === "end_workday") {
+      return null;
+    }
+    return { message: trackingError, source: trackingErrorSource };
+  })();
 
   function confirmStartWorkday() {
     if (busy || starting) return;
@@ -329,10 +351,12 @@ export default function TodayTabScreen() {
                         ? t("workdayUx.startingWorkday")
                         : null
                   }
-                  error={visibleTrackingError}
+                  error={visibleTrackingError?.message ?? null}
+                  errorSource={visibleTrackingError?.source ?? null}
                   onDismissError={() => {
                     setGateError(null);
                     setDismissedError(trackingError || "");
+                    setDismissedErrorSource(trackingErrorSource);
                   }}
                   timerDisplay=""
                   onStart={confirmStartWorkday}

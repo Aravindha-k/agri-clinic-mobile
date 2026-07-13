@@ -5,10 +5,6 @@ import { hasValidMapCoords } from "./mapCoords";
 import { isGpsAvailable, probeGpsAvailability } from "./gpsStatus";
 
 const TITLE = "Location Required";
-const MESSAGE =
-  "Enable location to start your workday and capture field visits.";
-const ENABLE = "Enable Location";
-const NOT_NOW = "Not Now";
 
 export type FieldGpsRequestOptions = {
   /** When workday is active and tracking already has a fix, skip re-probing. */
@@ -16,25 +12,18 @@ export type FieldGpsRequestOptions = {
   activeFix?: { latitude: number; longitude: number } | null;
 };
 
-export function showLocationRequiredModal(onEnable?: () => void) {
-  Alert.alert(TITLE, MESSAGE, [
-    { text: NOT_NOW, style: "cancel" },
-    {
-      text: ENABLE,
-      onPress: () => {
-        if (onEnable) {
-          void onEnable();
-          return;
-        }
-        // Re-request in-app permission — never auto-open Android Settings.
-        void ensureForegroundPermission().catch(() => undefined);
-      }
-    }
-  ]);
-}
+export type VisitLocationGateOptions = FieldGpsRequestOptions & {
+  workdayActive: boolean;
+};
 
-const GPS_OFF_MESSAGE =
-  "Turn on device location (GPS) in your phone settings to continue field work.";
+const WORKDAY_INACTIVE_MESSAGE = "Start your workday before recording a visit.";
+const VISIT_PERMISSION_MESSAGE = "Allow location access to capture the visit location.";
+const VISIT_GPS_OFF_MESSAGE = "Turn on device location to capture the visit location.";
+const WORKDAY_PERMISSION_MESSAGE = "Allow location access to start your workday.";
+const WORKDAY_GPS_OFF_MESSAGE = "Turn on device location to start your workday.";
+
+let visitGateInFlight = false;
+let fieldWorkGateInFlight = false;
 
 function hasTrustedActiveFix(options?: FieldGpsRequestOptions): boolean {
   if (!options?.trustActiveWorkdayFix || !options.activeFix) {
@@ -44,10 +33,65 @@ function hasTrustedActiveFix(options?: FieldGpsRequestOptions): boolean {
   return hasValidMapCoords(latitude, longitude);
 }
 
-/** Foreground GPS only — never re-prompts for background permission on visits. */
+function showInlineAlert(message: string) {
+  Alert.alert(TITLE, message, [{ text: "OK", style: "default" }]);
+}
+
+/** Foreground GPS for starting workday — workday-specific copy. */
 export async function requestGpsForFieldWork(
   options?: FieldGpsRequestOptions
 ): Promise<boolean> {
+  if (fieldWorkGateInFlight) {
+    return false;
+  }
+  fieldWorkGateInFlight = true;
+  try {
+    return await resolveFieldLocationAccess({
+      permissionMessage: WORKDAY_PERMISSION_MESSAGE,
+      gpsOffMessage: WORKDAY_GPS_OFF_MESSAGE,
+      options
+    });
+  } finally {
+    fieldWorkGateInFlight = false;
+  }
+}
+
+/**
+ * Visit FAB location gate — workday must already be active; context-specific messages.
+ * Never auto-opens Android Settings.
+ */
+export async function requestVisitLocationAccess(
+  options: VisitLocationGateOptions
+): Promise<boolean> {
+  if (visitGateInFlight) {
+    return false;
+  }
+  visitGateInFlight = true;
+  try {
+    if (!options.workdayActive) {
+      showInlineAlert(WORKDAY_INACTIVE_MESSAGE);
+      return false;
+    }
+
+    return await resolveFieldLocationAccess({
+      permissionMessage: VISIT_PERMISSION_MESSAGE,
+      gpsOffMessage: VISIT_GPS_OFF_MESSAGE,
+      options
+    });
+  } finally {
+    visitGateInFlight = false;
+  }
+}
+
+async function resolveFieldLocationAccess({
+  permissionMessage,
+  gpsOffMessage,
+  options
+}: {
+  permissionMessage: string;
+  gpsOffMessage: string;
+  options?: FieldGpsRequestOptions;
+}): Promise<boolean> {
   try {
     if (hasTrustedActiveFix(options)) {
       return true;
@@ -67,7 +111,7 @@ export async function requestGpsForFieldWork(
       if (isGpsAvailable(availability)) {
         return true;
       }
-      Alert.alert(TITLE, GPS_OFF_MESSAGE);
+      showInlineAlert(gpsOffMessage);
       return false;
     }
 
@@ -77,10 +121,10 @@ export async function requestGpsForFieldWork(
         return true;
       }
       if (permission.message?.includes("GPS is turned off")) {
-        Alert.alert(TITLE, GPS_OFF_MESSAGE);
+        showInlineAlert(gpsOffMessage);
         return false;
       }
-      showLocationRequiredModal();
+      showInlineAlert(permissionMessage);
       return false;
     }
 
@@ -90,13 +134,19 @@ export async function requestGpsForFieldWork(
     }
 
     if (permission.message?.includes("GPS is turned off")) {
-      Alert.alert(TITLE, GPS_OFF_MESSAGE);
+      showInlineAlert(gpsOffMessage);
       return false;
     }
 
-    showLocationRequiredModal();
+    showInlineAlert(permissionMessage);
     return false;
   } catch {
     return false;
   }
+}
+
+/** @deprecated Use requestVisitLocationAccess or requestGpsForFieldWork. */
+export function showLocationRequiredModal(onEnable?: () => void) {
+  void onEnable;
+  showInlineAlert(WORKDAY_PERMISSION_MESSAGE);
 }

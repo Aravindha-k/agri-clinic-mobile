@@ -163,34 +163,70 @@ for (const name of ["hydration_chime.wav"]) {
 }
 console.log("[ensure-android-release-config] synced notification sounds");
 
-const APP_BG = "#FAF9F6";
-const stylesPath = resolve(androidDir, "app/src/main/res/values/styles.xml");
-if (existsSync(stylesPath)) {
-  let styles = readFileSync(stylesPath, "utf8");
-  const navItems = [
-    `<item name="android:navigationBarColor">${APP_BG}</item>`,
-    `<item name="android:windowBackground">${APP_BG}</item>`,
-    `<item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item>`
-  ];
-  for (const item of navItems) {
-    const key = item.match(/name="([^"]+)"/)?.[1];
-    if (key && styles.includes(key)) continue;
-    styles = styles.replace(/<\/style>\s*\n\s*<style name="Theme\.App\.SplashScreen"/, `${item}\n  </style>\n  <style name="Theme.App.SplashScreen"`);
-    if (!styles.includes(key)) {
-      styles = styles.replace(
-        /<style name="AppTheme" parent="[^"]+">/,
-        (match) => `${match}\n    ${item}`
-      );
-    }
+const NATIVE_LAUNCH_BG = "#0B3D2E";
+const resDir = resolve(androidDir, "app/src/main/res");
+const colorsPath = resolve(resDir, "values/colors.xml");
+if (existsSync(colorsPath)) {
+  let colors = readFileSync(colorsPath, "utf8");
+  colors = colors.replace(
+    /<color name="splashscreen_background">[^<]*<\/color>/,
+    `<color name="splashscreen_background">${NATIVE_LAUNCH_BG}</color>`
+  );
+  if (!colors.includes("splashscreen_background")) {
+    colors = colors.replace(
+      "<resources>",
+      `<resources>\n  <color name="splashscreen_background">${NATIVE_LAUNCH_BG}</color>`
+    );
   }
-  writeFileSync(stylesPath, styles);
-  console.log("[ensure-android-release-config] patched AppTheme navigation/window background");
+  writeFileSync(colorsPath, colors);
+  console.log("[ensure-android-release-config] patched splashscreen_background color");
 }
+
+const stylesPath = resolve(resDir, "values/styles.xml");
+if (existsSync(stylesPath)) {
+  const styles = `<resources xmlns:tools="http://schemas.android.com/tools">
+  <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item>
+    <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
+    <item name="colorPrimary">@color/colorPrimary</item>
+    <item name="android:statusBarColor">@color/splashscreen_background</item>
+    <item name="android:navigationBarColor">@color/splashscreen_background</item>
+    <item name="android:windowBackground">@color/splashscreen_background</item>
+  </style>
+  <style name="Theme.App.SplashScreen" parent="Theme.SplashScreen">
+    <item name="windowSplashScreenBackground">@color/splashscreen_background</item>
+    <item name="windowSplashScreenAnimatedIcon">@drawable/splashscreen_icon</item>
+    <item name="windowSplashScreenIconBackgroundColor">@color/splashscreen_background</item>
+    <item name="postSplashScreenTheme">@style/AppTheme</item>
+    <item name="android:windowSplashScreenBehavior">icon_preferred</item>
+  </style>
+</resources>
+`;
+  writeFileSync(stylesPath, styles);
+  console.log("[ensure-android-release-config] patched native launch Theme.App.SplashScreen");
+}
+
+const stylesV31Dir = resolve(resDir, "values-v31");
+mkdirSync(stylesV31Dir, { recursive: true });
+writeFileSync(
+  resolve(stylesV31Dir, "styles.xml"),
+  `<resources>
+  <style name="Theme.App.SplashScreen" parent="Theme.SplashScreen">
+    <item name="windowSplashScreenBackground">@color/splashscreen_background</item>
+    <item name="windowSplashScreenAnimatedIcon">@drawable/splashscreen_icon</item>
+    <item name="windowSplashScreenIconBackgroundColor">@color/splashscreen_background</item>
+    <item name="android:windowSplashScreenAnimationDuration">0</item>
+    <item name="postSplashScreenTheme">@style/AppTheme</item>
+  </style>
+</resources>
+`
+);
+console.log("[ensure-android-release-config] wrote values-v31 splash overrides");
 
 const splashScript = resolve(ROOT, "scripts/generate-splash-logo.mjs");
 if (existsSync(splashScript)) {
   execSync(`node "${splashScript}"`, { stdio: "inherit", cwd: ROOT });
-  console.log("[ensure-android-release-config] generated splashscreen_logo drawables");
+  console.log("[ensure-android-release-config] generated transparent native splash drawables");
 }
 
 const launcherBgPath = resolve(androidDir, "app/src/main/res/drawable/ic_launcher_background.xml");

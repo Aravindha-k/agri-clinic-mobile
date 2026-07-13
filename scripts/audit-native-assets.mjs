@@ -75,8 +75,11 @@ const styles = read("android/app/src/main/res/values/styles.xml") ?? "";
 if (styles.includes("Theme.App.SplashScreen")) pass("styles.xml Theme.App.SplashScreen");
 else fail("styles.xml missing Theme.App.SplashScreen");
 
-if (styles.includes("splashscreen_logo")) pass("styles.xml references splashscreen_logo");
-else fail("styles.xml missing splashscreen_logo drawable");
+if (styles.includes("splashscreen_icon") || styles.includes("splashscreen_logo")) {
+  pass("styles.xml references native splash drawable");
+} else {
+  fail("styles.xml missing splashscreen_icon drawable");
+}
 
 const colors = read("android/app/src/main/res/values/colors.xml") ?? "";
 if (colors.includes("splashscreen_background")) pass("colors.xml splashscreen_background");
@@ -90,15 +93,10 @@ const appConfig = read("app.config.js") ?? "";
 if (appConfig.includes("expo-splash-screen")) pass("app.config.js expo-splash-screen plugin");
 else fail("app.config.js missing expo-splash-screen plugin");
 
-if (
-  appConfig.includes("logo.png") ||
-  appConfig.includes("logoAsset") ||
-  appConfig.includes("splashImageAsset") ||
-  appConfig.includes("logo_splash.png")
-) {
-  pass("app.config.js splash image configured");
+if (appConfig.includes("nativeSplashBackgroundColor") || appConfig.includes("expo-splash-screen")) {
+  pass("app.config.js native splash configured");
 } else {
-  fail("app.config.js splash image not configured");
+  fail("app.config.js native splash not configured");
 }
 
 console.log("=== Native splash / icon asset audit ===\n");

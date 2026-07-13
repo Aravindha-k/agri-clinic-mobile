@@ -13,6 +13,8 @@ module.exports = {
   loaderSubtitle: "Diagnostics • Solutions • Growth",
   employeeHint: "For field employees only",
   splashBackgroundColor: "#D8ECF8",
+  /** Android / Expo native launch screen — solid emerald, no logo. */
+  nativeSplashBackgroundColor: "#0B3D2E",
   /** Native + cinematic first-frame logo (centered on splash background). */
   splashImageAsset: "./assets/brand/logo_splash.png",
   /** Premium splash visible duration (ms) incl. crossfade. */

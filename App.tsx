@@ -5,7 +5,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { KavyaCinematicSplash } from "./src/components/brand/KavyaCinematicSplash";
 import { SPLASH_ASSETS } from "./src/components/brand/splashAssets";
-import { CINEMATIC_SPLASH_BG } from "./src/components/brand/splashColors";
+import { NATIVE_LAUNCH_BG } from "./src/components/brand/splashColors";
 import { hideNativeSplashSafe, holdNativeSplash } from "./src/bootstrap/nativeSplash";
 import { onSplashReplayRequested } from "./src/bootstrap/splashReplay";
 import { logStartup, logStartupError } from "./src/utils/startupDiagnostics";
@@ -95,7 +95,7 @@ export default function App() {
   const showShell = Providers != null || bootError != null;
   /** Keep providers mounted for auth/fonts, but hide until exit fade so login cannot flash under splash. */
   const shellVisible = phase === "revealing" || phase === "app";
-  const rootBg = showSplash ? CINEMATIC_SPLASH_BG : APP_BG;
+  const rootBg = showSplash ? NATIVE_LAUNCH_BG : APP_BG;
 
   return (
     <GestureHandlerRootView style={[styles.root, { backgroundColor: rootBg }]}>
@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
   },
   splashOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: CINEMATIC_SPLASH_BG,
+    backgroundColor: NATIVE_LAUNCH_BG,
     elevation: Platform.OS === "android" ? 1000 : 0,
     zIndex: 1000
   }

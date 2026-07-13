@@ -28,11 +28,26 @@ const isProductionEnv =
 const allowCleartext =
   process.env.EXPO_PUBLIC_ALLOW_CLEARTEXT === "1" || !isProductionEnv;
 
-const mapStyleUrl =
-  process.env.EXPO_PUBLIC_MAP_STYLE_URL?.trim() ||
-  process.env.EXPO_PUBLIC_MAP_STYLE_URL_STAGING?.trim() ||
-  process.env.EXPO_PUBLIC_MAP_STYLE_URL_DEV?.trim() ||
-  "";
+const googleMapsAndroidApiKey = process.env.GOOGLE_MAPS_ANDROID_API_KEY?.trim() || "";
+
+const isCiOrReleaseAndroidBuild =
+  process.env.GITHUB_ACTIONS === "true" ||
+  process.env.EAS_BUILD === "true" ||
+  isProductionEnv ||
+  process.env.REQUIRE_GOOGLE_MAPS_ANDROID_API_KEY === "1";
+
+if (isCiOrReleaseAndroidBuild && !googleMapsAndroidApiKey) {
+  throw new Error(
+    "GOOGLE_MAPS_ANDROID_API_KEY is required for Android APK builds. " +
+      "Add it as a GitHub Actions repository secret or in .env.local before prebuild."
+  );
+}
+
+if (!googleMapsAndroidApiKey && process.env.NODE_ENV !== "test") {
+  console.warn(
+    "[app.config] GOOGLE_MAPS_ANDROID_API_KEY is not set — Android map screens will show a fallback message."
+  );
+}
 
 module.exports = () => ({
   name: brand.appName,
@@ -96,7 +111,12 @@ module.exports = () => ({
           data: { scheme: "geo" }
         }
       }
-    ]
+    ],
+    config: {
+      googleMaps: {
+        apiKey: googleMapsAndroidApiKey
+      }
+    }
   },
   web: {
     bundler: "metro"
@@ -138,7 +158,6 @@ module.exports = () => ({
     "@react-native-community/datetimepicker",
     "expo-secure-store",
     "expo-background-task",
-    "@maplibre/maplibre-react-native",
     [
       "expo-notifications",
       {
@@ -153,6 +172,6 @@ module.exports = () => ({
     apiUrl: resolvedApiUrl,
     apiBaseUrl: resolvedApiUrl,
     production: isProductionApi,
-    mapStyleUrl: mapStyleUrl || null
+    mapsNativeConfigured: Boolean(googleMapsAndroidApiKey)
   }
 });

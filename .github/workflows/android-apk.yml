@@ -16,7 +16,7 @@ env:
   EXPO_PUBLIC_ENV: production
   EXPO_PUBLIC_ALLOW_INSECURE_HTTP: "1"
   EXPO_PUBLIC_QA_MODE: "true"
-  EXPO_PUBLIC_MAP_STYLE_URL: https://tiles.openfreemap.org/styles/liberty
+  GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
 
 jobs:
   build-apk:
@@ -61,7 +61,6 @@ jobs:
           EXPO_PUBLIC_API_BASE_URL=http://13.207.17.117/api/v1/
           EXPO_PUBLIC_ENV=production
           EXPO_PUBLIC_ALLOW_INSECURE_HTTP=1
-          EXPO_PUBLIC_MAP_STYLE_URL=https://tiles.openfreemap.org/styles/liberty
           EOF
 
       - name: Install dependencies
@@ -85,14 +84,23 @@ jobs:
       - name: Verify production API config
         run: node scripts/verify-production-api.mjs
 
+      - name: Preflight Google Maps Android API key
+        run: |
+          if [ -z "${GOOGLE_MAPS_ANDROID_API_KEY}" ]; then
+            echo "GOOGLE_MAPS_ANDROID_API_KEY is missing."
+            echo "Add repository secret GOOGLE_MAPS_ANDROID_API_KEY (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          echo "GOOGLE_MAPS_ANDROID_API_KEY is set (value not logged)."
+
       - name: Prebuild Android native project
         run: npx expo prebuild --platform android --clean --no-install
 
       - name: Apply Android release config
         run: node scripts/ensure-android-release-config.mjs
 
-      - name: Verify MapLibre release configuration
-        run: node scripts/verify-maplibre-release.mjs
+      - name: Verify Google Maps Android manifest config
+        run: node scripts/verify-android-maps-config.mjs
 
       - name: Make Gradle wrapper executable
         run: chmod +x android/gradlew
@@ -103,7 +111,6 @@ jobs:
           EXPO_PUBLIC_API_BASE_URL: http://13.207.17.117/api/v1/
           EXPO_PUBLIC_ENV: production
           EXPO_PUBLIC_ALLOW_INSECURE_HTTP: "1"
-          EXPO_PUBLIC_MAP_STYLE_URL: https://tiles.openfreemap.org/styles/liberty
           GRADLE_OPTS: -Dorg.gradle.caching=true -Dorg.gradle.parallel=true
         run: ./gradlew assembleRelease --build-cache --no-daemon --stacktrace
 

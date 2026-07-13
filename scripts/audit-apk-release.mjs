@@ -72,26 +72,19 @@ if (
 }
 
 if (
-  workflow.includes("EXPO_PUBLIC_MAP_STYLE_URL") &&
-  workflow.includes("assembleRelease")
+  workflow.includes("GOOGLE_MAPS_ANDROID_API_KEY") &&
+  workflow.includes("verify-android-maps-config")
 ) {
-  pass("GitHub workflow configures EXPO_PUBLIC_MAP_STYLE_URL + assembleRelease");
+  pass("GitHub workflow configures GOOGLE_MAPS_ANDROID_API_KEY + manifest verify");
 } else {
-  fail("GitHub workflow missing EXPO_PUBLIC_MAP_STYLE_URL or assembleRelease");
+  fail("GitHub workflow missing GOOGLE_MAPS_ANDROID_API_KEY or verify-android-maps-config step");
 }
 
 const appConfig = read("app.config.js") ?? "";
-if (appConfig.includes("@maplibre/maplibre-react-native") && appConfig.includes("mapStyleUrl")) {
-  pass("app.config.js includes MapLibre plugin and mapStyleUrl extra");
+if (appConfig.includes("GOOGLE_MAPS_ANDROID_API_KEY") && appConfig.includes("googleMaps")) {
+  pass("app.config.js reads GOOGLE_MAPS_ANDROID_API_KEY and sets android.config.googleMaps");
 } else {
-  fail("app.config.js missing MapLibre plugin or mapStyleUrl extra");
-}
-
-const pkg = read("package.json") ?? "";
-if (pkg.includes("@maplibre/maplibre-react-native") && !pkg.includes('"react-native-maps"')) {
-  pass("package.json uses MapLibre and removed react-native-maps");
-} else {
-  fail("package.json missing @maplibre/maplibre-react-native or still lists react-native-maps");
+  fail("app.config.js missing GOOGLE_MAPS_ANDROID_API_KEY / android.config.googleMaps");
 }
 
 const endpoints = {

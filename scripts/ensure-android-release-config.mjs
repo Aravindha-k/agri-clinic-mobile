@@ -63,6 +63,32 @@ for (const perm of requiredPerms) {
     manifest = manifest.replace(/(<manifest[^>]*>\n)/, `$1${line}`);
   }
 }
+
+const mapsKey = process.env.GOOGLE_MAPS_ANDROID_API_KEY?.trim() || "";
+const mapsMetaName = "com.google.android.geo.API_KEY";
+const mapsMetaTag = `<meta-data android:name="${mapsMetaName}" android:value="${mapsKey}"/>`;
+
+if (!mapsKey) {
+  console.error(
+    "[ensure-android-release-config] GOOGLE_MAPS_ANDROID_API_KEY is missing — cannot inject Google Maps metadata"
+  );
+  process.exit(1);
+}
+
+if (!manifest.includes(mapsMetaName)) {
+  manifest = manifest.replace(/(<application[^>]*>)/, `$1\n    ${mapsMetaTag}`);
+  console.log("[ensure-android-release-config] injected Google Maps API key metadata");
+} else {
+  manifest = manifest.replace(
+    new RegExp(
+      `<meta-data\\s+android:name="${mapsMetaName}"\\s+android:value="[^"]*"\\s*/>`,
+      "g"
+    ),
+    mapsMetaTag
+  );
+  console.log("[ensure-android-release-config] ensured Google Maps API key metadata");
+}
+
 writeFileSync(manifestPath, manifest);
 console.log("[ensure-android-release-config] patched AndroidManifest.xml");
 

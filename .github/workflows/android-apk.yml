@@ -102,6 +102,9 @@ jobs:
       - name: Verify Google Maps Android manifest config
         run: node scripts/verify-android-maps-config.mjs
 
+      - name: Verify Google Maps release configuration
+        run: node scripts/verify-google-maps-release.mjs
+
       - name: Make Gradle wrapper executable
         run: chmod +x android/gradlew
 

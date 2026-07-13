@@ -1,7 +1,7 @@
 /**
  * Generates production launcher icons from approved KAC Variant A assets.
- * Source: assets/brand/kac/app-icon-1024-solid.png
- *         assets/brand/kac/monogram-transparent.png
+ * Source: assets/brand/kac/app_icon_1024_solid.png
+ *         assets/brand/kac/monogram_transparent.png
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -13,13 +13,13 @@ const root = path.resolve(__dirname, "..");
 
 const EMERALD = "#0B3D2E";
 const KAC_DIR = path.join(root, "assets/brand/kac");
-const SOURCE_SOLID = path.join(KAC_DIR, "app-icon-1024-solid.png");
-const SOURCE_MONOGRAM = path.join(KAC_DIR, "monogram-transparent.png");
+const SOURCE_SOLID = path.join(KAC_DIR, "app_icon_1024_solid.png");
+const SOURCE_MONOGRAM = path.join(KAC_DIR, "monogram_transparent.png");
 
 const OUT_APP_ICON = path.join(root, "assets/brand/app_icon.png");
 const OUT_ADAPTIVE_FG = path.join(root, "assets/brand/adaptive_icon_foreground.png");
-const OUT_ADAPTIVE_BG = path.join(KAC_DIR, "adaptive-icon-background-1024.png");
-const OUT_SVG = path.join(KAC_DIR, "kac-monogram.svg");
+const OUT_ADAPTIVE_BG = path.join(KAC_DIR, "adaptive_icon_background_1024.png");
+const OUT_SVG = path.join(KAC_DIR, "kac_monogram.svg");
 const ANDROID_RES = path.join(root, "android/app/src/main/res");
 
 const LEGACY_SIZES = {

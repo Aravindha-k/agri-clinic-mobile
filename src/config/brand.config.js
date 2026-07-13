@@ -22,6 +22,6 @@ module.exports = {
   iconAsset: "./assets/brand/app_icon.png",
   adaptiveIconAsset: "./assets/brand/adaptive_icon_foreground.png",
   /** Approved KAC prestige icon sources (Variant A). */
-  kacIconSolid: "./assets/brand/kac/app-icon-1024-solid.png",
-  kacMonogramTransparent: "./assets/brand/kac/monogram-transparent.png"
+  kacIconSolid: "./assets/brand/kac/app_icon_1024_solid.png",
+  kacMonogramTransparent: "./assets/brand/kac/monogram_transparent.png"
 };

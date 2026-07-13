@@ -17,8 +17,11 @@ module.exports = {
   splashImageAsset: "./assets/brand/logo_splash.png",
   /** Premium splash visible duration (ms) incl. crossfade. */
   splashDurationMs: 3820,
-  iconBackgroundColor: "#0F5132",
+  iconBackgroundColor: "#0B3D2E",
   logoAsset: "./assets/brand/logo.png",
   iconAsset: "./assets/brand/app_icon.png",
-  adaptiveIconAsset: "./assets/brand/adaptive_icon_foreground.png"
+  adaptiveIconAsset: "./assets/brand/adaptive_icon_foreground.png",
+  /** Approved KAC prestige icon sources (Variant A). */
+  kacIconSolid: "./assets/brand/kac/app-icon-1024-solid.png",
+  kacMonogramTransparent: "./assets/brand/kac/monogram-transparent.png"
 };

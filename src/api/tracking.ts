@@ -251,6 +251,12 @@ export async function ensureActiveWorkday(coords: WorkdayStartCoords): Promise<W
   } catch (error) {
     lastError = error;
     const message = error instanceof Error ? error.message : "";
+    if (error instanceof ApiRequestError && error.status === 409) {
+      const current = await fetchCurrentDuty();
+      if (current.kind === "active") {
+        return current.workday;
+      }
+    }
     if (!isWorkdayAlreadyActiveMessage(message) && !isWorkdayInactiveMessage(message)) {
       await startMobileWorkSession(coords);
     }

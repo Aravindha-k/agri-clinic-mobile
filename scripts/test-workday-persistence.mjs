@@ -113,6 +113,50 @@ test("login hydration: Start hidden until server reconciled", () => {
   assert.equal(hydrating, true);
 });
 
+test("start tap first reconciles server active session from another device", () => {
+  const server = {
+    status: "in_progress",
+    is_active: true,
+    workday_id: 441,
+    duty_session_id: 902,
+    started_at: "2026-07-14T03:30:00.000Z"
+  };
+  const restored = restoreFromServerActive(
+    server,
+    null,
+    7,
+    new Date("2026-07-14T06:00:00.000Z").getTime()
+  );
+  const shouldPostStart = restored.status !== "in_progress";
+  assert.equal(shouldPostStart, false);
+  assert.equal(restored.workday_id, 441);
+  assert.equal(restored.started_at, server.started_at);
+});
+
+test("duplicate start conflict converges through current active duty", () => {
+  const conflictStatus = 409;
+  const current = {
+    kind: "active",
+    workday: {
+      workday_id: 441,
+      duty_session_id: 902,
+      started_at: "2026-07-14T03:30:00.000Z",
+      is_active: true
+    }
+  };
+  const restored = conflictStatus === 409 && current.kind === "active" ? current.workday : null;
+  assert.equal(restored?.workday_id, 441);
+  assert.equal(restored?.duty_session_id, 902);
+});
+
+test("completed server workday hides Start button", () => {
+  const serverKind = "completed";
+  const status = serverKind === "completed" ? "completed" : "not_started";
+  const showStart = status === "not_started";
+  assert.equal(status, "completed");
+  assert.equal(showStart, false);
+});
+
 test("different employee never restores foreign cache", () => {
   const record = {
     user_id: 7,

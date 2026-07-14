@@ -250,6 +250,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   );
 
   const applyWorkday = useCallback((status: WorkdayStatus | null) => {
+    workdayRef.current = status;
     setWorkday(status);
     const serverStart = resolveWorkdayStartedAt(status);
     const userId = resolveSyncUserId();
@@ -305,6 +306,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       markDutyTrackingSessionActive(false);
       void stopBackgroundLocationTracking();
       setWorkday(null);
+      workdayRef.current = null;
       setStartedAt(null);
       setWorkdaySessionStatus("not_started");
       setCompletedDurationMs(0);
@@ -334,6 +336,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       void stopBackgroundLocationTracking();
       stopGpsTrackingService();
       setWorkday(null);
+      workdayRef.current = null;
       setStartedAt(cached.started_at);
       setWorkdaySessionStatus("completed");
       setCompletedDurationMs(cached.total_work_duration_ms ?? 0);
@@ -361,13 +364,15 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       setWorkdaySessionStatus("in_progress");
       setCompletedDurationMs(0);
       markDutyTrackingSessionActive(true);
-      setWorkday({
+      const cachedWorkday = {
         workday_id: cached.workday_id,
         duty_session_id: cached.duty_session_id ?? cached.workday_id,
         is_active: true,
         started_at: resolved,
         start_time: resolved
-      });
+      };
+      workdayRef.current = cachedWorkday;
+      setWorkday(cachedWorkday);
       workdayRestoreLog("workday_timer_started", resolved);
     },
     []
@@ -866,6 +871,8 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     setBusy(true);
     try {
       setTrackedError(null);
+      setWorkdayServerReconciled(false);
+      await syncWorkdayFromServer({ force: true });
 
       const todayRecord = await readTodayWorkdayRecord(resolveSyncUserId());
       if (todayRecord?.status === "completed") {

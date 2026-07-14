@@ -13,12 +13,12 @@ import Svg, { Circle } from "react-native-svg";
 import { logStartup } from "../../utils/startupDiagnostics";
 
 const ORBIT_DURATION_MS = 2800;
-const RING_FADE_MS = 480;
+const RING_FADE_MS = 420;
 
 /** Champagne gold — high contrast on emerald splash. */
 const GOLD = "#E8C872";
-const GOLD_SOFT = "rgba(232, 200, 114, 0.72)";
-const RING_WHITE = "rgba(255, 255, 255, 0.38)";
+const GOLD_SOFT = "rgba(232, 200, 114, 0.86)";
+const RING_WHITE = "rgba(255, 255, 255, 0.48)";
 
 type Props = {
   /** Outer diameter of the orbit stage (must be larger than the logo). */
@@ -48,8 +48,8 @@ export function SplashLogoOrbit({
   const opacity = useSharedValue(0);
   const rotation = useSharedValue(0);
 
-  const ringStroke = useMemo(() => Math.max(1.75, size * 0.014), [size]);
-  const inset = useMemo(() => size * 0.08, [size]);
+  const ringStroke = useMemo(() => Math.max(2, size * 0.015), [size]);
+  const inset = useMemo(() => size * 0.075, [size]);
   const trackR = useMemo(() => size / 2 - inset, [inset, size]);
   const dotSize = useMemo(() => Math.max(8, Math.round(size * 0.06)), [size]);
 
@@ -194,11 +194,11 @@ const styles = StyleSheet.create({
   },
   halo: {
     ...StyleSheet.absoluteFillObject,
-    borderColor: "rgba(232, 200, 114, 0.22)",
+    borderColor: "rgba(232, 200, 114, 0.34)",
     backgroundColor: "transparent"
   },
   dotGlow: {
-    backgroundColor: "rgba(245, 215, 142, 0.35)",
+    backgroundColor: "rgba(245, 215, 142, 0.42)",
     position: "absolute"
   },
   dot: {

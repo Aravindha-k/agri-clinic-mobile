@@ -1,11 +1,12 @@
 /**
- * Generates Android launcher mipmaps from the FINAL approved app icon.
+ * Generates Android launcher mipmaps from the FINAL approved company seal.
  *
  * Source of truth (do not redesign / AI-recreate):
- *   assets/brand/kac/app_icon_1024_approved.png
+ *   assets/brand/logo_splash.png
  *
- * This script only resizes the approved artwork into Expo + Android densities.
- * It must not draw a new monogram, change colors, or alter typography.
+ * This script only recomposes the approved seal larger on the approved emerald
+ * icon background, then resizes that master into Expo + Android densities.
+ * It must not draw a new mark, change colors, or alter typography.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -19,7 +20,8 @@ const EMERALD = "#0B3D2E";
 const EMERALD_RGB = { r: 11, g: 61, b: 46 };
 
 const KAC_DIR = path.join(root, "assets/brand/kac");
-const SOURCE_APPROVED = path.join(KAC_DIR, "app_icon_1024_approved.png");
+const SOURCE_APPROVED = path.join(root, "assets/brand/logo_splash.png");
+const APPROVED_BACKGROUND = path.join(KAC_DIR, "app_icon_1024_approved.png");
 
 const OUT_APP_ICON = path.join(root, "assets/brand/app_icon.png");
 const OUT_APP_ICON_1024 = path.join(KAC_DIR, "app_icon_1024.png");
@@ -28,6 +30,9 @@ const OUT_ADAPTIVE_FG = path.join(root, "assets/brand/adaptive_icon_foreground.p
 const OUT_ADAPTIVE_BG = path.join(KAC_DIR, "adaptive_icon_background_1024.png");
 const OUT_ADAPTIVE_BG_ALIAS = path.join(KAC_DIR, "adaptive_icon_background.png");
 const ANDROID_RES = path.join(root, "android/app/src/main/res");
+
+const MASTER_SIZE = 1024;
+const LOGO_FILL_RATIO = 0.88;
 
 const LEGACY_SIZES = {
   "mipmap-mdpi": 48,
@@ -48,32 +53,53 @@ const FOREGROUND_SIZES = {
 async function ensureApprovedSource() {
   try {
     await fs.access(SOURCE_APPROVED);
+    await fs.access(APPROVED_BACKGROUND);
   } catch {
     throw new Error(
-      `Missing FINAL approved launcher icon: ${SOURCE_APPROVED}\n` +
-        "Place the approved 1024×1024 artwork at that path before running icons:generate."
+      `Missing approved logo/background:\n` +
+        `  logo: ${SOURCE_APPROVED}\n` +
+        `  background: ${APPROVED_BACKGROUND}`
     );
   }
-  const meta = await sharp(SOURCE_APPROVED).metadata();
-  if (!meta.width || !meta.height || meta.width !== meta.height) {
-    throw new Error(`Approved icon must be square. Got ${meta.width}x${meta.height}`);
+
+  const logoMeta = await sharp(SOURCE_APPROVED).metadata();
+  if (!logoMeta.width || !logoMeta.height || logoMeta.width !== logoMeta.height) {
+    throw new Error(`Approved logo must be square. Got ${logoMeta.width}x${logoMeta.height}`);
+  }
+
+  const bgMeta = await sharp(APPROVED_BACKGROUND).metadata();
+  if (bgMeta.width !== MASTER_SIZE || bgMeta.height !== MASTER_SIZE) {
+    throw new Error(
+      `Approved background must be ${MASTER_SIZE}x${MASTER_SIZE}. Got ${bgMeta.width}x${bgMeta.height}`
+    );
   }
 }
 
-/** Exact copy (PNG) into brand + Expo paths — no filter / redesign. */
-async function publishApprovedCopies() {
-  const buf = await fs.readFile(SOURCE_APPROVED);
-  await fs.writeFile(OUT_APP_ICON, buf);
-  await fs.writeFile(OUT_APP_ICON_1024, buf);
-  await fs.writeFile(OUT_APP_ICON_SOLID, buf);
-  await fs.writeFile(OUT_ADAPTIVE_FG, buf);
+async function buildMasterIcon() {
+  const logoSize = Math.round(MASTER_SIZE * LOGO_FILL_RATIO);
+  const logoOffset = Math.round((MASTER_SIZE - logoSize) / 2);
+  const logo = await sharp(SOURCE_APPROVED)
+    .resize(logoSize, logoSize, { fit: "contain", kernel: sharp.kernel.lanczos3 })
+    .png()
+    .toBuffer();
+  const master = await sharp(APPROVED_BACKGROUND)
+    .resize(MASTER_SIZE, MASTER_SIZE, { fit: "cover", kernel: sharp.kernel.lanczos3 })
+    .composite([{ input: logo, left: logoOffset, top: logoOffset }])
+    .png({ compressionLevel: 9 })
+    .toBuffer();
+
+  await fs.writeFile(OUT_APP_ICON, master);
+  await fs.writeFile(OUT_APP_ICON_1024, master);
+  await fs.writeFile(OUT_APP_ICON_SOLID, master);
+  await fs.writeFile(OUT_ADAPTIVE_FG, master);
+  return { logoSize, logoOffset };
 }
 
 async function buildSolidEmeraldBackground() {
   await sharp({
     create: {
-      width: 1024,
-      height: 1024,
+      width: MASTER_SIZE,
+      height: MASTER_SIZE,
       channels: 3,
       background: EMERALD_RGB
     }
@@ -90,20 +116,30 @@ async function writeWebp(inputPath, outputPath, size) {
     .toFile(outputPath);
 }
 
+async function cleanAndroidLauncherResources() {
+  const files = ["ic_launcher.webp", "ic_launcher_round.webp", "ic_launcher_foreground.webp"];
+  for (const folder of new Set([...Object.keys(LEGACY_SIZES), ...Object.keys(FOREGROUND_SIZES)])) {
+    const dir = path.join(ANDROID_RES, folder);
+    for (const file of files) {
+      await fs.rm(path.join(dir, file), { force: true }).catch(() => undefined);
+    }
+  }
+}
+
 async function writeAndroidMipmaps() {
+  await cleanAndroidLauncherResources();
+
   for (const [folder, size] of Object.entries(LEGACY_SIZES)) {
     const dir = path.join(ANDROID_RES, folder);
     await fs.mkdir(dir, { recursive: true });
-    // Legacy launchers: approved artwork exactly (resized only).
-    await writeWebp(SOURCE_APPROVED, path.join(dir, "ic_launcher.webp"), size);
-    await writeWebp(SOURCE_APPROVED, path.join(dir, "ic_launcher_round.webp"), size);
+    await writeWebp(OUT_APP_ICON_1024, path.join(dir, "ic_launcher.webp"), size);
+    await writeWebp(OUT_APP_ICON_1024, path.join(dir, "ic_launcher_round.webp"), size);
   }
 
   for (const [folder, size] of Object.entries(FOREGROUND_SIZES)) {
     const dir = path.join(ANDROID_RES, folder);
     await fs.mkdir(dir, { recursive: true });
-    // Adaptive foreground: same approved artwork (resized only).
-    await writeWebp(SOURCE_APPROVED, path.join(dir, "ic_launcher_foreground.webp"), size);
+    await writeWebp(OUT_ADAPTIVE_FG, path.join(dir, "ic_launcher_foreground.webp"), size);
   }
 }
 
@@ -142,19 +178,22 @@ async function assertNoWhiteCornersOnLegacy() {
       throw new Error(`Legacy launcher still has white corner at ${x},${y} rgb(${r},${g},${b})`);
     }
   }
-  console.log(`  legacy corner check OK (emerald field, not white)`);
+  console.log("  legacy corner check OK (emerald field, not white)");
 }
 
 async function main() {
   await ensureApprovedSource();
-  await publishApprovedCopies();
+  const composition = await buildMasterIcon();
   await buildSolidEmeraldBackground();
   await writeAndroidMipmaps();
   await assertAdaptiveXml();
   await assertNoWhiteCornersOnLegacy();
 
-  console.log("FINAL approved launcher icon shipped (resize only):");
+  console.log("FINAL approved launcher icon shipped (approved logo, larger composition):");
   console.log(`  source: ${path.relative(root, SOURCE_APPROVED)}`);
+  console.log(`  approved background: ${path.relative(root, APPROVED_BACKGROUND)}`);
+  console.log(`  logo size: ${composition.logoSize}px (${Math.round(LOGO_FILL_RATIO * 100)}%)`);
+  console.log(`  safe margin: ${composition.logoOffset}px`);
   console.log(`  ${path.relative(root, OUT_APP_ICON)}`);
   console.log(`  ${path.relative(root, OUT_ADAPTIVE_FG)}`);
   console.log(`  adaptive background: ${EMERALD}`);

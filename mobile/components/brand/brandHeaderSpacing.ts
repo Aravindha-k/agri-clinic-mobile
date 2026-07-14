@@ -29,6 +29,6 @@ export const BRAND_LOGO_FILL = 0.98;
 export const BRAND_LOGO_COVER_SCALE = 1.12;
 
 /** Gentle zoom in / out on the hero logo mark. */
-export const BRAND_LOGO_ZOOM_MIN = 0.94;
-export const BRAND_LOGO_ZOOM_MAX = 1.06;
-export const BRAND_LOGO_ZOOM_MS = 2600;
+export const BRAND_LOGO_ZOOM_MIN = 0.98;
+export const BRAND_LOGO_ZOOM_MAX = 1.02;
+export const BRAND_LOGO_ZOOM_MS = 2200;

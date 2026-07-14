@@ -83,6 +83,7 @@ export default function TodayTabScreen() {
     isActive,
     workdaySessionStatus,
     workdaySessionHydrated,
+    workdayServerReconciled,
     timerDisplay,
     startDay,
     endDay,
@@ -379,7 +380,7 @@ export default function TodayTabScreen() {
             <View style={styles.workdaySection}>
               <WorkdayStartPanel
                 workdayStatus={workdaySessionStatus}
-                hydrating={!workdaySessionHydrated}
+                hydrating={!workdaySessionHydrated || !workdayServerReconciled}
                 active={workActive || workdaySessionStatus === "completed"}
                 busy={busy}
                 starting={starting}

@@ -12,8 +12,13 @@ import Animated, {
 import Svg, { Circle } from "react-native-svg";
 import { logStartup } from "../../utils/startupDiagnostics";
 
-const ORBIT_DURATION_MS = 2200;
-const RING_FADE_MS = 420;
+const ORBIT_DURATION_MS = 2800;
+const RING_FADE_MS = 480;
+
+/** Champagne gold — high contrast on emerald splash. */
+const GOLD = "#E8C872";
+const GOLD_SOFT = "rgba(232, 200, 114, 0.72)";
+const RING_WHITE = "rgba(255, 255, 255, 0.38)";
 
 type Props = {
   /** Outer diameter of the orbit stage (must be larger than the logo). */
@@ -30,24 +35,23 @@ type Props = {
 
 /**
  * Premium splash orbit — thin rotating ring + glowing accent dot around the logo.
- * Reanimated `withRepeat` rotation (not Lottie / RN Animated).
+ * Renders behind the logo (caller z-order); must not cover the mark.
  */
 export function SplashLogoOrbit({
   size,
   left,
   top,
   active,
-  startDelayMs = 300,
+  startDelayMs = 280,
   reducedMotion = false
 }: Props) {
   const opacity = useSharedValue(0);
   const rotation = useSharedValue(0);
-  const counterRotation = useSharedValue(0);
 
-  const ringStroke = useMemo(() => Math.max(1.5, size * 0.012), [size]);
-  const inset = useMemo(() => size * 0.06, [size]);
+  const ringStroke = useMemo(() => Math.max(1.75, size * 0.014), [size]);
+  const inset = useMemo(() => size * 0.08, [size]);
   const trackR = useMemo(() => size / 2 - inset, [inset, size]);
-  const dotSize = useMemo(() => Math.max(7, Math.round(size * 0.055)), [size]);
+  const dotSize = useMemo(() => Math.max(8, Math.round(size * 0.06)), [size]);
 
   useEffect(() => {
     if (!active) return;
@@ -60,10 +64,8 @@ export function SplashLogoOrbit({
 
     cancelAnimation(opacity);
     cancelAnimation(rotation);
-    cancelAnimation(counterRotation);
     opacity.value = 0;
     rotation.value = 0;
-    counterRotation.value = 0;
 
     opacity.value = withDelay(
       startDelayMs,
@@ -78,19 +80,10 @@ export function SplashLogoOrbit({
       };
     }
 
-    // Kick rotation after the same delay so the ring is on-screen when motion starts.
     rotation.value = withDelay(
       startDelayMs,
       withRepeat(
         withTiming(360, { duration: ORBIT_DURATION_MS, easing: Easing.linear }),
-        -1,
-        false
-      )
-    );
-    counterRotation.value = withDelay(
-      startDelayMs,
-      withRepeat(
-        withTiming(-360, { duration: ORBIT_DURATION_MS * 1.35, easing: Easing.linear }),
         -1,
         false
       )
@@ -101,10 +94,9 @@ export function SplashLogoOrbit({
     return () => {
       cancelAnimation(opacity);
       cancelAnimation(rotation);
-      cancelAnimation(counterRotation);
       logStartup("ring_animation_stopped", "unmount");
     };
-  }, [active, counterRotation, left, opacity, reducedMotion, rotation, size, startDelayMs, top]);
+  }, [active, left, opacity, reducedMotion, rotation, size, startDelayMs, top]);
 
   const fadeStyle = useAnimatedStyle(() => ({
     opacity: opacity.value
@@ -112,10 +104,6 @@ export function SplashLogoOrbit({
 
   const spinStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value}deg` }]
-  }));
-
-  const counterSpinStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${counterRotation.value}deg` }]
   }));
 
   return (
@@ -134,7 +122,7 @@ export function SplashLogoOrbit({
       ]}
       collapsable={false}
     >
-      {/* Soft outer halo (static) */}
+      {/* Soft static halo */}
       <View
         style={[
           styles.halo,
@@ -147,21 +135,40 @@ export function SplashLogoOrbit({
         ]}
       />
 
-      {/* Primary rotating dashed ring */}
+      {/* Primary rotating dashed ring + traveling glow dot */}
       <Animated.View style={[StyleSheet.absoluteFill, spinStyle]}>
         <Svg width={size} height={size}>
           <Circle
             cx={size / 2}
             cy={size / 2}
             r={trackR}
-            stroke="rgba(15, 81, 50, 0.42)"
+            stroke={GOLD_SOFT}
             strokeWidth={ringStroke}
-            strokeDasharray={`${Math.max(4, size * 0.04)} ${Math.max(6, size * 0.055)}`}
+            strokeDasharray={`${Math.max(5, size * 0.045)} ${Math.max(7, size * 0.05)}`}
             fill="none"
             strokeLinecap="round"
           />
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={trackR - ringStroke * 2.5}
+            stroke={RING_WHITE}
+            strokeWidth={Math.max(1, ringStroke * 0.55)}
+            fill="none"
+          />
         </Svg>
-        {/* Glowing orbit accent */}
+        <View
+          style={[
+            styles.dotGlow,
+            {
+              width: dotSize * 2.4,
+              height: dotSize * 2.4,
+              borderRadius: (dotSize * 2.4) / 2,
+              left: size / 2 - (dotSize * 2.4) / 2,
+              top: inset - (dotSize * 2.4) / 2
+            }
+          ]}
+        />
         <View
           style={[
             styles.dot,
@@ -175,24 +182,6 @@ export function SplashLogoOrbit({
           ]}
         />
       </Animated.View>
-
-      {/* Secondary thin counter-rotating highlight */}
-      {!reducedMotion ? (
-        <Animated.View style={[StyleSheet.absoluteFill, counterSpinStyle]}>
-          <Svg width={size} height={size}>
-            <Circle
-              cx={size / 2}
-              cy={size / 2}
-              r={trackR - ringStroke * 3}
-              stroke="rgba(212, 184, 106, 0.55)"
-              strokeWidth={Math.max(1, ringStroke * 0.7)}
-              strokeDasharray={`${Math.max(10, size * 0.12)} ${Math.max(40, size * 0.55)}`}
-              fill="none"
-              strokeLinecap="round"
-            />
-          </Svg>
-        </Animated.View>
-      ) : null}
     </Animated.View>
   );
 }
@@ -205,16 +194,20 @@ const styles = StyleSheet.create({
   },
   halo: {
     ...StyleSheet.absoluteFillObject,
-    borderColor: "rgba(15, 107, 67, 0.18)",
+    borderColor: "rgba(232, 200, 114, 0.22)",
     backgroundColor: "transparent"
   },
+  dotGlow: {
+    backgroundColor: "rgba(245, 215, 142, 0.35)",
+    position: "absolute"
+  },
   dot: {
-    backgroundColor: "#E8C872",
-    elevation: 3,
+    backgroundColor: GOLD,
+    elevation: 4,
     position: "absolute",
     shadowColor: "#F5D78E",
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.85,
-    shadowRadius: 5
+    shadowOpacity: 0.9,
+    shadowRadius: 6
   }
 });

@@ -209,16 +209,26 @@ export function AgriNatureOrbit({
       {showTrack ? (
         <Svg width={stage} height={stage} style={styles.orbitTrack}>
           {minimalTrack ? (
-            <Circle
-              cx={trackCenter}
-              cy={trackCenter}
-              r={trackRadius}
-              stroke="rgba(15, 107, 67, 0.36)"
-              strokeWidth={Math.max(1.25, diameter * 0.012)}
-              strokeDasharray={`${Math.max(3, Math.round(diameter * 0.035))} ${Math.max(5, Math.round(diameter * 0.055))}`}
-              strokeLinecap="round"
-              fill="none"
-            />
+            <>
+              <Circle
+                cx={trackCenter}
+                cy={trackCenter}
+                r={trackRadius}
+                stroke="rgba(15, 107, 67, 0.22)"
+                strokeWidth={Math.max(2, diameter * 0.02)}
+                fill="none"
+              />
+              <Circle
+                cx={trackCenter}
+                cy={trackCenter}
+                r={trackRadius}
+                stroke="rgba(184, 148, 58, 0.78)"
+                strokeWidth={Math.max(1.5, diameter * 0.014)}
+                strokeDasharray={`${Math.max(4, Math.round(diameter * 0.04))} ${Math.max(6, Math.round(diameter * 0.05))}`}
+                strokeLinecap="round"
+                fill="none"
+              />
+            </>
           ) : (
             <>
               <Circle

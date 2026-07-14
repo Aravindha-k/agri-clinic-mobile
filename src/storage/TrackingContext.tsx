@@ -117,6 +117,7 @@ type TrackingContextValue = {
   isActive: boolean;
   workdaySessionStatus: WorkdaySessionStatus;
   workdaySessionHydrated: boolean;
+  workdayServerReconciled: boolean;
   timerDisplay: string;
   todayWorkDurationMs: number;
   fieldLocationBlocked: boolean;
@@ -181,6 +182,8 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   const [workdaySessionStatus, setWorkdaySessionStatus] =
     useState<WorkdaySessionStatus>("not_started");
   const [workdaySessionHydrated, setWorkdaySessionHydrated] = useState(false);
+  const [workdayServerReconciled, setWorkdayServerReconciled] = useState(false);
+  const [serverTimeOffsetMs, setServerTimeOffsetMs] = useState(0);
   const [completedDurationMs, setCompletedDurationMs] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const elapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -320,7 +323,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
         setWorkdayInactiveBanner(WORKDAY_INACTIVE_BANNER_MESSAGE);
       }
     },
-    [stopAllTrackingLoops]
+    [resolveSyncUserId, stopAllTrackingLoops]
   );
 
   const applyCompletedWorkdayFromCache = useCallback(
@@ -497,25 +500,42 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
 
       try {
         if (!result) {
-          if (isWorkdayActive(workdayRef.current)) {
+          // Offline / API failure — keep local active, never invent Not Started over cache.
+          if (isWorkdayActive(workdayRef.current) || workdaySessionStatus === "in_progress") {
             workdayRestoreLog("using_cached_workday");
             setUsingCachedWorkday(true);
             setWorkdaySyncStatus("connecting");
           }
+          setWorkdayServerReconciled(true);
           return;
         }
 
         if (result.kind === "active") {
           const userId = resolveSyncUserId();
           const existingToday = await readTodayWorkdayRecord(userId);
-          const resolvedStart = mergeWorkdayStartedAt(
-            existingToday?.started_at,
-            resolveWorkdayStartedAt(result.workday)
-          );
+          const serverStart = resolveWorkdayStartedAt(result.workday);
+          // Same session: prefer stored local started_at only when same workday IDs.
+          const sameSession =
+            existingToday != null &&
+            existingToday.status === "in_progress" &&
+            (existingToday.workday_id === result.workday.workday_id ||
+              existingToday.duty_session_id === result.workday.duty_session_id);
+          const resolvedStart = sameSession
+            ? mergeWorkdayStartedAt(existingToday?.started_at, serverStart)
+            : serverStart ?? mergeWorkdayStartedAt(existingToday?.started_at, serverStart);
+
+          if (typeof result.workday.server_time === "string") {
+            const serverMs = new Date(result.workday.server_time).getTime();
+            if (!Number.isNaN(serverMs)) {
+              setServerTimeOffsetMs(serverMs - Date.now());
+            }
+          }
+
           if (!resolvedStart || !isSameLocalWorkDate(resolvedStart)) {
             workdayRestoreLog("cleared_stale_workday", "server_active_wrong_day");
             clearWorkdayState({ showInactiveBanner: true });
             setWorkdaySyncStatus("idle");
+            setWorkdayServerReconciled(true);
             return;
           }
           setWorkdayInactiveBanner(null);
@@ -526,43 +546,77 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
             start_time: resolvedStart
           });
           setWorkdaySyncStatus("confirmed");
+          setWorkdayServerReconciled(true);
           return;
         }
 
-        const userId = resolveSyncUserId();
-        const todayCached = await readTodayWorkdayRecord(userId);
-        if (todayCached && isCachedWorkdayInProgress(todayCached)) {
-          workdayRestoreLog("using_cached_workday");
-          restoreInProgressWorkdayFromCache(todayCached);
-          setUsingCachedWorkday(true);
-          setWorkdaySyncStatus("connecting");
+        if (result.kind === "completed") {
+          const userId = resolveSyncUserId();
+          const endTime =
+            result.workday.end_time ||
+            new Date().toISOString();
+          const start = getWorkdayStartTimestamp(resolveWorkdayStartedAt(result.workday));
+          const totalDurationMs =
+            result.workday.total_work_duration_ms ??
+            (start ? Math.max(0, new Date(endTime).getTime() - start) : 0);
+          await markWorkdayCompletedInCache(
+            { endWorkTime: endTime, totalDurationMs },
+            userId
+          );
+          const completed = await readTodayWorkdayRecord(userId);
+          if (completed) {
+            applyCompletedWorkdayFromCache(completed);
+          } else {
+            applyCompletedWorkdayFromCache({
+              workday_id: result.workday.workday_id,
+              duty_session_id: result.workday.duty_session_id ?? result.workday.workday_id,
+              started_at: resolveWorkdayStartedAt(result.workday) || endTime,
+              work_date: getLocalWorkDate(),
+              status: "completed",
+              end_work_time: endTime,
+              total_work_duration_ms: totalDurationMs,
+              last_known_distance: 0,
+              last_known_points: 0,
+              user_id: userId ?? undefined
+            });
+          }
+          setWorkdaySyncStatus("idle");
+          setWorkdayServerReconciled(true);
           return;
         }
+
+        // Server authoritative when online: no active duty → clear local in_progress.
+        const userId = resolveSyncUserId();
+        const todayCached = await readTodayWorkdayRecord(userId);
 
         if (todayCached && isCachedWorkdayCompleted(todayCached)) {
           applyCompletedWorkdayFromCache(todayCached);
           setWorkdaySyncStatus("idle");
+          setWorkdayServerReconciled(true);
           return;
         }
 
-        if (shouldRestoreWorkdayRecord(todayCached, userId)) {
-          return;
+        if (todayCached && isCachedWorkdayInProgress(todayCached)) {
+          workdayRestoreLog("cleared_stale_workday", "server_none_over_local");
         }
-
-        const hadCached = Boolean(await readCachedActiveWorkday(userId));
         clearWorkdayState({
           showInactiveBanner: result.kind === "expired"
         });
-        if (hadCached) {
-          workdayRestoreLog("cleared_stale_workday", result.kind);
-        }
         setWorkdaySyncStatus("idle");
+        setWorkdayServerReconciled(true);
       } finally {
         workdaySyncInFlightRef.current = false;
         lastWorkdaySyncAtRef.current = Date.now();
+        setWorkdayServerReconciled(true);
       }
     },
-    [applyCompletedWorkdayFromCache, applyWorkday, clearWorkdayState, resolveSyncUserId, restoreInProgressWorkdayFromCache]
+    [
+      applyCompletedWorkdayFromCache,
+      applyWorkday,
+      clearWorkdayState,
+      resolveSyncUserId,
+      workdaySessionStatus
+    ]
   );
 
   const refreshTracking = useCallback(async () => {
@@ -1087,6 +1141,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!workdayApiReady) {
       workdaySessionSyncDoneRef.current = false;
+      setWorkdayServerReconciled(false);
       if (!isAuthenticated) {
         pauseTrackingForLogout();
       }
@@ -1097,6 +1152,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     workdaySessionSyncDoneRef.current = true;
+    setWorkdayServerReconciled(false);
     const userId = resolveSyncUserId();
     void hydrateWorkdaySessionFromCache(userId).then(() => {
       runSafe(syncWorkdayFromServer({ force: true }));
@@ -1144,10 +1200,10 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       computeWorkdayElapsedMs({
         status: workdaySessionStatus,
         startedAt,
-        now: elapsedNow,
+        now: elapsedNow + serverTimeOffsetMs,
         completedDurationMs
       }),
-    [completedDurationMs, elapsedNow, startedAt, workdaySessionStatus]
+    [completedDurationMs, elapsedNow, serverTimeOffsetMs, startedAt, workdaySessionStatus]
   );
 
   const timerDisplay = useMemo(
@@ -1223,6 +1279,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       isActive: workdaySessionStatus === "in_progress",
       workdaySessionStatus,
       workdaySessionHydrated,
+      workdayServerReconciled: workdayServerReconciled || !isAuthenticated,
       timerDisplay,
       todayWorkDurationMs,
       fieldLocationBlocked: workdaySessionStatus === "in_progress" && gpsState === "denied",
@@ -1251,6 +1308,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       elapsedNow,
       trackedError,
       gpsState,
+      isAuthenticated,
       lastSyncTime,
       loading,
       nextSyncAt,
@@ -1270,6 +1328,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       cachedRoutePoints,
       workdaySessionStatus,
       workdaySessionHydrated,
+      workdayServerReconciled,
       timerDisplay,
       todayWorkDurationMs
     ]

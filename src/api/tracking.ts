@@ -87,6 +87,8 @@ export type WorkdayStatus = {
   auto_ended?: boolean;
   last_heartbeat?: string | null;
   last_location?: TrackingLocation | null;
+  server_time?: string;
+  total_work_duration_ms?: number;
 };
 
 type PaginatedLocations = {
@@ -107,15 +109,34 @@ export async function fetchCurrentDuty(): Promise<WorkdayFetchResult> {
       { source: "Tracking" },
       LEGACY_TRACKING_ROUTES.current
     );
-    const workday = normalizeActiveWorkday(normalizeWorkdayRow(data));
+    const row = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+    const statusRaw = typeof row?.status === "string" ? String(row.status).toLowerCase() : "";
+
+    if (statusRaw === "not_started" || (row && row.is_active === false && !row.workday_id && !row.duty_session_id)) {
+      return { kind: "none" };
+    }
+
+    const workday = normalizeWorkdayRow(data);
     if (!workday) {
-      const row = normalizeWorkdayRow(data);
-      if (row?.auto_ended || row?.is_active === false) {
-        return workdayFetchFromError(new Error("auto-ended after 9 hours")) ?? { kind: "none" };
+      if (statusRaw === "completed") {
+        return { kind: "none" };
       }
       return { kind: "none" };
     }
-    return { kind: "active", workday };
+
+    if (statusRaw === "completed" || workday.is_active === false) {
+      return { kind: "completed", workday: { ...workday, is_active: false } };
+    }
+
+    const active = normalizeActiveWorkday(workday);
+    if (!active) {
+      const expired = workdayFetchFromError(new Error("auto-ended after 9 hours"));
+      if (workday.auto_ended) {
+        return expired ?? { kind: "none" };
+      }
+      return { kind: "none" };
+    }
+    return { kind: "active", workday: active };
   } catch (error) {
     const mapped = workdayFetchFromError(error);
     if (mapped) {

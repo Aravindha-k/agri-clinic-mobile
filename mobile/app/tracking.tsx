@@ -84,6 +84,7 @@ function TrackingWorkspaceScreenInner() {
     isActive,
     workdaySessionStatus,
     workdaySessionHydrated,
+    workdayServerReconciled,
     timerDisplay,
     startedAt: trackingStartedAt,
     busy,
@@ -335,7 +336,7 @@ function TrackingWorkspaceScreenInner() {
         <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
           <WorkdayStartPanel
             workdayStatus={workdaySessionStatus}
-            hydrating={!workdaySessionHydrated}
+            hydrating={!workdaySessionHydrated || !workdayServerReconciled}
             active={isActive || workdaySessionStatus === "completed"}
             busy={busy}
             starting={starting}

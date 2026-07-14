@@ -4,6 +4,7 @@ import { ApiRequestError } from "./apiError";
 
 export type WorkdayFetchResult =
   | { kind: "active"; workday: WorkdayStatus }
+  | { kind: "completed"; workday: WorkdayStatus }
   | { kind: "none" }
   | { kind: "expired"; message: string };
 
@@ -70,6 +71,11 @@ export function normalizeWorkdayRow(raw: unknown): WorkdayStatus | null {
         ? row.start_time
         : undefined;
 
+  const statusRaw = typeof row.status === "string" ? row.status.toLowerCase() : "";
+  const isActive =
+    row.is_active === true ||
+    (row.is_active !== false && statusRaw !== "completed" && statusRaw !== "not_started");
+
   return {
     id: typeof row.id === "number" ? row.id : workdayId,
     workday_id: workdayId,
@@ -77,14 +83,22 @@ export function normalizeWorkdayRow(raw: unknown): WorkdayStatus | null {
       dutySessionId != null && Number.isFinite(dutySessionId) && dutySessionId > 0
         ? dutySessionId
         : workdayId,
-    date: typeof row.date === "string" ? row.date : undefined,
+    date:
+      typeof row.work_date === "string"
+        ? row.work_date
+        : typeof row.date === "string"
+          ? row.date
+          : undefined,
     start_time: typeof row.start_time === "string" ? row.start_time : startedAt,
     started_at: startedAt,
-    end_time: (row.end_time as string | null | undefined) ?? null,
-    is_active: row.is_active !== false,
+    end_time: (row.end_time as string | null | undefined) ?? (row.end_work_time as string | null | undefined) ?? null,
+    is_active: isActive,
     auto_ended: Boolean(row.auto_ended),
     last_heartbeat: typeof row.last_heartbeat === "string" ? row.last_heartbeat : null,
-    last_location: (row.last_location as WorkdayStatus["last_location"]) ?? null
+    last_location: (row.last_location as WorkdayStatus["last_location"]) ?? null,
+    server_time: typeof row.server_time === "string" ? row.server_time : undefined,
+    total_work_duration_ms:
+      typeof row.total_work_duration_ms === "number" ? row.total_work_duration_ms : undefined
   };
 }
 

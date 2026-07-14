@@ -19,11 +19,11 @@ import { BRAND } from "../../config/brand";
 import { usePremiumMotion } from "../../hooks/usePremiumMotion";
 import { logStartup } from "../../utils/startupDiagnostics";
 import { SPLASH_ASSETS } from "./splashAssets";
+import { SplashLogoOrbit } from "./SplashLogoOrbit";
 import {
-  CINEMATIC_SPLASH_BG,
+  NATIVE_LAUNCH_BG,
   SPLASH_EXIT_FADE_MS,
   SPLASH_EXIT_WASH,
-  SPLASH_HOLD_AFTER_ANIM_MS,
   SPLASH_KEN_BURNS_MS,
   SPLASH_KEN_BURNS_SCALE_MAX,
   SPLASH_KEN_BURNS_SCALE_MIN,
@@ -33,7 +33,7 @@ import {
   SPLASH_NATIVE_HANDOFF_MS
 } from "./splashColors";
 
-const BLOOM_SIZE_RATIO = 1.65;
+const BLOOM_SIZE_RATIO = 1.75;
 const TITLE_GAP = 22;
 /** Logo center aligns with the background sunburst (~75% down the portrait art). */
 const SPLASH_LOGO_Y_RATIO = 0.75;
@@ -42,15 +42,21 @@ const COPY_BLOCK_HEIGHT = 78;
 /** Match Expo splash plugin imageWidth (~200 logical px). */
 const LOGO_WIDTH_RATIO = 0.42;
 const LOGO_MAX = 200;
+/** Orbit stage larger than logo so the ring never overlaps the mark. */
+const ORBIT_SCALE = 1.42;
 
 const LOGO_ENTRY_DELAY_MS = 0;
 const LOGO_ENTRY_MS = 900;
-const LOGO_BREATHE_MAX = 1.025;
+const LOGO_SCALE_FROM = 0.88;
+const LOGO_SCALE_PEAK = 1.04;
+const LOGO_SCALE_SETTLE = 1;
+const LOGO_BREATHE_MIN = 0.98;
+const LOGO_BREATHE_MAX = 1.02;
 const TITLE_START_MS = 520;
 const TITLE_ANIM_MS = 560;
 const SUBTITLE_START_MS = 720;
 const SUBTITLE_ANIM_MS = 500;
-const BLOOM_START_MS = 650;
+const BLOOM_START_MS = 520;
 const BLOOM_ANIM_MS = 750;
 
 type Props = {
@@ -95,7 +101,7 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
   const bgScale = useSharedValue(SPLASH_KEN_BURNS_SCALE_MIN);
   const bgTranslateY = useSharedValue(0);
   const logoOpacity = useSharedValue(0);
-  const logoScale = useSharedValue(0.94);
+  const logoScale = useSharedValue(LOGO_SCALE_FROM);
   const logoTranslateY = useSharedValue(8);
   const titleOpacity = useSharedValue(0);
   const titleTranslateY = useSharedValue(14);
@@ -111,6 +117,8 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
   }, [screenH, screenW]);
 
   const bloomSize = useMemo(() => Math.round(logoSize * BLOOM_SIZE_RATIO), [logoSize]);
+  const orbitSize = useMemo(() => Math.round(logoSize * ORBIT_SCALE), [logoSize]);
+  const orbitOffset = useMemo(() => (logoSize - orbitSize) / 2, [logoSize, orbitSize]);
 
   const logoCenterY = useMemo(() => {
     const desired = screenH * SPLASH_LOGO_Y_RATIO;
@@ -201,7 +209,7 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     bgScale.value = SPLASH_KEN_BURNS_SCALE_MIN;
     bgTranslateY.value = 0;
     logoOpacity.value = 0;
-    logoScale.value = 0.94;
+    logoScale.value = LOGO_SCALE_FROM;
     logoTranslateY.value = preferLight ? 4 : 8;
     titleOpacity.value = 0;
     titleTranslateY.value = 14;
@@ -235,15 +243,21 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     logoScale.value = withDelay(
       LOGO_ENTRY_DELAY_MS,
       withSequence(
-        withTiming(1.02, { duration: preferLight ? 420 : 620, easing: easeOut }),
-        withTiming(1, { duration: preferLight ? 280 : 380, easing: easeInOut }),
+        withTiming(LOGO_SCALE_PEAK, { duration: preferLight ? 420 : 640, easing: easeOut }),
+        withTiming(LOGO_SCALE_SETTLE, { duration: preferLight ? 300 : 400, easing: easeInOut }),
         ...(preferLight
           ? []
           : [
               withRepeat(
                 withSequence(
-                  withTiming(LOGO_BREATHE_MAX, { duration: SPLASH_LOGO_BREATHE_MS, easing: easeInOut }),
-                  withTiming(1, { duration: SPLASH_LOGO_BREATHE_MS, easing: easeInOut })
+                  withTiming(LOGO_BREATHE_MAX, {
+                    duration: SPLASH_LOGO_BREATHE_MS,
+                    easing: easeInOut
+                  }),
+                  withTiming(LOGO_BREATHE_MIN, {
+                    duration: SPLASH_LOGO_BREATHE_MS,
+                    easing: easeInOut
+                  })
                 ),
                 -1,
                 false
@@ -346,41 +360,48 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
 
   return (
     <Animated.View style={[styles.screen, rootStyle]} onLayout={onFirstLayout} collapsable={false}>
-      <StatusBar style="dark" translucent backgroundColor={CINEMATIC_SPLASH_BG} />
+      <StatusBar style="light" translucent backgroundColor={NATIVE_LAUNCH_BG} />
+
+      <View style={[styles.emeraldBase, { backgroundColor: NATIVE_LAUNCH_BG }]} pointerEvents="none" />
 
       <View style={styles.backgroundClip} pointerEvents="none">
         {!bgFailed ? (
           <Animated.View style={[styles.backgroundMotion, bgStyle]}>
             <Image
               source={SPLASH_ASSETS.background}
-              style={styles.backgroundImage}
+              style={[styles.backgroundImage, styles.backgroundDimmed]}
               resizeMode="cover"
               fadeDuration={0}
               onError={() => setBgFailed(true)}
               accessibilityIgnoresInvertColors
             />
           </Animated.View>
-        ) : (
-          <View style={[styles.backgroundFallback, { backgroundColor: CINEMATIC_SPLASH_BG }]} />
-        )}
+        ) : null}
       </View>
 
       <LinearGradient
         colors={[
-          "rgba(216, 236, 248, 0.12)",
-          "rgba(186, 224, 210, 0.28)",
-          "rgba(216, 236, 248, 0.18)"
+          "rgba(11, 61, 46, 0.72)",
+          "rgba(11, 61, 46, 0.55)",
+          "rgba(11, 61, 46, 0.78)"
         ]}
-        locations={[0, 0.55, 1]}
+        locations={[0, 0.52, 1]}
         style={styles.readabilityOverlay}
         pointerEvents="none"
       />
 
       <View style={styles.logoLayer} pointerEvents="none">
         <View style={[styles.heroColumn, { top: heroTop, width: screenW }]}>
-          <Animated.View
-            style={[styles.logoCluster, logoStyle, { width: logoSize, height: logoSize }]}
-          >
+          <View style={[styles.logoCluster, { width: logoSize, height: logoSize }]}>
+            <SplashLogoOrbit
+              size={orbitSize}
+              left={orbitOffset}
+              top={orbitOffset}
+              active={layoutReady}
+              startDelayMs={320}
+              reducedMotion={reduced}
+            />
+
             <Animated.View
               style={[
                 styles.bloomWrap,
@@ -396,22 +417,24 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
               <Svg width={bloomSize} height={bloomSize}>
                 <Defs>
                   <RadialGradient id="splashLogoGlow" cx="50%" cy="50%" rx="50%" ry="50%">
-                    <Stop offset="0%" stopColor="#FFE08A" stopOpacity={0.62} />
-                    <Stop offset="40%" stopColor="#FFC96B" stopOpacity={0.28} />
-                    <Stop offset="100%" stopColor="#FFC96B" stopOpacity={0} />
+                    <Stop offset="0%" stopColor="#FFE08A" stopOpacity={0.55} />
+                    <Stop offset="45%" stopColor="#E8C872" stopOpacity={0.22} />
+                    <Stop offset="100%" stopColor="#0B3D2E" stopOpacity={0} />
                   </RadialGradient>
                 </Defs>
                 <Circle cx={bloomSize / 2} cy={bloomSize / 2} r={bloomSize / 2} fill="url(#splashLogoGlow)" />
               </Svg>
             </Animated.View>
 
-            <Image
-              source={SPLASH_ASSETS.logo}
-              style={[styles.logoImage, { width: logoSize, height: logoSize }]}
-              resizeMode="contain"
-              accessibilityLabel="Kavya Agri-Horti Clinic logo"
-            />
-          </Animated.View>
+            <Animated.View style={[styles.logoMotion, logoStyle]}>
+              <Image
+                source={SPLASH_ASSETS.logo}
+                style={[styles.logoImage, { width: logoSize, height: logoSize }]}
+                resizeMode="contain"
+                accessibilityLabel="Kavya Agri-Horti Clinic logo"
+              />
+            </Animated.View>
+          </View>
 
           <Animated.View style={[styles.copyBlock, titleStyle, { marginTop: TITLE_GAP }]}>
             <Text style={styles.title} accessibilityRole="header">
@@ -434,9 +457,12 @@ export const KAVYA_CINEMATIC_SPLASH_MS = SPLASH_MIN_VISIBLE_MS + SPLASH_EXIT_FAD
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: CINEMATIC_SPLASH_BG,
+    backgroundColor: NATIVE_LAUNCH_BG,
     flex: 1,
     overflow: "hidden"
+  },
+  emeraldBase: {
+    ...StyleSheet.absoluteFillObject
   },
   backgroundClip: {
     ...StyleSheet.absoluteFillObject,
@@ -453,8 +479,8 @@ const styles = StyleSheet.create({
     height: "100%",
     width: "100%"
   },
-  backgroundFallback: {
-    ...StyleSheet.absoluteFillObject
+  backgroundDimmed: {
+    opacity: 0.28
   },
   readabilityOverlay: {
     ...StyleSheet.absoluteFillObject
@@ -470,7 +496,7 @@ const styles = StyleSheet.create({
   },
   bloomWrap: {
     position: "absolute",
-    zIndex: 1
+    zIndex: 3
   },
   logoCluster: {
     alignItems: "center",
@@ -478,23 +504,29 @@ const styles = StyleSheet.create({
     overflow: "visible",
     zIndex: 4
   },
+  logoMotion: {
+    zIndex: 6
+  },
   logoImage: {
     aspectRatio: 1,
-    zIndex: 5
+    zIndex: 6
   },
   copyBlock: {
     alignItems: "center",
     paddingHorizontal: 24
   },
   title: {
-    color: "#0B3D2E",
+    color: "#F4EBD0",
     fontSize: 24,
     fontWeight: "800",
     letterSpacing: 0.2,
-    textAlign: "center"
+    textAlign: "center",
+    textShadowColor: "rgba(0, 0, 0, 0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3
   },
   subtitle: {
-    color: "#1F4F40",
+    color: "rgba(244, 235, 208, 0.88)",
     fontSize: 15,
     fontWeight: "600",
     letterSpacing: 0.3,

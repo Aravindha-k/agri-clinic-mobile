@@ -25,9 +25,9 @@ import {
 /** Home-only hero tuning — does not affect other screens. */
 const HOME_LOGO_SIZE = 120;
 const HOME_STAGE_PAD = 4;
-const GLOW_MIN = 0.12;
-const GLOW_MAX = 0.2;
-const GLOW_HALF_MS = 3000;
+const GLOW_MIN = 0.18;
+const GLOW_MAX = 0.32;
+const GLOW_HALF_MS = 2800;
 const GLOW_SIZE_RATIO = 1.8;
 const BRAND_GREEN = "#0F6B43";
 
@@ -128,20 +128,30 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
       return;
     }
 
-    zoom.value = BRAND_LOGO_ZOOM_MIN;
-    zoom.value = withRepeat(
-      withSequence(
-        withTiming(BRAND_LOGO_ZOOM_MAX, {
-          duration: BRAND_LOGO_ZOOM_MS,
-          easing: Easing.inOut(Easing.ease)
-        }),
-        withTiming(BRAND_LOGO_ZOOM_MIN, {
-          duration: BRAND_LOGO_ZOOM_MS,
-          easing: Easing.inOut(Easing.ease)
-        })
-      ),
-      -1,
-      false
+    zoom.value = 0.88;
+    zoom.value = withSequence(
+      withTiming(1.04, {
+        duration: 620,
+        easing: Easing.out(Easing.cubic)
+      }),
+      withTiming(1, {
+        duration: 380,
+        easing: Easing.inOut(Easing.ease)
+      }),
+      withRepeat(
+        withSequence(
+          withTiming(BRAND_LOGO_ZOOM_MAX, {
+            duration: BRAND_LOGO_ZOOM_MS,
+            easing: Easing.inOut(Easing.ease)
+          }),
+          withTiming(BRAND_LOGO_ZOOM_MIN, {
+            duration: BRAND_LOGO_ZOOM_MS,
+            easing: Easing.inOut(Easing.ease)
+          })
+        ),
+        -1,
+        false
+      )
     );
 
     glow.value = GLOW_MIN;
@@ -309,15 +319,15 @@ const styles = StyleSheet.create({
   },
   logoShell: {
     alignItems: "center",
-    backgroundColor: "#E8F3EC",
-    borderColor: "rgba(15, 107, 67, 0.28)",
+    backgroundColor: "#FFFFFF",
+    borderColor: "rgba(184, 148, 58, 0.55)",
     borderWidth: 2,
     justifyContent: "center",
     overflow: "hidden"
   },
   logoClip: {
     alignItems: "center",
-    backgroundColor: "#E8F3EC",
+    backgroundColor: "#FFFFFF",
     justifyContent: "center",
     overflow: "hidden"
   },

@@ -1,4 +1,4 @@
-/** Cinematic React splash artwork background (unchanged). */
+/** Shared splash background — must match native Android / Expo splash. */
 export const CINEMATIC_SPLASH_BG = "#D8ECF8";
 
 /** Native Android / Expo launch screen — solid emerald handoff. */

@@ -336,6 +336,7 @@ function TrackingWorkspaceScreenInner() {
         <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
           <WorkdayStartPanel
             workdayStatus={workdaySessionStatus}
+            presentation="tracking"
             hydrating={!workdaySessionHydrated || !workdayServerReconciled}
             active={isActive || workdaySessionStatus === "completed"}
             busy={busy}

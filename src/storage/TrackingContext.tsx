@@ -1160,13 +1160,9 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     }
     workdaySessionSyncDoneRef.current = true;
     setWorkdayServerReconciled(false);
-    const userId = resolveSyncUserId();
-    void hydrateWorkdaySessionFromCache(userId).then(() => {
-      runSafe(syncWorkdayFromServer({ force: true }));
-    });
+    runSafe(syncWorkdayFromServer({ force: true }));
   }, [
     employee?.id,
-    hydrateWorkdaySessionFromCache,
     isAuthenticated,
     pauseTrackingForLogout,
     resolveSyncUserId,

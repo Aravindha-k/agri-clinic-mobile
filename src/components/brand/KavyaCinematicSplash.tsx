@@ -33,7 +33,7 @@ import {
   SPLASH_NATIVE_HANDOFF_MS
 } from "./splashColors";
 
-const BLOOM_SIZE_RATIO = 1.62;
+const BLOOM_SIZE_RATIO = 1.75;
 const TITLE_GAP = 22;
 /** Logo center aligns with the background sunburst (~75% down the portrait art). */
 const SPLASH_LOGO_Y_RATIO = 0.75;
@@ -43,7 +43,7 @@ const COPY_BLOCK_HEIGHT = 78;
 const LOGO_WIDTH_RATIO = 0.42;
 const LOGO_MAX = 200;
 /** Orbit stage larger than logo so the ring never overlaps the mark. */
-const ORBIT_SCALE = 1.54;
+const ORBIT_SCALE = 1.42;
 
 const LOGO_ENTRY_DELAY_MS = 0;
 const LOGO_ENTRY_MS = 900;
@@ -496,7 +496,7 @@ const styles = StyleSheet.create({
   },
   bloomWrap: {
     position: "absolute",
-    zIndex: 1
+    zIndex: 3
   },
   logoCluster: {
     alignItems: "center",

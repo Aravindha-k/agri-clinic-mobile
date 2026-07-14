@@ -14,6 +14,7 @@ import type { WorkdaySessionStatus } from "../../../src/storage/workdaySessionSt
 
 type Props = {
   workdayStatus: WorkdaySessionStatus;
+  presentation?: "dashboard" | "tracking";
   hydrating?: boolean;
   active: boolean;
   busy: boolean;
@@ -36,6 +37,7 @@ type Props = {
   onNewVisit?: () => void;
   onFarmers?: () => void;
   onMyRoute: () => void;
+  onOpenTracking?: () => void;
   /** When false, hide New Visit / Farmers (Day tab). Default true. */
   showVisitActions?: boolean;
 };
@@ -94,8 +96,17 @@ function readinessMeta(
 /**
  * Solid, outdoor-readable Start / Active workday panel — primary Today/Day CTA.
  */
+function formatCompactDuration(display?: string) {
+  const [hh = "0", mm = "0"] = (display || "00:00:00").split(":");
+  const hours = Number.parseInt(hh, 10) || 0;
+  const minutes = Number.parseInt(mm, 10) || 0;
+  if (hours > 0) return `${hours}h ${minutes.toString().padStart(2, "0")}m`;
+  return `${minutes}m`;
+}
+
 export function WorkdayStartPanel({
   workdayStatus,
+  presentation = "tracking",
   hydrating = false,
   active,
   busy,
@@ -117,6 +128,7 @@ export function WorkdayStartPanel({
   onNewVisit,
   onFarmers,
   onMyRoute,
+  onOpenTracking,
   showVisitActions = true
 }: Props) {
   const { t } = useI18n();
@@ -126,6 +138,8 @@ export function WorkdayStartPanel({
   const startButtonLabel = startBusy
     ? startingLabel || t("workdayUx.startingWorkday")
     : t("workdayUx.startWorkday");
+  const isDashboard = presentation === "dashboard";
+  const compactDuration = formatCompactDuration(timerDisplay);
 
   const statusMeta = (() => {
     switch (workdayStatus) {
@@ -251,6 +265,26 @@ export function WorkdayStartPanel({
     );
   }
 
+  if (workdayStatus === "completed" && isDashboard) {
+    return (
+      <View style={[styles.card, styles.cardActive]} accessibilityRole="summary">
+        <View style={styles.statusRow}>
+          <Text style={styles.statusLabel}>{t("workdayUx.status")}</Text>
+          <View style={[styles.statusPill, { backgroundColor: statusMeta.bg }]}>
+            <Text style={[styles.statusPillText, { color: statusMeta.color }]}>{statusMeta.label}</Text>
+          </View>
+        </View>
+
+        <View style={styles.compactRows}>
+          <View style={styles.compactRow}>
+            <Text style={styles.compactLabel}>Worked</Text>
+            <Text style={styles.compactValue}>{compactDuration}</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   if (workdayStatus === "completed") {
     return (
       <View style={[styles.card, styles.cardActive]} accessibilityRole="summary">
@@ -289,6 +323,45 @@ export function WorkdayStartPanel({
           disabled={busy}
           style={styles.primaryBtn}
           accessibilityLabel={t("workdayUx.myRoute")}
+        />
+      </View>
+    );
+  }
+
+  if (isDashboard) {
+    const openTracking = onOpenTracking ?? onMyRoute;
+    return (
+      <View style={[styles.card, styles.cardActive]} accessibilityRole="summary">
+        <View style={styles.statusRow}>
+          <Text style={styles.statusLabel}>{t("workdayUx.status")}</Text>
+          <View style={[styles.statusPill, { backgroundColor: statusMeta.bg }]}>
+            <Text style={[styles.statusPillText, { color: statusMeta.color }]}>{statusMeta.label}</Text>
+          </View>
+        </View>
+
+        <View style={styles.compactRows}>
+          {startedAtLabel ? (
+            <View style={styles.compactRow}>
+              <Text style={styles.compactLabel}>Started</Text>
+              <Text style={styles.compactValue}>{startedAtLabel}</Text>
+            </View>
+          ) : null}
+          <View style={styles.compactRow}>
+            <Text style={styles.compactLabel}>Today's Work</Text>
+            <Text style={styles.compactValue}>Active</Text>
+          </View>
+        </View>
+
+        <Text style={styles.trackingLine}>
+          {trackingActiveLabel ?? t("workdayUx.locationTrackingActive")}
+        </Text>
+
+        <PrimaryButton
+          label="Open Tracking"
+          onPress={openTracking}
+          disabled={busy}
+          style={styles.primaryBtn}
+          accessibilityLabel="Open Tracking"
         />
       </View>
     );
@@ -498,6 +571,25 @@ const styles = StyleSheet.create({
   activeMeta: {
     ...TextStyles.caption,
     color: Semantic.textMuted
+  },
+  compactRows: {
+    gap: Spacing.sm
+  },
+  compactRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    minHeight: 28
+  },
+  compactLabel: {
+    ...TextStyles.caption,
+    color: Semantic.textMuted,
+    fontWeight: FontWeight.semibold
+  },
+  compactValue: {
+    color: Semantic.textPrimary,
+    fontSize: FontSize.body,
+    fontWeight: FontWeight.bold
   },
   trackingLine: {
     ...TextStyles.small,

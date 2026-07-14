@@ -380,6 +380,7 @@ export default function TodayTabScreen() {
             <View style={styles.workdaySection}>
               <WorkdayStartPanel
                 workdayStatus={workdaySessionStatus}
+                presentation="dashboard"
                 hydrating={!workdaySessionHydrated || !workdayServerReconciled}
                 active={workActive || workdaySessionStatus === "completed"}
                 busy={busy}
@@ -417,7 +418,8 @@ export default function TodayTabScreen() {
                   navigation.navigate("Work", { screen: "WorkHome", params: { segment: "queue" } })
                 }
                 onMyRoute={() => rootNav?.navigate("MyLocation")}
-                showVisitActions={workActive}
+                onOpenTracking={() => navigation.navigate("Day")}
+                showVisitActions={false}
               />
             </View>
           </FadeInSection>

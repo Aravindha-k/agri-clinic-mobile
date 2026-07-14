@@ -15,6 +15,7 @@ import {
 import { Employee, getCurrentEmployee } from "../../../src/api/employees";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { formatRelativeTimeLocalized } from "../../../src/i18n";
+import { useWorkdayTimer } from "../../../src/hooks/useLiveClock";
 import { useRefreshControlProps } from "../../../src/hooks/useRefreshControlProps";
 import { useSafeAreaInsetsCompat } from "../../../src/hooks/useSafeAreaInsetsCompat";
 import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
@@ -22,20 +23,28 @@ import { useTabBarBottomInset } from "../../../src/hooks/useTabBarBottomInset";
 import { useAuth } from "../../../src/storage/AuthContext";
 import { useEmployee } from "../../../src/storage/EmployeeContext";
 import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
+import { useTracking } from "../../../src/storage/TrackingContext";
+import type { TrackingErrorSource } from "../../../src/types/trackingError";
 import {
   checkLogoutAllowed,
   showLogoutBlockedAlert,
   trySyncBeforeLogout
 } from "../../lib/sync/logoutGuard";
 import { formatDisplayRole } from "../../../src/utils/formatRole";
+import { resolveWorkdayStartedAt } from "../../../src/utils/workdayStartedAt";
+import { ensureLocationForWorkdayStart } from "../../../src/utils/workdayLocationGate";
+import { workdayStartGateCopy } from "../../../src/utils/workdayStartCopy";
 import { cacheBustPhotoUrl, extractPhotoUrl, photoCacheVersion } from "../../../src/utils/profilePhotoUrl";
 import { fetchVisitsPage } from "../../../src/api/visits";
 import { EmptyState, GhostButton, PrimaryButton } from "../../components/ui";
 import { FlatCard, ScreenCanvas, ScreenEntranceBloom, ScreenLoader } from "../../components/layout";
 import { FadeInSection, entranceListStagger, entranceStagger } from "../../components/ui/FadeInSection";
+import { BrandLogoBadge } from "../../components/brand/BrandLogoBadge";
+import { WorkdayStartPanel } from "../../components/workday/WorkdayStartPanel";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
 import { getBadgeCount } from "../../lib/notificationsApi";
 import { useSyncStore } from "../../lib/store/syncStore";
+import { formatShortTime } from "../../lib/format";
 import { DS } from "../../../src/theme/globalStyles";
 import { Colors, FontSize, FontWeight, Layout, Radius, Spacing } from "../../lib/theme";
 import { SECTION_LABEL } from "../../lib/sectionLabel";
@@ -66,6 +75,14 @@ function HeroVersionMark({ version }: { version: string }) {
 }
 
 const PROFILE_AVATAR_SIZE = 96;
+const PROFILE_LOGO_SIZE = 116;
+
+function formatWorkdayTime(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return formatShortTime(value);
+}
 
 function HeroAvatar({
   photoUrl,
@@ -189,6 +206,23 @@ export default function ProfileTabScreen() {
   const { pendingCount, lastSyncAt, refreshQueue, syncAll, syncing } = useOfflineSync();
   const pendingGpsCount = useSyncStore((state) => state.pendingGPSCount);
   const { t, language, setLanguage } = useI18n();
+  const {
+    isActive,
+    workdaySessionStatus,
+    workdaySessionHydrated,
+    workdayServerReconciled,
+    timerDisplay,
+    startedAt: trackingStartedAt,
+    busy,
+    error: trackingError,
+    errorSource: trackingErrorSource,
+    startDay,
+    endDay,
+    workday,
+    refreshTracking,
+    pendingSyncCount,
+    cachedDistanceKm
+  } = useTracking();
 
   const [profile, setProfile] = useState<Employee | null>(employee);
   const [loading, setLoading] = useState(!employee);
@@ -200,6 +234,12 @@ export default function ProfileTabScreen() {
   const [visitsMonth, setVisitsMonth] = useState(0);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [syncingAll, setSyncingAll] = useState(false);
+  const [endingWorkday, setEndingWorkday] = useState(false);
+  const [startingWorkday, setStartingWorkday] = useState(false);
+  const [startPhase, setStartPhase] = useState<"idle" | "location" | "starting">("idle");
+  const [gateError, setGateError] = useState<string | null>(null);
+  const [dismissedError, setDismissedError] = useState("");
+  const [dismissedErrorSource, setDismissedErrorSource] = useState<TrackingErrorSource | null>(null);
   const lastLoadAtRef = useRef(0);
   const PROFILE_FOCUS_TTL_MS = 45_000;
   const SIGN_OUT_SYNC_TIMEOUT_MS = 8_000;
@@ -254,6 +294,58 @@ export default function ProfileTabScreen() {
     }
   }
 
+  async function handleStartWorkday() {
+    if (busy || startingWorkday) return;
+    setStartingWorkday(true);
+    setGateError(null);
+    setDismissedError("");
+    setStartPhase("location");
+    try {
+      const gate = await ensureLocationForWorkdayStart(workdayStartGateCopy(t));
+      if (!gate.ok) {
+        if (gate.reason === "services_cancelled") {
+          setGateError(t("workdayUx.servicesOffBody"));
+        } else if (gate.reason === "permission_required") {
+          setGateError(t("workdayUx.permissionBody"));
+        } else if (gate.reason === "permission_blocked") {
+          setGateError(t("workdayUx.permissionBlockedBody"));
+        } else if (gate.reason === "services_unavailable") {
+          setGateError(t("workdayUx.servicesResolutionUnavailable"));
+        }
+        return;
+      }
+      setStartPhase("starting");
+      const started = await startDay();
+      if (!started) return;
+      await refreshTracking().catch(() => undefined);
+    } finally {
+      setStartingWorkday(false);
+      setStartPhase("idle");
+    }
+  }
+
+  async function handleEndWorkday() {
+    if (busy || endingWorkday) return;
+    Alert.alert(t("home.endWorkdayTitle"), t("home.endWorkdayBody"), [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("home.endWorkday"),
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            setEndingWorkday(true);
+            try {
+              await endDay();
+              await refreshTracking().catch(() => undefined);
+            } finally {
+              setEndingWorkday(false);
+            }
+          })();
+        }
+      }
+    ]);
+  }
+
   function confirmSignOut() {
     const blocked = checkLogoutAllowed();
     if (!blocked.allowed) {
@@ -300,6 +392,31 @@ export default function ProfileTabScreen() {
   const phone = profile?.phone?.trim() || "—";
   const lastSyncedLabel = formatRelativeTimeLocalized(language, lastSyncAt);
   const neverSynced = !lastSyncAt;
+  const startedAt = useMemo(
+    () => resolveWorkdayStartedAt(workday) || trackingStartedAt || null,
+    [trackingStartedAt, workday]
+  );
+  const liveWorkdayTimer = useWorkdayTimer(startedAt, workdaySessionStatus === "in_progress");
+  const profileTimerDisplay =
+    workdaySessionStatus === "in_progress" ? liveWorkdayTimer.display : timerDisplay;
+  const visibleTrackingError = (() => {
+    if (gateError) {
+      return { message: gateError, source: "start_workday" as const };
+    }
+    if (!trackingError) {
+      return null;
+    }
+    if (trackingError === dismissedError && trackingErrorSource === dismissedErrorSource) {
+      return null;
+    }
+    if (!isActive && trackingErrorSource && trackingErrorSource !== "start_workday") {
+      return null;
+    }
+    if (isActive && trackingErrorSource === "start_workday") {
+      return null;
+    }
+    return { message: trackingError, source: trackingErrorSource };
+  })();
 
   const menuRows: MenuRow[] = useMemo(
     () => [
@@ -381,6 +498,13 @@ export default function ProfileTabScreen() {
             </View>
 
             <View style={styles.profileIdentity}>
+              <BrandLogoBadge
+                size={PROFILE_LOGO_SIZE}
+                animated
+                replayKey={entranceTick}
+                showOrbit
+                motionPreset="profile"
+              />
               <HeroAvatar photoUrl={photoUrl} photoVersion={photoVersion} />
               <Text style={styles.userName} numberOfLines={2}>
                 {displayName}
@@ -418,7 +542,46 @@ export default function ProfileTabScreen() {
           </View>
         </FadeInSection>
 
-        <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
+        <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)} variant="card">
+          <View style={styles.workdaySection}>
+            <WorkdayStartPanel
+              workdayStatus={workdaySessionStatus}
+              presentation="tracking"
+              hydrating={!workdaySessionHydrated || !workdayServerReconciled}
+              active={isActive || workdaySessionStatus === "completed"}
+              busy={busy}
+              starting={startingWorkday}
+              ending={endingWorkday}
+              startingLabel={
+                startPhase === "location"
+                  ? t("workdayUx.gettingLocation")
+                  : startPhase === "starting"
+                    ? t("workdayUx.startingWorkday")
+                    : null
+              }
+              error={visibleTrackingError?.message ?? null}
+              errorSource={visibleTrackingError?.source ?? null}
+              onDismissError={() => {
+                setGateError(null);
+                setDismissedError(trackingError || "");
+                setDismissedErrorSource(trackingErrorSource);
+              }}
+              timerDisplay={profileTimerDisplay}
+              startedAtLabel={formatWorkdayTime(startedAt)}
+              endedAtLabel={formatWorkdayTime(workday?.end_time)}
+              distanceKm={cachedDistanceKm ?? 0}
+              visitsToday={visitsToday}
+              pendingSync={pendingSyncCount + pendingCount}
+              showVisitActions={false}
+              onStart={() => void handleStartWorkday()}
+              onEnd={isActive ? () => void handleEndWorkday() : undefined}
+              onRetryStart={() => void handleStartWorkday()}
+              onMyRoute={() => rootNav?.navigate("MyLocation")}
+            />
+          </View>
+        </FadeInSection>
+
+        <FadeInSection replayKey={entranceTick} delay={entranceStagger(2)}>
           <View style={styles.menuSection}>
           <SectionLabel title={t("profile.menu")} />
 
@@ -624,6 +787,9 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingBottom: 8,
     paddingTop: Spacing.md
+  },
+  workdaySection: {
+    marginTop: Spacing.md
   },
   sectionLabel: {
     marginBottom: Spacing.sm,

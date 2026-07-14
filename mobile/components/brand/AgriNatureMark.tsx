@@ -166,7 +166,8 @@ export function AgriNatureOrbit({
   /** Tighter chips for a compact orbit band. */
   compact = false,
   /** Single dashed ring — used on Home hero. */
-  minimalTrack = false
+  minimalTrack = false,
+  durationMs = ORBIT_DURATION_MS
 }: {
   diameter: number;
   animate?: boolean;
@@ -174,6 +175,7 @@ export function AgriNatureOrbit({
   gapRatio?: number;
   compact?: boolean;
   minimalTrack?: boolean;
+  durationMs?: number;
 }) {
   const chipPad = compact ? 5 : ORBIT_CHIP_PADDING;
   const iconSize = Math.max(
@@ -198,11 +200,11 @@ export function AgriNatureOrbit({
     }
     rotation.value = 0;
     rotation.value = withRepeat(
-      withTiming(Math.PI * 2, { duration: ORBIT_DURATION_MS, easing: Easing.linear }),
+      withTiming(Math.PI * 2, { duration: durationMs, easing: Easing.linear }),
       -1,
       false
     );
-  }, [animate, rotation]);
+  }, [animate, durationMs, rotation]);
 
   return (
     <View pointerEvents="none" style={[styles.orbitStage, { width: stage, height: stage }]}>

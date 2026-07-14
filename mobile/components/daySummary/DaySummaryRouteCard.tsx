@@ -6,16 +6,13 @@ import { getAllWorkdayLocations, type LocationLogPoint } from "../../../src/api/
 import { FieldMapView } from "../../../src/components/map/FieldMapView";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { readPendingGpsBuffer } from "../../../mobile/lib/gps/trackingService";
-import { useTracking } from "../../../src/storage/TrackingContext";
 import {
   buildDayMarkerFitCoords,
   buildDayRouteMarkers,
-  buildWorkdayGpsRoute,
   extractWorkdayStartPoint
 } from "../../../src/utils/dayRouteMap";
 import { logDayTabError } from "../../../src/utils/dayTabDiagnostics";
 import { isSameVisitLocalDay } from "../../../src/utils/format";
-import { hasValidMapCoords, parseMapCoord } from "../../../src/utils/mapCoords";
 import { fitMapRegion } from "../../../src/utils/mapRegion";
 import { visitRowFromApi, type VisitMapPoint } from "../../../src/utils/visitMapFlow";
 import { getHomeVisits } from "../../../src/utils/visitsCache";
@@ -25,7 +22,6 @@ import { SectionHeader } from "../ui/SectionHeader";
 
 const MAP_HEIGHT = 132;
 const VISITS_REFRESH_MS = 60_000;
-const ACTIVE_TRACK_REFRESH_MS = 20_000;
 
 type Props = {
   title: string;
@@ -46,20 +42,12 @@ export function DaySummaryRouteCard({
   onPress
 }: Props) {
   const { t } = useI18n();
-  const { isActive, currentLocation } = useTracking();
   const mountedRef = useRef(true);
   const [previewWidth, setPreviewWidth] = useState(0);
   const [loading, setLoading] = useState(Boolean(workdayId));
   const [visitsToday, setVisitsToday] = useState<VisitMapPoint[]>([]);
   const [serverTrack, setServerTrack] = useState<LocationLogPoint[]>([]);
   const [pendingTrackTick, setPendingTrackTick] = useState(0);
-
-  const liveCoordinate = useMemo(() => {
-    const lat = parseMapCoord(currentLocation?.latitude);
-    const lng = parseMapCoord(currentLocation?.longitude);
-    if (lat == null || lng == null || !hasValidMapCoords(lat, lng)) return null;
-    return { latitude: lat, longitude: lng };
-  }, [currentLocation?.latitude, currentLocation?.longitude]);
 
   const pendingPoints = useMemo(() => {
     void pendingTrackTick;
@@ -83,10 +71,9 @@ export function DaySummaryRouteCard({
     () =>
       buildDayMarkerFitCoords({
         startPoint,
-        visits: visitsToday,
-        live: isActive ? liveCoordinate : null
+        visits: visitsToday
       }),
-    [isActive, liveCoordinate, startPoint, visitsToday]
+    [startPoint, visitsToday]
   );
 
   const markers = useMemo(
@@ -94,25 +81,11 @@ export function DaySummaryRouteCard({
       buildDayRouteMarkers({
         startPoint,
         visits: visitsToday,
-        isActive: Boolean(workdayId && isActive),
-        live: liveCoordinate,
         startLabel: t("myLocation.legendRouteStart"),
         startDescription: t("myLocation.workStartHint")
       }),
-    [isActive, liveCoordinate, startPoint, t, visitsToday, workdayId]
+    [startPoint, t, visitsToday]
   );
-
-  const routeLine = useMemo(() => {
-    if (!workdayId) return [];
-    return buildWorkdayGpsRoute({
-      serverPoints: serverTrack,
-      pendingPoints,
-      workdayId,
-      live: isActive ? liveCoordinate : null
-    });
-  }, [isActive, liveCoordinate, pendingPoints, serverTrack, workdayId]);
-
-  const showLiveOnMap = Boolean(workdayId && isActive && liveCoordinate);
 
   const mapRegion = useMemo(() => {
     if (fitCoordinates.length === 0) return undefined;
@@ -181,14 +154,6 @@ export function DaySummaryRouteCard({
     return () => clearInterval(timer);
   }, [loadDayRoute, workdayId]);
 
-  useEffect(() => {
-    if (!workdayId || !isActive) return;
-    const bumpPending = () => setPendingTrackTick((tick) => tick + 1);
-    bumpPending();
-    const timer = setInterval(bumpPending, ACTIVE_TRACK_REFRESH_MS);
-    return () => clearInterval(timer);
-  }, [isActive, workdayId, refreshToken, currentLocation?.latitude, currentLocation?.longitude]);
-
   const hasMapContent = fitCoordinates.length > 0;
   const showMap = !loading && hasMapContent && mapRegion && previewWidth > 0;
 
@@ -216,13 +181,11 @@ export function DaySummaryRouteCard({
                 height={MAP_HEIGHT}
                 width={previewWidth}
                 region={mapRegion}
-                route={routeLine}
                 markers={markers}
                 fitCoordinates={fitCoordinates}
                 fitEdgePadding={{ top: 28, right: 28, bottom: 28, left: 28 }}
-                showsUserLocation={showLiveOnMap}
-                locationGranted={showLiveOnMap}
-                liveFocus={showLiveOnMap ? liveCoordinate : null}
+                showsUserLocation={false}
+                locationGranted={false}
                 followsUserLocation={false}
                 permissionResolved
                 loading={false}

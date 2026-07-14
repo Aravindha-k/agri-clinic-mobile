@@ -1,24 +1,24 @@
-# FINAL approved Android launcher icon
+# Android launcher icon
 
-**Source of truth:** `../logo_splash.png` on the approved `app_icon_1024_approved.png` emerald background.
+**Source of truth:** `../logo.png`.
 
-This is the production Kavya Agri Clinic launcher artwork: approved company seal on emerald `#0B3D2E`.
+The production launcher icon is the approved Kavya Agri Clinic circular company logo centered on a solid white adaptive icon background.
 
 ## Rules
 
-- Do **not** redesign, AI-recreate, recolor, or retouch the company logo.
-- `npm run icons:generate` only recomposes the approved company seal larger on the approved emerald background, then resizes it into Expo + Android mipmaps.
-- Adaptive background color remains `#0B3D2E` (`@color/iconBackground`).
+- Do not redesign, AI-recreate, recolor, sharpen, or retouch the company logo.
+- `npm run icons:generate` only resizes and centers `../logo.png` on a 1024x1024 white canvas.
+- The visible logo diameter is 720px, or 70.3% of the full canvas.
+- The adaptive background color is `#FFFFFF` (`@color/iconBackground`).
+- The adaptive foreground is transparent outside the circular company logo.
 
 ## Files
 
 | File | Role |
 |------|------|
-| `../logo_splash.png` | Approved transparent company seal |
-| `app_icon_1024_approved.png` | Approved 1024x1024 emerald icon background/reference |
-| `app_icon_1024_approved_source.jpg` | Original upload as provided |
-| `app_icon_1024.png` / `app_icon_1024_solid.png` | Published 1024x1024 launcher masters |
-| `adaptive_icon_background*.png` | Solid emerald adaptive background layer |
+| `../logo.png` | Approved original company seal |
+| `app_icon_1024.png` / `app_icon_1024_solid.png` | Published 1024x1024 white launcher masters |
+| `adaptive_icon_background*.png` | Solid white adaptive background layer |
 | `mask_preview_*.png` | QA only (not shipped) |
 
 Regenerate mipmaps:

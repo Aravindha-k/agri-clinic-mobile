@@ -1,7 +1,7 @@
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { AlertTriangle, ClipboardList, Map, Users } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, AppState, RefreshControl, StyleSheet, View } from "react-native";
+import { AppState, RefreshControl, StyleSheet } from "react-native";
 import Animated, {
   Extrapolation,
   interpolate,
@@ -20,11 +20,6 @@ import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContex
 import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
 import { useTracking } from "../../../src/storage/TrackingContext";
 import { autoFlushPendingGps } from "../../lib/sync/offlineSyncManager";
-import { updateCachedWorkdayMetrics } from "../../../src/storage/workdaySessionStorage";
-import {
-  ensureLocationForWorkdayStart
-} from "../../../src/utils/workdayLocationGate";
-import { workdayStartGateCopy } from "../../../src/utils/workdayStartCopy";
 import { useFieldWeather } from "../../../src/hooks/useFieldWeather";
 import { FadeInSection, entranceStagger } from "../../components/ui/FadeInSection";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
@@ -36,22 +31,18 @@ import {
   TodayQuickActions,
   type TodayQuickAction
 } from "../../components/today";
-import { WorkdayInactiveBanner } from "../../../src/components/WorkdayInactiveBanner";
 import { OfflineBanner } from "../../components/ui";
 import { SyncHealthIndicator } from "../../components/sync/SyncHealthIndicator";
-import { WorkdayStartPanel } from "../../components/workday/WorkdayStartPanel";
 import { ScreenLoader } from "../../components/layout/ScreenLoader";
 import { readDashboardCache } from "../../lib/dashboardCache";
-import { resolveWorkdayStartedAt } from "../../../src/utils/workdayStartedAt";
-import { formatHeaderDate, formatShortTime } from "../../lib/format";
-import { fetchDashboard, fetchWorkStatus } from "../../lib/homeApi";
+import { formatHeaderDate } from "../../lib/format";
+import { fetchDashboard } from "../../lib/homeApi";
 import { getBadgeCount } from "../../lib/notificationsApi";
 import { useSyncStore } from "../../lib/store/syncStore";
 import { useScreenTopEdges } from "../../hooks/useScreenTopEdges";
 import { Colors, Layout, Spacing } from "../../lib/theme";
 import { TODAY_SECTION_GAP } from "../../lib/todayLayout";
-import type { TrackingErrorSource } from "../../../src/types/trackingError";
-import type { DashboardData, MobileWorkStatus } from "../../lib/types";
+import type { DashboardData } from "../../lib/types";
 
 function greetingKey(hour: number) {
   if (hour < 12) return "home.goodMorning";
@@ -80,43 +71,21 @@ export default function TodayTabScreen() {
   const { pendingCount, lastSyncAt, syncing } = useOfflineSync();
   const { visitsVersion } = useFieldDataRefresh();
   const {
-    isActive,
-    workdaySessionStatus,
-    workdaySessionHydrated,
-    workdayServerReconciled,
-    timerDisplay,
-    startDay,
-    endDay,
-    busy,
-    startedAt: trackingStartedAt,
-    workday,
-    error: trackingError,
-    errorSource: trackingErrorSource,
     refreshTracking,
-    currentLocation,
-    cachedDistanceKm,
-    pendingSyncCount
+    currentLocation
   } = useTracking();
   const unreadNotifCount = useSyncStore((state) => state.unreadNotifCount);
 
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [workStatus, setWorkStatus] = useState<MobileWorkStatus | null>(null);
   const [cacheHydrated, setCacheHydrated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [ending, setEnding] = useState(false);
-  const [starting, setStarting] = useState(false);
-  const [startPhase, setStartPhase] = useState<"idle" | "location" | "starting">("idle");
-  const [gateError, setGateError] = useState<string | null>(null);
-  const [dismissedError, setDismissedError] = useState("");
-  const [dismissedErrorSource, setDismissedErrorSource] = useState<TrackingErrorSource | null>(null);
   const dashboardRef = useRef<DashboardData | null>(null);
   dashboardRef.current = dashboard;
   const entranceTick = useScreenEntrance();
   const showOfflineBanner = lanOnly;
   const headerStep = showOfflineBanner ? 1 : 0;
-  const heroStep = headerStep + 3;
-  const planStep = heroStep + 1;
+  const planStep = headerStep + 3;
   const insightsStep = planStep + 1;
   const actionsStep = insightsStep + 1;
   const activityStep = actionsStep + 1;
@@ -124,14 +93,6 @@ export default function TodayTabScreen() {
   const weatherLat = parseCoord(currentLocation?.latitude);
   const weatherLng = parseCoord(currentLocation?.longitude);
   const { weather: fieldWeather, loading: weatherLoading } = useFieldWeather(weatherLat, weatherLng);
-
-  const workActive = workdaySessionStatus === "in_progress";
-  const workdayStartedAt = useMemo(
-    () => resolveWorkdayStartedAt(workday) || trackingStartedAt || null,
-    [trackingStartedAt, workday]
-  );
-  const startedAtLabel = workdayStartedAt ? formatShortTime(workdayStartedAt) : null;
-  const endedAtLabel = workday?.end_time ? formatShortTime(workday.end_time) : null;
 
   const employeeName = employee?.full_name || employee?.name || employee?.username || null;
   const dateLabel = formatHeaderDate();
@@ -160,13 +121,6 @@ export default function TodayTabScreen() {
     ]
   }));
 
-  const applyWorkStatus = useCallback((work: MobileWorkStatus) => {
-    setWorkStatus(work);
-    if (work.is_active) {
-      void updateCachedWorkdayMetrics(work.distance_km ?? 0, work.route_points ?? 0);
-    }
-  }, []);
-
   useEffect(() => {
     void readDashboardCache().then((cached) => {
       if (cached) {
@@ -184,9 +138,8 @@ export default function TodayTabScreen() {
         setLoading(true);
       }
       try {
-        const [dash, work] = await Promise.all([fetchDashboard({ force: isRefresh }), fetchWorkStatus()]);
+        const dash = await fetchDashboard({ force: isRefresh });
         setDashboard(dash);
-        applyWorkStatus(work);
         void getBadgeCount(true);
       } catch {
         const cachedDash = await readDashboardCache();
@@ -196,7 +149,7 @@ export default function TodayTabScreen() {
         setRefreshing(false);
       }
     },
-    [applyWorkStatus]
+    []
   );
 
   useFocusEffect(
@@ -216,10 +169,9 @@ export default function TodayTabScreen() {
       if (state !== "active") return;
       void autoFlushPendingGps();
       void refreshTracking().catch(() => undefined);
-      void fetchWorkStatus().then(applyWorkStatus).catch(() => undefined);
     });
     return () => sub.remove();
-  }, [applyWorkStatus, refreshTracking]);
+  }, [refreshTracking]);
 
   useEffect(() => {
     if (visitsVersion > 0) {
@@ -230,84 +182,6 @@ export default function TodayTabScreen() {
   async function onRefresh() {
     setRefreshing(true);
     await Promise.all([loadAll(true), refreshTracking().catch(() => undefined)]);
-  }
-
-  const visibleTrackingError = (() => {
-    if (gateError) {
-      return { message: gateError, source: "start_workday" as const };
-    }
-    if (!trackingError) {
-      return null;
-    }
-    if (trackingError === dismissedError && trackingErrorSource === dismissedErrorSource) {
-      return null;
-    }
-    if (!workActive && trackingErrorSource && trackingErrorSource !== "start_workday") {
-      return null;
-    }
-    if (workActive && trackingErrorSource === "start_workday") {
-      return null;
-    }
-    if (workdaySessionStatus === "completed" && trackingErrorSource === "end_workday") {
-      return null;
-    }
-    return { message: trackingError, source: trackingErrorSource };
-  })();
-
-  function confirmStartWorkday() {
-    if (busy || starting) return;
-    void (async () => {
-      setStarting(true);
-      setGateError(null);
-      setDismissedError("");
-      setStartPhase("location");
-      try {
-        const gate = await ensureLocationForWorkdayStart(workdayStartGateCopy(t));
-        if (!gate.ok) {
-          if (gate.reason === "services_cancelled") {
-            setGateError(t("workdayUx.servicesOffBody"));
-          } else if (gate.reason === "permission_required") {
-            setGateError(t("workdayUx.permissionBody"));
-          } else if (gate.reason === "permission_blocked") {
-            setGateError(t("workdayUx.permissionBlockedBody"));
-          } else if (gate.reason === "services_unavailable") {
-            setGateError(t("workdayUx.servicesResolutionUnavailable"));
-          }
-          return;
-        }
-        setStartPhase("starting");
-        const started = await startDay();
-        if (!started) return;
-        await refreshTracking().catch(() => undefined);
-        void fetchWorkStatus().then(applyWorkStatus).catch(() => undefined);
-      } finally {
-        setStarting(false);
-        setStartPhase("idle");
-      }
-    })();
-  }
-
-  function confirmEndWorkday() {
-    if (busy || ending) return;
-    Alert.alert(t("home.endWorkdayTitle"), t("home.endWorkdayBody"), [
-      { text: t("common.cancel"), style: "cancel" },
-      {
-        text: t("home.endWorkday"),
-        style: "destructive",
-        onPress: () => {
-          void (async () => {
-            setEnding(true);
-            try {
-              await endDay();
-              await refreshTracking().catch(() => undefined);
-              void fetchWorkStatus().then(applyWorkStatus).catch(() => undefined);
-            } finally {
-              setEnding(false);
-            }
-          })();
-        }
-      }
-    ]);
   }
 
   const quickActions: TodayQuickAction[] = useMemo(
@@ -377,55 +251,6 @@ export default function TodayTabScreen() {
         <SyncHealthIndicator onPress={() => rootNav?.navigate("SyncStatus")} />
 
         <Animated.View style={[styles.headerHeroZone, headerParallaxStyle]}>
-          <FadeInSection replayKey={entranceTick} delay={entranceStagger(heroStep)} duration={280}>
-            <View style={styles.workdaySection}>
-              <WorkdayStartPanel
-                workdayStatus={workdaySessionStatus}
-                presentation="dashboard"
-                hydrating={!workdaySessionHydrated || !workdayServerReconciled}
-                active={workActive || workdaySessionStatus === "completed"}
-                busy={busy}
-                starting={starting}
-                ending={ending}
-                startingLabel={
-                  startPhase === "location"
-                    ? t("workdayUx.gettingLocation")
-                    : startPhase === "starting"
-                      ? t("workdayUx.startingWorkday")
-                      : null
-                }
-                error={visibleTrackingError?.message ?? null}
-                errorSource={visibleTrackingError?.source ?? null}
-                onDismissError={() => {
-                  setGateError(null);
-                  setDismissedError(trackingError || "");
-                  setDismissedErrorSource(trackingErrorSource);
-                }}
-                timerDisplay={timerDisplay}
-                startedAtLabel={startedAtLabel}
-                endedAtLabel={endedAtLabel}
-                distanceKm={workStatus?.distance_km ?? cachedDistanceKm ?? 0}
-                visitsToday={dashboard?.visits_today ?? 0}
-                pendingSync={pendingSyncCount}
-                onStart={confirmStartWorkday}
-                onEnd={workActive ? confirmEndWorkday : undefined}
-                onRetryStart={confirmStartWorkday}
-                onNewVisit={() =>
-                  rootNav?.navigate("VisitFlow", {
-                    screen: "NewVisitFarmer",
-                    params: { fresh: true }
-                  })
-                }
-                onFarmers={() =>
-                  navigation.navigate("Work", { screen: "WorkHome", params: { segment: "queue" } })
-                }
-                onMyRoute={() => rootNav?.navigate("MyLocation")}
-                onOpenTracking={() => navigation.navigate("Day")}
-                showVisitActions={false}
-              />
-            </View>
-          </FadeInSection>
-
           <TodayHeader
             greeting={greeting}
             name={employeeName}
@@ -436,9 +261,6 @@ export default function TodayTabScreen() {
             entranceStep={headerStep}
             scrollY={scrollY}
           />
-
-          <WorkdayInactiveBanner />
-
           {showSkeleton ? <ScreenLoader message={t("common.loading")} /> : null}
         </Animated.View>
 
@@ -496,9 +318,6 @@ const styles = StyleSheet.create({
   },
   headerHeroZone: {
     gap: 0
-  },
-  workdaySection: {
-    marginTop: TODAY_SECTION_GAP
   },
   belowHero: {
     gap: TODAY_SECTION_GAP,

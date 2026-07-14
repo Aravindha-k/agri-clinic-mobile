@@ -31,6 +31,7 @@ import {
 
 /** Orbit + glass activate at this diameter and above. */
 const LOGO_PREMIUM_MIN = 56;
+const PROFILE_ORBIT_DURATION_MS = 10_000;
 
 type Props = {
   size?: number;
@@ -39,6 +40,7 @@ type Props = {
   showOrbit?: boolean;
   /** Pin orbit + badge to the left edge of the header column. */
   alignLeft?: boolean;
+  motionPreset?: "default" | "profile";
 };
 
 /**
@@ -50,7 +52,8 @@ export function BrandLogoBadge({
   animated = false,
   replayKey = 0,
   showOrbit = true,
-  alignLeft = false
+  alignLeft = false,
+  motionPreset = "default"
 }: Props) {
   const { coreMotion } = usePremiumMotion();
   const isPremium = size >= LOGO_PREMIUM_MIN;
@@ -71,6 +74,35 @@ export function BrandLogoBadge({
       return;
     }
 
+    if (motionPreset === "profile") {
+      zoom.value = 0.92;
+      zoom.value = withSequence(
+        withTiming(1.05, {
+          duration: 700,
+          easing: Easing.out(Easing.cubic)
+        }),
+        withTiming(1, {
+          duration: 420,
+          easing: Easing.inOut(Easing.ease)
+        }),
+        withRepeat(
+          withSequence(
+            withTiming(1.04, {
+              duration: 2200,
+              easing: Easing.inOut(Easing.ease)
+            }),
+            withTiming(0.98, {
+              duration: 2200,
+              easing: Easing.inOut(Easing.ease)
+            })
+          ),
+          -1,
+          true
+        )
+      );
+      return;
+    }
+
     zoom.value = BRAND_LOGO_ZOOM_MIN;
     zoom.value = withRepeat(
       withSequence(
@@ -86,7 +118,7 @@ export function BrandLogoBadge({
       -1,
       false
     );
-  }, [replayKey, shouldZoom, zoom]);
+  }, [motionPreset, replayKey, shouldZoom, zoom]);
 
   const logoZoomStyle = useAnimatedStyle(() => ({
     transform: [{ scale: zoom.value }]
@@ -173,6 +205,7 @@ export function BrandLogoBadge({
             showTrack
             gapRatio={BRAND_ORBIT_GAP_RATIO}
             compact
+            durationMs={motionPreset === "profile" ? PROFILE_ORBIT_DURATION_MS : undefined}
           />
         </View>
       ) : null}

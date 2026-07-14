@@ -5,23 +5,23 @@ import sharp from "sharp";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outDir = path.join(root, "tmp");
-const output = path.join(outDir, "home-workday-working-preview.png");
+const output = path.join(outDir, "home-no-workday-preview.png");
 
 await fs.mkdir(outDir, { recursive: true });
 
-const svg = `<svg width="390" height="220" viewBox="0 0 390 220" xmlns="http://www.w3.org/2000/svg">
-  <rect width="390" height="220" rx="0" fill="#F6F8F5"/>
-  <rect x="18" y="18" width="354" height="184" rx="18" fill="#FFFFFF" stroke="#DDE6DE"/>
-  <text x="38" y="55" font-family="Arial, sans-serif" font-size="12" font-weight="700" fill="#607062">Status</text>
-  <rect x="282" y="36" width="70" height="30" rx="15" fill="#E7F5EA"/>
-  <text x="317" y="56" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="700" fill="#1E7A3A">Working</text>
-  <text x="38" y="99" font-family="Arial, sans-serif" font-size="12" font-weight="700" fill="#607062">Started</text>
-  <text x="352" y="99" text-anchor="end" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#17221B">09:15 AM</text>
-  <text x="38" y="133" font-family="Arial, sans-serif" font-size="12" font-weight="700" fill="#607062">Today's Work</text>
-  <text x="352" y="133" text-anchor="end" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#17221B">Active</text>
-  <text x="38" y="161" font-family="Arial, sans-serif" font-size="12" font-weight="700" fill="#1E7A3A">Location tracking active</text>
-  <rect x="38" y="172" width="314" height="46" rx="12" fill="#0B5D3E"/>
-  <text x="195" y="201" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#FFFFFF">Open Tracking</text>
+const svg = `<svg width="390" height="260" viewBox="0 0 390 260" xmlns="http://www.w3.org/2000/svg">
+  <rect width="390" height="260" rx="0" fill="#F6F8F5"/>
+  <text x="24" y="38" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#607062">Good morning</text>
+  <text x="24" y="68" font-family="Arial, sans-serif" font-size="26" font-weight="800" fill="#17221B">Kavya Agri</text>
+  <rect x="24" y="94" width="162" height="70" rx="14" fill="#FFFFFF" stroke="#DDE6DE"/>
+  <text x="42" y="124" font-family="Arial, sans-serif" font-size="24" font-weight="800" fill="#0B5D3E">12</text>
+  <text x="42" y="149" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#607062">Visits today</text>
+  <rect x="204" y="94" width="162" height="70" rx="14" fill="#FFFFFF" stroke="#DDE6DE"/>
+  <text x="222" y="124" font-family="Arial, sans-serif" font-size="24" font-weight="800" fill="#0B5D3E">8</text>
+  <text x="222" y="149" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#607062">Farmers covered</text>
+  <rect x="24" y="184" width="342" height="54" rx="14" fill="#FFFFFF" stroke="#DDE6DE"/>
+  <text x="42" y="217" font-family="Arial, sans-serif" font-size="15" font-weight="800" fill="#17221B">Recent activity</text>
+  <text x="350" y="217" text-anchor="end" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#0B5D3E">View all</text>
 </svg>`;
 
 await sharp(Buffer.from(svg)).png().toFile(output);

@@ -8,7 +8,7 @@ const outDir = path.join(root, "tmp");
 const output = path.join(outDir, "launcher-icon-preview.png");
 const foreground = path.join(root, "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.webp");
 const legacy = path.join(root, "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp");
-const emerald = "#0B3D2E";
+const iconBackground = "#FFFFFF";
 
 function svgMask(kind, size) {
   if (kind === "circle") {
@@ -30,7 +30,7 @@ async function adaptiveIcon(kind, size) {
       width: size,
       height: size,
       channels: 4,
-      background: emerald
+      background: iconBackground
     }
   })
     .composite([{ input: fg, left: 0, top: 0 }])

@@ -50,7 +50,7 @@ if (!googleMapsAndroidApiKey && process.env.NODE_ENV !== "test") {
 }
 
 module.exports = () => ({
-  name: brand.appName,
+  name: brand.launcherAppName,
   slug: "agri-clinic-field-app",
   version: "1.0.1",
   orientation: "portrait",

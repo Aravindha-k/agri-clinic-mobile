@@ -26,6 +26,7 @@ type Props = {
   onDismissError?: () => void;
   timerDisplay: string;
   startedAtLabel?: string | null;
+  endedAtLabel?: string | null;
   distanceKm?: number;
   visitsToday?: number;
   pendingSync?: number;
@@ -117,6 +118,7 @@ export function WorkdayStartPanel({
   onDismissError,
   timerDisplay,
   startedAtLabel,
+  endedAtLabel,
   distanceKm = 0,
   visitsToday = 0,
   pendingSync = 0,
@@ -184,6 +186,15 @@ export function WorkdayStartPanel({
   }, [refreshReadiness]);
 
   if (hydrating) {
+    if (isDashboard) {
+      return (
+        <View style={styles.card} accessibilityRole="summary">
+          <Text style={styles.title}>{t("workdayUx.loadingWorkday")}</Text>
+          <Text style={styles.helper}>{t("workdayUx.checkingWorkday")}</Text>
+        </View>
+      );
+    }
+
     return (
       <View style={styles.card} accessibilityRole="summary">
         <Text style={styles.title}>{t("workdayUx.loadingWorkday")}</Text>
@@ -205,10 +216,14 @@ export function WorkdayStartPanel({
           </View>
         </View>
 
-        <Text style={styles.timer} accessibilityLabel={t("workdayUx.todaysWorkTime")}>
-          {timerDisplay || "00:00:00"}
-        </Text>
-        <Text style={styles.timerCaption}>{t("workdayUx.todaysWorkTime")}</Text>
+        {!isDashboard ? (
+          <>
+            <Text style={styles.timer} accessibilityLabel={t("workdayUx.todaysWorkTime")}>
+              {timerDisplay || "00:00:00"}
+            </Text>
+            <Text style={styles.timerCaption}>{t("workdayUx.todaysWorkTime")}</Text>
+          </>
+        ) : null}
 
         <Text style={styles.title}>{t("workdayUx.startYourWorkday")}</Text>
         <Text style={styles.helper}>{t("workdayUx.startHelper")}</Text>
@@ -280,6 +295,18 @@ export function WorkdayStartPanel({
             <Text style={styles.compactLabel}>Worked</Text>
             <Text style={styles.compactValue}>{compactDuration}</Text>
           </View>
+          {startedAtLabel ? (
+            <View style={styles.compactRow}>
+              <Text style={styles.compactLabel}>Start time</Text>
+              <Text style={styles.compactValue}>{startedAtLabel}</Text>
+            </View>
+          ) : null}
+          {endedAtLabel ? (
+            <View style={styles.compactRow}>
+              <Text style={styles.compactLabel}>End time</Text>
+              <Text style={styles.compactValue}>{endedAtLabel}</Text>
+            </View>
+          ) : null}
         </View>
       </View>
     );

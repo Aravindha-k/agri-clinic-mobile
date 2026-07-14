@@ -5,6 +5,7 @@ node_modules
 .expo-export-cinematic-test/
 .expo-bundle-check/
 dist/
+tmp/
 *.apk
 *.aab
 .env

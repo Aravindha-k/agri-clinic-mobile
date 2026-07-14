@@ -131,6 +131,7 @@ export default function TodayTabScreen() {
     [trackingStartedAt, workday]
   );
   const startedAtLabel = workdayStartedAt ? formatShortTime(workdayStartedAt) : null;
+  const endedAtLabel = workday?.end_time ? formatShortTime(workday.end_time) : null;
 
   const employeeName = employee?.full_name || employee?.name || employee?.username || null;
   const dateLabel = formatHeaderDate();
@@ -402,6 +403,7 @@ export default function TodayTabScreen() {
                 }}
                 timerDisplay={timerDisplay}
                 startedAtLabel={startedAtLabel}
+                endedAtLabel={endedAtLabel}
                 distanceKm={workStatus?.distance_km ?? cachedDistanceKm ?? 0}
                 visitsToday={dashboard?.visits_today ?? 0}
                 pendingSync={pendingSyncCount}

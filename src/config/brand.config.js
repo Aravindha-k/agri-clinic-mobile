@@ -6,6 +6,7 @@ module.exports = {
   brandTitleLine2: "Agri Clinic",
   platformSubtitle: "Smart Field Operations",
   appName: "Kavya Agri Clinic",
+  launcherAppName: "Kavya Agri",
   splashTitle: "Kavya Agri Clinic",
   splashSubtitle: "Field Officer App",
   tagline: "Diagnostics • Solutions • Growth",

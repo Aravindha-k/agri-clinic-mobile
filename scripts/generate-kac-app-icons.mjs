@@ -32,7 +32,8 @@ const OUT_ADAPTIVE_BG_ALIAS = path.join(KAC_DIR, "adaptive_icon_background.png")
 const ANDROID_RES = path.join(root, "android/app/src/main/res");
 
 const MASTER_SIZE = 1024;
-const LOGO_FILL_RATIO = 0.88;
+const LEGACY_LOGO_FILL_RATIO = 0.92;
+const ADAPTIVE_FOREGROUND_FILL_RATIO = 0.92;
 
 const LEGACY_SIZES = {
   "mipmap-mdpi": 48,
@@ -75,13 +76,17 @@ async function ensureApprovedSource() {
   }
 }
 
-async function buildMasterIcon() {
-  const logoSize = Math.round(MASTER_SIZE * LOGO_FILL_RATIO);
-  const logoOffset = Math.round((MASTER_SIZE - logoSize) / 2);
-  const logo = await sharp(SOURCE_APPROVED)
-    .resize(logoSize, logoSize, { fit: "contain", kernel: sharp.kernel.lanczos3 })
+async function renderLogo(size) {
+  return sharp(SOURCE_APPROVED)
+    .resize(size, size, { fit: "contain", kernel: sharp.kernel.lanczos3 })
     .png()
     .toBuffer();
+}
+
+async function buildMasterIcon() {
+  const logoSize = Math.round(MASTER_SIZE * LEGACY_LOGO_FILL_RATIO);
+  const logoOffset = Math.round((MASTER_SIZE - logoSize) / 2);
+  const logo = await renderLogo(logoSize);
   const master = await sharp(APPROVED_BACKGROUND)
     .resize(MASTER_SIZE, MASTER_SIZE, { fit: "cover", kernel: sharp.kernel.lanczos3 })
     .composite([{ input: logo, left: logoOffset, top: logoOffset }])
@@ -91,7 +96,24 @@ async function buildMasterIcon() {
   await fs.writeFile(OUT_APP_ICON, master);
   await fs.writeFile(OUT_APP_ICON_1024, master);
   await fs.writeFile(OUT_APP_ICON_SOLID, master);
-  await fs.writeFile(OUT_ADAPTIVE_FG, master);
+  return { logoSize, logoOffset };
+}
+
+async function buildAdaptiveForeground() {
+  const logoSize = Math.round(MASTER_SIZE * ADAPTIVE_FOREGROUND_FILL_RATIO);
+  const logoOffset = Math.round((MASTER_SIZE - logoSize) / 2);
+  const logo = await renderLogo(logoSize);
+  await sharp({
+    create: {
+      width: MASTER_SIZE,
+      height: MASTER_SIZE,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 }
+    }
+  })
+    .composite([{ input: logo, left: logoOffset, top: logoOffset }])
+    .png({ compressionLevel: 9 })
+    .toFile(OUT_ADAPTIVE_FG);
   return { logoSize, logoOffset };
 }
 
@@ -184,6 +206,7 @@ async function assertNoWhiteCornersOnLegacy() {
 async function main() {
   await ensureApprovedSource();
   const composition = await buildMasterIcon();
+  const adaptiveComposition = await buildAdaptiveForeground();
   await buildSolidEmeraldBackground();
   await writeAndroidMipmaps();
   await assertAdaptiveXml();
@@ -192,8 +215,12 @@ async function main() {
   console.log("FINAL approved launcher icon shipped (approved logo, larger composition):");
   console.log(`  source: ${path.relative(root, SOURCE_APPROVED)}`);
   console.log(`  approved background: ${path.relative(root, APPROVED_BACKGROUND)}`);
-  console.log(`  logo size: ${composition.logoSize}px (${Math.round(LOGO_FILL_RATIO * 100)}%)`);
-  console.log(`  safe margin: ${composition.logoOffset}px`);
+  console.log(`  legacy logo size: ${composition.logoSize}px (${Math.round(LEGACY_LOGO_FILL_RATIO * 100)}%)`);
+  console.log(`  legacy safe margin: ${composition.logoOffset}px`);
+  console.log(
+    `  adaptive foreground logo size: ${adaptiveComposition.logoSize}px (${Math.round(ADAPTIVE_FOREGROUND_FILL_RATIO * 100)}%)`
+  );
+  console.log(`  adaptive foreground transparent margin: ${adaptiveComposition.logoOffset}px`);
   console.log(`  ${path.relative(root, OUT_APP_ICON)}`);
   console.log(`  ${path.relative(root, OUT_ADAPTIVE_FG)}`);
   console.log(`  adaptive background: ${EMERALD}`);

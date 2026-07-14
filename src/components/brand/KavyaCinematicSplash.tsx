@@ -19,6 +19,7 @@ import { BRAND } from "../../config/brand";
 import { usePremiumMotion } from "../../hooks/usePremiumMotion";
 import { logStartup } from "../../utils/startupDiagnostics";
 import { SPLASH_ASSETS } from "./splashAssets";
+import { SplashLogoOrbit } from "./SplashLogoOrbit";
 import {
   CINEMATIC_SPLASH_BG,
   SPLASH_EXIT_FADE_MS,
@@ -42,10 +43,14 @@ const COPY_BLOCK_HEIGHT = 78;
 /** Match Expo splash plugin imageWidth (~200 logical px). */
 const LOGO_WIDTH_RATIO = 0.42;
 const LOGO_MAX = 200;
+/** Logo occupies 80% of the orbit diameter. */
+const ORBIT_SCALE = 1.25;
 
 const LOGO_ENTRY_DELAY_MS = 250;
 const LOGO_ENTRY_MS = 900;
-const LOGO_BREATHE_MAX = 1.025;
+const LOGO_SCALE_FROM = 0.84;
+const LOGO_BREATHE_MIN = 0.96;
+const LOGO_BREATHE_MAX = 1.12;
 const TITLE_START_MS = 520;
 const TITLE_ANIM_MS = 560;
 const SUBTITLE_START_MS = 720;
@@ -95,7 +100,7 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
   const bgScale = useSharedValue(SPLASH_KEN_BURNS_SCALE_MIN);
   const bgTranslateY = useSharedValue(0);
   const logoOpacity = useSharedValue(0);
-  const logoScale = useSharedValue(0.94);
+  const logoScale = useSharedValue(LOGO_SCALE_FROM);
   const logoTranslateY = useSharedValue(8);
   const titleOpacity = useSharedValue(0);
   const titleTranslateY = useSharedValue(14);
@@ -111,15 +116,17 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
   }, [screenH, screenW]);
 
   const bloomSize = useMemo(() => Math.round(logoSize * BLOOM_SIZE_RATIO), [logoSize]);
+  const orbitSize = useMemo(() => Math.round(logoSize * ORBIT_SCALE), [logoSize]);
+  const orbitOffset = useMemo(() => (orbitSize - logoSize) / 2, [logoSize, orbitSize]);
 
   const logoCenterY = useMemo(() => {
     const desired = screenH * SPLASH_LOGO_Y_RATIO;
     const maxCenter =
-      screenH - insets.bottom - COPY_BLOCK_HEIGHT - TITLE_GAP - logoSize / 2 - 12;
-    return Math.min(desired, Math.max(logoSize / 2 + insets.top + 12, maxCenter));
-  }, [insets.bottom, insets.top, logoSize, screenH]);
+      screenH - insets.bottom - COPY_BLOCK_HEIGHT - TITLE_GAP - orbitSize / 2 - 12;
+    return Math.min(desired, Math.max(orbitSize / 2 + insets.top + 12, maxCenter));
+  }, [insets.bottom, insets.top, orbitSize, screenH]);
 
-  const heroTop = useMemo(() => logoCenterY - logoSize / 2, [logoCenterY, logoSize]);
+  const heroTop = useMemo(() => logoCenterY - orbitSize / 2, [logoCenterY, orbitSize]);
 
   const elapsed = useCallback(() => {
     const start = layoutAtRef.current ?? Date.now();
@@ -201,7 +208,7 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     bgScale.value = SPLASH_KEN_BURNS_SCALE_MIN;
     bgTranslateY.value = 0;
     logoOpacity.value = 0;
-    logoScale.value = 0.94;
+    logoScale.value = LOGO_SCALE_FROM;
     logoTranslateY.value = preferLight ? 4 : 8;
     titleOpacity.value = 0;
     titleTranslateY.value = 14;
@@ -235,7 +242,7 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     logoScale.value = withDelay(
       LOGO_ENTRY_DELAY_MS,
       withSequence(
-        withTiming(1.02, { duration: preferLight ? 420 : 620, easing: easeOut }),
+        withTiming(1.08, { duration: preferLight ? 420 : 620, easing: easeOut }),
         withTiming(1, { duration: preferLight ? 280 : 380, easing: easeInOut }),
         ...(preferLight
           ? []
@@ -243,7 +250,7 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
               withRepeat(
                 withSequence(
                   withTiming(LOGO_BREATHE_MAX, { duration: SPLASH_LOGO_BREATHE_MS, easing: easeInOut }),
-                  withTiming(1, { duration: SPLASH_LOGO_BREATHE_MS, easing: easeInOut })
+                  withTiming(LOGO_BREATHE_MIN, { duration: SPLASH_LOGO_BREATHE_MS, easing: easeInOut })
                 ),
                 -1,
                 false
@@ -378,9 +385,15 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
 
       <View style={styles.logoLayer} pointerEvents="none">
         <View style={[styles.heroColumn, { top: heroTop, width: screenW }]}>
-          <Animated.View
-            style={[styles.logoCluster, logoStyle, { width: logoSize, height: logoSize }]}
-          >
+          <View style={[styles.logoCluster, { width: orbitSize, height: orbitSize }]}>
+            <SplashLogoOrbit
+              size={orbitSize}
+              left={0}
+              top={0}
+              active={layoutReady}
+              startDelayMs={300}
+              reducedMotion={reduced}
+            />
             <Animated.View
               style={[
                 styles.bloomWrap,
@@ -388,8 +401,8 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
                 {
                   width: bloomSize,
                   height: bloomSize,
-                  left: (logoSize - bloomSize) / 2,
-                  top: (logoSize - bloomSize) / 2
+                  left: (orbitSize - bloomSize) / 2,
+                  top: (orbitSize - bloomSize) / 2
                 }
               ]}
             >
@@ -405,13 +418,26 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
               </Svg>
             </Animated.View>
 
-            <Image
-              source={SPLASH_ASSETS.logo}
-              style={[styles.logoImage, { width: logoSize, height: logoSize }]}
-              resizeMode="contain"
-              accessibilityLabel="Kavya Agri-Horti Clinic logo"
-            />
-          </Animated.View>
+            <Animated.View
+              style={[
+                styles.logoMotion,
+                logoStyle,
+                {
+                  left: orbitOffset,
+                  top: orbitOffset,
+                  width: logoSize,
+                  height: logoSize
+                }
+              ]}
+            >
+              <Image
+                source={SPLASH_ASSETS.logo}
+                style={[styles.logoImage, { width: logoSize, height: logoSize }]}
+                resizeMode="contain"
+                accessibilityLabel="Kavya Agri-Horti Clinic logo"
+              />
+            </Animated.View>
+          </View>
 
           <Animated.View style={[styles.copyBlock, titleStyle, { marginTop: TITLE_GAP }]}>
             <Text style={styles.title} accessibilityRole="header">
@@ -478,9 +504,13 @@ const styles = StyleSheet.create({
     overflow: "visible",
     zIndex: 4
   },
+  logoMotion: {
+    position: "absolute",
+    zIndex: 6
+  },
   logoImage: {
     aspectRatio: 1,
-    zIndex: 5
+    zIndex: 6
   },
   copyBlock: {
     alignItems: "center",

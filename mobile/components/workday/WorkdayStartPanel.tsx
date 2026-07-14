@@ -207,6 +207,21 @@ export function WorkdayStartPanel({
 
   if (!active) {
     const meta = readinessMeta(readiness, t);
+    if (isDashboard) {
+      return (
+        <View style={styles.card} accessibilityRole="summary">
+          <PrimaryButton
+            label={startButtonLabel}
+            onPress={onStart}
+            loading={startBusy}
+            disabled={startBusy || workdayStatus === "completed"}
+            accessibilityLabel={startButtonLabel}
+            style={styles.primaryBtn}
+          />
+        </View>
+      );
+    }
+
     return (
       <View style={styles.card} accessibilityRole="summary">
         <View style={styles.statusRow}>

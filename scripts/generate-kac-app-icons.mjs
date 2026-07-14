@@ -1,7 +1,11 @@
 /**
- * Generates production launcher icons from approved KAC Variant A assets.
- * Source: assets/brand/kac/app_icon_1024_solid.png
- *         assets/brand/kac/monogram_transparent.png
+ * Generates Android launcher mipmaps from the FINAL approved app icon.
+ *
+ * Source of truth (do not redesign / AI-recreate):
+ *   assets/brand/kac/app_icon_1024_approved.png
+ *
+ * This script only resizes the approved artwork into Expo + Android densities.
+ * It must not draw a new monogram, change colors, or alter typography.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -13,21 +17,17 @@ const root = path.resolve(__dirname, "..");
 
 const EMERALD = "#0B3D2E";
 const EMERALD_RGB = { r: 11, g: 61, b: 46 };
+
 const KAC_DIR = path.join(root, "assets/brand/kac");
-const SOURCE_SOLID = path.join(KAC_DIR, "app_icon_1024_solid.png");
-const SOURCE_MONOGRAM = path.join(KAC_DIR, "monogram_transparent.png");
-const OUT_MONOGRAM_CLEAN = path.join(KAC_DIR, "monogram_transparent.png");
+const SOURCE_APPROVED = path.join(KAC_DIR, "app_icon_1024_approved.png");
 
 const OUT_APP_ICON = path.join(root, "assets/brand/app_icon.png");
 const OUT_APP_ICON_1024 = path.join(KAC_DIR, "app_icon_1024.png");
+const OUT_APP_ICON_SOLID = path.join(KAC_DIR, "app_icon_1024_solid.png");
 const OUT_ADAPTIVE_FG = path.join(root, "assets/brand/adaptive_icon_foreground.png");
 const OUT_ADAPTIVE_BG = path.join(KAC_DIR, "adaptive_icon_background_1024.png");
 const OUT_ADAPTIVE_BG_ALIAS = path.join(KAC_DIR, "adaptive_icon_background.png");
-const OUT_SVG = path.join(KAC_DIR, "kac_monogram.svg");
 const ANDROID_RES = path.join(root, "android/app/src/main/res");
-
-/** Adaptive-icon safe zone (~66% diameter) — prevents clipping on circle/squircle masks. */
-const MONOGRAM_SAFE_PX = 660;
 
 const LEGACY_SIZES = {
   "mipmap-mdpi": 48,
@@ -45,89 +45,31 @@ const FOREGROUND_SIZES = {
   "mipmap-xxxhdpi": 432
 };
 
-async function ensureSources() {
-  for (const file of [SOURCE_SOLID, SOURCE_MONOGRAM]) {
-    try {
-      await fs.access(file);
-    } catch {
-      throw new Error(`Missing KAC source: ${file}`);
-    }
+async function ensureApprovedSource() {
+  try {
+    await fs.access(SOURCE_APPROVED);
+  } catch {
+    throw new Error(
+      `Missing FINAL approved launcher icon: ${SOURCE_APPROVED}\n` +
+        "Place the approved 1024×1024 artwork at that path before running icons:generate."
+    );
+  }
+  const meta = await sharp(SOURCE_APPROVED).metadata();
+  if (!meta.width || !meta.height || meta.width !== meta.height) {
+    throw new Error(`Approved icon must be square. Got ${meta.width}x${meta.height}`);
   }
 }
 
-async function stripNearWhiteCanvas(input) {
-  const { data, info } = await sharp(input).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  const out = Buffer.from(data);
-  for (let i = 0; i < out.length; i += 4) {
-    const r = out[i];
-    const g = out[i + 1];
-    const b = out[i + 2];
-    const a = out[i + 3];
-    if (a === 0) continue;
-    const isNearWhite = r > 235 && g > 235 && b > 235;
-    const isPaperGray = r > 210 && g > 210 && b > 200 && Math.abs(r - g) < 24;
-    const isEmeraldField = r < 40 && g > 40 && b < 70;
-    if (isNearWhite || isPaperGray || isEmeraldField) {
-      out[i + 3] = 0;
-    }
-  }
-  return sharp(out, { raw: { width: info.width, height: info.height, channels: 4 } }).png().toBuffer();
+/** Exact copy (PNG) into brand + Expo paths — no filter / redesign. */
+async function publishApprovedCopies() {
+  const buf = await fs.readFile(SOURCE_APPROVED);
+  await fs.writeFile(OUT_APP_ICON, buf);
+  await fs.writeFile(OUT_APP_ICON_1024, buf);
+  await fs.writeFile(OUT_APP_ICON_SOLID, buf);
+  await fs.writeFile(OUT_ADAPTIVE_FG, buf);
 }
 
-async function inspectForegroundAlpha(file) {
-  const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  let transparent = 0;
-  let whiteOpaque = 0;
-  const total = info.width * info.height;
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
-    const a = data[i + 3];
-    if (a < 16) transparent += 1;
-    else if (r > 235 && g > 235 && b > 235) whiteOpaque += 1;
-  }
-  return {
-    file,
-    transparentPct: (transparent / total) * 100,
-    whiteOpaquePct: (whiteOpaque / total) * 100
-  };
-}
-
-async function normalizeSolid1024() {
-  await sharp(SOURCE_SOLID)
-    .resize(1024, 1024, { fit: "cover" })
-    .png()
-    .toFile(OUT_APP_ICON);
-  await fs.copyFile(OUT_APP_ICON, OUT_APP_ICON_1024);
-}
-
-async function buildAdaptiveForeground() {
-  const cleanedMonogram = await stripNearWhiteCanvas(SOURCE_MONOGRAM);
-  await sharp(cleanedMonogram).png().toFile(OUT_MONOGRAM_CLEAN);
-
-  const monogram = await sharp(cleanedMonogram)
-    .resize(MONOGRAM_SAFE_PX, MONOGRAM_SAFE_PX, {
-      fit: "contain",
-      background: { r: 0, g: 0, b: 0, alpha: 0 }
-    })
-    .png()
-    .toBuffer();
-
-  await sharp({
-    create: {
-      width: 1024,
-      height: 1024,
-      channels: 4,
-      background: { r: 0, g: 0, b: 0, alpha: 0 }
-    }
-  })
-    .composite([{ input: monogram, gravity: "center" }])
-    .png()
-    .toFile(OUT_ADAPTIVE_FG);
-}
-
-async function buildAdaptiveBackground() {
+async function buildSolidEmeraldBackground() {
   await sharp({
     create: {
       width: 1024,
@@ -141,23 +83,10 @@ async function buildAdaptiveBackground() {
   await fs.copyFile(OUT_ADAPTIVE_BG, OUT_ADAPTIVE_BG_ALIAS);
 }
 
-async function writeSvg() {
-  const pngBuffer = await fs.readFile(OUT_ADAPTIVE_FG);
-  const b64 = pngBuffer.toString("base64");
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="KAC monogram">
-  <title>Kavya Agri Clinic monogram</title>
-  <rect width="1024" height="1024" fill="${EMERALD}"/>
-  <image href="data:image/png;base64,${b64}" x="${(1024 - MONOGRAM_SAFE_PX) / 2}" y="${(1024 - MONOGRAM_SAFE_PX) / 2}" width="${MONOGRAM_SAFE_PX}" height="${MONOGRAM_SAFE_PX}" preserveAspectRatio="xMidYMid meet"/>
-</svg>
-`;
-  await fs.writeFile(OUT_SVG, svg, "utf8");
-}
-
 async function writeWebp(inputPath, outputPath, size) {
   await sharp(inputPath)
-    .resize(size, size, { fit: "cover" })
-    .webp({ quality: 95 })
+    .resize(size, size, { fit: "cover", kernel: sharp.kernel.lanczos3 })
+    .webp({ quality: 100, lossless: true })
     .toFile(outputPath);
 }
 
@@ -165,86 +94,72 @@ async function writeAndroidMipmaps() {
   for (const [folder, size] of Object.entries(LEGACY_SIZES)) {
     const dir = path.join(ANDROID_RES, folder);
     await fs.mkdir(dir, { recursive: true });
-    await writeWebp(OUT_APP_ICON, path.join(dir, "ic_launcher.webp"), size);
-    await writeWebp(OUT_APP_ICON, path.join(dir, "ic_launcher_round.webp"), size);
+    // Legacy launchers: approved artwork exactly (resized only).
+    await writeWebp(SOURCE_APPROVED, path.join(dir, "ic_launcher.webp"), size);
+    await writeWebp(SOURCE_APPROVED, path.join(dir, "ic_launcher_round.webp"), size);
   }
 
   for (const [folder, size] of Object.entries(FOREGROUND_SIZES)) {
     const dir = path.join(ANDROID_RES, folder);
     await fs.mkdir(dir, { recursive: true });
-    await writeWebp(OUT_ADAPTIVE_FG, path.join(dir, "ic_launcher_foreground.webp"), size);
+    // Adaptive foreground: same approved artwork (resized only).
+    await writeWebp(SOURCE_APPROVED, path.join(dir, "ic_launcher_foreground.webp"), size);
   }
 }
 
-async function writeMaskPreviews() {
-  const fg = await sharp(OUT_ADAPTIVE_FG).resize(512, 512).png().toBuffer();
-  const bg = await sharp(OUT_ADAPTIVE_BG).resize(512, 512).png().toBuffer();
-  const composed = await sharp(bg)
-    .composite([{ input: fg, gravity: "center" }])
-    .png()
-    .toBuffer();
-
-  const masks = {
-    "mask_preview_pixel_circle.png": Buffer.from(
-      `<svg width="512" height="512"><circle cx="256" cy="256" r="256" fill="white"/></svg>`
-    ),
-    "mask_preview_samsung_squircle.png": Buffer.from(
-      `<svg width="512" height="512"><rect x="32" y="32" width="448" height="448" rx="112" fill="white"/></svg>`
-    ),
-    "mask_preview_miui_rounded.png": Buffer.from(
-      `<svg width="512" height="512"><rect x="48" y="48" width="416" height="416" rx="96" fill="white"/></svg>`
-    )
-  };
-
-  for (const [name, maskSvg] of Object.entries(masks)) {
-    const masked = await sharp(composed)
-      .composite([{ input: maskSvg, blend: "dest-in" }])
-      .png()
-      .toBuffer();
-    await sharp({
-      create: {
-        width: 512,
-        height: 512,
-        channels: 4,
-        background: { r: 240, g: 240, b: 240, alpha: 255 }
-      }
-    })
-      .composite([{ input: masked, gravity: "center" }])
-      .png()
-      .toFile(path.join(KAC_DIR, name));
+async function assertAdaptiveXml() {
+  const xmlPaths = [
+    path.join(ANDROID_RES, "mipmap-anydpi-v26", "ic_launcher.xml"),
+    path.join(ANDROID_RES, "mipmap-anydpi-v26", "ic_launcher_round.xml")
+  ];
+  for (const xmlPath of xmlPaths) {
+    const xml = await fs.readFile(xmlPath, "utf8");
+    if (!xml.includes("@color/iconBackground") || !xml.includes("@mipmap/ic_launcher_foreground")) {
+      throw new Error(`Adaptive XML unexpected: ${xmlPath}`);
+    }
   }
-  console.log("  assets/brand/kac/mask_preview_*.png (QA only)");
+  const colors = await fs.readFile(path.join(ANDROID_RES, "values", "colors.xml"), "utf8");
+  if (!colors.includes("iconBackground") || !colors.toUpperCase().includes("0B3D2E")) {
+    throw new Error("iconBackground must be #0B3D2E");
+  }
+}
+
+async function assertNoWhiteCornersOnLegacy() {
+  const sample = path.join(ANDROID_RES, "mipmap-xxxhdpi", "ic_launcher.webp");
+  const { data, info } = await sharp(sample).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const at = (x, y) => {
+    const i = (y * info.width + x) * 4;
+    return [data[i], data[i + 1], data[i + 2]];
+  };
+  for (const [x, y] of [
+    [0, 0],
+    [info.width - 1, 0],
+    [0, info.height - 1],
+    [info.width - 1, info.height - 1]
+  ]) {
+    const [r, g, b] = at(x, y);
+    if (r > 200 && g > 200 && b > 200) {
+      throw new Error(`Legacy launcher still has white corner at ${x},${y} rgb(${r},${g},${b})`);
+    }
+  }
+  console.log(`  legacy corner check OK (emerald field, not white)`);
 }
 
 async function main() {
-  await ensureSources();
-  await normalizeSolid1024();
-  await buildAdaptiveForeground();
-  await buildAdaptiveBackground();
-  await writeSvg();
+  await ensureApprovedSource();
+  await publishApprovedCopies();
+  await buildSolidEmeraldBackground();
   await writeAndroidMipmaps();
-  await writeMaskPreviews();
+  await assertAdaptiveXml();
+  await assertNoWhiteCornersOnLegacy();
 
-  const fgAudit = await inspectForegroundAlpha(OUT_ADAPTIVE_FG);
-  console.log(
-    `  foreground audit: transparent=${fgAudit.transparentPct.toFixed(1)}% whiteOpaque=${fgAudit.whiteOpaquePct.toFixed(1)}%`
-  );
-  if (fgAudit.whiteOpaquePct > 1) {
-    throw new Error(
-      `Adaptive foreground still contains ${fgAudit.whiteOpaquePct.toFixed(1)}% white pixels — white launcher halo risk`
-    );
-  }
-  if (fgAudit.transparentPct < 50) {
-    throw new Error("Adaptive foreground lacks sufficient transparency for emerald background layer");
-  }
-
-  console.log("KAC Variant A icons generated:");
+  console.log("FINAL approved launcher icon shipped (resize only):");
+  console.log(`  source: ${path.relative(root, SOURCE_APPROVED)}`);
   console.log(`  ${path.relative(root, OUT_APP_ICON)}`);
   console.log(`  ${path.relative(root, OUT_ADAPTIVE_FG)}`);
-  console.log(`  ${path.relative(root, OUT_APP_ICON_1024)}`);
-  console.log(`  ${path.relative(root, OUT_ADAPTIVE_BG_ALIAS)}`);
-  console.log(`  ${path.relative(root, OUT_SVG)}`);
+  console.log(`  adaptive background: ${EMERALD}`);
   console.log("  android/app/src/main/res/mipmap-*/ic_launcher*.webp");
+  console.log("  android/app/src/main/res/mipmap-anydpi-v26/ic_launcher*.xml (unchanged)");
 }
 
 main().catch((err) => {

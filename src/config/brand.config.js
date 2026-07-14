@@ -23,7 +23,7 @@ module.exports = {
   logoAsset: "./assets/brand/logo.png",
   iconAsset: "./assets/brand/app_icon.png",
   adaptiveIconAsset: "./assets/brand/adaptive_icon_foreground.png",
-  /** Approved KAC prestige icon sources (Variant A). */
-  kacIconSolid: "./assets/brand/kac/app_icon_1024_solid.png",
-  kacMonogramTransparent: "./assets/brand/kac/monogram_transparent.png"
+  /** FINAL approved launcher artwork (resize-only into mipmaps). */
+  kacIconApproved: "./assets/brand/kac/app_icon_1024_approved.png",
+  kacIconSolid: "./assets/brand/kac/app_icon_1024_approved.png"
 };

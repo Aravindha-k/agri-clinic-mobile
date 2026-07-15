@@ -3,8 +3,7 @@ import { LOGO_IMAGE } from "../../../src/config/brand";
 import { AgriNatureMark } from "./AgriNatureMark";
 import {
   BRAND_LOGO_FILL,
-  BRAND_LOGO_INLINE,
-  BRAND_LOGO_INLINE_COVER
+  BRAND_LOGO_INLINE
 } from "./brandHeaderSpacing";
 
 type Props = {
@@ -13,7 +12,7 @@ type Props = {
 
 /** Logo chip for compact screen title bars — Work, Day, Tracking, etc. */
 export function BrandInlineLogo({ size = BRAND_LOGO_INLINE }: Props) {
-  const logoCover = Math.round(size * BRAND_LOGO_FILL * BRAND_LOGO_INLINE_COVER);
+  const markSize = Math.round(size * BRAND_LOGO_FILL);
 
   return (
     <View
@@ -26,13 +25,13 @@ export function BrandInlineLogo({ size = BRAND_LOGO_INLINE }: Props) {
       {LOGO_IMAGE ? (
         <Image
           source={LOGO_IMAGE}
-          style={{ width: logoCover, height: logoCover }}
-          resizeMode="cover"
+          style={{ width: size, height: size }}
+          resizeMode="contain"
           accessibilityLabel="Kavya Agri Clinic"
           accessibilityIgnoresInvertColors
         />
       ) : (
-        <AgriNatureMark size={Math.round(size * BRAND_LOGO_FILL)} variant="cluster" />
+        <AgriNatureMark size={markSize} variant="cluster" />
       )}
     </View>
   );
@@ -41,7 +40,7 @@ export function BrandInlineLogo({ size = BRAND_LOGO_INLINE }: Props) {
 const styles = StyleSheet.create({
   chip: {
     alignItems: "center",
-    backgroundColor: "#F7FBF8",
+    backgroundColor: "#FFFFFF",
     borderColor: "rgba(15, 107, 67, 0.22)",
     borderWidth: 1.5,
     flexShrink: 0,

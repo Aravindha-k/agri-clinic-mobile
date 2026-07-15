@@ -73,12 +73,8 @@ export function AppLogo({
   const mark = LOGO_IMAGE ? (
     <Image
       source={LOGO_IMAGE}
-      style={
-        roundBareMark
-          ? { width: dim * 1.12, height: dim * 1.12 }
-          : { width: dim, height: dim, aspectRatio: 1 }
-      }
-      resizeMode={roundBareMark ? "cover" : "contain"}
+      style={{ width: dim, height: dim, aspectRatio: 1 }}
+      resizeMode="contain"
       accessibilityLabel="Clinic logo"
     />
   ) : (

@@ -24,7 +24,8 @@ export const BRAND = {
   ...brandMeta,
   /** @deprecated Use `companyName` */
   name: brandMeta.companyName,
-  logo: require("../../assets/brand/logo.png") as number
+  /** In-app logo — sourced from assets/brand/logo_icons.png. */
+  logo: require("../../assets/brand/logo_icon.png") as number
 } as const;
 
 /** Set to null to use leaf fallback in logo components. */

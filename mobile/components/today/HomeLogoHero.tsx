@@ -16,7 +16,6 @@ import { usePremiumMotion } from "../../../src/hooks/usePremiumMotion";
 import { LOGO_IMAGE } from "../../../src/config/brand";
 import { AgriNatureMark, AgriNatureOrbit, computeOrbitGap, computeOrbitStageSize } from "../brand/AgriNatureMark";
 import {
-  BRAND_LOGO_COVER_SCALE,
   BRAND_LOGO_FILL,
   BRAND_LOGO_ZOOM_MAX,
   BRAND_LOGO_ZOOM_MIN,
@@ -117,7 +116,6 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
   const glow = useSharedValue(coreMotion ? GLOW_MIN : (GLOW_MIN + GLOW_MAX) / 2);
 
   const logoVisual = Math.round(HOME_LOGO_SIZE * BRAND_LOGO_FILL);
-  const logoCover = Math.round(logoVisual * BRAND_LOGO_COVER_SCALE);
   const outer = logoVisual;
   const orbitGap = computeOrbitGap(outer, BRAND_ORBIT_GAP_RATIO);
   const trackRadius = outer / 2 + orbitGap;
@@ -210,8 +208,8 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
           >
             <Image
               source={LOGO_IMAGE}
-              style={{ width: logoCover, height: logoCover }}
-              resizeMode="cover"
+              style={{ width: outer, height: outer }}
+              resizeMode="contain"
               accessibilityLabel="Kavya Agri Clinic"
               accessibilityIgnoresInvertColors
             />
@@ -221,7 +219,7 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
         )}
       </View>
     ),
-    [logoCover, logoVisual, outer]
+    [logoVisual, outer]
   );
 
   return (
@@ -339,7 +337,7 @@ const styles = StyleSheet.create({
   logoShell: {
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderColor: "rgba(184, 148, 58, 0.55)",
+    borderColor: "rgba(15, 107, 67, 0.22)",
     borderWidth: 2,
     justifyContent: "center",
     overflow: "hidden"

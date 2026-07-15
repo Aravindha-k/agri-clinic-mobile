@@ -19,7 +19,6 @@ import {
   computeOrbitStageSize
 } from "./AgriNatureMark";
 import {
-  BRAND_LOGO_COVER_SCALE,
   BRAND_LOGO_FILL,
   BRAND_LOGO_HERO,
   BRAND_LOGO_ZOOM_MAX,
@@ -59,7 +58,6 @@ export function BrandLogoBadge({
   const isPremium = size >= LOGO_PREMIUM_MIN;
   const logoVisual = Math.round(size * BRAND_LOGO_FILL);
   const logoSize = logoVisual;
-  const logoCover = Math.round(logoVisual * BRAND_LOGO_COVER_SCALE);
   const shouldOrbit = showOrbit && isPremium;
   const shouldZoom = animated && isPremium && coreMotion;
   const ringPad = isPremium ? 0 : 3;
@@ -152,8 +150,8 @@ export function BrandLogoBadge({
         >
           <Image
             source={LOGO_IMAGE}
-            style={{ width: logoCover, height: logoCover }}
-            resizeMode="cover"
+            style={{ width: outer, height: outer }}
+            resizeMode="contain"
             accessibilityLabel="Kavya Agri Clinic"
             accessibilityIgnoresInvertColors
           />
@@ -241,8 +239,8 @@ const styles = StyleSheet.create({
   },
   glassShell: {
     alignItems: "center",
-    backgroundColor: "#E8F3EC",
-    borderColor: "rgba(15, 107, 67, 0.28)",
+    backgroundColor: "#FFFFFF",
+    borderColor: "rgba(15, 107, 67, 0.22)",
     borderWidth: 2,
     justifyContent: "center",
     overflow: "hidden",
@@ -250,13 +248,13 @@ const styles = StyleSheet.create({
   },
   logoClip: {
     alignItems: "center",
-    backgroundColor: "#E8F3EC",
+    backgroundColor: "#FFFFFF",
     justifyContent: "center",
     overflow: "hidden"
   },
   badge: {
     alignItems: "center",
-    backgroundColor: "#E8F3EC",
+    backgroundColor: "#FFFFFF",
     borderColor: "rgba(15, 107, 67, 0.2)",
     borderWidth: StyleSheet.hairlineWidth,
     justifyContent: "center",
@@ -266,7 +264,7 @@ const styles = StyleSheet.create({
     })
   },
   badgeHero: {
-    borderColor: "rgba(15, 107, 67, 0.32)",
+    borderColor: "rgba(15, 107, 67, 0.28)",
     borderWidth: 1.5
   }
 });

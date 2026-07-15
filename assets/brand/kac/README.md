@@ -1,28 +1,24 @@
 # Android launcher icon
 
-**Source of truth:** `../logo_icon.png`.
+**Source of truth:** `../logo_icons.png` (promoted to `../logo_icon.png`).
 
-The production launcher icon is the approved Kavya Agri-Horti Clinic circular badge centered **inside a white circular orbit** (with transparent corners outside that orbit).
+```bash
+node scripts/promote-logo-icons.mjs
+```
 
 ## Rules
 
-- Do not redesign, AI-recreate, recolor, sharpen, or retouch the company logo.
-- `logo_icon.png` composition: white orbit + green badge inset (~66%) so OEM round/squircle masks never clip the green ring.
-- `npm run icons:generate` ships the source as-is onto legacy (white square) and adaptive (transparent corners) layers.
-- The adaptive background is opaque white (`#FFFFFF`, `@color/iconBackground`).
+- Artwork is the approved KAC + medical-cross brand mark on white.
+- Adaptive background is opaque white (`#FFFFFF`, `@color/iconBackground`).
 - Keep the launcher label `Kavya Agri` unchanged.
 
 ## Files
 
 | File | Role |
 |------|------|
-| `../logo_icon.png` | Launcher artwork source (white orbit + inset badge) |
-| `app_icon_1024.png` / `app_icon_1024_solid.png` | Circular 1024x1024 launcher masters |
-| `adaptive_icon_background*.png` | Opaque white adaptive background layer |
-| `mask_preview_*.png` | QA only (not shipped) |
-
-Regenerate mipmaps:
-
-```bash
-node scripts/generate-kac-app-icons.mjs
-```
+| `../logo_icons.png` | Designer source |
+| `../logo_icon.png` | In-app + promoted launcher source |
+| `../app_icon.png` | Expo / legacy square icon |
+| `../adaptive_icon_foreground.png` | Adaptive foreground |
+| `app_icon_1024.png` / `app_icon_1024_solid.png` | 1024 masters |
+| `mask_preview_*.png` / `preview_*.png` | QA only (not shipped) |

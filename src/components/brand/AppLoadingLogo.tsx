@@ -100,10 +100,10 @@ export function AppLoadingLogo({
             source={LOGO_IMAGE}
             style={[
               styles.logo,
-              { width: Math.round(size * 1.1), height: Math.round(size * 1.1) },
+              { width: size, height: size },
               shouldAnimate ? { transform: [{ scale: breathe }] } : null
             ]}
-            resizeMode="cover"
+            resizeMode="contain"
             accessibilityLabel="Loading"
           />
         ) : (

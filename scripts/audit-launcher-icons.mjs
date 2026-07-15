@@ -9,7 +9,7 @@ const approved = path.join(root, "assets/brand/logo_icon.png");
 const legacy = path.join(root, "assets/brand/app_icon.png");
 const foreground = path.join(root, "assets/brand/adaptive_icon_foreground.png");
 const background = path.join(root, "assets/brand/kac/adaptive_icon_background_1024.png");
-const approvedSha = "442f4de4f38cf74bab61d9dcf57fa1c0b442155530b74caac145a6a238b0e99d";
+const approvedSha = "2bd7a0ab02fa9535d94ee55b8d396bad4755fc05a88947cff4f48fe7f654af56";
 const androidRes = path.join(root, "android/app/src/main/res");
 const legacySizes = {
   "mipmap-mdpi": 48,

@@ -22,7 +22,7 @@ const TRANSPARENT_RGBA = { r: 0, g: 0, b: 0, alpha: 0 };
 const WHITE_RGBA = { r: 255, g: 255, b: 255, alpha: 1 };
 const ADAPTIVE_BACKGROUND = "#FFFFFF";
 const ADAPTIVE_BACKGROUND_RGB = { r: 255, g: 255, b: 255 };
-const APPROVED_SOURCE_SHA256 = "442f4de4f38cf74bab61d9dcf57fa1c0b442155530b74caac145a6a238b0e99d";
+const APPROVED_SOURCE_SHA256 = "2bd7a0ab02fa9535d94ee55b8d396bad4755fc05a88947cff4f48fe7f654af56";
 
 const SOURCE_APPROVED = path.join(root, "assets/brand/logo_icon.png");
 const KAC_DIR = path.join(root, "assets/brand/kac");

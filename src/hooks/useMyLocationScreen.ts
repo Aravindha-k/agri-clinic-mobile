@@ -11,6 +11,7 @@ import { isBackgroundLocationTrackingActive } from "../tracking/backgroundLocati
 import { readCachedActiveWorkday } from "../storage/workdaySessionStorage";
 import { readLocationServicesEnabled } from "../utils/locationServicesProbe";
 import { hasValidMapCoords, parseMapCoord } from "../utils/mapCoords";
+import { logMapEvent } from "../utils/mapDebug";
 import { DEFAULT_MAP_REGION, fitMapRegion } from "../utils/mapRegion";
 import { isSameVisitLocalDay, visitDisplayIso } from "../utils/format";
 import { getHomeVisits } from "../utils/visitsCache";
@@ -138,9 +139,22 @@ export function useMyLocationScreen() {
         Location.getForegroundPermissionsAsync()
       ]);
       if (!mountedRef.current) return;
-      setLocationGranted(servicesEnabled && permission.status === "granted");
-    } catch {
+      const granted = servicesEnabled && permission.status === "granted";
+      setLocationGranted(granted);
+      logMapEvent("MyLocationScreen", "permission_status", {
+        permission: permission.status,
+        servicesEnabled,
+        granted
+      });
+      logMapEvent("MyLocationScreen", "gps_status", { servicesEnabled });
+      if (granted) {
+        logMapEvent("MyLocationScreen", "location_success", { source: "foreground_permission" });
+      }
+    } catch (err) {
       if (mountedRef.current) setLocationGranted(false);
+      logMapEvent("MyLocationScreen", "location_error", {
+        message: err instanceof Error ? err.message : "permission_check_failed"
+      });
     }
   }, []);
 

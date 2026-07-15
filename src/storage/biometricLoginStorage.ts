@@ -16,7 +16,52 @@ export type BiometricLoginStatus = {
   label: string;
 };
 
+/** Structured biometric logs. Never includes tokens/secrets/secure-store values. */
+type BiometricLogEvent =
+  | "capability_checked"
+  | "onboarding_required"
+  | "onboarding_skipped"
+  | "setup_started"
+  | "setup_success"
+  | "setup_failed"
+  | "login_prompt_started"
+  | "login_success"
+  | "login_cancelled"
+  | "login_failed"
+  | "prompt_suppressed_duplicate"
+  | "enabled_flag_cleared";
+
+export function logBiometric(event: BiometricLogEvent, detail?: Record<string, unknown>) {
+  // eslint-disable-next-line no-console
+  console.log(`[Biometric] ${event}`, detail ?? {});
+}
+
 let legacyCleared = false;
+
+/**
+ * Only one native biometric prompt may be active at a time. Prevents duplicate
+ * prompts from React Strict Mode, focus listeners, token hydration, and
+ * repeated app-state events all racing into authenticateAsync().
+ */
+let biometricPromptInProgress = false;
+
+/**
+ * One auto-unlock attempt per app launch (process). Survives LoginScreen
+ * remounts so navigation/tab changes never re-open the prompt on their own.
+ */
+let unlockAttemptedThisLaunch = false;
+
+export function hasAttemptedBiometricUnlockThisLaunch(): boolean {
+  return unlockAttemptedThisLaunch;
+}
+
+export function markBiometricUnlockAttempted(): void {
+  unlockAttemptedThisLaunch = true;
+}
+
+export function isBiometricPromptInProgress(): boolean {
+  return biometricPromptInProgress;
+}
 
 /** Remove any historically stored plaintext passwords. Safe to call often. */
 export async function migrateLegacyBiometricPasswords(): Promise<void> {
@@ -50,12 +95,18 @@ export async function getBiometricLoginStatus(): Promise<BiometricLoginStatus> {
     SecureStore.getItemAsync(ENABLED_KEY)
   ]);
 
-  return {
+  const status = {
     hardwareAvailable,
     enrolled,
     enabled: enabledFlag === "1",
     label: await getBiometricTypeLabel()
   };
+  logBiometric("capability_checked", {
+    hardwareAvailable,
+    enrolled,
+    enabled: status.enabled
+  });
+  return status;
 }
 
 export async function canUseBiometricLogin(): Promise<boolean> {
@@ -87,10 +138,21 @@ export async function shouldOfferBiometricEnrollment(): Promise<boolean> {
     isBiometricEnrollmentDismissed()
   ]);
   if (!status.hardwareAvailable || !status.enrolled || status.enabled || dismissed) {
+    logBiometric("onboarding_skipped", {
+      hardwareAvailable: status.hardwareAvailable,
+      enrolled: status.enrolled,
+      enabled: status.enabled,
+      dismissed
+    });
     return false;
   }
   const refresh = await getRefreshToken();
-  return Boolean(refresh);
+  if (!refresh) {
+    logBiometric("onboarding_skipped", { reason: "no_refresh_token" });
+    return false;
+  }
+  logBiometric("onboarding_required");
+  return true;
 }
 
 /**
@@ -99,30 +161,44 @@ export async function shouldOfferBiometricEnrollment(): Promise<boolean> {
  */
 export async function enableBiometricLoginWithVerification(): Promise<boolean> {
   await migrateLegacyBiometricPasswords();
+  if (biometricPromptInProgress) {
+    logBiometric("prompt_suppressed_duplicate", { source: "setup" });
+    return false;
+  }
   const [hardwareAvailable, enrolled] = await Promise.all([
     LocalAuthentication.hasHardwareAsync(),
     LocalAuthentication.isEnrolledAsync()
   ]);
   if (!hardwareAvailable || !enrolled) {
+    logBiometric("setup_failed", { reason: "no_hardware_or_enrollment" });
     return false;
   }
   const refresh = await getRefreshToken();
   if (!refresh) {
+    logBiometric("setup_failed", { reason: "no_refresh_token" });
     return false;
   }
 
-  const auth = await LocalAuthentication.authenticateAsync({
-    promptMessage: "Confirm fingerprint to enable faster login",
-    cancelLabel: "Cancel",
-    disableDeviceFallback: false
-  });
-  if (!auth.success) {
-    return false;
-  }
+  biometricPromptInProgress = true;
+  logBiometric("setup_started");
+  try {
+    const auth = await LocalAuthentication.authenticateAsync({
+      promptMessage: "Confirm fingerprint to enable faster login",
+      cancelLabel: "Cancel",
+      disableDeviceFallback: false
+    });
+    if (!auth.success) {
+      logBiometric("setup_failed", { reason: auth.error ?? "not_successful" });
+      return false;
+    }
 
-  await SecureStore.setItemAsync(ENABLED_KEY, "1");
-  await clearBiometricEnrollmentDismissed();
-  return true;
+    await SecureStore.setItemAsync(ENABLED_KEY, "1");
+    await clearBiometricEnrollmentDismissed();
+    logBiometric("setup_success");
+    return true;
+  } finally {
+    biometricPromptInProgress = false;
+  }
 }
 
 /**
@@ -131,6 +207,10 @@ export async function enableBiometricLoginWithVerification(): Promise<boolean> {
  */
 export async function unlockSessionWithBiometrics(): Promise<boolean> {
   await migrateLegacyBiometricPasswords();
+  if (biometricPromptInProgress) {
+    logBiometric("prompt_suppressed_duplicate", { source: "login" });
+    return false;
+  }
   const enabled = await SecureStore.getItemAsync(ENABLED_KEY);
   if (enabled !== "1") {
     return false;
@@ -142,17 +222,32 @@ export async function unlockSessionWithBiometrics(): Promise<boolean> {
     return false;
   }
 
-  const auth = await LocalAuthentication.authenticateAsync({
-    promptMessage: "Unlock your field workspace",
-    cancelLabel: "Cancel",
-    disableDeviceFallback: false
-  });
-  if (!auth.success) {
-    return false;
-  }
+  biometricPromptInProgress = true;
+  // Any real prompt counts as this launch's auto attempt so it cannot re-open
+  // itself on the next LoginScreen remount.
+  unlockAttemptedThisLaunch = true;
+  logBiometric("login_prompt_started");
+  try {
+    const auth = await LocalAuthentication.authenticateAsync({
+      promptMessage: "Unlock your field workspace",
+      cancelLabel: "Cancel",
+      disableDeviceFallback: false
+    });
+    if (!auth.success) {
+      logBiometric("login_cancelled", { error: auth.error ?? "not_successful" });
+      return false;
+    }
 
-  const access = await refreshAccessTokenOnce();
-  return Boolean(access);
+    const access = await refreshAccessTokenOnce();
+    if (access) {
+      logBiometric("login_success");
+      return true;
+    }
+    logBiometric("login_failed", { reason: "token_refresh_failed" });
+    return false;
+  } finally {
+    biometricPromptInProgress = false;
+  }
 }
 
 /** @deprecated Passwords are never returned. Prefer unlockSessionWithBiometrics. */
@@ -168,6 +263,7 @@ export async function clearBiometricLogin(): Promise<void> {
     SecureStore.deleteItemAsync(LEGACY_PASS_KEY).catch(() => undefined),
     SecureStore.deleteItemAsync(LEGACY_USER_KEY).catch(() => undefined)
   ]);
+  logBiometric("enabled_flag_cleared");
 }
 
 /** @deprecated Use enableBiometricLoginWithVerification */

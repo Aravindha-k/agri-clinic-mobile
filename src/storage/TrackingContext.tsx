@@ -201,6 +201,9 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   workdayRef.current = workday;
   currentLocationRef.current = currentLocation;
 
+  const gpsStateRef = useRef(gpsState);
+  gpsStateRef.current = gpsState;
+
   const clearTrackedError = useCallback((source?: TrackingErrorSource) => {
     setTrackedError((prev) => {
       if (!prev) return null;
@@ -897,6 +900,21 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     startForegroundLoop();
   }, [startForegroundLoop, stopForegroundLoop]);
 
+  // Stable refs so lifecycle effects can key off primitive workday identity
+  // (activeWorkdayId) instead of unstable callbacks. This prevents the
+  // background-location task from being stopped and restarted on every render,
+  // navigation focus, workday sync, or GPS-state change.
+  const resumeTrackingRef = useRef(resumeActiveWorkdayTracking);
+  const startElapsedLoopRef = useRef(startElapsedLoop);
+  const stopAllTrackingLoopsRef = useRef(stopAllTrackingLoops);
+  const syncWorkdayRef = useRef(syncWorkdayFromServer);
+  const flushQueueRef = useRef(flushPendingLocationQueue);
+  resumeTrackingRef.current = resumeActiveWorkdayTracking;
+  startElapsedLoopRef.current = startElapsedLoop;
+  stopAllTrackingLoopsRef.current = stopAllTrackingLoops;
+  syncWorkdayRef.current = syncWorkdayFromServer;
+  flushQueueRef.current = flushPendingLocationQueue;
+
   const startDay = useCallback(async (): Promise<boolean> => {
     setBusy(true);
     try {
@@ -1208,9 +1226,10 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     }
     const onAppState = (state: AppStateStatus) => {
       if (state === "active") {
-        runSafe(syncWorkdayFromServer({ force: true }).then(() => flushPendingLocationQueue()));
+        runSafe(syncWorkdayRef.current({ force: true }).then(() => flushQueueRef.current()));
         if (isWorkdayActive(workdayRef.current)) {
-          runSafe(resumeActiveWorkdayTracking());
+          // startBackgroundLocationTracking() is a no-op when already running.
+          runSafe(resumeTrackingRef.current());
         }
         return;
       }
@@ -1221,7 +1240,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     };
     const sub = AppState.addEventListener("change", onAppState);
     return () => sub.remove();
-  }, [flushPendingLocationQueue, resumeActiveWorkdayTracking, syncWorkdayFromServer, workdayApiReady]);
+  }, [workdayApiReady]);
 
   const activeWorkdayId =
     workdayApiReady &&
@@ -1248,16 +1267,18 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!activeWorkdayId) {
-      stopAllTrackingLoops();
+      stopAllTrackingLoopsRef.current();
       return;
     }
-    startElapsedLoop();
+    // Keyed only on the primitive workday id: start loops + background tracking
+    // once per active workday, not on every callback/gpsState identity change.
+    startElapsedLoopRef.current();
     startGpsTrackingService({
-      isGpsEnabled: () => gpsState !== "denied"
+      isGpsEnabled: () => gpsStateRef.current !== "denied"
     });
-    void resumeActiveWorkdayTracking();
-    return stopAllTrackingLoops;
-  }, [activeWorkdayId, gpsState, resumeActiveWorkdayTracking, startElapsedLoop, stopAllTrackingLoops]);
+    void resumeTrackingRef.current();
+    return () => stopAllTrackingLoopsRef.current();
+  }, [activeWorkdayId]);
 
   useEffect(() => {
     if (!trackingReady || !activeWorkdayId) {
@@ -1281,16 +1302,21 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     }
   }, [activeWorkdayId, enforceMaxWorkdayDuration]);
 
+  const prevBatterySaverRef = useRef(trackingBatterySaver);
   useEffect(() => {
     setTrackingBatterySaverEnabled(trackingBatterySaver);
-    if (!activeWorkdayId) {
+    const changed = prevBatterySaverRef.current !== trackingBatterySaver;
+    prevBatterySaverRef.current = trackingBatterySaver;
+    // Only cycle the background task when the battery-saver setting actually
+    // changes — never on workday re-render or callback identity churn.
+    if (!activeWorkdayId || !changed) {
       return;
     }
     void (async () => {
       await stopBackgroundLocationTracking();
-      await resumeActiveWorkdayTracking();
+      await resumeTrackingRef.current();
     })();
-  }, [activeWorkdayId, resumeActiveWorkdayTracking, trackingBatterySaver]);
+  }, [activeWorkdayId, trackingBatterySaver]);
 
   const nextSyncAt = useMemo(
     () =>

@@ -13,8 +13,16 @@ const PLACEHOLDER_KEYS = new Set([
   "YOUR_GOOGLE_MAPS_ANDROID_API_KEY",
   "your API key",
   "undefined",
-  "null"
+  "null",
+  "local-build-placeholder"
 ]);
+
+/** Any obvious non-key sentinel value that must never reach a release APK. */
+function isPlaceholderKey(value) {
+  if (PLACEHOLDER_KEYS.has(value)) return true;
+  const lowered = value.toLowerCase();
+  return lowered.includes("placeholder") || lowered.includes("your_") || lowered.includes("replace");
+}
 
 const issues = [];
 const passes = [];
@@ -195,8 +203,8 @@ if (existsSync(manifestPath)) {
   }
   if (value == null) {
     fail(`AndroidManifest.xml missing ${META_NAME} metadata`);
-  } else if (PLACEHOLDER_KEYS.has(value)) {
-    fail("AndroidManifest Google Maps API key is empty or placeholder");
+  } else if (isPlaceholderKey(value)) {
+    fail(`AndroidManifest Google Maps API key is empty or a placeholder ("${value}")`);
   } else {
     const masked = value.length < 8 ? "(too short)" : `${value.slice(0, 4)}…${value.slice(-4)}`;
     pass(`AndroidManifest ${META_NAME} present (${value.length} chars, ${masked})`);

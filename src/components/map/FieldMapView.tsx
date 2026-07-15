@@ -11,7 +11,7 @@ import {
   isAndroidMapsNativeConfigured,
   MAP_CONFIG_UNAVAILABLE_MESSAGE
 } from "../../utils/mapsNativeConfig";
-import { logMapDiagnostics } from "../../utils/mapDebug";
+import { logMapDiagnostics, logMapEvent } from "../../utils/mapDebug";
 import { sanitizeRegion } from "../../utils/mapRegion";
 import { FieldMapMarker } from "./FieldMapMarker";
 import { MapErrorBoundary } from "./MapErrorBoundary";
@@ -165,21 +165,19 @@ export function FieldMapView({
     if (!mapsNativeConfigured) return false;
     if (errorMessage) return false;
     if (!permissionResolved || loading) return false;
-    if (locationDenied && !hasRenderableCoordinates) return false;
+    // safeRegion always resolves to a valid Tamil Nadu fallback when the input
+    // is missing/invalid, so the base map renders even before any marker,
+    // route, or live GPS fix is available. We never block the map purely for
+    // lack of coordinates — an empty hint is overlaid instead.
     if (!hasValidMapCoords(safeRegion.latitude, safeRegion.longitude)) return false;
-    if (!hasRenderableCoordinates) return false;
     return true;
   }, [
     errorMessage,
-    hasRenderableCoordinates,
     loading,
-    locationDenied,
-    locationGranted,
     mapsNativeConfigured,
     permissionResolved,
     safeRegion.latitude,
-    safeRegion.longitude,
-    showsUserLocation
+    safeRegion.longitude
   ]);
 
   const allowFollowUser =
@@ -187,10 +185,40 @@ export function FieldMapView({
 
   useEffect(() => {
     mountedRef.current = true;
+    logMapEvent(screenName, "component_mounted");
+    logMapEvent(screenName, "api_key_configured", { mapsNativeConfigured });
     return () => {
       mountedRef.current = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    logMapEvent(screenName, "permission_status", {
+      permissionResolved,
+      locationGranted,
+      locationDenied
+    });
+    logMapEvent(screenName, "gps_status", {
+      showsUserLocation,
+      locationGranted
+    });
+  }, [locationDenied, locationGranted, permissionResolved, screenName, showsUserLocation]);
+
+  useEffect(() => {
+    logMapEvent(screenName, "initial_region", {
+      latitude: safeRegion.latitude,
+      longitude: safeRegion.longitude,
+      usingFallback: !hasValidMapCoords(region.latitude, region.longitude)
+    });
+  }, [region.latitude, region.longitude, safeRegion.latitude, safeRegion.longitude, screenName]);
+
+  useEffect(() => {
+    logMapEvent(screenName, "markers_count", {
+      markers: safeMarkers.length,
+      routePoints: safeRoute.length
+    });
+  }, [safeMarkers.length, safeRoute.length, screenName]);
 
   useEffect(() => {
     setMapReady(false);
@@ -434,6 +462,17 @@ export function FieldMapView({
             ))}
           </MapView>
         )}
+
+        {canRenderMap && !hasRenderableCoordinates && (emptyMessage || locationDenied) ? (
+          <View pointerEvents="none" style={styles.overlayHint}>
+            <Text style={styles.overlayHintText}>
+              {emptyMessage ??
+                (locationDenied
+                  ? "Enable location to see your position on the map."
+                  : "No location to show yet.")}
+            </Text>
+          </View>
+        ) : null}
       </View>
     </MapErrorBoundary>
   );
@@ -465,6 +504,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     lineHeight: 20,
+    textAlign: "center"
+  },
+  overlayHint: {
+    alignItems: "center",
+    backgroundColor: "rgba(18, 32, 24, 0.72)",
+    borderRadius: 12,
+    bottom: 12,
+    left: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    position: "absolute",
+    right: 12
+  },
+  overlayHintText: {
+    color: "#FFFFFF",
+    fontSize: 12.5,
+    fontWeight: "600",
+    lineHeight: 17,
     textAlign: "center"
   }
 });

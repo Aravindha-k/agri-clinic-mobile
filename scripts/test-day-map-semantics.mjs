@@ -4,11 +4,15 @@ import { readFileSync } from "node:fs";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("Day map renders markers without movement polyline or user location", () => {
+test("Day map renders markers without movement polyline and never follows the camera", () => {
   const screen = read("src/screens/map/MyLocationScreen.tsx");
+  // No movement/breadcrumb polyline on the day map.
   assert.doesNotMatch(screen, /\broute=\{/);
-  assert.match(screen, /showsUserLocation=\{false\}/);
+  // Camera must not chase the user (start + visit dots stay framed).
   assert.match(screen, /followsUserLocation=\{false\}/);
+  // Current location dot is shown only once foreground permission is granted.
+  assert.match(screen, /showsUserLocation=\{locationGranted\}/);
+  assert.match(screen, /locationGranted=\{locationGranted\}/);
 });
 
 test("Day card loads fresh paginated markers and exposes button semantics", () => {

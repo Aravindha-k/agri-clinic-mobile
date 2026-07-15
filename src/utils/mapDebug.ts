@@ -34,3 +34,24 @@ export function logMapDiagnostics(screen: string, payload: MapDiagnosticPayload)
       : null
   });
 }
+
+export type MapLogEvent =
+  | "component_mounted"
+  | "api_key_configured"
+  | "permission_status"
+  | "gps_status"
+  | "initial_region"
+  | "location_success"
+  | "location_error"
+  | "markers_count"
+  | "render_blocked"
+  | "render_error";
+
+/**
+ * Structured, release-safe map lifecycle logs. Never logs the API key value —
+ * only whether native Maps was configured at build time.
+ */
+export function logMapEvent(screen: string, event: MapLogEvent, detail?: Record<string, unknown>) {
+  // eslint-disable-next-line no-console
+  console.log(`[Map] ${event}`, { screen, ...(detail ?? {}) });
+}

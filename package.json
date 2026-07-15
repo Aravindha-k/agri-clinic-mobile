@@ -18,7 +18,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "test:offline": "node --test scripts/test-offline-sync.mjs",
-    "test:hardening": "node --test scripts/test-startup-recovery.mjs scripts/test-workday-calendar.mjs scripts/test-workday-persistence.mjs scripts/test-day-map-semantics.mjs scripts/test-visit-draft-reset.mjs scripts/test-visit-v2-hardening.mjs scripts/test-offline-sync.mjs",
+    "test:hardening": "node --test scripts/test-startup-recovery.mjs scripts/test-workday-calendar.mjs scripts/test-workday-persistence.mjs scripts/test-day-map-semantics.mjs scripts/test-maps-bio-tracking-hardening.mjs scripts/test-visit-draft-reset.mjs scripts/test-visit-v2-hardening.mjs scripts/test-offline-sync.mjs",
     "test:navigation-smoke": "node scripts/test-navigation-smoke.mjs",
     "verify:api": "node scripts/verify-production-api.mjs",
     "verify:deploy": "node scripts/audit-deploy-config.mjs",

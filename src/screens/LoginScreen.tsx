@@ -24,6 +24,8 @@ import {
   dismissBiometricEnrollmentPrompt,
   enableBiometricLoginWithVerification,
   getBiometricLoginStatus,
+  hasAttemptedBiometricUnlockThisLaunch,
+  markBiometricUnlockAttempted,
   shouldOfferBiometricEnrollment,
   unlockSessionWithBiometrics,
   type BiometricLoginStatus
@@ -54,7 +56,6 @@ export function LoginScreen() {
 
   const scrollRef = useRef<ScrollView>(null);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const autoBiometricAttempted = useRef(false);
 
   const [empId, setEmpId] = useState("");
   const [password, setPassword] = useState("");
@@ -201,8 +202,10 @@ export function LoginScreen() {
 
   useEffect(() => {
     if (!biometricReady || !biometricCanLogin || biometricBusy || loading) return;
-    if (autoBiometricAttempted.current) return;
-    autoBiometricAttempted.current = true;
+    // One automatic prompt per app launch. Survives LoginScreen remounts so
+    // tab switches, Profile visits, and repeated foregrounding never re-open it.
+    if (hasAttemptedBiometricUnlockThisLaunch()) return;
+    markBiometricUnlockAttempted();
     void handleBiometricLogin();
   }, [biometricBusy, biometricCanLogin, biometricReady, loading]);
 

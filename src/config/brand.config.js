@@ -20,11 +20,17 @@ module.exports = {
   splashImageAsset: "./assets/brand/logo_splash.png",
   /** Premium splash visible duration (ms) incl. crossfade. */
   splashDurationMs: 3820,
+  /** Adaptive icon plate behind inset foreground — must stay white. */
   iconBackgroundColor: "#FFFFFF",
   logoAsset: "./assets/brand/logo_icon.png",
+  /** Expo / iOS / legacy launcher — exact logo_icons.png plate. */
   iconAsset: "./assets/brand/app_icon.png",
+  /**
+   * Android adaptive foreground — same artwork inset into the safe zone
+   * (generated from logo_icons.png; do not replace with a redesigned asset).
+   */
   adaptiveIconAsset: "./assets/brand/adaptive_icon_foreground.png",
-  /** Designer source; promoted to logo_icon / app_icon via `npm run icons:generate`. */
+  /** Immutable designer source; promoted via `npm run icons:generate`. */
   kacIconApproved: "./assets/brand/logo_icons.png",
   kacIconSolid: "./assets/brand/app_icon.png"
 };

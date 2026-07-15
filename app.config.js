@@ -92,6 +92,11 @@ module.exports = () => ({
       "READ_MEDIA_IMAGES",
       "POST_NOTIFICATIONS"
     ],
+    /**
+     * Adaptive icons crop OEMs' masks over a 108dp canvas.
+     * `adaptiveIconAsset` is logo_icons.png inset (~70%) with transparent padding
+     * so the full white rounded-square remains visible. Background stays white.
+     */
     adaptiveIcon: {
       foregroundImage: brand.adaptiveIconAsset,
       backgroundColor: brand.iconBackgroundColor

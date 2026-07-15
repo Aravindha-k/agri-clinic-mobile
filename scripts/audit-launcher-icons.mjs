@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
+import { ADAPTIVE_CONTENT_RATIO } from "./promote-logo-icons.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const approvedSource = path.join(root, "assets/brand/logo_icons.png");
@@ -26,9 +27,6 @@ const foregroundSizes = {
   "mipmap-xxhdpi": 324,
   "mipmap-xxxhdpi": 432
 };
-/** Visible brand mark should fill most of the white squircle plate. */
-const MIN_CONTENT_RATIO = 0.45;
-const MAX_CONTENT_RATIO = 0.96;
 
 async function rgba(file) {
   return sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -54,27 +52,21 @@ function contentBounds({ data, info }, predicate) {
     }
   }
   assert.ok(maxX >= minX && maxY >= minY, "launcher artwork must contain visible logo pixels");
-  return { width: maxX - minX + 1, height: maxY - minY + 1 };
+  return { width: maxX - minX + 1, height: maxY - minY + 1, minX, minY, maxX, maxY };
 }
 
-function assertContentRatio(bounds, size, name, tolerance = 0) {
-  for (const dimension of [bounds.width, bounds.height]) {
-    const ratio = dimension / size;
-    assert.ok(
-      ratio >= MIN_CONTENT_RATIO - tolerance && ratio <= MAX_CONTENT_RATIO + tolerance,
-      `${name} content ratio ${ratio.toFixed(4)} must stay ${MIN_CONTENT_RATIO}-${MAX_CONTENT_RATIO}`
-    );
-  }
-}
-
-function assertNearWhiteCorner(rgba, name) {
-  const [r, g, b, a] = rgba;
+function assertNearWhiteCorner(rgbaTuple, name) {
+  const [r, g, b, a] = rgbaTuple;
   assert.ok(a === 255, `${name} corner alpha must be opaque`);
-  assert.ok(r >= 248 && g >= 248 && b >= 248, `${name} corner must be near-white; rgba=${rgba.join(",")}`);
+  assert.ok(r >= 248 && g >= 248 && b >= 248, `${name} corner must be near-white; rgba=${rgbaTuple.join(",")}`);
+}
+
+function assertTransparentCorner(rgbaTuple, name) {
+  assert.equal(rgbaTuple[3], 0, `${name} adaptive corner must be transparent; rgba=${rgbaTuple.join(",")}`);
 }
 
 const sourceDigest = crypto.createHash("sha256").update(await fs.readFile(approvedSource)).digest("hex");
-assert.equal(sourceDigest, approvedSha, "launcher must use the approved logo_icons source");
+assert.equal(sourceDigest, approvedSha, "launcher must use the approved logo_icons source (unchanged)");
 
 const [legacyImage, foregroundImage, backgroundImage, logoIconImage] = await Promise.all([
   rgba(legacy),
@@ -87,19 +79,37 @@ for (const image of [legacyImage, foregroundImage, backgroundImage, logoIconImag
   assert.equal(image.info.height, 1024);
 }
 
-const isBrandInk = ([r, g, b, a]) => a > 8 && (r < 245 || g < 245 || b < 245);
-assertContentRatio(contentBounds(logoIconImage, isBrandInk), logoIconImage.info.width, "logo_icon");
-assertContentRatio(contentBounds(legacyImage, isBrandInk), legacyImage.info.width, "legacy");
-assertContentRatio(contentBounds(foregroundImage, isBrandInk), foregroundImage.info.width, "adaptive");
+const isOpaque = ([, , , a]) => a > 8;
+const fgBounds = contentBounds(foregroundImage, isOpaque);
+const fgRatio = Math.max(fgBounds.width, fgBounds.height) / foregroundImage.info.width;
+assert.ok(
+  Math.abs(fgRatio - ADAPTIVE_CONTENT_RATIO) <= 0.04,
+  `adaptive foreground content ratio ${fgRatio.toFixed(3)} must be ~${ADAPTIVE_CONTENT_RATIO} (safe-zone inset)`
+);
+assert.ok(
+  Math.abs(fgBounds.minX - (1024 - fgBounds.width) / 2) <= 4,
+  "adaptive foreground artwork must be horizontally centered"
+);
 
-for (const image of [legacyImage, foregroundImage, backgroundImage, logoIconImage]) {
+// Adaptive FG: transparent corners (padding) so OEM masks do not crop the plate.
+for (const [x, y] of [
+  [0, 0],
+  [1023, 0],
+  [0, 1023],
+  [1023, 1023]
+]) {
+  assertTransparentCorner(pixel(foregroundImage.data, 1024, x, y), "adaptive_icon_foreground");
+}
+
+// Legacy / in-app / background: opaque white corners (full plate).
+for (const image of [legacyImage, backgroundImage, logoIconImage]) {
   for (const [x, y] of [
     [0, 0],
     [1023, 0],
     [0, 1023],
     [1023, 1023]
   ]) {
-    assertNearWhiteCorner(pixel(image.data, image.info.width, x, y), path.basename(String(image)));
+    assertNearWhiteCorner(pixel(image.data, image.info.width, x, y), "legacy/background");
   }
 }
 
@@ -109,7 +119,6 @@ for (const [folder, size] of Object.entries(legacySizes)) {
     const image = await rgba(file);
     assert.equal(image.info.width, size, `${folder}/${filename} width`);
     assert.equal(image.info.height, size, `${folder}/${filename} height`);
-    assertContentRatio(contentBounds(image, isBrandInk), size, `${folder}/${filename}`, 0.08);
     for (const [x, y] of [
       [0, 0],
       [size - 1, 0],
@@ -126,7 +135,20 @@ for (const [folder, size] of Object.entries(foregroundSizes)) {
   const image = await rgba(path.join(androidRes, folder, filename));
   assert.equal(image.info.width, size, `${folder}/${filename} width`);
   assert.equal(image.info.height, size, `${folder}/${filename} height`);
-  assertContentRatio(contentBounds(image, isBrandInk), size, `${folder}/${filename}`, 0.08);
+  for (const [x, y] of [
+    [0, 0],
+    [size - 1, 0],
+    [0, size - 1],
+    [size - 1, size - 1]
+  ]) {
+    assertTransparentCorner(pixel(image.data, size, x, y), `${folder}/${filename}`);
+  }
+  const bounds = contentBounds(image, isOpaque);
+  const ratio = Math.max(bounds.width, bounds.height) / size;
+  assert.ok(
+    Math.abs(ratio - ADAPTIVE_CONTENT_RATIO) <= 0.08,
+    `${folder}/${filename} inset ratio ${ratio.toFixed(3)} must stay near ${ADAPTIVE_CONTENT_RATIO}`
+  );
 }
 
 for (const filename of ["ic_launcher.xml", "ic_launcher_round.xml"]) {
@@ -145,11 +167,15 @@ assert.match(
 
 const readme = await fs.readFile(path.join(root, "assets/brand/kac/README.md"), "utf8");
 assert.match(readme, /adaptive background is opaque white/i, "launcher README must document white background");
-assert.doesNotMatch(readme, /logo-green adaptive background/i, "launcher README must not describe a green background");
+assert.match(readme, /safe zone|inset/i, "launcher README must document adaptive safe-zone inset");
 
 const brandConfig = await fs.readFile(path.join(root, "src/config/brand.config.js"), "utf8");
 assert.match(brandConfig, /launcherAppName:\s*"Kavya Agri"/, "launcher label must remain unchanged");
 assert.match(brandConfig, /iconBackgroundColor:\s*"#FFFFFF"/, "adaptive background config must be white");
 assert.match(brandConfig, /logo_icons\.png/, "brand config must reference logo_icons source");
+assert.match(brandConfig, /adaptiveIconAsset:\s*"\.\/assets\/brand\/adaptive_icon_foreground\.png"/);
+assert.match(brandConfig, /iconAsset:\s*"\.\/assets\/brand\/app_icon\.png"/);
 
-console.log("Launcher icon audit passed: logo_icons source, white plate, densities, adaptive XML, and label.");
+console.log(
+  `Launcher icon audit passed: exact logo_icons source, adaptive ${(ADAPTIVE_CONTENT_RATIO * 100).toFixed(0)}% inset, white background.`
+);

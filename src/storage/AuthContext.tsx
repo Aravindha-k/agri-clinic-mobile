@@ -263,17 +263,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      await ensureDeviceSessionLoaded();
+      await ensureDeviceSessionLoaded().catch(() => undefined);
 
-      if (!(await getDeviceSessionId())) {
+      if (!(await getDeviceSessionId().catch(() => null))) {
         await performLocalSignOut({
           notice: "This device needs a fresh sign-in. Please log in again."
-        });
+        }).catch(() => undefined);
         endedAuthenticated = false;
         return;
       }
 
-      const biometricLocked = await canUseBiometricLogin();
+      let biometricLocked = false;
+      try {
+        biometricLocked = await canUseBiometricLogin();
+      } catch {
+        biometricLocked = false;
+        logStartup("session_restored", "biometric check failed — continue without lock");
+      }
       if (biometricLocked) {
         setIsAuthenticated(false);
         endedAuthenticated = false;
@@ -284,6 +290,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsAuthenticated(true);
       endedAuthenticated = true;
       logStartup("session_restored", "token present — home unlocked");
+    } catch (err) {
+      setIsAuthenticated(false);
+      endedAuthenticated = false;
+      logStartup(
+        "session_cleared",
+        err instanceof Error ? `bootstrap_error:${err.message}` : "bootstrap_error"
+      );
     } finally {
       setAuthLoading(false);
       setIsReady(true);

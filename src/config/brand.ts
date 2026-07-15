@@ -20,12 +20,15 @@ export const BRAND_COLORS = {
   gradientDeep: "#0B5A38"
 } as const;
 
+/**
+ * Official company logo for ALL in-app branding (splash, login, headers, loaders).
+ * Never use launcher assets (logo_icons / app_icon / adaptive foreground) here.
+ */
 export const BRAND = {
   ...brandMeta,
   /** @deprecated Use `companyName` */
   name: brandMeta.companyName,
-  /** In-app logo — sourced from assets/brand/logo_icons.png. */
-  logo: require("../../assets/brand/logo_icon.png") as number
+  logo: require("../../assets/brand/company_logo.png") as number
 } as const;
 
 /** Set to null to use leaf fallback in logo components. */

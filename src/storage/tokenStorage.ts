@@ -10,11 +10,19 @@ export type StoredTokens = {
 };
 
 export async function getAccessToken() {
-  return SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+  try {
+    return await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+  } catch {
+    return null;
+  }
 }
 
 export async function getRefreshToken() {
-  return SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+  try {
+    return await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+  } catch {
+    return null;
+  }
 }
 
 export async function saveTokens(tokens: StoredTokens) {
@@ -27,7 +35,7 @@ export async function updateAccessToken(access: string) {
 }
 
 export async function clearTokens() {
-  await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
-  await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+  await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY).catch(() => undefined);
+  await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY).catch(() => undefined);
   await clearDeviceSessionId();
 }

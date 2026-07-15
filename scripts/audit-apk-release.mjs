@@ -126,8 +126,8 @@ else pass("network_security_config allows AWS host");
 
 // 3. Bundled assets
 const requiredAssets = [
-  "assets/brand/logo.png",
-  "assets/brand/logo_splash.png",
+  "assets/brand/company_logo.png",
+  "assets/brand/logo_icons.png",
   "assets/brand/app_icon.png",
   "assets/brand/adaptive_icon_foreground.png",
   "mobile/assets/backgrounds/login_backdrop.webp",

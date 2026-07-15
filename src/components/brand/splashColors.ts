@@ -19,6 +19,12 @@ export const SPLASH_MIN_VISIBLE_MS = SPLASH_ANIMATION_END_MS + SPLASH_HOLD_AFTER
 /** Hard ceiling from first layout — never block forever (ms). */
 export const SPLASH_MAX_VISIBLE_MS = 6500;
 
+/**
+ * Absolute failsafe from component mount (ms). Covers OEMs where onLayout never
+ * fires or Reanimated callbacks stall — last resort only.
+ */
+export const SPLASH_ABSOLUTE_FAILSAFE_MS = 8000;
+
 /** Exit fade duration (ms). */
 export const SPLASH_EXIT_FADE_MS = 450;
 

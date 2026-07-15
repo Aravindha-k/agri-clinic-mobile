@@ -74,48 +74,73 @@ export async function migrateLegacyBiometricPasswords(): Promise<void> {
 }
 
 export async function getBiometricTypeLabel(): Promise<string> {
-  const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
-  if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {
-    return "Face ID";
-  }
-  if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) {
-    return "Fingerprint";
-  }
-  if (types.includes(LocalAuthentication.AuthenticationType.IRIS)) {
-    return "Iris";
+  try {
+    const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+    if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {
+      return "Face ID";
+    }
+    if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) {
+      return "Fingerprint";
+    }
+    if (types.includes(LocalAuthentication.AuthenticationType.IRIS)) {
+      return "Iris";
+    }
+  } catch {
+    // OEM biometric query can throw — treat as generic label.
   }
   return "Biometrics";
 }
 
-export async function getBiometricLoginStatus(): Promise<BiometricLoginStatus> {
-  await migrateLegacyBiometricPasswords();
-  const [hardwareAvailable, enrolled, enabledFlag] = await Promise.all([
-    LocalAuthentication.hasHardwareAsync(),
-    LocalAuthentication.isEnrolledAsync(),
-    SecureStore.getItemAsync(ENABLED_KEY)
-  ]);
+const EMPTY_BIOMETRIC_STATUS: BiometricLoginStatus = {
+  hardwareAvailable: false,
+  enrolled: false,
+  enabled: false,
+  label: "Biometrics"
+};
 
-  const status = {
-    hardwareAvailable,
-    enrolled,
-    enabled: enabledFlag === "1",
-    label: await getBiometricTypeLabel()
-  };
-  logBiometric("capability_checked", {
-    hardwareAvailable,
-    enrolled,
-    enabled: status.enabled
-  });
-  return status;
+export async function getBiometricLoginStatus(): Promise<BiometricLoginStatus> {
+  try {
+    await migrateLegacyBiometricPasswords();
+    const [hardwareAvailable, enrolled, enabledFlag] = await Promise.all([
+      LocalAuthentication.hasHardwareAsync().catch(() => false),
+      LocalAuthentication.isEnrolledAsync().catch(() => false),
+      SecureStore.getItemAsync(ENABLED_KEY).catch(() => null)
+    ]);
+
+    const status = {
+      hardwareAvailable: Boolean(hardwareAvailable),
+      enrolled: Boolean(enrolled),
+      enabled: enabledFlag === "1",
+      label: await getBiometricTypeLabel()
+    };
+    logBiometric("capability_checked", {
+      hardwareAvailable: status.hardwareAvailable,
+      enrolled: status.enrolled,
+      enabled: status.enabled
+    });
+    return status;
+  } catch (err) {
+    logBiometric("capability_checked", {
+      hardwareAvailable: false,
+      enrolled: false,
+      enabled: false,
+      error: err instanceof Error ? err.message : "capability_failed"
+    });
+    return { ...EMPTY_BIOMETRIC_STATUS };
+  }
 }
 
 export async function canUseBiometricLogin(): Promise<boolean> {
-  const status = await getBiometricLoginStatus();
-  if (!status.hardwareAvailable || !status.enrolled || !status.enabled) {
+  try {
+    const status = await getBiometricLoginStatus();
+    if (!status.hardwareAvailable || !status.enrolled || !status.enabled) {
+      return false;
+    }
+    const refresh = await getRefreshToken();
+    return Boolean(refresh);
+  } catch {
     return false;
   }
-  const refresh = await getRefreshToken();
-  return Boolean(refresh);
 }
 
 export async function isBiometricEnrollmentDismissed(): Promise<boolean> {

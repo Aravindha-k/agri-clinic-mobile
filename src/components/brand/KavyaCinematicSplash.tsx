@@ -31,7 +31,8 @@ import {
   SPLASH_LOGO_BREATHE_MS,
   SPLASH_MAX_VISIBLE_MS,
   SPLASH_MIN_VISIBLE_MS,
-  SPLASH_NATIVE_HANDOFF_MS
+  SPLASH_NATIVE_HANDOFF_MS,
+  SPLASH_ABSOLUTE_FAILSAFE_MS
 } from "./splashColors";
 
 const BLOOM_SIZE_RATIO = 1.65;
@@ -77,6 +78,8 @@ type Props = {
  */
 export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit = false }: Props) {
   const { ready: motionReady, reduced } = usePremiumMotion();
+  const [motionFallback, setMotionFallback] = useState(false);
+  const effectiveMotionReady = motionReady || motionFallback;
   const { width: screenW, height: screenH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const layoutAtRef = useRef<number | null>(null);
@@ -150,6 +153,12 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
 
     const easeInOut = Easing.inOut(Easing.cubic);
     exitWash.value = withTiming(1, { duration: SPLASH_EXIT_FADE_MS, easing: easeInOut });
+
+    // OEM Reanimated completion callbacks can stall — finish splash anyway.
+    const finishFailsafe = setTimeout(() => {
+      finishSplash();
+    }, SPLASH_EXIT_FADE_MS + 600);
+
     screenOpacity.value = withTiming(0, { duration: SPLASH_EXIT_FADE_MS, easing: easeInOut }, (done) => {
       if (done) {
         runOnJS(finishSplash)();
@@ -173,6 +182,36 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     logStartup("cinematic_component_rendered", "0 ms");
   }, []);
 
+  // Prefer motion prefs when ready; never block splash animation forever on OEM hangs.
+  useEffect(() => {
+    if (motionReady) return;
+    const timer = setTimeout(() => setMotionFallback(true), 2000);
+    return () => clearTimeout(timer);
+  }, [motionReady]);
+
+  /**
+   * Last-resort: some OEM skins never fire onLayout / Reanimated callbacks.
+   * Force native splash hide + cinematic exit so no device stays blank forever.
+   */
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (finishedRef.current) return;
+      logStartup("splash_timeout", "absolute_failsafe");
+      if (!readyNotifiedRef.current) {
+        readyNotifiedRef.current = true;
+        layoutAtRef.current = Date.now();
+        setLayoutReady(true);
+      }
+      setBackgroundSettled(true);
+      setLogoSettled(true);
+      setMotionFallback(true);
+      onReadyRef.current?.();
+      animationFloorDoneRef.current = true;
+      beginExitRef.current();
+    }, SPLASH_ABSOLUTE_FAILSAFE_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
   const onFirstLayout = useCallback(() => {
     if (readyNotifiedRef.current) return;
     readyNotifiedRef.current = true;
@@ -185,7 +224,7 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
   preferLightRef.current = reduced;
 
   useEffect(() => {
-    if (!layoutReady || !motionReady || animationStartedRef.current) return;
+    if (!layoutReady || !effectiveMotionReady || animationStartedRef.current) return;
     animationStartedRef.current = true;
 
     const easeOut = Easing.out(Easing.cubic);
@@ -319,7 +358,7 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
       cancelAnimation(screenOpacity);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- cold-mount cinematic sequence
-  }, [layoutReady, motionReady]);
+  }, [layoutReady, effectiveMotionReady]);
 
   useEffect(() => {
     if (!layoutReady) return;

@@ -29,7 +29,7 @@ function read(rel) {
 
 const brandConfig = read("src/config/brand.config.js") ?? "";
 const assetPaths = [
-  ["logoAsset", "./assets/brand/logo.png"],
+  ["logoAsset", "./assets/brand/company_logo.png"],
   ["iconAsset", "./assets/brand/app_icon.png"],
   ["adaptiveIconAsset", "./assets/brand/adaptive_icon_foreground.png"]
 ];
@@ -41,14 +41,22 @@ for (const [name, fallback] of assetPaths) {
   else fail(`Missing bundled asset: ${rel} (${name})`);
 }
 
-if (exists("assets/brand/logo_splash.png")) pass("Boot splash logo: assets/brand/logo_splash.png");
-else fail("Missing assets/brand/logo_splash.png (BootSplash)");
+if (exists("assets/brand/company_logo.png")) pass("In-app / splash logo: assets/brand/company_logo.png");
+else fail("Missing assets/brand/company_logo.png");
+
+if (exists("logo.png")) pass("Designer company logo source: logo.png");
+else fail("Missing project-root logo.png");
+
+if (exists("assets/brand/logo_icons.png")) pass("Launcher source: assets/brand/logo_icons.png");
+else fail("Missing assets/brand/logo_icons.png");
 
   if (exists("assets/splash/sky_background.jpg")) pass("Splash sky: assets/splash/sky_background.jpg");
   else if (exists("assets/splash/rice_field.png")) pass("React splash poster: assets/splash/rice_field.png");
-  else fail("Missing assets/splash/sky_background.jpg or rice_field.png");
+  else if (exists("assets/splash/premium_background.png")) pass("Splash background: assets/splash/premium_background.png");
+  else fail("Missing splash background art");
 
   if (exists("assets/splash/product_pile.png")) pass("Splash product pile: assets/splash/product_pile.png");
+  else if (exists("assets/splash/premium_background.png")) pass("Splash uses premium_background (product_pile optional)");
   else fail("Missing assets/splash/product_pile.png");
 
 const splashDensities = ["mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"];

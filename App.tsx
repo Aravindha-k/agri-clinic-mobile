@@ -19,6 +19,8 @@ const APP_BG = "#F8F7F2";
 type StartupPhase = "cinematic" | "revealing" | "app";
 /** Must fire before the cinematic's 6.5s hard ceiling so recovery is already painted. */
 const PROVIDERS_WATCHDOG_MS = 5500;
+/** Last-resort native splash hide if cinematic onReady never fires (OEM layout hangs). */
+const NATIVE_SPLASH_FAILSAFE_MS = 8000;
 
 function preloadSplashAssets() {
   const bg = Image.resolveAssetSource(SPLASH_ASSETS.background);
@@ -43,6 +45,10 @@ export default function App() {
     logStartup("first_render");
     void holdNativeSplash();
     void preloadSplashAssets();
+    const failsafe = setTimeout(() => {
+      void hideNativeSplashSafe("absolute_failsafe");
+    }, NATIVE_SPLASH_FAILSAFE_MS);
+    return () => clearTimeout(failsafe);
   }, []);
 
   useEffect(() => {

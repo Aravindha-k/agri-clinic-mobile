@@ -1,9 +1,9 @@
 /**
- * Promotes assets/brand/logo_icons.png to in-app + launcher slots WITHOUT redesigning it.
+ * Promotes assets/brand/logo_icons.png to LAUNCHER slots only (no redesign).
+ * Does NOT overwrite the in-app company logo (assets/brand/company_logo.png).
  *
  * - Legacy / Expo `icon`: exact source on white (full plate).
- * - Adaptive foreground: same source centered inside the Android safe zone so OEM
- *   circle/squircle masks keep the complete white rounded-square visible.
+ * - Adaptive foreground: same source centered in the Android safe zone.
  * - Adaptive background: opaque white (`#FFFFFF`).
  */
 import fs from "node:fs/promises";
@@ -20,14 +20,11 @@ const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 };
 
 /**
  * Full square artwork fits inside a circular launcher mask when side ≤ canvas/√2.
- * 0.70 keeps the complete white rounded-square visible on Pixel/Samsung/MIUI
- * without cropping corners or enlarging only the inner logo.
+ * 0.70 keeps the complete white rounded-square visible on Pixel/Samsung/MIUI.
  */
 export const ADAPTIVE_CONTENT_RATIO = 0.7;
 
 const OUT = {
-  logoIcon: path.join(root, "assets/brand/logo_icon.png"),
-  logo: path.join(root, "assets/brand/logo.png"),
   appIcon: path.join(root, "assets/brand/app_icon.png"),
   adaptiveFg: path.join(root, "assets/brand/adaptive_icon_foreground.png"),
   master: path.join(root, "assets/brand/kac/app_icon_1024.png"),
@@ -63,7 +60,7 @@ function maskSvg(kind, size) {
   );
 }
 
-/** Exact source → 1024 square, no crop of content (contain). */
+/** Exact launcher source → 1024 square, no crop of content (contain). */
 async function buildExactMaster() {
   return sharp(SRC)
     .resize(SIZE, SIZE, {
@@ -76,10 +73,7 @@ async function buildExactMaster() {
     .toBuffer();
 }
 
-/**
- * Same artwork, inset + transparent padding for adaptive safe zone.
- * Does not redesign pixels — only scales the full plate and centers it.
- */
+/** Same artwork, inset + transparent padding for adaptive safe zone. */
 async function buildAdaptiveForeground(master) {
   const contentSize = Math.round(SIZE * ADAPTIVE_CONTENT_RATIO);
   const inset = await sharp(master)
@@ -131,8 +125,6 @@ async function promoteLogoIcons() {
   const adaptive = await buildAdaptiveForeground(master);
 
   await fs.mkdir(path.join(root, "assets/brand/kac"), { recursive: true });
-  await fs.writeFile(OUT.logoIcon, master);
-  await fs.writeFile(OUT.logo, master);
   await fs.writeFile(OUT.appIcon, master);
   await fs.writeFile(OUT.adaptiveFg, adaptive);
   await fs.writeFile(OUT.master, master);
@@ -171,9 +163,9 @@ async function promoteLogoIcons() {
   await sharp(master).resize(48, 48).png().toFile(path.join(root, "assets/brand/kac/preview_48.png"));
   await sharp(master).resize(64, 64).png().toFile(path.join(root, "assets/brand/kac/preview_64.png"));
 
-  const meta = await sharp(OUT.logoIcon).metadata();
+  const meta = await sharp(OUT.appIcon).metadata();
   console.log(
-    `Promoted logo_icons.png unchanged (${meta.width}x${meta.height}); adaptive inset ${(ADAPTIVE_CONTENT_RATIO * 100).toFixed(0)}% safe zone`
+    `Launcher-only promote from logo_icons.png (${meta.width}x${meta.height}); adaptive inset ${(ADAPTIVE_CONTENT_RATIO * 100).toFixed(0)}% — company_logo.png untouched`
   );
 }
 

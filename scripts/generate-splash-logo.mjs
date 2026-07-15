@@ -1,6 +1,7 @@
 /**
- * Generates logo_splash.png for the cinematic React splash overlay.
- * Android native launch uses background-only emerald (#0B3D2E) with a transparent splash icon.
+ * Prefreshes transparent Android native splash drawables.
+ * In-app / cinematic splash uses assets/brand/company_logo.png as-is (no redesign).
+ * Android native launch remains background-only emerald (#0B3D2E).
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -9,9 +10,8 @@ import sharp from "sharp";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
-const SOURCE = path.join(root, "assets/brand/logo.png");
-const OUT = path.join(root, "assets/brand/logo_splash.png");
 const ANDROID_RES = path.join(root, "android/app/src/main/res");
+const COMPANY_LOGO = path.join(root, "assets/brand/company_logo.png");
 
 /** Required by Expo/Android when styles reference @drawable/splashscreen_logo — keep fully transparent. */
 const SPLASH_LOGO_SIZES = {
@@ -22,26 +22,11 @@ const SPLASH_LOGO_SIZES = {
   "drawable-xxxhdpi": 1152
 };
 
-const size = 768;
-const circleMask = Buffer.from(
-  `<svg width="${size}" height="${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${size / 2}" fill="white"/></svg>`
-);
-
 /** 1x1 transparent PNG for invisible native splash artwork. */
 const TRANSPARENT_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
   "base64"
 );
-
-async function buildLogoSplash() {
-  await sharp(SOURCE)
-    .trim({ threshold: 12 })
-    .resize(size, size, { fit: "cover", position: "centre" })
-    .composite([{ input: circleMask, blend: "dest-in" }])
-    .png()
-    .toFile(OUT);
-  console.log(`Wrote ${OUT}`);
-}
 
 async function writeTransparentAndroidSplashLogos() {
   for (const [folder, px] of Object.entries(SPLASH_LOGO_SIZES)) {
@@ -70,6 +55,12 @@ async function writeSplashscreenIconXml() {
   console.log("Wrote android/app/src/main/res/drawable/splashscreen_icon.xml");
 }
 
-await buildLogoSplash();
+async function assertCompanyLogo() {
+  await fs.access(COMPANY_LOGO);
+  const meta = await sharp(COMPANY_LOGO).metadata();
+  console.log(`company_logo.png present (${meta.width}x${meta.height}) — used as-is for splash/in-app`);
+}
+
+await assertCompanyLogo();
 await writeTransparentAndroidSplashLogos();
 await writeSplashscreenIconXml();

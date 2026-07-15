@@ -39,7 +39,6 @@ import { fetchVisitsPage } from "../../../src/api/visits";
 import { EmptyState, GhostButton, PrimaryButton } from "../../components/ui";
 import { FlatCard, ScreenCanvas, ScreenEntranceBloom, ScreenLoader } from "../../components/layout";
 import { FadeInSection, entranceListStagger, entranceStagger } from "../../components/ui/FadeInSection";
-import { BrandLogoBadge } from "../../components/brand/BrandLogoBadge";
 import { WorkdayStartPanel } from "../../components/workday/WorkdayStartPanel";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
 import { getBadgeCount } from "../../lib/notificationsApi";
@@ -74,8 +73,7 @@ function HeroVersionMark({ version }: { version: string }) {
   );
 }
 
-const PROFILE_AVATAR_SIZE = 96;
-const PROFILE_LOGO_SIZE = 116;
+const PROFILE_AVATAR_SIZE = 116;
 
 function formatWorkdayTime(value?: string | null) {
   if (!value) return null;
@@ -498,13 +496,6 @@ export default function ProfileTabScreen() {
             </View>
 
             <View style={styles.profileIdentity}>
-              <BrandLogoBadge
-                size={PROFILE_LOGO_SIZE}
-                animated
-                replayKey={entranceTick}
-                showOrbit
-                motionPreset="profile"
-              />
               <HeroAvatar photoUrl={photoUrl} photoVersion={photoVersion} />
               <Text style={styles.userName} numberOfLines={2}>
                 {displayName}

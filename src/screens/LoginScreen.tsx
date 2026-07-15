@@ -68,10 +68,16 @@ export function LoginScreen() {
   const [biometricBusy, setBiometricBusy] = useState(false);
 
   const refreshBiometricState = useCallback(async () => {
-    const [status, canLogin] = await Promise.all([getBiometricLoginStatus(), canUseBiometricLogin()]);
-    setBiometricStatus(status);
-    setBiometricCanLogin(canLogin);
-    setBiometricReady(true);
+    try {
+      const [status, canLogin] = await Promise.all([getBiometricLoginStatus(), canUseBiometricLogin()]);
+      setBiometricStatus(status);
+      setBiometricCanLogin(canLogin);
+    } catch {
+      setBiometricStatus(EMPTY_BIOMETRIC_STATUS);
+      setBiometricCanLogin(false);
+    } finally {
+      setBiometricReady(true);
+    }
   }, []);
 
   useFocusEffect(

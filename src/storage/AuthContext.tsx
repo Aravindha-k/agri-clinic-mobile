@@ -325,6 +325,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void runFastLocalBootstrap();
   }, [runFastLocalBootstrap]);
 
+  /** Hard ceiling: never leave RootNavigator on a blank View because a hung storage promise never settles. */
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsReady((prev) => {
+        if (prev) return prev;
+        logStartup("auth_bootstrap_timeout", "AuthProvider hard ceiling — forcing isReady");
+        setAuthLoading(false);
+        return true;
+      });
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, []);
+
   const retryBootstrap = useCallback(async () => {
     if (!isReady) {
       await runFastLocalBootstrap();

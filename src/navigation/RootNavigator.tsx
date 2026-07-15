@@ -194,7 +194,7 @@ function AppRoutes() {
   }, [forceLogin, isAuthenticated]);
 
   if (!isReady) {
-    // Match splash exit wash — no spinner (cinematic owns startup loading).
+    // Match splash exit wash — never spin forever; AuthProvider hard-ceiling forces isReady ≤6s.
     return <View style={{ flex: 1, backgroundColor: Colors.bg }} />;
   }
 

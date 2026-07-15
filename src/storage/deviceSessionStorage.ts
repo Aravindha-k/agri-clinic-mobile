@@ -1,10 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
+import { withTimeout } from "../utils/withTimeout";
 
 const DEVICE_SESSION_KEY = "agri_clinic_device_session_id";
 const SESSION_VERSION_KEY = "agri_clinic_session_version";
 const ACTIVE_DEVICE_ID_KEY = "agri_clinic_active_device_id";
 const FALLBACK_PREFIX = "@agri_clinic_fallback:";
+const STORE_READ_MS = 2500;
 
 export const DEVICE_SESSION_STORAGE_ERROR =
   "Login was successful, but this phone could not save the secure session. Please restart the app and try again.";
@@ -15,7 +17,7 @@ let cachedActiveDeviceId: string | null | undefined;
 
 async function readSecureKey(key: string): Promise<string | null> {
   try {
-    const value = await SecureStore.getItemAsync(key);
+    const value = await withTimeout(SecureStore.getItemAsync(key), STORE_READ_MS, null, `SecureStore:${key}`);
     return value?.trim() ? value.trim() : null;
   } catch {
     return null;
@@ -24,7 +26,12 @@ async function readSecureKey(key: string): Promise<string | null> {
 
 async function readFallbackKey(key: string): Promise<string | null> {
   try {
-    const value = await AsyncStorage.getItem(`${FALLBACK_PREFIX}${key}`);
+    const value = await withTimeout(
+      AsyncStorage.getItem(`${FALLBACK_PREFIX}${key}`),
+      STORE_READ_MS,
+      null,
+      `AsyncStorage:${key}`
+    );
     return value?.trim() ? value.trim() : null;
   } catch {
     return null;

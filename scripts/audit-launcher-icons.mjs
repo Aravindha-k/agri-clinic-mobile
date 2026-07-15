@@ -10,7 +10,7 @@ const approvedSource = path.join(root, "assets/brand/logo_icons.png");
 const legacy = path.join(root, "assets/brand/app_icon.png");
 const foreground = path.join(root, "assets/brand/adaptive_icon_foreground.png");
 const background = path.join(root, "assets/brand/kac/adaptive_icon_background_1024.png");
-const companyLogo = path.join(root, "assets/brand/company_logo.png");
+const companyLogo = path.join(root, "logo.png");
 const approvedSha = "614f95d93e99a397a18bbe1bcf0cbc92987600c5cb3a9d8a343f587999fc6e89";
 const androidRes = path.join(root, "android/app/src/main/res");
 const legacySizes = {
@@ -174,20 +174,20 @@ assert.match(brandConfig, /iconBackgroundColor:\s*"#FFFFFF"/, "adaptive backgrou
 assert.match(brandConfig, /logo_icons\.png/, "brand config must reference logo_icons source");
 assert.match(brandConfig, /adaptiveIconAsset:\s*"\.\/assets\/brand\/adaptive_icon_foreground\.png"/);
 assert.match(brandConfig, /iconAsset:\s*"\.\/assets\/brand\/app_icon\.png"/);
-assert.match(brandConfig, /logoAsset:\s*"\.\/assets\/brand\/company_logo\.png"/, "in-app logo must be company_logo");
-assert.match(brandConfig, /splashImageAsset:\s*"\.\/assets\/brand\/company_logo\.png"/, "splash must use company_logo");
+assert.match(brandConfig, /logoAsset:\s*"\.\/logo\.png"/, "in-app logo must be root logo.png");
+assert.match(brandConfig, /splashImageAsset:\s*"\.\/logo\.png"/, "splash must use root logo.png");
 
-const companyMeta = await sharp(companyLogo).metadata();
-assert.ok(companyMeta.width && companyMeta.height, "company_logo.png must exist for in-app branding");
+const companyMeta = await sharp(path.join(root, "logo.png")).metadata();
+assert.ok(companyMeta.width && companyMeta.height, "logo.png must exist for in-app branding");
 
 const brandTs = await fs.readFile(path.join(root, "src/config/brand.ts"), "utf8");
-assert.match(brandTs, /company_logo\.png/, "brand.ts must require company_logo for in-app");
+assert.match(brandTs, /require\("\.\.\/\.\.\/logo\.png"\)/, "brand.ts must require project-root logo.png");
 assert.doesNotMatch(brandTs, /logo_icons\.png|logo_icon\.png|app_icon\.png|adaptive_icon/, "brand.ts must not use launcher art");
 
 const splashAssets = await fs.readFile(path.join(root, "src/components/brand/splashAssets.ts"), "utf8");
-assert.match(splashAssets, /company_logo\.png/, "splashAssets must use company_logo");
+assert.match(splashAssets, /require\("\.\.\/\.\.\/\.\.\/logo\.png"\)/, "splashAssets must use project-root logo.png");
 assert.doesNotMatch(splashAssets, /logo_icons\.png|logo_icon\.png|app_icon\.png/, "splash must not use launcher art");
 
 console.log(
-  `Launcher icon audit passed: exact logo_icons source, adaptive ${(ADAPTIVE_CONTENT_RATIO * 100).toFixed(0)}% inset, white background; company_logo for in-app.`
+  `Launcher icon audit passed: exact logo_icons source, adaptive ${(ADAPTIVE_CONTENT_RATIO * 100).toFixed(0)}% inset, white background; root logo.png for in-app.`
 );

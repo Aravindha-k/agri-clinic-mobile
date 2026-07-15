@@ -1,5 +1,5 @@
-/** Splash — product background + official company logo (never the launcher icon). */
+/** Splash — product background + official company logo from project-root logo.png. */
 export const SPLASH_ASSETS = {
   background: require("../../../assets/splash/premium_background.png"),
-  logo: require("../../../assets/brand/company_logo.png")
+  logo: require("../../../logo.png")
 } as const;

@@ -109,7 +109,7 @@ for (const sound of ["heat.wav", "water.wav", "water_pour.wav"]) {
 
 // 5. Key bundled assets
 const assets = [
-  "assets/brand/company_logo.png",
+  "logo.png",
   "assets/brand/app_icon.png",
   "mobile/assets/headers/home.jpg",
   "mobile/assets/headers/work.jpg"

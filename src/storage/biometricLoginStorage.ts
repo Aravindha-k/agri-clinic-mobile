@@ -2,6 +2,7 @@ import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
 import { getRefreshToken } from "./tokenStorage";
 import { refreshAccessTokenOnce } from "../api/tokenRefresh";
+import { withTimeout } from "../utils/withTimeout";
 
 const ENABLED_KEY = "biometric_login_enabled";
 const PROMPT_DISMISSED_KEY = "biometric_login_prompt_dismissed";
@@ -102,9 +103,9 @@ export async function getBiometricLoginStatus(): Promise<BiometricLoginStatus> {
   try {
     await migrateLegacyBiometricPasswords();
     const [hardwareAvailable, enrolled, enabledFlag] = await Promise.all([
-      LocalAuthentication.hasHardwareAsync().catch(() => false),
-      LocalAuthentication.isEnrolledAsync().catch(() => false),
-      SecureStore.getItemAsync(ENABLED_KEY).catch(() => null)
+      withTimeout(LocalAuthentication.hasHardwareAsync().catch(() => false), 2500, false, "hasHardwareAsync"),
+      withTimeout(LocalAuthentication.isEnrolledAsync().catch(() => false), 2500, false, "isEnrolledAsync"),
+      withTimeout(SecureStore.getItemAsync(ENABLED_KEY).catch(() => null), 2500, null, "biometric_enabled_flag")
     ]);
 
     const status = {

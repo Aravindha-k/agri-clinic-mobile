@@ -29,7 +29,7 @@ function read(rel) {
 
 const brandConfig = read("src/config/brand.config.js") ?? "";
 const assetPaths = [
-  ["logoAsset", "./assets/brand/company_logo.png"],
+  ["logoAsset", "./logo.png"],
   ["iconAsset", "./assets/brand/app_icon.png"],
   ["adaptiveIconAsset", "./assets/brand/adaptive_icon_foreground.png"]
 ];
@@ -41,10 +41,7 @@ for (const [name, fallback] of assetPaths) {
   else fail(`Missing bundled asset: ${rel} (${name})`);
 }
 
-if (exists("assets/brand/company_logo.png")) pass("In-app / splash logo: assets/brand/company_logo.png");
-else fail("Missing assets/brand/company_logo.png");
-
-if (exists("logo.png")) pass("Designer company logo source: logo.png");
+if (exists("logo.png")) pass("In-app / splash company logo: logo.png");
 else fail("Missing project-root logo.png");
 
 if (exists("assets/brand/logo_icons.png")) pass("Launcher source: assets/brand/logo_icons.png");

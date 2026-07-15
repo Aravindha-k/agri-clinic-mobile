@@ -22,13 +22,14 @@ export const BRAND_COLORS = {
 
 /**
  * Official company logo for ALL in-app branding (splash, login, headers, loaders).
+ * Source of truth: project-root `logo.png` (bundled relative require — no Windows absolute paths).
  * Never use launcher assets (logo_icons / app_icon / adaptive foreground) here.
  */
 export const BRAND = {
   ...brandMeta,
   /** @deprecated Use `companyName` */
   name: brandMeta.companyName,
-  logo: require("../../assets/brand/company_logo.png") as number
+  logo: require("../../logo.png") as number
 } as const;
 
 /** Set to null to use leaf fallback in logo components. */

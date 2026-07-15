@@ -26,6 +26,7 @@
     "verify:release": "node scripts/verify-release-constants.mjs",
     "verify:native-assets": "node scripts/audit-native-assets.mjs",
     "verify:launcher-icons": "node scripts/audit-launcher-icons.mjs",
+    "verify:branding": "node scripts/verify-branding-assets.mjs",
     "verify:shared-ui": "node scripts/audit-shared-ui.mjs",
     "verify:mobile": "node scripts/verify-mobile-readiness.mjs",
     "verify:android-maps": "node scripts/verify-android-maps-config.mjs",

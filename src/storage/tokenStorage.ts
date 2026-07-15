@@ -1,8 +1,11 @@
 import * as SecureStore from "expo-secure-store";
 import { clearDeviceSessionId } from "./deviceSessionStorage";
+import { withTimeout } from "../utils/withTimeout";
 
 const ACCESS_TOKEN_KEY = "agri_clinic_access_token";
 const REFRESH_TOKEN_KEY = "agri_clinic_refresh_token";
+/** OEM Keystore can hang indefinitely — never block bootstrap. */
+const STORE_READ_MS = 2500;
 
 export type StoredTokens = {
   access: string;
@@ -11,7 +14,7 @@ export type StoredTokens = {
 
 export async function getAccessToken() {
   try {
-    return await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+    return await withTimeout(SecureStore.getItemAsync(ACCESS_TOKEN_KEY), STORE_READ_MS, null, "getAccessToken");
   } catch {
     return null;
   }
@@ -19,7 +22,7 @@ export async function getAccessToken() {
 
 export async function getRefreshToken() {
   try {
-    return await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+    return await withTimeout(SecureStore.getItemAsync(REFRESH_TOKEN_KEY), STORE_READ_MS, null, "getRefreshToken");
   } catch {
     return null;
   }

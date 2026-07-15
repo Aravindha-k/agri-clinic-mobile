@@ -16,19 +16,18 @@ module.exports = {
   splashBackgroundColor: "#D8ECF8",
   /** Android / Expo native launch screen — solid emerald, no logo. */
   nativeSplashBackgroundColor: "#0B3D2E",
-  /** Native + cinematic first-frame company logo (never the launcher icon). */
-  splashImageAsset: "./assets/brand/company_logo.png",
+  /** Native + cinematic company logo (project-root logo.png via relative path). */
+  splashImageAsset: "./logo.png",
   /** Premium splash visible duration (ms) incl. crossfade. */
   splashDurationMs: 3820,
   /** Adaptive icon plate behind inset foreground — must stay white. */
   iconBackgroundColor: "#FFFFFF",
-  /** Official company logo for in-app UI (relative bundled path). */
-  logoAsset: "./assets/brand/company_logo.png",
+  /** Official company logo for in-app UI (bundled relative path to root logo.png). */
+  logoAsset: "./logo.png",
   /** Expo / iOS / legacy launcher — exact logo_icons.png plate. */
   iconAsset: "./assets/brand/app_icon.png",
   /**
-   * Android adaptive foreground — same launcher artwork inset into the safe zone
-   * (generated from logo_icons.png; do not replace with a redesigned asset).
+   * Android adaptive foreground — launcher artwork only (from logo_icons.png safe-zone inset).
    */
   adaptiveIconAsset: "./assets/brand/adaptive_icon_foreground.png",
   /** Immutable launcher designer source; promoted via `npm run icons:generate`. */

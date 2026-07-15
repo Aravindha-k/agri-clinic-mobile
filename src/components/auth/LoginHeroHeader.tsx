@@ -11,7 +11,7 @@ import Reanimated, {
 import { FONTS } from "../../theme/fonts";
 import { Colors, Shadow, Spacing } from "../../../mobile/lib/theme";
 
-const SPLASH_LOGO = require("../../../assets/brand/company_logo.png");
+const SPLASH_LOGO = require("../../../logo.png");
 
 /** Space for login card overlap below the header. */
 export const LOGIN_HEADER_OVERLAP = 24;

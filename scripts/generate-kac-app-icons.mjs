@@ -1,13 +1,13 @@
 /**
- * Generates Android launcher mipmaps from the approved original company logo.
+ * Generates circular Android launcher mipmaps from the app icon logo.
  *
  * Source of truth (do not redesign / AI-recreate):
- *   assets/brand/logo.png
+ *   assets/brand/logo_icon.png
  *
  * Composition only:
- *   - 1024x1024 white canvas
- *   - original circular logo centered at 720px diameter (70.3%)
- *   - adaptive foreground is transparent outside the circular logo
+ *   - legacy icon is a large circular logo with transparent corners
+ *   - adaptive foreground keeps the circular logo inside Android's safe zone
+ *   - adaptive background matches the logo's outer green, avoiding white corners
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -17,10 +17,11 @@ import sharp from "sharp";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 
-const WHITE = "#FFFFFF";
-const WHITE_RGB = { r: 255, g: 255, b: 255 };
+const TRANSPARENT_RGBA = { r: 0, g: 0, b: 0, alpha: 0 };
+const ADAPTIVE_BACKGROUND = "#004D17";
+const ADAPTIVE_BACKGROUND_RGB = { r: 0, g: 77, b: 23 };
 
-const SOURCE_APPROVED = path.join(root, "assets/brand/logo.png");
+const SOURCE_APPROVED = path.join(root, "assets/brand/logo_icon.png");
 const KAC_DIR = path.join(root, "assets/brand/kac");
 
 const OUT_APP_ICON = path.join(root, "assets/brand/app_icon.png");
@@ -35,8 +36,8 @@ const OUT_MASK_PREVIEW_MIUI = path.join(KAC_DIR, "mask_preview_miui_rounded.png"
 const ANDROID_RES = path.join(root, "android/app/src/main/res");
 
 const MASTER_SIZE = 1024;
-const LOGO_DIAMETER = 720;
-const LOGO_FILL_RATIO = LOGO_DIAMETER / MASTER_SIZE;
+const LEGACY_LOGO_DIAMETER = 960;
+const ADAPTIVE_LOGO_DIAMETER = 720;
 
 const LEGACY_SIZES = {
   "mipmap-mdpi": 48,
@@ -84,28 +85,28 @@ function launcherMaskSvg(kind, size) {
   return Buffer.from(`<svg width="${size}" height="${size}"><rect x="0" y="0" width="${size}" height="${size}" rx="${radius}" ry="${radius}" fill="#fff"/></svg>`);
 }
 
-async function buildAdaptiveForeground() {
+async function buildCircularLogo(diameter) {
   const logo = await sharp(SOURCE_APPROVED)
-    .resize(LOGO_DIAMETER, LOGO_DIAMETER, {
+    .resize(diameter, diameter, {
       fit: "contain",
       kernel: sharp.kernel.lanczos3,
-      background: WHITE_RGB
+      background: TRANSPARENT_RGBA
     })
     .png()
     .toBuffer();
 
-  return sharp(circularLogoSvg({ logo, size: MASTER_SIZE, diameter: LOGO_DIAMETER }))
+  return sharp(circularLogoSvg({ logo, size: MASTER_SIZE, diameter }))
     .png({ compressionLevel: 9 })
     .toBuffer();
 }
 
-async function buildWhiteBackground() {
+async function buildAdaptiveBackground() {
   return sharp({
     create: {
       width: MASTER_SIZE,
       height: MASTER_SIZE,
       channels: 3,
-      background: WHITE_RGB
+      background: ADAPTIVE_BACKGROUND_RGB
     }
   })
     .png({ compressionLevel: 9 })
@@ -115,11 +116,11 @@ async function buildWhiteBackground() {
 async function buildLauncherIcons() {
   await fs.mkdir(KAC_DIR, { recursive: true });
 
-  const [foreground, background] = await Promise.all([buildAdaptiveForeground(), buildWhiteBackground()]);
-  const master = await sharp(background)
-    .composite([{ input: foreground, left: 0, top: 0 }])
-    .png({ compressionLevel: 9 })
-    .toBuffer();
+  const [master, foreground, background] = await Promise.all([
+    buildCircularLogo(LEGACY_LOGO_DIAMETER),
+    buildCircularLogo(ADAPTIVE_LOGO_DIAMETER),
+    buildAdaptiveBackground()
+  ]);
 
   await fs.writeFile(OUT_ADAPTIVE_FG, foreground);
   await fs.writeFile(OUT_APP_ICON, master);
@@ -136,7 +137,7 @@ async function writeMaskPreview(outputPath, kind) {
       width: MASTER_SIZE,
       height: MASTER_SIZE,
       channels: 4,
-      background: WHITE
+      background: TRANSPARENT_RGBA
     }
   })
     .composite([{ input: foreground, left: 0, top: 0 }])
@@ -194,7 +195,7 @@ async function writeAndroidMipmaps() {
 async function ensureAndroidColor(name, value) {
   const colorsPath = path.join(ANDROID_RES, "values", "colors.xml");
   const xml = await fs.readFile(colorsPath, "utf8");
-  const next = xml.replace(new RegExp(`<color name="${name}">#[0-9A-Fa-f]{6}</color>`), `<color name="${name}">${value}</color>`);
+  const next = xml.replace(new RegExp(`<color name="${name}">#[0-9A-Fa-f]{6,8}</color>`), `<color name="${name}">${value}</color>`);
   if (next === xml && !xml.includes(`name="${name}"`)) {
     throw new Error(`Missing Android color ${name} in ${colorsPath}`);
   }
@@ -213,13 +214,13 @@ async function assertAdaptiveXml() {
     }
   }
   const colors = await fs.readFile(path.join(ANDROID_RES, "values", "colors.xml"), "utf8");
-  if (!colors.includes("iconBackground") || !colors.toUpperCase().includes("#FFFFFF")) {
-    throw new Error("iconBackground must be #FFFFFF");
+  if (!colors.includes("iconBackground") || !colors.toUpperCase().includes(ADAPTIVE_BACKGROUND)) {
+    throw new Error(`iconBackground must be ${ADAPTIVE_BACKGROUND}`);
   }
 }
 
-async function assertForegroundTransparentCorners() {
-  const { data, info } = await sharp(OUT_ADAPTIVE_FG).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+async function assertTransparentCorners(imagePath) {
+  const { data, info } = await sharp(imagePath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   for (const [x, y] of [
     [0, 0],
     [info.width - 1, 0],
@@ -228,7 +229,7 @@ async function assertForegroundTransparentCorners() {
   ]) {
     const alpha = data[(y * info.width + x) * 4 + 3];
     if (alpha !== 0) {
-      throw new Error(`Adaptive foreground corner must be transparent at ${x},${y}; alpha=${alpha}`);
+      throw new Error(`${path.relative(root, imagePath)} corner must be transparent at ${x},${y}; alpha=${alpha}`);
     }
   }
 }
@@ -236,19 +237,18 @@ async function assertForegroundTransparentCorners() {
 async function main() {
   await ensureApprovedSource();
   await buildLauncherIcons();
-  await ensureAndroidColor("iconBackground", WHITE);
+  await ensureAndroidColor("iconBackground", ADAPTIVE_BACKGROUND);
   await writeAndroidMipmaps();
   await writeMaskPreviews();
   await assertAdaptiveXml();
-  await assertForegroundTransparentCorners();
+  await Promise.all([assertTransparentCorners(OUT_APP_ICON), assertTransparentCorners(OUT_ADAPTIVE_FG)]);
 
-  console.log("Approved white-background launcher icon generated:");
+  console.log("Circular launcher icon generated:");
   console.log(`  source: ${path.relative(root, SOURCE_APPROVED)}`);
-  console.log(`  canvas: ${MASTER_SIZE}x${MASTER_SIZE} ${WHITE}`);
-  console.log(`  logo diameter: ${LOGO_DIAMETER}px (${(LOGO_FILL_RATIO * 100).toFixed(1)}%)`);
-  console.log(`  margin: ${(MASTER_SIZE - LOGO_DIAMETER) / 2}px`);
+  console.log(`  legacy logo diameter: ${LEGACY_LOGO_DIAMETER}px`);
+  console.log(`  adaptive logo diameter: ${ADAPTIVE_LOGO_DIAMETER}px`);
   console.log(`  adaptive foreground: ${path.relative(root, OUT_ADAPTIVE_FG)}`);
-  console.log(`  adaptive background: ${WHITE}`);
+  console.log(`  adaptive background: ${ADAPTIVE_BACKGROUND}`);
   console.log("  android/app/src/main/res/mipmap-*/ic_launcher*.webp");
 }
 

@@ -20,11 +20,11 @@ module.exports = {
   splashImageAsset: "./assets/brand/logo_splash.png",
   /** Premium splash visible duration (ms) incl. crossfade. */
   splashDurationMs: 3820,
-  iconBackgroundColor: "#FFFFFF",
+  iconBackgroundColor: "#004D17",
   logoAsset: "./assets/brand/logo.png",
   iconAsset: "./assets/brand/app_icon.png",
   adaptiveIconAsset: "./assets/brand/adaptive_icon_foreground.png",
-  /** FINAL approved launcher artwork source (resize-only into mipmaps). */
-  kacIconApproved: "./assets/brand/logo.png",
+  /** Launcher artwork source; generated icons circular-mask its white corners. */
+  kacIconApproved: "./assets/brand/logo_icon.png",
   kacIconSolid: "./assets/brand/app_icon.png"
 };

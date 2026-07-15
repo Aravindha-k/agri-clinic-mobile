@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -69,7 +68,6 @@ export default function VisitCreateStep1({ onClose }: Props) {
   const setVisitKind = useVisitFormStore((s) => s.setVisitKind);
   const newFarmer = useVisitFormStore((s) => s.newFarmer);
   const gpsCoords = useVisitFormStore((s) => s.gpsCoords);
-  const hasFormData = useVisitFormStore((s) => s.hasFormData);
 
   const [segment, setSegment] = useState<FarmerSegment>("existing");
   const [recentFarmers, setRecentFarmers] = useState<Farmer[]>([]);
@@ -238,14 +236,7 @@ export default function VisitCreateStep1({ onClose }: Props) {
   const showSearchResults = debouncedQuery.length > 0;
 
   function confirmClose() {
-    if (!hasFormData()) {
-      onClose();
-      return;
-    }
-    Alert.alert(t("visitFlow.discardVisit"), t("visitFlow.discardVisitBody"), [
-      { text: t("visitFlow.keepEditing"), style: "cancel" },
-      { text: t("visitFlow.discard"), style: "destructive", onPress: onClose }
-    ]);
+    onClose();
   }
 
   async function selectFarmer(farmer: MobileFarmer) {

@@ -18,7 +18,11 @@ export function VisitFlowNavigator() {
         ...stackScreenOptionsPush
       }}
     >
-      <Stack.Screen name="NewVisitFarmer" component={VisitFlowShell} />
+      <Stack.Screen
+        name="NewVisitFarmer"
+        component={VisitFlowShell}
+        options={{ gestureEnabled: false }}
+      />
       <Stack.Screen name="VisitSuccess" component={VisitSuccessScreen} options={{ gestureEnabled: false }} />
     </Stack.Navigator>
   );

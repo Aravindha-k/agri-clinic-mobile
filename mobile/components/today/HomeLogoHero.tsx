@@ -1,9 +1,11 @@
-import { useEffect, useMemo } from "react";
-import { Image, Platform, StyleSheet, View } from "react-native";
+import { useIsFocused } from "@react-navigation/native";
+import { useEffect, useMemo, useState } from "react";
+import { AppState, Image, Platform, StyleSheet, View } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
 import Animated, {
   Easing,
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -64,6 +66,7 @@ function HomeLogoParticle({
   const baseY = Math.sin(spec.angle) * radius;
 
   useEffect(() => {
+    cancelAnimation(drift);
     if (!enabled) {
       drift.value = 0;
       return;
@@ -76,6 +79,7 @@ function HomeLogoParticle({
       -1,
       false
     );
+    return () => cancelAnimation(drift);
   }, [drift, enabled, spec.driftMs]);
 
   const motion = useAnimatedStyle(() => ({
@@ -106,7 +110,9 @@ function HomeLogoParticle({
 
 /** Today hero — logo zooms in/out inside a fixed orbit band (classic BrandLogoBadge motion). */
 export function HomeLogoHero({ replayKey = 0 }: Props) {
-  const { coreMotion } = usePremiumMotion();
+  const { coreMotion, ready: motionReady } = usePremiumMotion();
+  const isFocused = useIsFocused();
+  const [appActive, setAppActive] = useState(AppState.currentState === "active");
   const zoom = useSharedValue(BRAND_LOGO_ZOOM_MIN);
   const glow = useSharedValue(coreMotion ? GLOW_MIN : (GLOW_MIN + GLOW_MAX) / 2);
 
@@ -118,10 +124,19 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
   const orbitStageSize = computeOrbitStageSize(outer, { gapRatio: BRAND_ORBIT_GAP_RATIO, compact: true });
   const stageSize = orbitStageSize + HOME_STAGE_PAD * 2;
   const glowSize = Math.round(outer * GLOW_SIZE_RATIO);
-  const shouldZoom = coreMotion;
-  const showDecorParticles = coreMotion;
+  const shouldZoom = motionReady && coreMotion && isFocused && appActive;
+  const showDecorParticles = shouldZoom;
 
   useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      setAppActive(state === "active");
+    });
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    cancelAnimation(zoom);
+    cancelAnimation(glow);
     if (!shouldZoom) {
       zoom.value = 1;
       glow.value = (GLOW_MIN + GLOW_MAX) / 2;
@@ -163,7 +178,11 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
       -1,
       false
     );
-  }, [coreMotion, glow, replayKey, shouldZoom, zoom]);
+    return () => {
+      cancelAnimation(zoom);
+      cancelAnimation(glow);
+    };
+  }, [glow, replayKey, shouldZoom, zoom]);
 
   const logoZoomStyle = useAnimatedStyle(() => ({
     transform: [{ scale: zoom.value }]
@@ -210,7 +229,7 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
       <View pointerEvents="none" style={styles.orbitSlot}>
         <AgriNatureOrbit
           diameter={outer}
-          animate={coreMotion}
+          animate={shouldZoom}
           showTrack
           minimalTrack
           gapRatio={BRAND_ORBIT_GAP_RATIO}

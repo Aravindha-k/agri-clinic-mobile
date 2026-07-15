@@ -19,6 +19,9 @@ export function TechnicalDetailsCollapsible({ children }: Props) {
       <Pressable
         onPress={() => setOpen((value) => !value)}
         accessibilityRole="button"
+        accessibilityLabel={t("common.technicalDetails")}
+        accessibilityHint={open ? t("common.collapseSection") : t("common.expandSection")}
+        accessibilityState={{ expanded: open }}
         style={({ pressed }) => [styles.toggle, pressed && { opacity: 0.9 }]}
       >
         <Ionicons name="construct-outline" size={16} color={Colors.text3} />
@@ -43,7 +46,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     gap: Spacing.sm,
-    paddingVertical: Spacing.xs
+    minHeight: 48,
+    paddingVertical: Spacing.sm
   },
   toggleText: {
     color: Colors.text3,

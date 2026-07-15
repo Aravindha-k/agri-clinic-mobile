@@ -79,6 +79,8 @@ export type WorkdayStatus = {
   workday_id: number;
   /** Session id returned by duty/start — sent with location updates. */
   duty_session_id?: number;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
   date?: string;
   start_time?: string;
   started_at?: string;
@@ -362,11 +364,11 @@ function toBulkPoint(location: LocationPushPayload) {
     speed: location.speed ?? undefined,
     heading: location.heading ?? undefined,
     battery_level: location.battery_level ?? undefined,
-    duty_session_id: location.duty_session_id ?? location.workday_id ?? undefined,
+    duty_session_id: location.duty_session_id,
     captured_at: location.captured_at,
     recorded_at: location.recorded_at ?? location.captured_at,
     timestamp: location.timestamp ?? location.captured_at,
-    workday_id: location.workday_id ?? location.duty_session_id ?? undefined,
+    workday_id: location.workday_id,
     client_point_id: location.client_point_id,
     gps_enabled: location.gps_enabled,
     location_permission_status: location.location_permission_status,

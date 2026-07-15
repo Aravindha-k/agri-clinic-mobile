@@ -82,7 +82,15 @@ export function normalizeWorkdayRow(raw: unknown): WorkdayStatus | null {
     duty_session_id:
       dutySessionId != null && Number.isFinite(dutySessionId) && dutySessionId > 0
         ? dutySessionId
-        : workdayId,
+        : undefined,
+    latitude:
+      typeof row.latitude === "string" || typeof row.latitude === "number"
+        ? row.latitude
+        : null,
+    longitude:
+      typeof row.longitude === "string" || typeof row.longitude === "number"
+        ? row.longitude
+        : null,
     date:
       typeof row.work_date === "string"
         ? row.work_date

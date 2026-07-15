@@ -96,9 +96,9 @@ export default function MainTabBar({ state, descriptors, navigation }: BottomTab
               return (
                 <View key={route.key} style={styles.fabSlot} pointerEvents="box-none">
                   <TabBarButton
-                    accessibilityRole="button"
+                    accessibilityRole="tab"
                     accessibilityState={{ selected: focused }}
-                    accessibilityLabel={options.tabBarAccessibilityLabel}
+                    accessibilityLabel={options.tabBarAccessibilityLabel ?? t("tabs.newVisit")}
                     onPress={onPress}
                     onLongPress={onLongPress}
                     testID={options.tabBarTestID}
@@ -121,7 +121,7 @@ export default function MainTabBar({ state, descriptors, navigation }: BottomTab
                 onPress={onPress}
                 onLongPress={onLongPress}
                 style={styles.tabSlot}
-                accessibilityRole="button"
+                accessibilityRole="tab"
                 accessibilityState={{ selected: focused }}
                 accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
               >
@@ -176,14 +176,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
     justifyContent: "flex-end",
-    minHeight: 50,
+    minHeight: Layout.touchTargetMin,
     paddingBottom: 6
   },
   fabSlot: {
     alignItems: "center",
     flex: 1,
     justifyContent: "flex-end",
-    minHeight: 50,
+    minHeight: Layout.touchTargetMin,
     overflow: "visible",
     zIndex: 30
   },
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 3,
     justifyContent: "flex-end",
-    minHeight: 44,
+    minHeight: Layout.touchTargetMin,
     paddingHorizontal: 4,
     position: "relative",
     width: "100%"

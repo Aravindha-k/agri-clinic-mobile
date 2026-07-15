@@ -2,10 +2,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { getAllWorkdayLocations, type LocationLogPoint } from "../../../src/api/tracking";
 import { FieldMapView } from "../../../src/components/map/FieldMapView";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { readPendingGpsBuffer } from "../../../mobile/lib/gps/trackingService";
+import { readPendingVisits } from "../../lib/pendingVisitsQueue";
 import {
   buildDayMarkerFitCoords,
   buildDayRouteMarkers,
@@ -15,7 +15,7 @@ import { logDayTabError } from "../../../src/utils/dayTabDiagnostics";
 import { isSameVisitLocalDay } from "../../../src/utils/format";
 import { fitMapRegion } from "../../../src/utils/mapRegion";
 import { visitRowFromApi, type VisitMapPoint } from "../../../src/utils/visitMapFlow";
-import { getHomeVisits } from "../../../src/utils/visitsCache";
+import { fetchVisitsForMapMarkers } from "../../../src/utils/visitsCache";
 import { Colors, FontSize, FontWeight, Spacing } from "../../lib/theme";
 import { FlatCard } from "../layout/FlatCard";
 import { SectionHeader } from "../ui/SectionHeader";
@@ -28,6 +28,11 @@ type Props = {
   distanceLabel: string;
   distanceValue: string;
   workdayId?: number;
+  dutySessionId?: number;
+  serverStart?: {
+    latitude?: string | number | null;
+    longitude?: string | number | null;
+  } | null;
   /** Bumps when parent tracking sync completes — triggers reload. */
   refreshToken?: string | null;
   onPress: () => void;
@@ -38,6 +43,8 @@ export function DaySummaryRouteCard({
   distanceLabel,
   distanceValue,
   workdayId,
+  dutySessionId,
+  serverStart,
   refreshToken,
   onPress
 }: Props) {
@@ -46,7 +53,6 @@ export function DaySummaryRouteCard({
   const [previewWidth, setPreviewWidth] = useState(0);
   const [loading, setLoading] = useState(Boolean(workdayId));
   const [visitsToday, setVisitsToday] = useState<VisitMapPoint[]>([]);
-  const [serverTrack, setServerTrack] = useState<LocationLogPoint[]>([]);
   const [pendingTrackTick, setPendingTrackTick] = useState(0);
 
   const pendingPoints = useMemo(() => {
@@ -59,12 +65,13 @@ export function DaySummaryRouteCard({
     () =>
       workdayId
         ? extractWorkdayStartPoint({
-            serverPoints: serverTrack,
+            serverStart,
             pendingPoints,
-            workdayId
+            workdayId,
+            dutySessionId
           })
         : null,
-    [pendingPoints, serverTrack, workdayId]
+    [dutySessionId, pendingPoints, serverStart, workdayId]
   );
 
   const fitCoordinates = useMemo(
@@ -95,36 +102,43 @@ export function DaySummaryRouteCard({
   const loadDayRoute = useCallback(async () => {
     if (!workdayId) {
       setVisitsToday([]);
-      setServerTrack([]);
       setLoading(false);
       return;
     }
     setLoading(true);
     try {
-      const [visitsCache, locations] = await Promise.all([
-        getHomeVisits({ pageSize: 80 }),
-        getAllWorkdayLocations(workdayId).catch((err) => {
-          logDayTabError("day_route_locations", err);
-          return [] as LocationLogPoint[];
-        })
+      const [freshVisits, pendingVisits] = await Promise.all([
+        fetchVisitsForMapMarkers({ pageSize: 100, maxPages: 10, dateFilter: "today" }),
+        readPendingVisits().catch(() => [])
       ]);
       if (!mountedRef.current) return;
 
       const today = new Date();
-      const rows =
-        visitsCache?.visits
-          .filter((v) => isSameVisitLocalDay(v, today))
-          .map(visitRowFromApi)
-          .filter((row): row is VisitMapPoint => row != null) ?? [];
+      const rows = freshVisits
+        .filter((v) => isSameVisitLocalDay(v, today))
+        .map(visitRowFromApi)
+        .filter((row): row is VisitMapPoint => row != null);
+      const queuedRows = pendingVisits
+        .filter((row) => isSameVisitLocalDay({ created_at: row.createdAt }, today))
+        .map((row) =>
+          visitRowFromApi({
+            id: row.local_sync_id,
+            latitude: row.values.latitude,
+            longitude: row.values.longitude,
+            farmer_name: row.values.farmer_name,
+            village_name: row.values.village,
+            visit_date: row.values.visit_date,
+            created_at: row.createdAt
+          })
+        )
+        .filter((row): row is VisitMapPoint => row != null);
 
-      setVisitsToday(rows);
-      setServerTrack(locations);
+      setVisitsToday([...rows, ...queuedRows]);
       setPendingTrackTick((tick) => tick + 1);
     } catch (err) {
       logDayTabError("day_route_visits", err);
       if (mountedRef.current) {
         setVisitsToday([]);
-        setServerTrack([]);
       }
     } finally {
       if (mountedRef.current) setLoading(false);
@@ -162,7 +176,12 @@ export function DaySummaryRouteCard({
       <View style={styles.headerPad}>
         <SectionHeader title={title} />
       </View>
-      <Pressable onPress={onPress} style={({ pressed }) => [pressed && { opacity: 0.96 }]}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`${title}. ${t("myLocation.openFullMap")}`}
+        style={({ pressed }) => [pressed && { opacity: 0.96 }]}
+      >
           <FlatCard variant="secondary" style={styles.card}>
           <View
             style={styles.previewWrap}

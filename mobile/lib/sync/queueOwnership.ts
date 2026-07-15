@@ -8,13 +8,25 @@ export type OwnedQueueItem = {
 };
 
 let activeSyncUserId: number | null = null;
+const activeUserListeners = new Set<(userId: number | null) => void>();
 
 export function setActiveSyncUserId(userId: number | null): void {
+  if (activeSyncUserId === userId) return;
   activeSyncUserId = userId;
+  for (const listener of activeUserListeners) {
+    listener(userId);
+  }
 }
 
 export function getActiveSyncUserId(): number | null {
   return activeSyncUserId;
+}
+
+export function subscribeActiveSyncUserId(
+  listener: (userId: number | null) => void
+): () => void {
+  activeUserListeners.add(listener);
+  return () => activeUserListeners.delete(listener);
 }
 
 export function filterQueueForActiveUser<T extends OwnedQueueItem>(

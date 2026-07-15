@@ -1,13 +1,18 @@
 import * as SecureStore from "expo-secure-store";
 import { getLocalWorkDate, workDateFromIso } from "../utils/workdayCalendar";
-import { workdayCacheKeyForUser, mergeWorkdayStartedAt } from "../utils/workdayPersistence";
+import {
+  legacyWorkdayMigrationDecision,
+  workdayCacheKeyForUser,
+  mergeWorkdayStartedAt
+} from "../utils/workdayPersistence";
+import { getActiveSyncUserId } from "../../mobile/lib/sync/queueOwnership";
 
 export type WorkdaySessionStatus = "not_started" | "in_progress" | "completed";
 
 /** One persisted work record per user per calendar day (local timezone). */
 export type CachedWorkdayRecord = {
   workday_id: number;
-  duty_session_id: number;
+  duty_session_id?: number;
   started_at: string;
   work_date: string;
   status: WorkdaySessionStatus;
@@ -26,6 +31,14 @@ export type CachedActiveWorkday = CachedWorkdayRecord;
 const LEGACY_CACHE_KEY = "agri_active_workday_v1";
 const LEGACY_ID_KEY = "agri_active_workday_id";
 const LEGACY_STARTED_KEY = "agri_workday_started_at";
+const LEGACY_OWNER_KEY = "agri_active_workday_owner_v1";
+
+const LEGACY_KEYS = [
+  LEGACY_CACHE_KEY,
+  LEGACY_ID_KEY,
+  LEGACY_STARTED_KEY,
+  LEGACY_OWNER_KEY
+] as const;
 
 function cacheKeyForUser(userId: number | null | undefined): string {
   if (userId != null && Number.isFinite(userId) && userId > 0) {
@@ -41,6 +54,17 @@ async function readRawCache(key: string): Promise<CachedWorkdayRecord | null> {
   } catch {
     return null;
   }
+}
+
+async function clearLegacyWorkdayKeys(): Promise<void> {
+  await Promise.all(
+    LEGACY_KEYS.map((key) => SecureStore.deleteItemAsync(key).catch(() => undefined))
+  );
+}
+
+function parseOwnerId(raw: string | null): number | null {
+  const value = raw ? Number(raw) : NaN;
+  return Number.isFinite(value) && value > 0 ? value : null;
 }
 
 function normalizeStatus(raw: unknown): WorkdaySessionStatus | null {
@@ -59,7 +83,7 @@ function parseCache(raw: string | null): CachedWorkdayRecord | null {
     const workdayId = Number(parsed.workday_id);
     if (!Number.isFinite(workdayId) || workdayId <= 0) return null;
     if (typeof parsed.started_at !== "string" || !parsed.started_at.trim()) return null;
-    const dutySessionId = Number(parsed.duty_session_id ?? workdayId);
+    const dutySessionId = Number(parsed.duty_session_id);
     const workDate =
       typeof parsed.work_date === "string" && parsed.work_date.trim()
         ? parsed.work_date.trim()
@@ -67,7 +91,7 @@ function parseCache(raw: string | null): CachedWorkdayRecord | null {
     return {
       workday_id: workdayId,
       duty_session_id:
-        Number.isFinite(dutySessionId) && dutySessionId > 0 ? dutySessionId : workdayId,
+        Number.isFinite(dutySessionId) && dutySessionId > 0 ? dutySessionId : undefined,
       started_at: parsed.started_at.trim(),
       work_date: workDate,
       status,
@@ -116,15 +140,18 @@ export async function readCachedActiveWorkday(
   userId?: number | null
 ): Promise<CachedWorkdayRecord | null> {
   try {
-    if (userId != null && Number.isFinite(userId) && userId > 0) {
-      const userRecord = await readRawCache(workdayCacheKeyForUser(userId));
+    const resolvedUserId = userId === undefined ? getActiveSyncUserId() : userId;
+    if (resolvedUserId != null && Number.isFinite(resolvedUserId) && resolvedUserId > 0) {
+      const userRecord = await readRawCache(workdayCacheKeyForUser(resolvedUserId));
       if (userRecord) {
         if (userRecord.user_id == null) {
-          const patched = { ...userRecord, user_id: userId };
+          // The scoped key itself proves ownership, including old scoped records
+          // written before user_id was embedded in the JSON.
+          const patched = { ...userRecord, user_id: resolvedUserId };
           await saveCachedActiveWorkday(patched);
           return patched;
         }
-        if (userRecord.user_id === userId) {
+        if (userRecord.user_id === resolvedUserId) {
           return userRecord;
         }
         return null;
@@ -133,34 +160,46 @@ export async function readCachedActiveWorkday(
 
     const fromLegacy = await readRawCache(LEGACY_CACHE_KEY);
     if (fromLegacy) {
-      if (userId != null && fromLegacy.user_id != null && fromLegacy.user_id !== userId) {
+      const decision = legacyWorkdayMigrationDecision(resolvedUserId, fromLegacy.user_id);
+      if (decision === "reject") {
+        if (fromLegacy.user_id == null) {
+          await clearLegacyWorkdayKeys();
+        }
         return null;
       }
-      if (userId != null && fromLegacy.user_id == null) {
-        const migrated = { ...fromLegacy, user_id: userId };
+      if (decision === "migrate") {
+        const migrated = { ...fromLegacy, user_id: resolvedUserId! };
         await saveCachedActiveWorkday(migrated);
         return migrated;
       }
       return fromLegacy;
     }
 
-    const [idRaw, startedRaw] = await Promise.all([
+    const [idRaw, startedRaw, ownerRaw] = await Promise.all([
       SecureStore.getItemAsync(LEGACY_ID_KEY),
-      SecureStore.getItemAsync(LEGACY_STARTED_KEY)
+      SecureStore.getItemAsync(LEGACY_STARTED_KEY),
+      SecureStore.getItemAsync(LEGACY_OWNER_KEY)
     ]);
     const id = idRaw ? Number(idRaw) : NaN;
     if (!Number.isFinite(id) || id <= 0 || !startedRaw?.trim()) return null;
+    const legacyOwnerId = parseOwnerId(ownerRaw);
+    const primitiveDecision = legacyWorkdayMigrationDecision(resolvedUserId, legacyOwnerId);
+    if (primitiveDecision === "reject") {
+      if (legacyOwnerId == null) {
+        await clearLegacyWorkdayKeys();
+      }
+      return null;
+    }
 
     const startedAt = startedRaw.trim();
     const migrated: CachedWorkdayRecord = {
       workday_id: id,
-      duty_session_id: id,
       started_at: startedAt,
       work_date: workDateFromIso(startedAt) ?? getLocalWorkDate(),
       status: "in_progress",
       last_known_distance: 0,
       last_known_points: 0,
-      user_id: userId ?? undefined
+      user_id: resolvedUserId ?? undefined
     };
     await saveCachedActiveWorkday(migrated);
     return migrated;
@@ -188,11 +227,14 @@ export async function saveCachedActiveWorkday(snapshot: CachedWorkdayRecord): Pr
   if (snapshot.status === "in_progress") {
     await SecureStore.setItemAsync(LEGACY_ID_KEY, String(snapshot.workday_id));
     await SecureStore.setItemAsync(LEGACY_STARTED_KEY, snapshot.started_at);
+    if (snapshot.user_id != null) {
+      await SecureStore.setItemAsync(LEGACY_OWNER_KEY, String(snapshot.user_id));
+    }
   }
 }
 
 export async function clearCachedActiveWorkday(userId?: number | null): Promise<void> {
-  const keys = new Set<string>([LEGACY_CACHE_KEY, LEGACY_ID_KEY, LEGACY_STARTED_KEY]);
+  const keys = new Set<string>(LEGACY_KEYS);
   if (userId != null && Number.isFinite(userId)) {
     keys.add(workdayCacheKeyForUser(userId));
   }
@@ -223,7 +265,7 @@ export async function getActiveWorkdayId(userId?: number | null): Promise<number
 export async function getActiveDutySessionId(userId?: number | null): Promise<number | null> {
   const cached = await readCachedActiveWorkday(userId);
   if (!cached || cached.status !== "in_progress") return null;
-  return cached.duty_session_id ?? cached.workday_id ?? null;
+  return cached.duty_session_id ?? null;
 }
 
 export async function saveDutySessionFromWorkday(
@@ -241,7 +283,12 @@ export async function saveDutySessionFromWorkday(
       : typeof workday.start_time === "string" && workday.start_time.trim()
         ? workday.start_time.trim()
         : new Date().toISOString();
-  const dutySessionId = workday.duty_session_id ?? workday.workday_id;
+  const dutySessionId =
+    workday.duty_session_id != null &&
+    Number.isFinite(workday.duty_session_id) &&
+    workday.duty_session_id > 0
+      ? workday.duty_session_id
+      : undefined;
   const deviceNow = new Date().toISOString();
   const existing = await readCachedActiveWorkday(options?.userId ?? null);
   const persistedStart = mergeWorkdayStartedAt(existing?.started_at, startedAt) ?? startedAt;

@@ -9,7 +9,6 @@ export const MyLocationMapLegend = memo(function MyLocationMapLegend() {
   return (
     <View style={styles.wrap}>
       <LegendRow color="#D97706" label={t("myLocation.legendRouteStart")} variant="dot" />
-      <LegendRow color={Colors.green} label={t("myLocation.legendYou")} variant="arrow" />
       <LegendRow color={Colors.green} label={t("myLocation.legendVisit")} variant="dot" />
     </View>
   );

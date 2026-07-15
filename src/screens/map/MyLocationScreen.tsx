@@ -1,20 +1,17 @@
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useCallback, useMemo, useState } from "react";
-import { Linking, Platform, StyleSheet, View } from "react-native";
+import { useMemo, useState } from "react";
+import { StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FieldMapView } from "../../components/map/FieldMapView";
 import { MapErrorBoundary } from "../../components/map/MapErrorBoundary";
 import { MyLocationBottomSheet } from "../../components/myLocation/MyLocationBottomSheet";
 import { MyLocationHeader } from "../../components/myLocation/MyLocationHeader";
-import { MyLocationLivePill } from "../../components/myLocation/MyLocationLivePill";
-import { MyLocationMapFab } from "../../components/myLocation/MyLocationMapFab";
 import { MyLocationMapLegend } from "../../components/myLocation/MyLocationMapLegend";
 import { MyLocationMetricsRow } from "../../components/myLocation/MyLocationMetricsRow";
 import { useMyLocationScreen } from "../../hooks/useMyLocationScreen";
 import { useSecureScreen } from "../../hooks/useSecureScreen";
 import { useI18n } from "../../i18n/I18nContext";
 import { RootStackParamList } from "../../navigation/types";
-import { hasValidMapCoords } from "../../utils/mapCoords";
 import { Colors } from "../../../mobile/lib/theme";
 import { ScreenCanvas } from "../../../mobile/components/layout";
 
@@ -49,28 +46,20 @@ export function MyLocationScreen({ navigation, route }: Props) {
   const {
     mapRef,
     isActive,
-    hasLiveGps,
     startedAt,
     lastSyncTime,
     distanceKm,
     accuracyMeters,
     isSyncing,
     refreshing,
-    liveCoordinate,
-    accuracyCircle,
     markers,
     mapRegion,
     fitCoordinates,
-    routeLine,
     visitsToday,
     emptyStateKey,
     refresh,
-    centerOnVisit,
-    locateMe,
-    fitRoute
+    centerOnVisit
   } = useMyLocationScreen();
-
-  const followLive = hasLiveGps && isActive;
 
   const emptyMessage = useMemo(() => {
     if (emptyStateKey === "noWorkday") return t("myLocation.empty.noWorkday");
@@ -79,29 +68,11 @@ export function MyLocationScreen({ navigation, route }: Props) {
     return undefined;
   }, [emptyStateKey, t]);
 
-  const openExternalMaps = useCallback(() => {
-    void (async () => {
-      const { getForegroundLocation } = await import("../../utils/location");
-      const fix = await getForegroundLocation().catch(() => null);
-      if (!fix?.granted) return;
-      const la = fix.location.coords.latitude;
-      const ln = fix.location.coords.longitude;
-      if (la == null || ln == null || !hasValidMapCoords(la, ln)) return;
-      const url =
-        Platform.OS === "ios"
-          ? `maps://?q=${la},${ln}`
-          : `geo:${la},${ln}?q=${la},${ln}`;
-      void Linking.openURL(url).catch(() => {
-        void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${la},${ln}`);
-      });
-    })();
-  }, []);
-
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
       <ScreenCanvas />
       <MyLocationHeader
-        trackingActive={isActive && hasLiveGps}
+        trackingActive={isActive}
         onBack={() => navigation.goBack()}
         onRefresh={() => void refresh()}
         title={headerCopy.title}
@@ -130,32 +101,22 @@ export function MyLocationScreen({ navigation, route }: Props) {
               height={mapHeight}
               width={mapWidth}
               region={mapRegion}
-              route={routeLine}
               fitCoordinates={fitCoordinates}
               fitEdgePadding={{ top: 72, right: 56, bottom: 88, left: 40 }}
               markers={markers}
               mapRef={mapRef}
-              showsUserLocation={hasLiveGps}
-              followsUserLocation={followLive}
-              liveFocus={followLive ? liveCoordinate : null}
-              liveFocusDelta={0.005}
-              locationGranted={hasLiveGps}
+              showsUserLocation={false}
+              followsUserLocation={false}
+              locationGranted={false}
               permissionResolved
               locationDenied={false}
               loading={false}
               emptyMessage={emptyMessage}
-              accuracyCircle={accuracyCircle}
             />
           </MapErrorBoundary>
         ) : null}
 
-        <MyLocationLivePill active={followLive} />
         <MyLocationMapLegend />
-        <MyLocationMapFab
-          onLocateMe={locateMe}
-          onFitRoute={fitRoute}
-          onNavigate={openExternalMaps}
-        />
       </View>
 
       <MyLocationBottomSheet

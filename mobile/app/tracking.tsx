@@ -1,5 +1,5 @@
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Alert,
   ScrollView,
@@ -16,7 +16,6 @@ import { AppErrorBoundary } from "../../src/components/AppErrorBoundary";
 import { getExpoBuildUrl, shouldShowExpoGoDevWarning } from "../../src/utils/expoRuntime";
 import { logDayTabApi, logDayTabError, logDayTabOpen } from "../../src/utils/dayTabDiagnostics";
 import { useRefreshControlProps } from "../../src/hooks/useRefreshControlProps";
-import { useWorkdayTimer } from "../../src/hooks/useLiveClock";
 import { useTabBarBottomInset } from "../../src/hooks/useTabBarBottomInset";
 import { useI18n } from "../../src/i18n/I18nContext";
 import { useOfflineSync } from "../../src/storage/OfflineSyncContext";
@@ -29,7 +28,6 @@ import { autoFlushPendingGps } from "../lib/sync/offlineSyncManager";
 import { readPendingVisits } from "../lib/pendingVisitsQueue";
 import { isSameVisitLocalDay } from "../../src/utils/format";
 import { getHomeVisits } from "../../src/utils/visitsCache";
-import { resolveWorkdayStartedAt } from "../../src/utils/workdayStartedAt";
 import { DaySummaryRouteCard } from "../components/daySummary/DaySummaryRouteCard";
 import { ScreenCanvas, ScreenEntranceBloom, ScreenPageHeader } from "../components/layout";
 import { FadeInSection, entranceStagger } from "../components/ui/FadeInSection";
@@ -115,13 +113,7 @@ function TrackingWorkspaceScreenInner() {
   const [summaryLoading, setSummaryLoading] = useState(true);
   const entranceTick = useScreenEntrance();
 
-  const startedAt = useMemo(
-    () => resolveWorkdayStartedAt(workday) || trackingStartedAt || null,
-    [trackingStartedAt, workday]
-  );
-  const workdayTimer = useWorkdayTimer(startedAt, workdaySessionStatus === "in_progress");
-  const panelTimerDisplay =
-    workdaySessionStatus === "in_progress" ? workdayTimer.display : timerDisplay;
+  const startedAt = trackingStartedAt;
 
   const resolvedWorkdayId = workdayId ?? workday?.workday_id;
 
@@ -356,7 +348,7 @@ function TrackingWorkspaceScreenInner() {
               setDismissedError(trackingError || "");
               setDismissedErrorSource(trackingErrorSource);
             }}
-            timerDisplay={panelTimerDisplay}
+            timerDisplay={timerDisplay}
             startedAtLabel={formatStartedTime(startedAt)}
             distanceKm={displayDistanceKm}
             visitsToday={visitsToday}
@@ -410,6 +402,8 @@ function TrackingWorkspaceScreenInner() {
           distanceLabel={t("daySummary.totalRouteDistance")}
           distanceValue={`${formatDistanceKm(distanceKm)} km`}
           workdayId={resolvedWorkdayId}
+          dutySessionId={workday?.duty_session_id}
+          serverStart={workday}
           refreshToken={lastSyncTime}
           onPress={() => navigateMyLocation()}
         />

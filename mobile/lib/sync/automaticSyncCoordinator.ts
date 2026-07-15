@@ -18,6 +18,7 @@ import {
   scheduleBackgroundFieldSync
 } from "./syncScheduler";
 import { useSyncStore } from "../store/syncStore";
+import { emitFieldQueueChange } from "./syncQueueNotifier";
 
 export type AutomaticSyncTrigger =
   | "app_start"
@@ -66,7 +67,8 @@ export async function runAutomaticSync(
   trigger: AutomaticSyncTrigger,
   options?: { force?: boolean }
 ): Promise<AutomaticSyncResult> {
-  if (coordinatorInFlight && !options?.force) {
+  // Manual/diagnostic force may bypass scheduling gates, never the single-flight lock.
+  if (coordinatorInFlight) {
     return coordinatorInFlight;
   }
 
@@ -210,6 +212,7 @@ export async function runAutomaticSync(
 
     if (madeProgress) {
       noteForegroundSyncProgress();
+      emitFieldQueueChange("sync_progress");
     }
 
     const health = deriveSyncHealth(true, countsAfter, result.phase, false);

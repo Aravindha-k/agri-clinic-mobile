@@ -33,6 +33,7 @@ import { useI18n } from "../../../src/i18n/I18nContext";
 import { useSyncStore } from "../../lib/store/syncStore";
 import { visitDisplayIso } from "../../../src/utils/format";
 import { VisitListCard } from "../visits/VisitListCard";
+import { PendingVisitDetail } from "../visits/PendingVisitDetail";
 import {
   buildVisitListRows,
   stickySectionIndices,
@@ -79,6 +80,7 @@ export function WorkVisitsPanel({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [dateFilter, setDateFilter] = useState<VisitDateFilter>("all");
+  const [selectedPending, setSelectedPending] = useState<PendingVisitRecord | null>(null);
 
   const loadPending = useCallback(async () => {
     setPendingVisits(await readPendingVisits());
@@ -183,7 +185,10 @@ export function WorkVisitsPanel({
         return wrap(<SectionLabel title={item.title} first={item.title === "PENDING SYNC"} />);
       }
       if (item.kind === "pending") {
-        return wrap(<VisitListCard pending={item.pending} />, true);
+        return wrap(
+          <VisitListCard pending={item.pending} onPress={() => setSelectedPending(item.pending)} />,
+          true
+        );
       }
       return wrap(
         <VisitListCard
@@ -290,6 +295,14 @@ export function WorkVisitsPanel({
           />
         )}
       </View>
+      <PendingVisitDetail
+        visit={selectedPending}
+        onClose={() => setSelectedPending(null)}
+        onChanged={() => {
+          void loadPending();
+          bumpAfterVisitChange();
+        }}
+      />
     </View>
   );
 }

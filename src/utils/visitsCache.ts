@@ -1,4 +1,4 @@
-import { fetchVisitsPage, Visit } from "../api/visits";
+import { fetchVisitsPage, Visit, type VisitDateFilter } from "../api/visits";
 
 const HOME_VISITS_TTL_MS = 60_000;
 
@@ -26,4 +26,31 @@ export async function getHomeVisits(options?: { force?: boolean; pageSize?: numb
     fetchedAt: now
   };
   return homeCache;
+}
+
+/**
+ * Fetches enough uncached pages for map markers without replacing the home-list cache.
+ * The cap prevents a malformed pagination chain from keeping the Day screen busy forever.
+ */
+export async function fetchVisitsForMapMarkers(options?: {
+  pageSize?: number;
+  maxPages?: number;
+  dateFilter?: VisitDateFilter;
+}): Promise<Visit[]> {
+  const pageSize = options?.pageSize ?? 100;
+  const maxPages = options?.maxPages ?? 10;
+  const visits: Visit[] = [];
+  let nextUrl: string | null | undefined;
+
+  for (let pageIndex = 0; pageIndex < maxPages; pageIndex += 1) {
+    const page = await fetchVisitsPage(
+      nextUrl
+        ? { nextUrl }
+        : { pageSize, dateFilter: options?.dateFilter ?? "today", source: "day-map" }
+    );
+    visits.push(...page.results);
+    nextUrl = page.next;
+    if (!nextUrl) break;
+  }
+  return visits;
 }

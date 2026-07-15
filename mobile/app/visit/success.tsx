@@ -13,6 +13,7 @@ import { VisitFlowParamList } from "../../../src/navigation/types";
 import { resetToMainTab, resetToVisitDetail } from "../../../src/navigation/rootNavigationRef";
 import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
 import { useI18n } from "../../../src/i18n/I18nContext";
+import { usePremiumMotion } from "../../../src/hooks/usePremiumMotion";
 import type { SubmittedVisitSummary } from "../../../src/types/submittedVisitSummary";
 import { beginNewVisit } from "../../lib/beginNewVisit";
 import { GhostButton, PrimaryButton } from "../../components/ui";
@@ -23,11 +24,14 @@ import { Colors, FontSize, FontWeight, Layout, Radius, Spacing } from "../../lib
 type Props = NativeStackScreenProps<VisitFlowParamList, "VisitSuccess">;
 
 function AnimatedHeroIcon({ queued }: { queued: boolean }) {
-  const scale = useSharedValue(0);
+  const { coreMotion } = usePremiumMotion();
+  const scale = useSharedValue(coreMotion ? 0 : 1);
 
   useEffect(() => {
-    scale.value = withSequence(withTiming(1.2, { duration: 200 }), withTiming(1, { duration: 200 }));
-  }, [scale]);
+    scale.value = coreMotion
+      ? withSequence(withTiming(1.2, { duration: 200 }), withTiming(1, { duration: 200 }))
+      : 1;
+  }, [coreMotion, scale]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }]
@@ -184,11 +188,9 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
               ) : visitId > 0 ? (
                 <GhostButton label={t("visitFlow.viewVisit")} onPress={viewVisit} style={styles.actionBtn} />
               ) : null}
-              {!queued ? (
-                <Pressable onPress={goHome} style={styles.homeLink} accessibilityRole="button">
-                  <Text style={styles.homeLinkText}>{t("visitFlow.goHome")}</Text>
-                </Pressable>
-              ) : null}
+              <Pressable onPress={goHome} style={styles.homeLink} accessibilityRole="button">
+                <Text style={styles.homeLinkText}>{t("visitFlow.goToday")}</Text>
+              </Pressable>
             </View>
           </EntranceBlocks>
         </ScrollView>

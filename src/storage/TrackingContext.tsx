@@ -188,7 +188,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   const intervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const elapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const syncInFlightRef = useRef(false);
-  const workdaySyncInFlightRef = useRef(false);
+  const workdaySyncPromiseRef = useRef<Promise<void> | null>(null);
   const lastWorkdaySyncAtRef = useRef(0);
   const workdaySessionSyncDoneRef = useRef(false);
   const autoEndInFlightRef = useRef(false);
@@ -196,6 +196,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   const workdayRef = useRef<WorkdayStatus | null>(null);
   const workdayStartedAtRef = useRef<number | null>(null);
   const currentLocationRef = useRef<CurrentLocation | null>(null);
+  const serverAuthorityVersionRef = useRef(0);
 
   workdayRef.current = workday;
   currentLocationRef.current = currentLocation;
@@ -255,13 +256,21 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     const serverStart = resolveWorkdayStartedAt(status);
     const userId = resolveSyncUserId();
 
-    if (status?.workday_id && serverStart) {
+    if (status?.workday_id && status.duty_session_id && serverStart) {
       void readTodayWorkdayRecord(userId).then((existing) => {
+        const current = workdayRef.current;
+        if (
+          !current ||
+          current.workday_id !== status.workday_id ||
+          current.duty_session_id !== status.duty_session_id
+        ) {
+          return;
+        }
         const mergedStart = mergeWorkdayStartedAt(existing?.started_at, serverStart) ?? serverStart;
         setStartedAt(mergedStart);
         void saveCachedActiveWorkday({
           workday_id: status.workday_id,
-          duty_session_id: status.duty_session_id ?? status.workday_id,
+          duty_session_id: status.duty_session_id,
           started_at: mergedStart,
           work_date: getLocalWorkDate(),
           status: "in_progress",
@@ -366,7 +375,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       markDutyTrackingSessionActive(true);
       const cachedWorkday = {
         workday_id: cached.workday_id,
-        duty_session_id: cached.duty_session_id ?? cached.workday_id,
+        duty_session_id: cached.duty_session_id,
         is_active: true,
         started_at: resolved,
         start_time: resolved
@@ -379,9 +388,13 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   );
 
   const hydrateWorkdaySessionFromCache = useCallback(async (userId?: number | null) => {
+    const authorityVersion = serverAuthorityVersionRef.current;
     setWorkdaySessionHydrated(false);
     try {
       const cached = await readCachedActiveWorkday(userId);
+      if (authorityVersion !== serverAuthorityVersionRef.current) {
+        return;
+      }
 
       if (!cached) {
         setWorkdaySessionStatus("not_started");
@@ -471,7 +484,8 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   }, [autoEndWorkday, startedAt, workday]);
 
   const syncWorkdayFromServer = useCallback(async (options?: { force?: boolean }) => {
-      if (workdaySyncInFlightRef.current) {
+      if (workdaySyncPromiseRef.current) {
+        await workdaySyncPromiseRef.current;
         return;
       }
 
@@ -483,7 +497,11 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      workdaySyncInFlightRef.current = true;
+      let settleActiveSync!: () => void;
+      const activeSync = new Promise<void>((resolve) => {
+        settleActiveSync = resolve;
+      });
+      workdaySyncPromiseRef.current = activeSync;
       setWorkdaySyncStatus((prev) => (prev === "confirmed" ? "syncing" : prev === "idle" ? "syncing" : prev));
       workdayRestoreLog("workday_current_api_start");
 
@@ -514,6 +532,9 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
           setWorkdayServerReconciled(true);
           return;
         }
+
+        // Any completed server response supersedes hydration that started earlier.
+        serverAuthorityVersionRef.current += 1;
 
         if (result.kind === "active") {
           const userId = resolveSyncUserId();
@@ -574,7 +595,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
           } else {
             applyCompletedWorkdayFromCache({
               workday_id: result.workday.workday_id,
-              duty_session_id: result.workday.duty_session_id ?? result.workday.workday_id,
+              duty_session_id: result.workday.duty_session_id,
               started_at: resolveWorkdayStartedAt(result.workday) || endTime,
               work_date: getLocalWorkDate(),
               status: "completed",
@@ -585,6 +606,12 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
               user_id: userId ?? undefined
             });
           }
+          const completedServerWorkday = {
+            ...result.workday,
+            is_active: false
+          };
+          workdayRef.current = completedServerWorkday;
+          setWorkday(completedServerWorkday);
           setWorkdaySyncStatus("idle");
           setWorkdayServerReconciled(true);
           return;
@@ -610,7 +637,10 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
         setWorkdaySyncStatus("idle");
         setWorkdayServerReconciled(true);
       } finally {
-        workdaySyncInFlightRef.current = false;
+        if (workdaySyncPromiseRef.current === activeSync) {
+          workdaySyncPromiseRef.current = null;
+        }
+        settleActiveSync();
         lastWorkdaySyncAtRef.current = Date.now();
         setWorkdayServerReconciled(true);
       }
@@ -715,7 +745,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
           location,
           {
             workdayId: workday?.workday_id,
-            dutySessionId: workday?.duty_session_id ?? workday?.workday_id
+            dutySessionId: workday?.duty_session_id
           },
           batteryLevel
         );
@@ -934,14 +964,14 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       setGpsState("granted");
       trackingDevLog(
         "workday_started",
-        `duty_session_id=${activeWorkday.duty_session_id ?? activeWorkday.workday_id}`
+        `duty_session_id=${activeWorkday.duty_session_id ?? "missing"}`
       );
 
       const payload = toTrackingPayload(
         foregroundLocation,
         {
           workdayId: activeWorkday.workday_id,
-          dutySessionId: activeWorkday.duty_session_id ?? activeWorkday.workday_id
+          dutySessionId: activeWorkday.duty_session_id
         },
         await getBatteryPercent()
       );
@@ -983,6 +1013,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       startGpsTrackingService({
         isGpsEnabled: () => gpsState !== "denied"
       });
+      await syncWorkdayFromServer({ force: true });
       return true;
     } catch (err) {
       const message =
@@ -1053,6 +1084,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       if (online) {
         try {
           await endDutySession(await getActiveDutySessionId());
+          await syncWorkdayFromServer({ force: true });
           const pendingEnd = readActiveUserWorkdayOps().find((r) => r.operation === "end");
           if (pendingEnd) {
             markWorkdayOpSynced(pendingEnd.local_operation_id);
@@ -1176,7 +1208,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     }
     const onAppState = (state: AppStateStatus) => {
       if (state === "active") {
-        runSafe(syncWorkdayFromServer().then(() => flushPendingLocationQueue()));
+        runSafe(syncWorkdayFromServer({ force: true }).then(() => flushPendingLocationQueue()));
         if (isWorkdayActive(workdayRef.current)) {
           runSafe(resumeActiveWorkdayTracking());
         }
@@ -1238,7 +1270,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       if (online) {
-        runSafe(syncWorkdayFromServer().then(() => flushPendingLocationQueue()));
+        runSafe(syncWorkdayFromServer({ force: true }).then(() => flushPendingLocationQueue()));
       }
     });
   }, [activeWorkdayId, flushPendingLocationQueue, syncWorkdayFromServer, trackingReady]);

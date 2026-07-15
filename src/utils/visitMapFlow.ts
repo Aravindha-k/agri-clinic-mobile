@@ -2,7 +2,7 @@ import type { MapCoordinate, MapPin } from "../components/map/FieldMapView.types
 import { hasValidMapCoords, parseMapCoord } from "./mapCoords";
 
 export type VisitMapPoint = {
-  id: number;
+  id: number | string;
   latitude: number;
   longitude: number;
   visitedAt?: string | null;
@@ -62,7 +62,7 @@ export function buildVisitMapMarkers(visits: VisitMapPoint[]): MapPin[] {
 }
 
 export function visitRowFromApi(visit: {
-  id: number;
+  id: number | string;
   latitude?: string | number | null;
   longitude?: string | number | null;
   farmer_name?: string | null;

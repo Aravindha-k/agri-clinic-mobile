@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loginNotice, setLoginNotice] = useState<string | null>(null);
   const [employee, setEmployee] = useState<Employee | null>(null);
   const bootstrapRunningRef = useRef(false);
-  const backgroundValidationRunningRef = useRef(false);
+  const backgroundValidationPromiseRef = useRef<Promise<void> | null>(null);
   const autoValidateStartedRef = useRef(false);
   const validationGenerationRef = useRef(0);
 
@@ -147,10 +147,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const validateSessionInBackground = useCallback(
     async (options?: { isRetry?: boolean }) => {
-      if (backgroundValidationRunningRef.current) return;
-      backgroundValidationRunningRef.current = true;
       const generation = ++validationGenerationRef.current;
       const isStale = () => generation !== validationGenerationRef.current;
+
+      const previousValidation = backgroundValidationPromiseRef.current;
+      if (previousValidation) {
+        await previousValidation;
+        // Only the newest request starts after the previous session's request
+        // settles. This prevents a sign-in from being dropped by an old run.
+        if (isStale()) return;
+      }
+
+      let settleValidation!: () => void;
+      const activeValidation = new Promise<void>((resolve) => {
+        settleValidation = resolve;
+      });
+      backgroundValidationPromiseRef.current = activeValidation;
 
       if (options?.isRetry) {
         setBootstrapIssue("none");
@@ -223,7 +235,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setTimeout(() => logApiTelemetrySummary(), 2500);
           }
         }
-        backgroundValidationRunningRef.current = false;
+        if (backgroundValidationPromiseRef.current === activeValidation) {
+          backgroundValidationPromiseRef.current = null;
+        }
+        settleValidation();
       }
     },
     [performLocalSignOut]
@@ -298,8 +313,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [runFastLocalBootstrap]);
 
   const retryBootstrap = useCallback(async () => {
+    if (!isReady) {
+      await runFastLocalBootstrap();
+      return;
+    }
     await validateSessionInBackground({ isRetry: true });
-  }, [validateSessionInBackground]);
+  }, [isReady, runFastLocalBootstrap, validateSessionInBackground]);
 
   const resetLocalSession = useCallback(
     async (reason = "manual reset") => {

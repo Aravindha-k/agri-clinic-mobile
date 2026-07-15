@@ -75,7 +75,7 @@ export function hasObservation(values: VisitFormValues): boolean {
   );
 }
 
-/** Step 3 UI: at least one of observation or recommendation/advice. */
+/** Legacy helper only. Active V2 treats observations and advice as optional. */
 export function hasVisitObservationOrAdvice(observation: string, recommendation: string): boolean {
   return Boolean(coerceStr(observation) || coerceStr(recommendation));
 }
@@ -133,7 +133,7 @@ export function getDetailsStepIssues(values: VisitFormValues): VisitValidationIs
   return issues;
 }
 
-/** Validates against normalized POST payload (farmer, crop, lat/lng, observation). */
+/** Validates required submit identity, crop, and GPS. V2 observation/evidence is optional. */
 export function getSubmitIssues(values: VisitFormValues): VisitValidationIssue[] {
   const normalized = normalizeVisitGpsFields(values);
   const issues: VisitValidationIssue[] = [];

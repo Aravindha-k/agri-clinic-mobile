@@ -20,7 +20,7 @@ module.exports = {
   splashImageAsset: "./assets/brand/logo_splash.png",
   /** Premium splash visible duration (ms) incl. crossfade. */
   splashDurationMs: 3820,
-  iconBackgroundColor: "#004D17",
+  iconBackgroundColor: "#FFFFFF",
   logoAsset: "./assets/brand/logo.png",
   iconAsset: "./assets/brand/app_icon.png",
   adaptiveIconAsset: "./assets/brand/adaptive_icon_foreground.png",

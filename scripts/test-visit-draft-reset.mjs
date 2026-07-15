@@ -16,6 +16,12 @@ const biometric = read("src/storage/biometricLoginStorage.ts");
 const auth = read("src/storage/AuthContext.tsx");
 
 assert.match(store, /reset:\s*\(\)\s*=>/);
+assert.match(store, /subscribeActiveSyncUserId/);
+assert.match(store, /rehydrateVisitDraftForActiveUser/);
+assert.match(
+  store,
+  /const persistedTarget = targetKey \? storage\.getString\(targetKey\)[\s\S]*useVisitFormStore\.getState\(\)\.reset\(\)[\s\S]*persist\.rehydrate\(\)/
+);
 assert.match(store, /fieldNotes:\s*""/);
 assert.match(store, /recommendation:\s*""/);
 assert.match(store, /observation:\s*""/);

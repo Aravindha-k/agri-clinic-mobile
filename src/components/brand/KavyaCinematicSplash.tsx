@@ -76,7 +76,7 @@ type Props = {
  * centered Kavya logo reveal, then smooth handoff to the app.
  */
 export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit = false }: Props) {
-  const { reduced } = usePremiumMotion();
+  const { ready: motionReady, reduced } = usePremiumMotion();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const layoutAtRef = useRef<number | null>(null);
@@ -91,6 +91,8 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
   const onFinishRef = useRef(onFinish);
   const [layoutReady, setLayoutReady] = useState(false);
   const [bgFailed, setBgFailed] = useState(false);
+  const [backgroundSettled, setBackgroundSettled] = useState(false);
+  const [logoSettled, setLogoSettled] = useState(false);
 
   canExitRef.current = canExit;
   onReadyRef.current = onReady;
@@ -183,7 +185,7 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
   preferLightRef.current = reduced;
 
   useEffect(() => {
-    if (!layoutReady || animationStartedRef.current) return;
+    if (!layoutReady || !motionReady || animationStartedRef.current) return;
     animationStartedRef.current = true;
 
     const easeOut = Easing.out(Easing.cubic);
@@ -216,7 +218,16 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     exitWash.value = 0;
     screenOpacity.value = 1;
 
-    if (!preferLight) {
+    if (preferLight) {
+      logoOpacity.value = 1;
+      logoScale.value = 1;
+      logoTranslateY.value = 0;
+      titleOpacity.value = 1;
+      titleTranslateY.value = 0;
+      subtitleOpacity.value = 1;
+      bloomOpacity.value = 0.12;
+      bloomScale.value = 1;
+    } else {
       bgScale.value = withRepeat(
         withSequence(
           withTiming(SPLASH_KEN_BURNS_SCALE_MAX, { duration: kenBurnsHalf / 2, easing: easeInOut }),
@@ -233,68 +244,58 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
         -1,
         false
       );
+
+      logoOpacity.value = withDelay(
+        LOGO_ENTRY_DELAY_MS,
+        withTiming(1, { duration: LOGO_ENTRY_MS, easing: easeOut })
+      );
+      logoScale.value = withDelay(
+        LOGO_ENTRY_DELAY_MS,
+        withSequence(
+          withTiming(1.08, { duration: 620, easing: easeOut }),
+          withTiming(1, { duration: 380, easing: easeInOut }),
+          withRepeat(
+            withSequence(
+              withTiming(LOGO_BREATHE_MAX, { duration: SPLASH_LOGO_BREATHE_MS, easing: easeInOut }),
+              withTiming(LOGO_BREATHE_MIN, { duration: SPLASH_LOGO_BREATHE_MS, easing: easeInOut })
+            ),
+            -1,
+            false
+          )
+        )
+      );
+      logoTranslateY.value = withDelay(
+        LOGO_ENTRY_DELAY_MS,
+        withTiming(0, { duration: LOGO_ENTRY_MS, easing: easeOut })
+      );
+
+      titleOpacity.value = withDelay(
+        TITLE_START_MS,
+        withTiming(1, { duration: TITLE_ANIM_MS, easing: easeOut })
+      );
+      titleTranslateY.value = withDelay(
+        TITLE_START_MS,
+        withTiming(0, { duration: TITLE_ANIM_MS, easing: easeOut })
+      );
+      subtitleOpacity.value = withDelay(
+        SUBTITLE_START_MS,
+        withTiming(1, { duration: SUBTITLE_ANIM_MS, easing: easeOut })
+      );
+
+      bloomOpacity.value = withDelay(
+        BLOOM_START_MS,
+        withSequence(
+          withTiming(0.42, { duration: BLOOM_ANIM_MS * 0.5, easing: easeOut }),
+          withTiming(0.2, { duration: BLOOM_ANIM_MS * 0.5, easing: easeInOut })
+        )
+      );
+      bloomScale.value = withDelay(
+        BLOOM_START_MS,
+        withTiming(1.08, { duration: BLOOM_ANIM_MS, easing: easeOut })
+      );
     }
 
-    logoOpacity.value = withDelay(
-      LOGO_ENTRY_DELAY_MS,
-      withTiming(1, { duration: preferLight ? 500 : LOGO_ENTRY_MS, easing: easeOut })
-    );
-    logoScale.value = withDelay(
-      LOGO_ENTRY_DELAY_MS,
-      withSequence(
-        withTiming(1.08, { duration: preferLight ? 420 : 620, easing: easeOut }),
-        withTiming(1, { duration: preferLight ? 280 : 380, easing: easeInOut }),
-        ...(preferLight
-          ? []
-          : [
-              withRepeat(
-                withSequence(
-                  withTiming(LOGO_BREATHE_MAX, { duration: SPLASH_LOGO_BREATHE_MS, easing: easeInOut }),
-                  withTiming(LOGO_BREATHE_MIN, { duration: SPLASH_LOGO_BREATHE_MS, easing: easeInOut })
-                ),
-                -1,
-                false
-              )
-            ])
-      )
-    );
-    logoTranslateY.value = withDelay(
-      LOGO_ENTRY_DELAY_MS,
-      withTiming(0, { duration: preferLight ? 520 : LOGO_ENTRY_MS, easing: easeOut })
-    );
-
-    titleOpacity.value = withDelay(
-      TITLE_START_MS,
-      withTiming(1, { duration: TITLE_ANIM_MS, easing: easeOut })
-    );
-    titleTranslateY.value = withDelay(
-      TITLE_START_MS,
-      withTiming(0, { duration: TITLE_ANIM_MS, easing: easeOut })
-    );
-    subtitleOpacity.value = withDelay(
-      SUBTITLE_START_MS,
-      withTiming(1, { duration: SUBTITLE_ANIM_MS, easing: easeOut })
-    );
-
-    bloomOpacity.value = withDelay(
-      BLOOM_START_MS,
-      withSequence(
-        withTiming(preferLight ? 0.24 : 0.42, { duration: BLOOM_ANIM_MS * 0.5, easing: easeOut }),
-        withTiming(preferLight ? 0.12 : 0.2, { duration: BLOOM_ANIM_MS * 0.5, easing: easeInOut })
-      )
-    );
-    bloomScale.value = withDelay(
-      BLOOM_START_MS,
-      withTiming(1.08, { duration: BLOOM_ANIM_MS, easing: easeOut })
-    );
-
     logStartup("cinematic_animation_started", `${elapsed()} ms`);
-
-    const handoffTimer = setTimeout(() => {
-      requestAnimationFrame(() => {
-        onReadyRef.current?.();
-      });
-    }, SPLASH_NATIVE_HANDOFF_MS);
 
     const floorTimer = setTimeout(() => {
       animationFloorDoneRef.current = true;
@@ -302,19 +303,51 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
       tryExitRef.current();
     }, minMs);
 
-    const maxTimer = setTimeout(() => {
+    return () => {
+      clearTimeout(floorTimer);
+      cancelAnimation(bgScale);
+      cancelAnimation(bgTranslateY);
+      cancelAnimation(logoOpacity);
+      cancelAnimation(logoScale);
+      cancelAnimation(logoTranslateY);
+      cancelAnimation(titleOpacity);
+      cancelAnimation(titleTranslateY);
+      cancelAnimation(subtitleOpacity);
+      cancelAnimation(bloomOpacity);
+      cancelAnimation(bloomScale);
+      cancelAnimation(exitWash);
+      cancelAnimation(screenOpacity);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cold-mount cinematic sequence
+  }, [layoutReady, motionReady]);
+
+  useEffect(() => {
+    if (!layoutReady) return;
+    const maxVisibleTimer = setTimeout(() => {
       animationFloorDoneRef.current = true;
       logStartup("splash_timeout", `${elapsed()} ms`);
       beginExitRef.current();
     }, SPLASH_MAX_VISIBLE_MS);
+    return () => clearTimeout(maxVisibleTimer);
+  }, [elapsed, layoutReady]);
 
-    return () => {
-      clearTimeout(handoffTimer);
-      clearTimeout(floorTimer);
-      clearTimeout(maxTimer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- cold-mount cinematic sequence
-  }, [layoutReady]);
+  useEffect(() => {
+    if (!layoutReady || (!backgroundSettled || !logoSettled)) return;
+    const handoffTimer = setTimeout(() => {
+      requestAnimationFrame(() => onReadyRef.current?.());
+    }, SPLASH_NATIVE_HANDOFF_MS);
+    return () => clearTimeout(handoffTimer);
+  }, [backgroundSettled, layoutReady, logoSettled]);
+
+  useEffect(() => {
+    if (backgroundSettled && logoSettled) return;
+    const assetFallbackTimer = setTimeout(() => {
+      setBackgroundSettled(true);
+      setLogoSettled(true);
+      logStartup("splash_timeout", "asset readiness fallback");
+    }, 1500);
+    return () => clearTimeout(assetFallbackTimer);
+  }, [backgroundSettled, logoSettled]);
 
   useEffect(() => {
     tryExit();
@@ -363,7 +396,11 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
               style={styles.backgroundImage}
               resizeMode="cover"
               fadeDuration={0}
-              onError={() => setBgFailed(true)}
+              onLoadEnd={() => setBackgroundSettled(true)}
+              onError={() => {
+                setBgFailed(true);
+                setBackgroundSettled(true);
+              }}
               accessibilityIgnoresInvertColors
             />
           </Animated.View>
@@ -434,6 +471,8 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
                 source={SPLASH_ASSETS.logo}
                 style={[styles.logoImage, { width: logoSize, height: logoSize }]}
                 resizeMode="contain"
+                onLoadEnd={() => setLogoSettled(true)}
+                onError={() => setLogoSettled(true)}
                 accessibilityLabel="Kavya Agri-Horti Clinic logo"
               />
             </Animated.View>

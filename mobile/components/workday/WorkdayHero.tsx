@@ -11,6 +11,7 @@ import Animated, {
   withSequence,
   withTiming
 } from "react-native-reanimated";
+import { useI18n } from "../../../src/i18n/I18nContext";
 import { FieldGradient } from "../../lib/fieldTheme";
 import { heroCardShellStyle } from "../../lib/fieldCardStyles";
 import { Grid, PremiumRadius, PremiumShadow, Typography } from "../../lib/designSystem";
@@ -124,12 +125,18 @@ export function WorkdayHero({
   busy = false,
   onStart,
   onEnd,
-  startLabel = "Start workday",
-  endLabel = "End workday",
-  idleTitle = "Start your workday",
-  idleSubtitle = "GPS activates when you start",
+  startLabel,
+  endLabel,
+  idleTitle,
+  idleSubtitle,
   statItems
 }: WorkdayHeroProps) {
+  const { t } = useI18n();
+  const resolvedStartLabel = startLabel ?? t("workdayUx.startWorkday");
+  const resolvedEndLabel = endLabel ?? t("workdayUx.endWorkday");
+  const resolvedIdleTitle = idleTitle ?? t("workdayUx.startYourWorkday");
+  const resolvedIdleSubtitle = idleSubtitle ?? t("workdayUx.startHelper");
+
   if (!active) {
     return (
       <FlatCard padded={false} style={[styles.idleCard, PremiumShadow.card]}>
@@ -145,8 +152,8 @@ export function WorkdayHero({
             <LucideGlyph icon={PlayCircle} size={26} color={Colors.brand700} />
           </LinearGradient>
           <View style={styles.idleCopy}>
-            <Text style={styles.idleTitle}>{idleTitle}</Text>
-            <Text style={styles.idleSub}>{idleSubtitle}</Text>
+            <Text style={styles.idleTitle}>{resolvedIdleTitle}</Text>
+            <Text style={styles.idleSub}>{resolvedIdleSubtitle}</Text>
           </View>
         </View>
         <Pressable
@@ -166,7 +173,7 @@ export function WorkdayHero({
             ) : (
               <>
                 <LucideGlyph icon={Play} size={18} color={Colors.onPrimary} fill={Colors.onPrimary} />
-                <Text style={styles.startBtnText}>{startLabel}</Text>
+                <Text style={styles.startBtnText}>{resolvedStartLabel}</Text>
               </>
             )}
           </LinearGradient>
@@ -177,7 +184,9 @@ export function WorkdayHero({
 
   const distanceLabel = `${distanceKm.toFixed(1)} km`;
   const metrics =
-    statItems && statItems.length > 0 ? statItems : [{ label: "Distance", value: distanceLabel }];
+    statItems && statItems.length > 0
+      ? statItems
+      : [{ label: t("workdayUx.distance"), value: distanceLabel }];
 
   return (
     <View style={[heroCardShellStyle, styles.activeShell, PremiumShadow.hero]}>
@@ -224,7 +233,7 @@ export function WorkdayHero({
         {onEnd ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={endLabel}
+            accessibilityLabel={resolvedEndLabel}
             disabled={busy}
             onPress={onEnd}
             style={({ pressed }) => [
@@ -233,7 +242,7 @@ export function WorkdayHero({
               busy && { opacity: 0.55 }
             ]}
           >
-            <Text style={styles.endBtnText}>{endLabel}</Text>
+            <Text style={styles.endBtnText}>{resolvedEndLabel}</Text>
           </Pressable>
         ) : null}
       </View>

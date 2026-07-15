@@ -1,4 +1,5 @@
 import * as FileSystem from "expo-file-system/legacy";
+import type { PendingVisitAttachment } from "../../../src/visit/pendingAttachments";
 import type { VisitPhotoAsset } from "../visitPhotos";
 import type { PendingVisitPhoto } from "../sync/fieldQueueTypes";
 import { generateLocalPhotoId } from "../sync/queueIds";
@@ -8,6 +9,10 @@ const PENDING_MEDIA_ROOT = "pending-visit-media";
 
 export type PersistPhotoResult =
   | { ok: true; photo: PendingVisitPhoto }
+  | { ok: false; code: "copy_failed" | "missing_source" | "storage_unavailable"; message: string };
+
+export type PersistAttachmentResult =
+  | { ok: true; attachment: PendingVisitAttachment; persistedUris: string[] }
   | { ok: false; code: "copy_failed" | "missing_source" | "storage_unavailable"; message: string };
 
 function pendingMediaDir(userId: number, visitLocalSyncId: string): string | null {
@@ -25,6 +30,34 @@ async function ensureDir(path: string): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+function extensionFor(name: string | undefined, mimeType: string | undefined): string {
+  const match = name?.match(/\.([a-zA-Z0-9]{1,8})$/);
+  if (match) return match[1].toLowerCase();
+  if (mimeType?.includes("png")) return "png";
+  if (mimeType?.includes("pdf")) return "pdf";
+  if (mimeType?.startsWith("audio/")) return mimeType.split("/")[1]?.split(";")[0] || "audio";
+  if (mimeType?.startsWith("image/")) return "jpg";
+  return "bin";
+}
+
+async function persistFile(params: {
+  sourceUri: string;
+  destinationUri: string;
+  missingMessage: string;
+  copyMessage: string;
+}): Promise<{ ok: true } | { ok: false; code: "copy_failed" | "missing_source"; message: string }> {
+  const sourceInfo = await FileSystem.getInfoAsync(params.sourceUri).catch(() => null);
+  if (!sourceInfo?.exists) {
+    return { ok: false, code: "missing_source", message: params.missingMessage };
+  }
+  try {
+    await FileSystem.copyAsync({ from: params.sourceUri, to: params.destinationUri });
+    return { ok: true };
+  } catch {
+    return { ok: false, code: "copy_failed", message: params.copyMessage };
   }
 }
 
@@ -82,6 +115,62 @@ export async function persistVisitPhotoAsset(params: {
       retry_count: 0,
       created_at: now
     }
+  };
+}
+
+export async function persistPendingAttachmentAsset(params: {
+  attachment: PendingVisitAttachment;
+  visitLocalSyncId: string;
+  userId?: number;
+}): Promise<PersistAttachmentResult> {
+  const item = params.attachment;
+  if (item.attachmentType === "text") {
+    return { ok: true, attachment: item, persistedUris: [] };
+  }
+
+  const userId = params.userId ?? getActiveSyncUserId();
+  const dir = userId == null ? null : pendingMediaDir(userId, params.visitLocalSyncId);
+  if (!dir) {
+    return { ok: false, code: "storage_unavailable", message: "Document storage is unavailable." };
+  }
+  if (!(await ensureDir(dir))) {
+    return { ok: false, code: "copy_failed", message: "Could not create attachment storage folder." };
+  }
+  if (!item.uri) {
+    return { ok: false, code: "missing_source", message: "Attachment file is missing." };
+  }
+
+  const safeId = item.id.replace(/[^a-zA-Z0-9_-]/g, "_");
+  const primaryUri = `${dir}${safeId}.${extensionFor(item.name, item.mimeType)}`;
+  const primary = await persistFile({
+    sourceUri: item.uri,
+    destinationUri: primaryUri,
+    missingMessage: "Attachment file is missing.",
+    copyMessage: "Could not save attachment on this device."
+  });
+  if (!primary.ok) return primary;
+
+  const persistedUris = [primaryUri];
+  let originalUri: string | undefined;
+  if (item.originalUri) {
+    originalUri = `${dir}${safeId}-original.${extensionFor(item.originalName, item.originalMimeType)}`;
+    const original = await persistFile({
+      sourceUri: item.originalUri,
+      destinationUri: originalUri,
+      missingMessage: "Original attachment file is missing.",
+      copyMessage: "Could not save original attachment on this device."
+    });
+    if (!original.ok) {
+      await deletePersistedPhoto(primaryUri);
+      return original;
+    }
+    persistedUris.push(originalUri);
+  }
+
+  return {
+    ok: true,
+    attachment: { ...item, uri: primaryUri, originalUri },
+    persistedUris
   };
 }
 

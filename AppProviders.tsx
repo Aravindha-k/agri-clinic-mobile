@@ -8,7 +8,7 @@ import {
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dimensions, LogBox, Platform, StatusBar as RNStatusBar } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
@@ -29,6 +29,7 @@ import { AutomaticSyncProvider } from "./src/storage/AutomaticSyncProvider";
 import { AppPreferencesProvider } from "./src/storage/AppPreferencesContext";
 import { I18nProvider } from "./src/i18n/I18nContext";
 import { RootNavigator } from "./src/navigation/RootNavigator";
+import { StartupScreen } from "./src/screens/StartupScreen";
 import { TrackingProvider } from "./src/storage/TrackingContext";
 import { GpsComplianceProvider } from "./src/storage/GpsComplianceContext";
 import { NotificationsProvider } from "./src/storage/NotificationsContext";
@@ -95,34 +96,39 @@ function AppShell() {
 
 /** Fires once when critical local startup is done (fonts + auth restore) — not network APIs. */
 function CriticalStartupGate({
-  fontsLoaded,
+  fontsReady,
   onCriticalReady
 }: {
-  fontsLoaded: boolean;
+  fontsReady: boolean;
   onCriticalReady?: () => void;
 }) {
   const { isReady } = useAuth();
   const firedRef = useRef(false);
+  const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
-    if (firedRef.current || !onCriticalReady) return;
-    if (!fontsLoaded || !isReady) return;
-    firedRef.current = true;
-    onCriticalReady();
-  }, [fontsLoaded, isReady, onCriticalReady]);
-
-  useEffect(() => {
-    if (!onCriticalReady || firedRef.current) return;
-    const timer = setTimeout(() => {
-      if (firedRef.current) return;
+    if (!fontsReady || !isReady) return;
+    setTimedOut(false);
+    if (!firedRef.current && onCriticalReady) {
       firedRef.current = true;
-      logStartup("providers_ready", "soft_timeout");
       onCriticalReady();
-    }, 2800);
-    return () => clearTimeout(timer);
-  }, [onCriticalReady]);
+    }
+  }, [fontsReady, isReady, onCriticalReady]);
 
-  return null;
+  useEffect(() => {
+    if (fontsReady && isReady) return;
+    const timer = setTimeout(() => {
+      setTimedOut(true);
+      logStartup("auth_bootstrap_timeout", "critical startup watchdog");
+      if (!firedRef.current && onCriticalReady) {
+        firedRef.current = true;
+        onCriticalReady();
+      }
+    }, 5500);
+    return () => clearTimeout(timer);
+  }, [fontsReady, isReady, onCriticalReady]);
+
+  return timedOut ? <StartupScreen startupTimedOut /> : null;
 }
 
 type Props = {
@@ -131,13 +137,14 @@ type Props = {
 };
 
 export default function AppProviders({ onShellReady, onCriticalReady }: Props) {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
     Inter_800ExtraBold
   });
+  const fontsReady = fontsLoaded || fontError != null;
 
   useEffect(() => {
     logStartup("fonts_loading");
@@ -163,13 +170,16 @@ export default function AppProviders({ onShellReady, onCriticalReady }: Props) {
           <AppErrorBoundary>
             <ThemeProvider>
               <AuthProvider>
-                <CriticalStartupGate fontsLoaded={fontsLoaded} onCriticalReady={onCriticalReady} />
                 <FieldDataRefreshProvider>
                   <MasterDataProvider>
                     <EmployeeProvider>
                       <NotificationsProvider>
                         <AppPreferencesProvider>
                           <I18nProvider>
+                            <CriticalStartupGate
+                              fontsReady={fontsReady}
+                              onCriticalReady={onCriticalReady}
+                            />
                             <OfflineSyncProvider>
                               <AutomaticSyncProvider>
                               <GpsComplianceProvider>

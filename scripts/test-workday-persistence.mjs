@@ -1,5 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+const workdayStorageSource = readFileSync(
+  resolve(import.meta.dirname, "../src/storage/workdaySessionStorage.ts"),
+  "utf8"
+);
+const trackingSource = readFileSync(
+  resolve(import.meta.dirname, "../src/storage/TrackingContext.tsx"),
+  "utf8"
+);
 
 function getWorkdayStartTimestamp(startedAt) {
   if (!startedAt?.trim()) return null;
@@ -36,6 +47,11 @@ function shouldRestoreWorkdayRecord(record, userId, reference = new Date()) {
   if (record.status !== "in_progress" && record.status !== "completed") return false;
   if (userId != null && record.user_id != null && record.user_id !== userId) return false;
   return true;
+}
+
+function legacyWorkdayMigrationDecision(requestedUserId, storedOwnerId) {
+  if (requestedUserId == null) return "unscoped";
+  return storedOwnerId === requestedUserId ? "migrate" : "reject";
 }
 
 function computeWorkdayElapsedMs({ status, startedAt, now, completedDurationMs = 0 }) {
@@ -165,6 +181,40 @@ test("different employee never restores foreign cache", () => {
     started_at: new Date().toISOString()
   };
   assert.equal(shouldRestoreWorkdayRecord(record, 9), false);
+});
+
+test("legacy cache migrates only for its recorded owner", () => {
+  assert.equal(legacyWorkdayMigrationDecision(7, 7), "migrate");
+  assert.equal(legacyWorkdayMigrationDecision(9, 7), "reject");
+  assert.equal(legacyWorkdayMigrationDecision(7, null), "reject");
+});
+
+test("same employee still restores an owner-scoped offline workday", () => {
+  const record = {
+    user_id: 7,
+    work_date: getLocalWorkDate(),
+    status: "in_progress",
+    started_at: new Date().toISOString()
+  };
+  assert.equal(shouldRestoreWorkdayRecord(record, 7), true);
+});
+
+test("legacy primitive cache is owner-bound and ambiguous keys are cleared", () => {
+  assert.match(workdayStorageSource, /LEGACY_OWNER_KEY/);
+  assert.match(workdayStorageSource, /legacyWorkdayMigrationDecision/);
+  assert.match(
+    workdayStorageSource,
+    /primitiveDecision === "reject"[\s\S]*legacyOwnerId == null[\s\S]*clearLegacyWorkdayKeys/
+  );
+});
+
+test("workday reconciliation shares the active promise", () => {
+  assert.match(trackingSource, /workdaySyncPromiseRef/);
+  assert.match(
+    trackingSource,
+    /if \(workdaySyncPromiseRef\.current\) \{\s*await workdaySyncPromiseRef\.current/
+  );
+  assert.doesNotMatch(trackingSource, /workdaySyncInFlightRef/);
 });
 
 test("server time offset keeps timer accurate with wrong device clock", () => {

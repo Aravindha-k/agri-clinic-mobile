@@ -498,7 +498,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
         <FadeInSection replayKey={entranceTick} delay={entranceStagger(3)} variant="card">
         {!editMode && adviceBlocks.length > 0 ? (
           <View style={styles.card}>
-            <SectionHeader title="ADVICE" />
+            <SectionHeader title={t("visitFlow.adviceSummary")} />
             {adviceBlocks.map((block) => (
               <View key={block.key} style={styles.adviceBlock}>
                 <Text style={styles.adviceLabel}>{block.label}</Text>
@@ -517,7 +517,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
           </View>
           {hasGps ? (
             <GhostButton
-              label="Open in Maps"
+              label={t("visitFlow.openInMaps")}
               onPress={() => openMaps(visit.latitude!, visit.longitude!)}
               style={styles.mapsBtn}
             />
@@ -526,12 +526,12 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
 
         {hasGps ? (
           <View style={styles.mapPreviewWrap}>
-            <SectionHeader title="FIELD LOCATION" />
+            <SectionHeader title={t("visitFlow.fieldLocation")} />
             <LocationPreviewMap
               height={200}
               latitude={visit.latitude}
               longitude={visit.longitude}
-              title={farmer?.name ?? "Visit location"}
+              title={farmer?.name ?? t("visitFlow.visitLocation")}
               description={address}
               markerKind="visit"
             />
@@ -539,7 +539,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
         ) : null}
 
         <View style={styles.section}>
-          <SectionHeader title="PHOTOS" />
+          <SectionHeader title={t("visitFlow.photos")} />
           <View style={styles.photoGrid}>
             {attachments.map((attachment, index) => {
               const uri = resolveMediaUrl(attachment.file_url);

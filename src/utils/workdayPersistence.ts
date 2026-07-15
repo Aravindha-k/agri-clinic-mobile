@@ -50,6 +50,21 @@ export function workdayCacheKeyForUser(userId: number): string {
   return `agri_workday_v1_u${userId}`;
 }
 
+export type LegacyWorkdayMigrationDecision = "migrate" | "reject" | "unscoped";
+
+/**
+ * Legacy records may only move into a user-scoped key when they already carry
+ * that user's ownership. An unowned global record is ambiguous and must never
+ * be claimed by whichever employee happens to sign in next.
+ */
+export function legacyWorkdayMigrationDecision(
+  requestedUserId: number | null | undefined,
+  storedOwnerId: number | null | undefined
+): LegacyWorkdayMigrationDecision {
+  if (requestedUserId == null) return "unscoped";
+  return storedOwnerId === requestedUserId ? "migrate" : "reject";
+}
+
 export function isTodayWorkDate(reference = new Date()): string {
   return getLocalWorkDate(reference);
 }

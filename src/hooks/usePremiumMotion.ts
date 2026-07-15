@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Platform } from "react-native";
 
 export type PremiumMotionState = {
+  /** Accessibility and power preferences have been resolved at least once. */
+  ready: boolean;
   /**
    * Heavy decorative effects only (particles, Lottie, glass sheen, splash golden dust).
    * May be off during battery saver — core logo/screen motion still runs.
@@ -21,9 +23,14 @@ const BATTERY_SUPPORTED =
   typeof Battery.isLowPowerModeEnabledAsync === "function" &&
   typeof Battery.addLowPowerModeListener === "function";
 
-function buildMotionState(reduced: boolean, batterySaver: boolean): PremiumMotionState {
+function buildMotionState(
+  reduced: boolean,
+  batterySaver: boolean,
+  ready = true
+): PremiumMotionState {
   const heavyEffects = !reduced && !batterySaver;
   return {
+    ready,
     reduced,
     enabled: heavyEffects,
     coreMotion: !reduced
@@ -50,7 +57,9 @@ async function resolveMotionState(): Promise<PremiumMotionState> {
   return buildMotionState(reduced, batterySaver);
 }
 
-const DEFAULT_MOTION: PremiumMotionState = buildMotionState(false, false);
+// Stay static until the async accessibility preference is known. This avoids
+// briefly starting motion for users who have Reduce Motion enabled.
+const DEFAULT_MOTION: PremiumMotionState = buildMotionState(true, false, false);
 
 /** Gates animations — core logo/screen motion runs on all devices unless reduce-motion is on. */
 export function usePremiumMotion(): PremiumMotionState {

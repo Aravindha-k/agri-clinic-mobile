@@ -35,6 +35,10 @@ export default function VisitFlowShell() {
   const setStep = useVisitFormStore((s) => s.setStep);
   const applyRevisitPrefill = useVisitFormStore((s) => s.applyRevisitPrefill);
   const fastRevisitStarted = useRef(false);
+  const guardDialogOpen = useRef(false);
+  const allowRemoval = useRef(false);
+  const draftState = useVisitFormStore();
+  const hasDraft = draftState.hasFormData();
 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const [displayedStep, setDisplayedStep] = useState(step);
@@ -63,10 +67,16 @@ export default function VisitFlowShell() {
   }, [slideAnim, step]);
 
   useEffect(() => {
-    if (!route.params?.fresh) return;
-    const prefill = route.params.prefill;
-    beginNewVisit(prefill ? { farmerPrefill: prefill, step: 2 } : undefined);
-    navigation.setParams({ fresh: undefined, prefill: undefined });
+    let active = true;
+    void Promise.resolve(useVisitFormStore.persist.rehydrate()).then(() => {
+      if (!active || !route.params?.fresh) return;
+      const prefill = route.params.prefill;
+      beginNewVisit(prefill ? { farmerPrefill: prefill, step: 2 } : undefined);
+      navigation.setParams({ fresh: undefined, prefill: undefined });
+    });
+    return () => {
+      active = false;
+    };
   }, [navigation, route.params?.fresh, route.params?.prefill]);
 
   useEffect(() => {
@@ -140,8 +150,45 @@ export default function VisitFlowShell() {
   const entranceTick = useScreenEntrance();
   const entranceKey = `${entranceTick}-${displayedStep}`;
 
+  useEffect(
+    () =>
+      navigation.addListener("beforeRemove", (event: any) => {
+        if (!hasDraft || allowRemoval.current) return;
+        event.preventDefault();
+        if (guardDialogOpen.current) return;
+        guardDialogOpen.current = true;
+        Alert.alert(t("visitFlow.leaveVisitTitle"), t("visitFlow.leaveVisitBody"), [
+          {
+            text: t("visitFlow.continueEditing"),
+            style: "cancel",
+            onPress: () => {
+              guardDialogOpen.current = false;
+            }
+          },
+          {
+            text: t("visitFlow.saveDraft"),
+            onPress: () => {
+              guardDialogOpen.current = false;
+              allowRemoval.current = true;
+              navigation.dispatch(event.data.action);
+            }
+          },
+          {
+            text: t("visitFlow.discard"),
+            style: "destructive",
+            onPress: () => {
+              guardDialogOpen.current = false;
+              allowRemoval.current = true;
+              beginNewVisit();
+              navigation.dispatch(event.data.action);
+            }
+          }
+        ]);
+      }),
+    [hasDraft, navigation, t]
+  );
+
   function closeFlow() {
-    beginNewVisit();
     navigation.goBack();
   }
 

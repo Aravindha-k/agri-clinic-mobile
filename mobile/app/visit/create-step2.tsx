@@ -19,6 +19,10 @@ import { StepIndicator } from "../../components/visit/StepIndicator";
 import { PrimaryButton, SearchBar } from "../../components/ui";
 import { VisitFlowHeader } from "../../components/visit/VisitFlowHeader";
 import {
+  VisitBottomFooter,
+  VISIT_FOOTER_SCROLL_SPACE
+} from "../../components/visit/VisitBottomFooter";
+import {
   cropHasMappedProblems,
   filterStep2Problems,
   findProblemItemById,
@@ -472,17 +476,14 @@ export function VisitCreateStep2({ onBack }: Props) {
         <View onLayout={sectionLayoutHandler(sectionOffsets, "continue")} style={styles.footerSpacer} />
       </ScrollView>
 
-      <View style={styles.footer}>
-        {!canContinue && continueHint ? (
-          <Text style={styles.footerHint}>{continueHint}</Text>
-        ) : null}
+      <VisitBottomFooter hint={!canContinue ? continueHint : undefined}>
         <PrimaryButton
           label={t("visitFlow.continue")}
           onPress={continueToStep3}
           disabled={!canContinue}
           style={styles.footerBtn}
         />
-      </View>
+      </VisitBottomFooter>
 
       <MasterSelectSheet
         ref={cropSheetRef}
@@ -512,7 +513,7 @@ const styles = StyleSheet.create({
   },
   scroll: {
     gap: 14,
-    paddingBottom: 120,
+    paddingBottom: VISIT_FOOTER_SCROLL_SPACE,
     paddingHorizontal: Spacing.screen
   },
   problemSection: {
@@ -609,23 +610,6 @@ const styles = StyleSheet.create({
   },
   footerSpacer: {
     height: 8
-  },
-  footer: {
-    backgroundColor: Colors.surface,
-    borderTopColor: Colors.border,
-    borderTopWidth: 1,
-    bottom: 0,
-    gap: 6,
-    left: 0,
-    padding: 12,
-    paddingHorizontal: Spacing.screen,
-    position: "absolute",
-    right: 0
-  },
-  footerHint: {
-    color: Colors.text3,
-    fontSize: FontSize.sm,
-    textAlign: "center"
   },
   footerBtn: {
     width: "100%"

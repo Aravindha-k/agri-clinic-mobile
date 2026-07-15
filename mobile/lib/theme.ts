@@ -23,7 +23,8 @@ export const Colors = {
   text1: "#111827",
   text2: "#374151",
   text3: "#6B7280",
-  text4: "#9CA3AF",
+  /** Lowest-emphasis readable text/icon color (4.5:1+ on white). */
+  text4: "#667085",
 
   // Semantic
   amber: "#F59E0B",
@@ -50,7 +51,7 @@ export const Colors = {
   overlay: "rgba(17, 24, 39, 0.45)",
   photoOverlay: "rgba(0, 0, 0, 0.55)",
   scrim: "rgba(17, 24, 39, 0.92)",
-  placeholder: "#9CA3AF",
+  placeholder: "#667085",
   inputFill: "#F3F4F6",
   disabled: "#9CA3AF",
   disabledBg: "#F3F4F6"

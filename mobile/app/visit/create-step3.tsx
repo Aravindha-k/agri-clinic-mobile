@@ -13,6 +13,10 @@ import { useI18n } from "../../../src/i18n/I18nContext";
 import { PrimaryButton } from "../../components/ui";
 import { StepIndicator } from "../../components/visit/StepIndicator";
 import { VisitFlowHeader } from "../../components/visit/VisitFlowHeader";
+import {
+  VisitBottomFooter,
+  VISIT_FOOTER_SCROLL_SPACE
+} from "../../components/visit/VisitBottomFooter";
 import { pickVisitPhotoFromCamera, pickVisitPhotoFromGallery } from "../../lib/visitPhotos";
 import { useVisitFormStore } from "../../store/visitFormStore";
 import { EntranceBlocks } from "../../components/ui/EntranceBlocks";
@@ -45,7 +49,7 @@ export function VisitCreateStep3({ onBack }: Props) {
 
   async function handleAddCameraPhoto() {
     if (photos.length >= MAX_PHOTOS) {
-      setHint(`Photo limit reached (${MAX_PHOTOS}).`);
+      setHint(t("visitFlow.photoLimitReached", { count: MAX_PHOTOS }));
       return;
     }
     const photo = await pickVisitPhotoFromCamera();
@@ -54,7 +58,7 @@ export function VisitCreateStep3({ onBack }: Props) {
 
   async function handleAddGalleryPhoto() {
     if (photos.length >= MAX_PHOTOS) {
-      setHint(`Photo limit reached (${MAX_PHOTOS}).`);
+      setHint(t("visitFlow.photoLimitReached", { count: MAX_PHOTOS }));
       return;
     }
     const photo = await pickVisitPhotoFromGallery();
@@ -77,7 +81,7 @@ export function VisitCreateStep3({ onBack }: Props) {
       >
         <EntranceBlocks replayKey={replayKey} startStep={0} variant="card">
         <View>
-        <Text style={styles.notesHint}>{t("visitFlow.step3NotesHint")}</Text>
+        <Text style={styles.notesHint}>{t("visitFlow.optionalObservationHint")}</Text>
 
         <Text style={styles.sectionLabel}>{t("visitFlow.fieldNotes")}</Text>
         <View style={styles.notesWrap}>
@@ -134,15 +138,14 @@ export function VisitCreateStep3({ onBack }: Props) {
         </EntranceBlocks>
       </ScrollView>
 
-      <View style={styles.footer}>
-        {hint ? <Text style={styles.footerHint}>{hint}</Text> : null}
+      <VisitBottomFooter hint={hint}>
         <PrimaryButton
           label={t("visitFlow.continueToReview")}
           onPress={continueToReview}
           icon={<Ionicons name="arrow-forward" size={18} color={Colors.surface} />}
           style={styles.footerBtn}
         />
-      </View>
+      </VisitBottomFooter>
     </View>
   );
 }
@@ -161,7 +164,7 @@ const styles = StyleSheet.create({
   },
   scroll: {
     gap: 12,
-    paddingBottom: 130,
+    paddingBottom: VISIT_FOOTER_SCROLL_SPACE,
     paddingHorizontal: Spacing.screen
   },
   sectionLabel: {
@@ -260,23 +263,6 @@ const styles = StyleSheet.create({
     color: Colors.text4,
     fontSize: FontSize.sm,
     textTransform: "capitalize"
-  },
-  footer: {
-    backgroundColor: Colors.surface,
-    borderTopColor: Colors.border,
-    borderTopWidth: 1,
-    bottom: 0,
-    gap: 6,
-    left: 0,
-    padding: 12,
-    paddingHorizontal: Spacing.screen,
-    position: "absolute",
-    right: 0
-  },
-  footerHint: {
-    color: Colors.text3,
-    fontSize: FontSize.sm,
-    textAlign: "center"
   },
   footerBtn: {
     width: "100%"

@@ -14,6 +14,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { Grid, Harvest, Motion, PremiumRadius, PremiumShadow, Typography } from "../../lib/designSystem";
 import { Colors, FontWeight } from "../../lib/theme";
+import { usePremiumMotion } from "../../../src/hooks/usePremiumMotion";
 import { LucideGlyph } from "./AppIcon";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -38,6 +39,7 @@ export function CircularProgressRing({
   centerLabel,
   variant = "card"
 }: Props) {
+  const { coreMotion } = usePremiumMotion();
   const clamped = Math.max(0, Math.min(1, progress));
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -49,6 +51,11 @@ export function CircularProgressRing({
   const checkScale = useSharedValue(complete ? 1 : 0);
 
   useEffect(() => {
+    if (!coreMotion) {
+      progressAnim.value = clamped;
+      checkScale.value = complete ? 1 : 0;
+      return;
+    }
     progressAnim.value = 0;
     progressAnim.value = withTiming(clamped, {
       duration: Motion.slow,
@@ -59,7 +66,7 @@ export function CircularProgressRing({
     } else {
       checkScale.value = 0;
     }
-  }, [checkScale, clamped, complete, progressAnim]);
+  }, [checkScale, clamped, complete, coreMotion, progressAnim]);
 
   const animatedProps = useAnimatedProps(() => ({
     strokeDashoffset: circumference * (1 - progressAnim.value)
@@ -72,7 +79,13 @@ export function CircularProgressRing({
   const isGlass = variant === "glass";
 
   return (
-    <View style={[styles.wrap, !isGlass && PremiumShadow.card, isGlass && styles.wrapGlass]}>
+    <View
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel={label}
+      accessibilityValue={{ min: 0, max: 100, now: pct, text: centerLabel ?? `${pct}%` }}
+      style={[styles.wrap, !isGlass && PremiumShadow.card, isGlass && styles.wrapGlass]}
+    >
       {!isGlass ? (
         <LinearGradient
           colors={["rgba(46,155,100,0.04)", "rgba(255,255,255,0.98)"]}

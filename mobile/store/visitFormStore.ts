@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import type { Farmer } from "../../src/api/farmers";
 import type { ProblemCategory, ProblemItem } from "../../src/api/problems";
 import type { LoadedRevisitPrefill } from "../../src/utils/farmerPrefill";
@@ -17,6 +18,11 @@ import {
 } from "../lib/visitAdvice";
 import type { PendingVisitAttachment } from "../../src/visit/pendingAttachments";
 import type { VisitPhotoAsset } from "../lib/visitPhotos";
+import {
+  getActiveSyncUserId,
+  subscribeActiveSyncUserId
+} from "../lib/sync/queueOwnership";
+import { storage } from "../lib/storage";
 
 export type VisitGpsCoords = {
   latitude: number;
@@ -72,6 +78,7 @@ type VisitFormState = {
   photos: VisitPhotoAsset[];
   extraAttachments: PendingVisitAttachment[];
   nextVisitDate: string | null;
+  submissionLocalSyncId: string | null;
   setStep: (step: 1 | 2 | 3 | 4) => void;
   setFarmer: (farmer: Farmer | null) => void;
   setNewFarmer: (patch: Partial<NewFarmerDraft>) => void;
@@ -100,6 +107,7 @@ type VisitFormState = {
   removeExtraAttachment: (id: string) => void;
   clearExtraAttachments: () => void;
   setNextVisitDate: (value: string | null) => void;
+  setSubmissionLocalSyncId: (value: string | null) => void;
   applyRevisitPrefill: (loaded: LoadedRevisitPrefill) => void;
   hasFormData: () => boolean;
   reset: () => void;
@@ -141,12 +149,37 @@ const initialStep2 = {
   nextVisitDate: null as string | null
 };
 
-export const useVisitFormStore = create<VisitFormState>((set, get) => ({
+const VISIT_DRAFT_KEY = "visit_form_draft_v2";
+
+function scopedDraftKey(name: string): string | null {
+  const userId = getActiveSyncUserId();
+  return userId == null ? null : `${name}:user_${userId}`;
+}
+
+const userScopedDraftStorage: StateStorage = {
+  getItem(name) {
+    const key = scopedDraftKey(name);
+    return key ? storage.getString(key) ?? null : null;
+  },
+  setItem(name, value) {
+    const key = scopedDraftKey(name);
+    if (key) storage.set(key, value);
+  },
+  removeItem(name) {
+    const key = scopedDraftKey(name);
+    if (key) storage.delete?.(key);
+  }
+};
+
+export const useVisitFormStore = create<VisitFormState>()(
+  persist(
+    (set, get) => ({
   step: 1,
   farmer: null,
   newFarmer: null,
   visitKind: "first" as VisitKind,
   gpsCoords: null,
+  submissionLocalSyncId: null,
   ...initialStep2,
   setStep: (step) => set({ step }),
   setFarmer: (farmer) =>
@@ -258,6 +291,7 @@ export const useVisitFormStore = create<VisitFormState>((set, get) => ({
     })),
   clearExtraAttachments: () => set({ extraAttachments: [] }),
   setNextVisitDate: (nextVisitDate) => set({ nextVisitDate, followUpDate: nextVisitDate }),
+  setSubmissionLocalSyncId: (submissionLocalSyncId) => set({ submissionLocalSyncId }),
   applyRevisitPrefill: (loaded) => {
     const values = loaded.values;
     const meta = loaded.meta;
@@ -332,9 +366,86 @@ export const useVisitFormStore = create<VisitFormState>((set, get) => ({
       newFarmer: null,
       visitKind: "first",
       gpsCoords: null,
+      submissionLocalSyncId: null,
       ...initialStep2
     })
-}));
+    }),
+    {
+      name: VISIT_DRAFT_KEY,
+      storage: createJSONStorage(() => userScopedDraftStorage),
+      skipHydration: true,
+      partialize: (state) => ({
+        step: state.step,
+        farmer: state.farmer,
+        newFarmer: state.newFarmer,
+        visitKind: state.visitKind,
+        gpsCoords: state.gpsCoords,
+        cropId: state.cropId,
+        cropName: state.cropName,
+        problemCategoryId: state.problemCategoryId,
+        problemCategoryCode: state.problemCategoryCode,
+        problemMasterId: state.problemMasterId,
+        pendingProblemMasterId: state.pendingProblemMasterId,
+        selectedProblem: state.selectedProblem,
+        otherProblemDescription: state.otherProblemDescription,
+        severity: state.severity,
+        pestIssue: state.pestIssue,
+        diseaseIssue: state.diseaseIssue,
+        followUpRequired: state.followUpRequired,
+        followUpDate: state.followUpDate,
+        observation: state.observation,
+        fieldNotes: state.fieldNotes,
+        recommendation: state.recommendation,
+        actionTaken: state.actionTaken,
+        fertilizerAdvice: state.fertilizerAdvice,
+        pesticideAdvice: state.pesticideAdvice,
+        irrigationAdvice: state.irrigationAdvice,
+        generalAdvice: state.generalAdvice,
+        adviceSuggestions: state.adviceSuggestions,
+        revisitContext: state.revisitContext,
+        photos: state.photos,
+        extraAttachments: state.extraAttachments,
+        nextVisitDate: state.nextVisitDate,
+        submissionLocalSyncId: state.submissionLocalSyncId
+      })
+    }
+  )
+);
+
+let draftSessionGeneration = 0;
+
+/**
+ * The Zustand store is process-global, so changing the storage key alone is
+ * insufficient: the previous employee's live state would remain in memory.
+ * Snapshot the incoming user's persisted value before reset (reset itself is
+ * persisted), then restore and hydrate only that user's scoped draft.
+ */
+export function rehydrateVisitDraftForActiveUser(userId: number | null): Promise<void> {
+  const generation = ++draftSessionGeneration;
+  const targetKey = userId == null ? null : `${VISIT_DRAFT_KEY}:user_${userId}`;
+  const persistedTarget = targetKey ? storage.getString(targetKey) : undefined;
+
+  useVisitFormStore.getState().reset();
+
+  if (!targetKey) {
+    return Promise.resolve();
+  }
+  if (persistedTarget == null) {
+    storage.delete?.(targetKey);
+  } else {
+    storage.set(targetKey, persistedTarget);
+  }
+
+  return Promise.resolve(useVisitFormStore.persist.rehydrate()).then(() => {
+    if (generation !== draftSessionGeneration) {
+      return;
+    }
+  });
+}
+
+subscribeActiveSyncUserId((userId) => {
+  void rehydrateVisitDraftForActiveUser(userId);
+});
 
 export function farmerDisplayName(farmer: Farmer | null, newFarmer: NewFarmerDraft | null) {
   return farmer?.name?.trim() || newFarmer?.name?.trim() || "Farmer";

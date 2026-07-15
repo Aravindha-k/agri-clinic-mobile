@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsetsCompat } from "../../../src/hooks/useSafeAreaInsetsCompat";
+import { useI18n } from "../../../src/i18n/I18nContext";
 import { Colors, FontSize, FontWeight, Layout, Radius, Spacing } from "../../lib/theme";
 
 type Props = {
@@ -24,6 +25,7 @@ export function StackScreenHeader({
   style
 }: Props) {
   const { top: safeTop } = useSafeAreaInsetsCompat();
+  const { t } = useI18n();
 
   return (
     <View
@@ -39,7 +41,7 @@ export function StackScreenHeader({
             onPress={onBack}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Go back"
+            accessibilityLabel={t("common.back")}
             style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.88 }]}
           >
             <Ionicons name="chevron-back" size={22} color={Colors.brand700} />
@@ -63,7 +65,7 @@ export function StackScreenHeader({
   );
 }
 
-const BTN = Layout.touchTargetMin - 8;
+const BTN = Layout.touchTargetMin;
 
 const styles = StyleSheet.create({
   wrap: {

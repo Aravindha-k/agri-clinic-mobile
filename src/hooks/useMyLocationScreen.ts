@@ -9,7 +9,6 @@ import { isGpsAvailable } from "../utils/gpsStatus";
 import { useTracking } from "../storage/TrackingContext";
 import { isBackgroundLocationTrackingActive } from "../tracking/backgroundLocationService";
 import { readCachedActiveWorkday } from "../storage/workdaySessionStorage";
-import { getForegroundLocation } from "../utils/location";
 import { readLocationServicesEnabled } from "../utils/locationServicesProbe";
 import { hasValidMapCoords, parseMapCoord } from "../utils/mapCoords";
 import { DEFAULT_MAP_REGION, fitMapRegion } from "../utils/mapRegion";
@@ -19,7 +18,7 @@ import { useSyncStore } from "../../mobile/lib/store/syncStore";
 import { formatDistanceKm } from "../../mobile/lib/format";
 
 export type MyLocationVisitRow = {
-  id: number;
+  id: number | string;
   farmerName: string;
   village: string;
   visitedAt: string | null;
@@ -30,11 +29,11 @@ export type MyLocationVisitRow = {
 
 export type MyLocationStatusTone = "green" | "amber" | "red";
 
-import { getWorkdayLocationsPage, type LocationLogPoint } from "../api/tracking";
 import { useI18n } from "../i18n/I18nContext";
 import { readPendingGpsBuffer } from "../../mobile/lib/gps/trackingService";
-import { extractWorkdayStartPoint, buildDayMarkerFitCoords, buildDayRouteMarkers, buildWorkdayGpsRoute } from "../utils/dayRouteMap";
+import { extractWorkdayStartPoint, buildDayMarkerFitCoords, buildDayRouteMarkers } from "../utils/dayRouteMap";
 import { visitRowFromApi } from "../utils/visitMapFlow";
+import { readPendingVisits } from "../../mobile/lib/pendingVisitsQueue";
 
 function visitToRow(visit: Visit): MyLocationVisitRow | null {
   const mapped = visitRowFromApi({
@@ -87,7 +86,6 @@ export function useMyLocationScreen() {
   const [distanceKm, setDistanceKm] = useState(cachedDistanceKm);
   const [visitsToday, setVisitsToday] = useState<MyLocationVisitRow[]>([]);
   const [startPoint, setStartPoint] = useState<MapCoordinate | null>(null);
-  const [serverTrack, setServerTrack] = useState<LocationLogPoint[]>([]);
   const [liveAccuracy, setLiveAccuracy] = useState<number | null>(null);
   const [locationGranted, setLocationGranted] = useState(() => {
     const lat = parseMapCoord(currentLocation?.latitude);
@@ -111,10 +109,9 @@ export function useMyLocationScreen() {
     () =>
       buildDayMarkerFitCoords({
         startPoint,
-        visits: visitsToday,
-        live: liveCoordinate
+        visits: visitsToday
       }),
-    [liveCoordinate, startPoint, visitsToday]
+    [startPoint, visitsToday]
   );
 
   const mapFlowCoords = useMemo(() => {
@@ -147,35 +144,15 @@ export function useMyLocationScreen() {
     }
   }, []);
 
-  const loadLiveFix = useCallback(async () => {
-    await refreshPermissionState();
-    if (currentLocation?.accuracy != null && Number.isFinite(Number(currentLocation.accuracy))) {
-      setLiveAccuracy(Number(currentLocation.accuracy));
-      return;
-    }
-    try {
-      const result = await getForegroundLocation();
-      if (!mountedRef.current) return;
-      if (result.granted) {
-        setLocationGranted(true);
-        setLiveAccuracy(result.location.coords.accuracy ?? null);
-      }
-    } catch {
-      // Keep permission-based grant; tracking context may still have a fix.
-    }
-  }, [currentLocation?.accuracy, refreshPermissionState]);
-
   const loadVisits = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) {
       setServerRefreshing(true);
     }
     try {
       const workdayId = trackingWorkday?.workday_id;
-      const [visitsCache, locationPage] = await Promise.all([
+      const [visitsCache, pendingRows] = await Promise.all([
         getHomeVisits({ pageSize: 80 }).catch(() => null),
-        workdayId
-          ? getWorkdayLocationsPage(workdayId, 1, 120).catch(() => null)
-          : Promise.resolve(null)
+        readPendingVisits().catch(() => [])
       ]);
       if (!mountedRef.current) return;
 
@@ -185,20 +162,43 @@ export function useMyLocationScreen() {
           .filter((v) => isSameVisitLocalDay(v, today))
           .map(visitToRow)
           .filter((row): row is MyLocationVisitRow => row != null) ?? [];
-      setVisitsToday(visitRows);
+      const queuedRows = pendingRows
+        .filter((row) => isSameVisitLocalDay({ created_at: row.createdAt }, today))
+        .map((row) => {
+          const mapped = visitRowFromApi({
+            id: row.local_sync_id,
+            latitude: row.values.latitude,
+            longitude: row.values.longitude,
+            farmer_name: row.values.farmer_name,
+            village_name: row.values.village,
+            visit_date: row.values.visit_date,
+            created_at: row.createdAt
+          });
+          return mapped
+            ? {
+                id: mapped.id,
+                farmerName: mapped.farmerName || "Farmer",
+                village: mapped.village || "—",
+                visitedAt: mapped.visitedAt ?? null,
+                statusLabel: "Pending sync",
+                latitude: mapped.latitude,
+                longitude: mapped.longitude
+              }
+            : null;
+        })
+        .filter((row): row is MyLocationVisitRow => row != null);
+      setVisitsToday([...visitRows, ...queuedRows]);
 
       if (workdayId) {
-        const serverPoints = locationPage?.results ?? [];
-        setServerTrack(serverPoints);
         setStartPoint(
           extractWorkdayStartPoint({
-            serverPoints,
+            serverStart: trackingWorkday,
             pendingPoints: readPendingGpsBuffer(),
-            workdayId
+            workdayId,
+            dutySessionId: trackingWorkday?.duty_session_id
           })
         );
       } else {
-        setServerTrack([]);
         setStartPoint(null);
       }
 
@@ -209,13 +209,12 @@ export function useMyLocationScreen() {
         setServerRefreshing(false);
       }
     }
-  }, [isActive, trackingWorkday?.workday_id]);
+  }, [isActive, trackingWorkday]);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
       await Promise.all([
-        loadLiveFix(),
         loadVisits({ silent: true }),
         refreshTracking().catch(() => undefined),
         isBackgroundLocationTrackingActive().then((active) => {
@@ -225,7 +224,7 @@ export function useMyLocationScreen() {
     } finally {
       if (mountedRef.current) setRefreshing(false);
     }
-  }, [loadLiveFix, loadVisits, refreshTracking]);
+  }, [loadVisits, refreshTracking]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -263,12 +262,10 @@ export function useMyLocationScreen() {
       buildDayRouteMarkers({
         startPoint,
         visits: visitsToday,
-        isActive: workdayActive,
-        live: liveCoordinate,
         startLabel: t("myLocation.legendRouteStart"),
         startDescription: t("myLocation.workStartHint")
       }),
-    [liveCoordinate, startPoint, t, visitsToday, workdayActive]
+    [startPoint, t, visitsToday]
   );
 
   const mapRegion = useMemo(() => {
@@ -278,21 +275,9 @@ export function useMyLocationScreen() {
 
   const fitCoordinates = useMemo(() => {
     if (mapFitPoints.length >= 2) return mapFitPoints;
-    if (liveCoordinate) return [liveCoordinate];
     if (mapFitPoints.length === 1) return mapFitPoints;
     return undefined;
-  }, [liveCoordinate, mapFitPoints]);
-
-  const routeLine = useMemo(() => {
-    const workdayId = trackingWorkday?.workday_id;
-    if (!workdayId) return [];
-    return buildWorkdayGpsRoute({
-      serverPoints: serverTrack,
-      pendingPoints: readPendingGpsBuffer(),
-      workdayId,
-      live: liveCoordinate
-    });
-  }, [liveCoordinate, serverTrack, trackingWorkday?.workday_id]);
+  }, [mapFitPoints]);
 
   const gpsConfirmedOff =
     !hasLiveGps &&
@@ -342,7 +327,6 @@ export function useMyLocationScreen() {
     const lat = parseMapCoord(currentLocation?.latitude);
     const lng = parseMapCoord(currentLocation?.longitude);
     if (lat == null || lng == null) {
-      void loadLiveFix();
       return;
     }
     mapRef.current?.animateToRegion(
@@ -354,7 +338,7 @@ export function useMyLocationScreen() {
       },
       350
     );
-  }, [currentLocation?.latitude, currentLocation?.longitude, loadLiveFix]);
+  }, [currentLocation?.latitude, currentLocation?.longitude]);
 
   const fitRoute = useCallback(() => {
     if (fitCoordinates && fitCoordinates.length >= 1) {
@@ -399,7 +383,7 @@ export function useMyLocationScreen() {
     accuracyCircle,
     markers,
     mapRegion,
-    routeLine,
+    routeLine: [],
     fitCoordinates,
     visitsToday,
     statusTone,

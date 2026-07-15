@@ -17,6 +17,7 @@ export function hasValidMapCoords(lat?: string | number | null, lng?: string | n
   const la = parseMapCoord(lat);
   const lo = parseMapCoord(lng);
   if (la == null || lo == null) return false;
+  if (la === 0 || lo === 0) return false;
   return la >= -90 && la <= 90 && lo >= -180 && lo <= 180;
 }
 

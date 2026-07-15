@@ -313,6 +313,23 @@ export function removeVisitFromQueue(local_sync_id: string) {
   const next = readVisitQueue().filter((v) => v.local_sync_id !== local_sync_id);
   writeVisitQueue(next);
   refreshSyncStoreCounts();
+  notifyFieldQueueChanged("periodic_foreground");
+}
+
+export function retryVisitFromQueue(local_sync_id: string): boolean {
+  const queue = readVisitQueue();
+  const index = queue.findIndex((visit) => visit.local_sync_id === local_sync_id);
+  if (index < 0) return false;
+  queue[index] = {
+    ...queue[index],
+    status: "pending",
+    last_error: undefined,
+    updated_at: new Date().toISOString()
+  };
+  writeVisitQueue(queue);
+  refreshSyncStoreCounts();
+  notifyFieldQueueChanged("periodic_foreground");
+  return true;
 }
 
 export function addGPSPoint(point: PendingGPSPoint) {
@@ -403,7 +420,13 @@ export async function flushVisitQueue(
 
           const attempts = next[idx].attempts + 1;
           if (isNetworkError(err)) {
-            next[idx] = { ...next[idx], attempts, status: "pending" };
+            next[idx] = {
+              ...next[idx],
+              attempts,
+              status: "pending",
+              last_error: err instanceof Error ? err.message : "Network error",
+              updated_at: new Date().toISOString()
+            };
             writeVisitQueue(next);
             onProgress?.({
               index,
@@ -416,12 +439,24 @@ export async function flushVisitQueue(
           }
 
           if (attempts >= MAX_VISIT_ATTEMPTS) {
-            next[idx] = { ...next[idx], attempts, status: "failed" };
+            next[idx] = {
+              ...next[idx],
+              attempts,
+              status: "failed",
+              last_error: err instanceof Error ? err.message : "Sync failed",
+              updated_at: new Date().toISOString()
+            };
             writeVisitQueue(next);
             failed += 1;
             notifyFailedVisit(next[idx]);
           } else {
-            next[idx] = { ...next[idx], attempts, status: "pending" };
+            next[idx] = {
+              ...next[idx],
+              attempts,
+              status: "pending",
+              last_error: err instanceof Error ? err.message : "Sync failed",
+              updated_at: new Date().toISOString()
+            };
             writeVisitQueue(next);
           }
           onProgress?.({

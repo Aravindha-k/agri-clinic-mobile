@@ -15,7 +15,6 @@ import {
   getBiometricLoginStatus,
   type BiometricLoginStatus
 } from "../storage/biometricLoginStorage";
-import { useTheme } from "../theme";
 import type { AppLanguage } from "../i18n";
 import { FlatCard, ScreenCanvas, StackScreenHeader } from "../../mobile/components/layout";
 import { Colors, FontSize, FontWeight, Layout, Radius, Spacing } from "../../mobile/lib/theme";
@@ -23,7 +22,6 @@ import { Colors, FontSize, FontWeight, Layout, Radius, Spacing } from "../../mob
 export function SettingsScreen() {
   useSecureScreen();
   const navigation = useNavigation<any>();
-  const { isDark, toggleTheme } = useTheme();
   const { autoSyncOnReconnect, wifiOnlySync, trackingBatterySaver, reminderSoundsEnabled, setPreference } =
     useAppPreferences();
   const { t, language, setLanguage } = useI18n();
@@ -94,16 +92,6 @@ export function SettingsScreen() {
           <LanguageRow language={language} onSelect={(lang) => void setLanguage(lang)} t={t} />
         </FlatCard>
 
-        <Text style={styles.sectionLabel}>{t("settings.appearance")}</Text>
-        <FlatCard padded={false}>
-          <SettingRow
-            icon={isDark ? "moon" : "sunny"}
-            title={t("settings.darkMode")}
-            subtitle={t("settings.darkModeHint")}
-            right={<Switch value={isDark} onValueChange={toggleTheme} trackColor={{ true: Colors.brand700 }} />}
-          />
-        </FlatCard>
-
         <Text style={styles.sectionLabel}>{t("settings.sync")}</Text>
         <FlatCard padded={false}>
           <SettingRow
@@ -115,6 +103,7 @@ export function SettingsScreen() {
                 value={autoSyncOnReconnect}
                 onValueChange={(v) => void setPreference("autoSyncOnReconnect", v)}
                 trackColor={{ true: Colors.brand700 }}
+                accessibilityLabel={t("settings.autoSync")}
               />
             }
           />
@@ -128,6 +117,7 @@ export function SettingsScreen() {
                 value={wifiOnlySync}
                 onValueChange={(v) => void setPreference("wifiOnlySync", v)}
                 trackColor={{ true: Colors.brand700 }}
+                accessibilityLabel={t("settings.wifiOnly")}
               />
             }
           />
@@ -149,7 +139,12 @@ export function SettingsScreen() {
                 subtitle={t("settings.fingerprintNotEnrolled")}
               />
               <View style={styles.divider} />
-              <Pressable onPress={openDeviceSecuritySettings} style={({ pressed }) => [styles.reset, pressed && { opacity: 0.9 }]}>
+              <Pressable
+                onPress={openDeviceSecuritySettings}
+                accessibilityRole="button"
+                accessibilityLabel={t("settings.fingerprintOpenSettings")}
+                style={({ pressed }) => [styles.reset, pressed && { opacity: 0.9 }]}
+              >
                 <Text style={styles.resetText}>{t("settings.fingerprintOpenSettings")}</Text>
               </Pressable>
             </>
@@ -163,6 +158,7 @@ export function SettingsScreen() {
                   value={biometricStatus.enabled}
                   onValueChange={() => void toggleFingerprintLogin()}
                   trackColor={{ true: Colors.brand700 }}
+                  accessibilityLabel={t("settings.fingerprintLogin")}
                 />
               }
             />
@@ -180,6 +176,7 @@ export function SettingsScreen() {
                 value={trackingBatterySaver}
                 onValueChange={(v) => void setPreference("trackingBatterySaver", v)}
                 trackColor={{ true: Colors.brand700 }}
+                accessibilityLabel={t("settings.batterySaver")}
               />
             }
           />
@@ -196,6 +193,7 @@ export function SettingsScreen() {
                 value={reminderSoundsEnabled}
                 onValueChange={(v) => void setPreference("reminderSoundsEnabled", v)}
                 trackColor={{ true: Colors.brand700 }}
+                accessibilityLabel={t("settings.reminderSounds")}
               />
             }
           />
@@ -222,6 +220,8 @@ export function SettingsScreen() {
               }
             ])
           }
+          accessibilityRole="button"
+          accessibilityLabel={t("settings.resetDefaults")}
           style={({ pressed }) => [styles.reset, pressed && { opacity: 0.9 }]}
         >
           <Text style={styles.resetText}>{t("settings.resetDefaults")}</Text>
@@ -252,6 +252,9 @@ function LanguageRow({
       <View style={styles.langChips}>
         <Pressable
           onPress={() => onSelect("en")}
+          accessibilityRole="radio"
+          accessibilityLabel={t("profile.english")}
+          accessibilityState={{ checked: language === "en" }}
           style={[styles.langChip, language === "en" && styles.langChipActive]}
         >
           <Text style={[styles.langChipText, language === "en" && styles.langChipTextActive]}>
@@ -260,6 +263,9 @@ function LanguageRow({
         </Pressable>
         <Pressable
           onPress={() => onSelect("ta")}
+          accessibilityRole="radio"
+          accessibilityLabel={t("profile.tamil")}
+          accessibilityState={{ checked: language === "ta" }}
           style={[styles.langChip, language === "ta" && styles.langChipActive]}
         >
           <Text style={[styles.langChipText, language === "ta" && styles.langChipTextActive]}>
@@ -273,7 +279,12 @@ function LanguageRow({
 
 function ReminderTestButton({ label, onPress }: { label: string; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.testBtn, pressed && { opacity: 0.9 }]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.testBtn, pressed && { opacity: 0.9 }]}
+    >
       <Text style={styles.testBtnText}>{label}</Text>
     </Pressable>
   );
@@ -339,7 +350,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderRadius: Radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 40,
+    minHeight: Layout.touchTargetMin,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm
   },
@@ -397,7 +408,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderRadius: Radius.button,
     borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 44,
+    minHeight: Layout.touchTargetMin,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm
   },

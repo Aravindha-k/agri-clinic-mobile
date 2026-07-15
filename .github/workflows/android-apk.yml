@@ -69,6 +69,12 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      - name: Run production hardening tests
+        run: npm run test:hardening
+
+      - name: Verify shared UI accessibility
+        run: npm run verify:shared-ui
+
       - name: Audit Android asset filenames
         run: node scripts/audit-android-asset-names.mjs
 
@@ -101,6 +107,9 @@ jobs:
 
       - name: Regenerate KAC launcher mipmaps
         run: node scripts/generate-kac-app-icons.mjs
+
+      - name: Verify launcher icon composition
+        run: npm run verify:launcher-icons
 
       - name: Print signing certificate fingerprints (safe)
         run: node scripts/print-signing-cert-fingerprints.mjs

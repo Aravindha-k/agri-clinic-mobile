@@ -9,6 +9,7 @@ import Animated, {
   withTiming
 } from "react-native-reanimated";
 import { Harvest, PremiumRadius } from "../../lib/designSystem";
+import { usePremiumMotion } from "../../../src/hooks/usePremiumMotion";
 
 type Props = {
   width: number | `${number}%`;
@@ -19,15 +20,20 @@ type Props = {
 
 /** Shimmer skeleton block — replaces flat pulse loaders. */
 export function ShimmerBlock({ width, height, borderRadius = PremiumRadius.sm, style }: Props) {
+  const { coreMotion } = usePremiumMotion();
   const shift = useSharedValue(-1);
 
   useEffect(() => {
+    if (!coreMotion) {
+      shift.value = 0;
+      return;
+    }
     shift.value = withRepeat(
       withTiming(1, { duration: 1200, easing: Easing.linear }),
       -1,
       false
     );
-  }, [shift]);
+  }, [coreMotion, shift]);
 
   const shimmerStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: shift.value * 120 }]
@@ -41,14 +47,14 @@ export function ShimmerBlock({ width, height, borderRadius = PremiumRadius.sm, s
         style
       ]}
     >
-      <Animated.View style={[styles.shimmerTrack, shimmerStyle]}>
+      {coreMotion ? <Animated.View style={[styles.shimmerTrack, shimmerStyle]}>
         <LinearGradient
           colors={["transparent", "rgba(255,255,255,0.55)", "transparent"]}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
           style={styles.shimmerGradient}
         />
-      </Animated.View>
+      </Animated.View> : null}
     </View>
   );
 }

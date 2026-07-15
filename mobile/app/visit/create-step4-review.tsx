@@ -2,20 +2,29 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { uploadVisitAttachmentFile } from "../../../src/api/visitAttachments";
 import { useConnectivityOnline } from "../../../src/hooks/useConnectivityOnline";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
+import { useMasterData } from "../../../src/storage/MasterDataContext";
 import { useTracking } from "../../../src/storage/TrackingContext";
 import { getForegroundLocation } from "../../../src/utils/location";
 import { buildSubmittedVisitSummary } from "../../../src/types/submittedVisitSummary";
 import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal";
 import { hasValidGps } from "../../../src/visit/visitValidation";
+import {
+  pendingAttachmentLabel,
+  uploadAllPendingAttachments,
+  type PendingVisitAttachment
+} from "../../../src/visit/pendingAttachments";
 import { FlatCard } from "../../components/layout/FlatCard";
 import { LocationPreviewMap } from "../../../src/components/map/LocationPreviewMap";
 import { PrimaryButton, StatusChip } from "../../components/ui";
 import { StepIndicator } from "../../components/visit/StepIndicator";
 import { VisitFlowHeader } from "../../components/visit/VisitFlowHeader";
+import {
+  VisitBottomFooter,
+  VISIT_FOOTER_SCROLL_SPACE
+} from "../../components/visit/VisitBottomFooter";
 import { enqueuePendingVisit, generateLocalSyncId } from "../../lib/pendingVisitsQueue";
 import { beginNewVisit } from "../../lib/beginNewVisit";
 import { getVisitDutyFields } from "../../lib/visitDutyContext";
@@ -25,6 +34,7 @@ import {
   submitVisitFromStore
 } from "../../lib/visitSubmitApi";
 import { farmerDisplayName, useVisitFormStore } from "../../store/visitFormStore";
+import { resolveVisitReviewFarmer } from "../../lib/visitReviewFarmer";
 import { EntranceBlocks } from "../../components/ui/EntranceBlocks";
 import { useVisitEntranceKey } from "../../context/VisitEntranceContext";
 import { Colors, FontSize, FontWeight, Layout, Radius, Spacing, TextStyles, minTouchStyle } from "../../lib/theme";
@@ -49,6 +59,7 @@ function gpsDotColor(accuracy: number | null | undefined) {
 export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3 }: Props) {
   const { t } = useI18n();
   const navigation = useNavigation<any>();
+  const { districts, villages } = useMasterData();
   const replayKey = useVisitEntranceKey();
   const online = useConnectivityOnline();
   const { bumpAfterVisitChange } = useFieldDataRefresh();
@@ -56,7 +67,6 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
   const setGpsCoords = useVisitFormStore((s) => s.setGpsCoords);
 
   const submitInFlightRef = useRef(false);
-  const localSyncIdRef = useRef<string | null>(null);
 
   const farmer = useVisitFormStore((s) => s.farmer);
   const newFarmer = useVisitFormStore((s) => s.newFarmer);
@@ -69,6 +79,8 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
   const fieldNotes = useVisitFormStore((s) => s.fieldNotes);
   const photos = useVisitFormStore((s) => s.photos);
   const extraAttachments = useVisitFormStore((s) => s.extraAttachments);
+  const submissionLocalSyncId = useVisitFormStore((s) => s.submissionLocalSyncId);
+  const setSubmissionLocalSyncId = useVisitFormStore((s) => s.setSubmissionLocalSyncId);
 
   const [submitting, setSubmitting] = useState(false);
   const [submitHint, setSubmitHint] = useState("");
@@ -79,8 +91,9 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
     : selectedProblem?.tamil_name || selectedProblem?.name || problemCategoryCode || "—";
 
   const farmerName = farmerDisplayName(farmer, newFarmer);
-  const farmerPhone = farmer?.phone?.trim() || newFarmer?.phone?.trim() || "—";
-  const farmerVillage = farmer?.village_name?.trim() || t("visitFlow.villageNotSet");
+  const reviewFarmer = resolveVisitReviewFarmer(farmer, newFarmer, districts, villages, "—");
+  const farmerPhone = reviewFarmer.phone;
+  const farmerVillage = reviewFarmer.village;
   const visitTypeLabel = visitKind === "revisit" ? t("visitFlow.revisit") : t("visitFlow.firstVisit");
   const evidenceCount = photos.length + extraAttachments.length;
 
@@ -90,19 +103,10 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
   }
 
   async function uploadExtraAttachments(visitId: number) {
-    const failed: string[] = [];
+    const failed: PendingVisitAttachment[] = [];
     for (const attachment of extraAttachments) {
-      if (!attachment.uri) continue;
-      try {
-        await uploadVisitAttachmentFile(visitId, {
-          uri: attachment.uri,
-          name: attachment.name ?? "attachment",
-          mimeType: attachment.mimeType ?? "application/octet-stream",
-          attachmentType: attachment.attachmentType
-        });
-      } catch {
-        failed.push(attachment.name ?? "attachment");
-      }
+      const result = await uploadAllPendingAttachments(visitId, [attachment]);
+      if (result.failed.length) failed.push(attachment);
     }
     return failed;
   }
@@ -111,35 +115,36 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
     if (submitInFlightRef.current) return;
     if (!validateSubmit()) return;
 
-    if (!isActive) {
-      const started = await startDay();
-      if (!started) {
-        setSubmitHint(t("visitFlow.workdayFirstBody"));
-        return;
-      }
-    }
-
-    const allowed = await requestGpsForFieldWork();
-    if (!allowed) return;
-
     submitInFlightRef.current = true;
     setSubmitting(true);
     setSubmitHint("");
 
-    const localSyncId = localSyncIdRef.current ?? generateLocalSyncId();
-    localSyncIdRef.current = localSyncId;
-
-    let capturedExtras:
-      | {
-          latitude: number;
-          longitude: number;
-          accuracy: number | null;
-          capturedAt: Date;
-          duty: Awaited<ReturnType<typeof getVisitDutyFields>>;
-        }
-      | undefined;
-
     try {
+      if (!isActive) {
+        const started = await startDay();
+        if (!started) {
+          setSubmitHint(t("visitFlow.workdayFirstBody"));
+          return;
+        }
+      }
+
+      const allowed = await requestGpsForFieldWork();
+      if (!allowed) return;
+
+      const localSyncId = submissionLocalSyncId ?? generateLocalSyncId();
+      setSubmissionLocalSyncId(localSyncId);
+
+      let capturedExtras:
+        | {
+            latitude: number;
+            longitude: number;
+            accuracy: number | null;
+            capturedAt: Date;
+            duty: Awaited<ReturnType<typeof getVisitDutyFields>>;
+          }
+        | undefined;
+
+      try {
       const locationResult = await getForegroundLocation();
       if (!locationResult.granted) {
         setSubmitHint(locationResult.message || t("visitFlow.gpsNotCaptured"));
@@ -173,15 +178,28 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
       }
 
       const { visit, evidenceFailed } = await submitVisitFromStore(state, localSyncId, capturedExtras);
-      localSyncIdRef.current = null;
-      const uploadFailures = [...evidenceFailed, ...(await uploadExtraAttachments(visit.id))];
-      if (uploadFailures.length && state.photos.length) {
+      const failedExtras = await uploadExtraAttachments(visit.id);
+      const failedPhotoNames = new Set(evidenceFailed);
+      const failedAttachments: PendingVisitAttachment[] = [
+        ...state.photos
+          .filter((photo) => failedPhotoNames.has(photo.name))
+          .map((photo) => ({
+            id: photo.id,
+            attachmentType: "image" as const,
+            uri: photo.uri,
+            name: photo.name,
+            mimeType: photo.mimeType,
+            createdAt: new Date().toISOString()
+          })),
+        ...failedExtras
+      ];
+      const uploadFailures = failedAttachments.map(pendingAttachmentLabel);
+      if (failedAttachments.length) {
         const { enqueueFailedVisitEvidence } = await import("../../lib/sync/pendingEvidenceQueue");
-        enqueueFailedVisitEvidence({
+        await enqueueFailedVisitEvidence({
           visitId: visit.id,
-          photos: state.photos,
-          localSyncId,
-          failedNames: uploadFailures
+          attachments: failedAttachments,
+          localSyncId
         });
       }
       bumpAfterVisitChange();
@@ -196,12 +214,12 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
         gpsConfirmed,
         submittedAt: capturedAt.toISOString(),
         evidenceWarning: uploadFailures.length
-          ? `Some uploads failed and were queued for retry: ${uploadFailures.join(", ")}`
+          ? t("visitFlow.uploadsQueuedForRetry", { files: uploadFailures.join(", ") })
           : undefined
       });
       beginNewVisit();
       navigation.navigate("VisitSuccess", { summary });
-    } catch (err) {
+      } catch (err) {
       if (!isOfflineSubmitError(err) && (err as Error)?.message !== "offline") {
         setSubmitHint(err instanceof Error ? err.message : t("visitFlow.submitFailed"));
         return;
@@ -220,11 +238,12 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
           local_sync_id: localSyncId,
           createdAt: new Date().toISOString(),
           values,
-          photos: state.photos
+          photos: state.photos,
+          status: "pending",
+          attempts: 0
         },
         extraAttachments
       );
-      localSyncIdRef.current = null;
 
       bumpAfterVisitChange();
       const summary = buildSubmittedVisitSummary({
@@ -241,6 +260,9 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
       });
       beginNewVisit();
       navigation.navigate("VisitSuccess", { summary });
+      }
+    } catch (err) {
+      setSubmitHint(err instanceof Error ? err.message : t("visitFlow.submitFailed"));
     } finally {
       submitInFlightRef.current = false;
       setSubmitting(false);
@@ -276,7 +298,7 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
           </View>
           <Text style={styles.reviewTitle}>{farmerName}</Text>
           <Text style={styles.reviewMeta}>
-            {farmerPhone} · {farmerVillage}
+            {farmerPhone} · {farmerVillage} · {reviewFarmer.district}
           </Text>
           <StatusChip label={visitTypeLabel} variant={visitKind === "revisit" ? "blue" : "gray"} />
         </FlatCard>
@@ -314,7 +336,9 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
             </Pressable>
           </View>
           <Text style={styles.reviewBlockLabel}>{t("visitFlow.fieldNotes")}</Text>
-          <Text style={styles.reviewValue}>{fieldNotes.trim() || "—"}</Text>
+          <Text style={styles.reviewValue}>
+            {fieldNotes.trim() || t("visitFlow.noObservationOptional")}
+          </Text>
           <Text style={styles.reviewBlockLabel}>{t("visitFlow.evidencePhotos")}</Text>
           <Text style={styles.reviewValue}>
             {evidenceCount > 0
@@ -332,7 +356,7 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
         </View>
 
         <View style={styles.mapPreviewWrap}>
-          <Text style={styles.reviewLabel}>Field location</Text>
+          <Text style={styles.reviewLabel}>{t("visitFlow.fieldLocation")}</Text>
           <LocationPreviewMap
             height={180}
             latitude={gpsCoords?.latitude ?? farmer?.latitude}
@@ -347,8 +371,7 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
         </EntranceBlocks>
       </ScrollView>
 
-      <View style={styles.footer}>
-        {submitHint ? <Text style={styles.footerHint}>{submitHint}</Text> : null}
+      <VisitBottomFooter hint={submitHint}>
         <PrimaryButton
           label={online ? t("visitFlow.submitVisit") : t("visitFlow.saveOffline")}
           onPress={() => void handleSubmit()}
@@ -363,7 +386,7 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
           }
           style={styles.footerBtn}
         />
-      </View>
+      </VisitBottomFooter>
     </View>
   );
 }
@@ -382,7 +405,7 @@ const styles = StyleSheet.create({
   },
   scroll: {
     gap: 10,
-    paddingBottom: 130,
+    paddingBottom: VISIT_FOOTER_SCROLL_SPACE,
     paddingHorizontal: Spacing.screen
   },
   reviewCard: {
@@ -466,23 +489,6 @@ const styles = StyleSheet.create({
   mapPreviewWrap: {
     gap: 8,
     paddingVertical: 4
-  },
-  footer: {
-    backgroundColor: Colors.surface,
-    borderTopColor: Colors.border,
-    borderTopWidth: 1,
-    bottom: 0,
-    gap: 6,
-    left: 0,
-    padding: 12,
-    paddingHorizontal: Spacing.screen,
-    position: "absolute",
-    right: 0
-  },
-  footerHint: {
-    color: Colors.text3,
-    fontSize: FontSize.sm,
-    textAlign: "center"
   },
   footerBtn: {
     width: "100%"

@@ -18,5 +18,5 @@ navigator (for example Settings).
 ## Launcher assets
 
 The launcher label remains `Kavya Agri`. Generate launcher artwork only with
-`node scripts/generate-kac-app-icons.mjs`; splash artwork has a separate pipeline and must not be
-changed during launcher updates.
+`node scripts/promote-logo-icons.mjs` (or `node scripts/generate-kac-app-icons.mjs` in CI);
+splash artwork has a separate pipeline and must not be changed during launcher updates.

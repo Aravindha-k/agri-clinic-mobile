@@ -50,7 +50,7 @@ function maskSvg(kind, size) {
   );
 }
 
-async function main() {
+async function promoteLogoIcons() {
   const master = await sharp(SRC)
     .resize(SIZE, SIZE, { fit: "cover", kernel: sharp.kernel.lanczos3 })
     .flatten({ background: WHITE })
@@ -106,7 +106,12 @@ async function main() {
   console.log(`Promoted logo_icons.png -> logo_icon/app_icon (${meta.width}x${meta.height})`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+export { promoteLogoIcons };
+
+const isDirectRun = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isDirectRun) {
+  promoteLogoIcons().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

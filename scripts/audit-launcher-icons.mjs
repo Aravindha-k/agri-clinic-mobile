@@ -9,7 +9,7 @@ const approved = path.join(root, "assets/brand/logo_icon.png");
 const legacy = path.join(root, "assets/brand/app_icon.png");
 const foreground = path.join(root, "assets/brand/adaptive_icon_foreground.png");
 const background = path.join(root, "assets/brand/kac/adaptive_icon_background_1024.png");
-const approvedSha = "2bd7a0ab02fa9535d94ee55b8d396bad4755fc05a88947cff4f48fe7f654af56";
+const approvedSha = "b689ce5ece9f35c3a8e78fb03bc301254ea020fb461f29cbc0566208ddc35a4a";
 const androidRes = path.join(root, "android/app/src/main/res");
 const legacySizes = {
   "mipmap-mdpi": 48,
@@ -25,6 +25,9 @@ const foregroundSizes = {
   "mipmap-xxhdpi": 324,
   "mipmap-xxxhdpi": 432
 };
+/** Green badge must sit inside the white orbit with safe padding. */
+const MIN_BADGE_RATIO = 0.60;
+const MAX_BADGE_RATIO = 0.72;
 
 async function rgba(file) {
   return sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -53,19 +56,22 @@ function contentBounds({ data, info }, predicate) {
   return { width: maxX - minX + 1, height: maxY - minY + 1 };
 }
 
-function assertRatio(bounds, size, name) {
-  for (const dimension of [bounds.width, bounds.height]) {
-    const ratio = dimension / size;
-    assert.ok(ratio >= 0.68 && ratio <= 0.74, `${name} content ratio ${ratio.toFixed(4)} must be 68–74%`);
-  }
-}
-
-function assertShippedRatio(bounds, size, name) {
+function assertBadgeRatio(bounds, size, name) {
   for (const dimension of [bounds.width, bounds.height]) {
     const ratio = dimension / size;
     assert.ok(
-      ratio >= 0.66 && ratio <= 0.77,
-      `${name} rasterized content ratio ${ratio.toFixed(4)} must remain near the 68–74% master`
+      ratio >= MIN_BADGE_RATIO && ratio <= MAX_BADGE_RATIO,
+      `${name} green badge ratio ${ratio.toFixed(4)} must stay ${MIN_BADGE_RATIO}-${MAX_BADGE_RATIO} inside white orbit`
+    );
+  }
+}
+
+function assertShippedBadgeRatio(bounds, size, name) {
+  for (const dimension of [bounds.width, bounds.height]) {
+    const ratio = dimension / size;
+    assert.ok(
+      ratio >= MIN_BADGE_RATIO - 0.04 && ratio <= MAX_BADGE_RATIO + 0.04,
+      `${name} rasterized badge ratio ${ratio.toFixed(4)} must stay near ${MIN_BADGE_RATIO}-${MAX_BADGE_RATIO}`
     );
   }
 }
@@ -73,27 +79,30 @@ function assertShippedRatio(bounds, size, name) {
 const sourceDigest = crypto.createHash("sha256").update(await fs.readFile(approved)).digest("hex");
 assert.equal(sourceDigest, approvedSha, "launcher must use the approved original company logo");
 
-const [legacyImage, foregroundImage, backgroundImage] = await Promise.all([
+const [legacyImage, foregroundImage, backgroundImage, sourceImage] = await Promise.all([
   rgba(legacy),
   rgba(foreground),
-  rgba(background)
+  rgba(background),
+  rgba(approved)
 ]);
-for (const image of [legacyImage, foregroundImage, backgroundImage]) {
+for (const image of [legacyImage, foregroundImage, backgroundImage, sourceImage]) {
   assert.equal(image.info.width, 1024);
   assert.equal(image.info.height, 1024);
 }
 
-assertRatio(
-  contentBounds(legacyImage, ([r, g, b]) => r < 245 || g < 245 || b < 245),
-  legacyImage.info.width,
-  "legacy"
-);
-assertRatio(
-  contentBounds(foregroundImage, ([, , , a]) => a > 8),
-  foregroundImage.info.width,
-  "adaptive"
-);
+// Source + shipped icons: green badge inset inside white orbit (not edge-to-edge).
+const isGreenBadge = ([r, g, b, a]) => a > 8 && (r < 245 || g < 245 || b < 245);
+assertBadgeRatio(contentBounds(sourceImage, isGreenBadge), sourceImage.info.width, "source logo_icon");
+assertBadgeRatio(contentBounds(legacyImage, isGreenBadge), legacyImage.info.width, "legacy");
+assertBadgeRatio(contentBounds(foregroundImage, isGreenBadge), foregroundImage.info.width, "adaptive");
 
+// Source / adaptive foreground: true transparent corners (outside white orbit).
+for (const [x, y] of [[0, 0], [1023, 0], [0, 1023], [1023, 1023]]) {
+  assert.equal(pixel(sourceImage.data, sourceImage.info.width, x, y)[3], 0, "source corner alpha");
+  assert.equal(pixel(foregroundImage.data, foregroundImage.info.width, x, y)[3], 0, "adaptive corner alpha");
+}
+
+// Legacy + background: opaque white corners.
 for (const image of [legacyImage, backgroundImage]) {
   for (const [x, y] of [[0, 0], [1023, 0], [0, 1023], [1023, 1023]]) {
     assert.deepEqual(pixel(image.data, image.info.width, x, y), [255, 255, 255, 255]);
@@ -106,11 +115,7 @@ for (const [folder, size] of Object.entries(legacySizes)) {
     const image = await rgba(file);
     assert.equal(image.info.width, size, `${folder}/${filename} width`);
     assert.equal(image.info.height, size, `${folder}/${filename} height`);
-    assertShippedRatio(
-      contentBounds(image, ([r, g, b]) => r < 245 || g < 245 || b < 245),
-      size,
-      `${folder}/${filename}`
-    );
+    assertShippedBadgeRatio(contentBounds(image, isGreenBadge), size, `${folder}/${filename}`);
     for (const [x, y] of [[0, 0], [size - 1, 0], [0, size - 1], [size - 1, size - 1]]) {
       assert.deepEqual(pixel(image.data, size, x, y), [255, 255, 255, 255]);
     }
@@ -122,7 +127,7 @@ for (const [folder, size] of Object.entries(foregroundSizes)) {
   const image = await rgba(path.join(androidRes, folder, filename));
   assert.equal(image.info.width, size, `${folder}/${filename} width`);
   assert.equal(image.info.height, size, `${folder}/${filename} height`);
-  assertShippedRatio(contentBounds(image, ([, , , a]) => a > 8), size, `${folder}/${filename}`);
+  assertShippedBadgeRatio(contentBounds(image, isGreenBadge), size, `${folder}/${filename}`);
 }
 
 for (const filename of ["ic_launcher.xml", "ic_launcher_round.xml"]) {
@@ -147,4 +152,4 @@ const brandConfig = await fs.readFile(path.join(root, "src/config/brand.config.j
 assert.match(brandConfig, /launcherAppName:\s*"Kavya Agri"/, "launcher label must remain unchanged");
 assert.match(brandConfig, /iconBackgroundColor:\s*"#FFFFFF"/, "adaptive background config must be white");
 
-console.log("Launcher icon audit passed: source, shipped densities, adaptive XML, white background, artwork ratio, and label.");
+console.log("Launcher icon audit passed: white orbit, inset badge, densities, adaptive XML, and label.");

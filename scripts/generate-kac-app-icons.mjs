@@ -4,10 +4,15 @@
  * Source of truth (do not redesign / AI-recreate):
  *   assets/brand/logo_icon.png
  *
- * Composition only:
- *   - legacy icon centers the approved logo on white
- *   - adaptive foreground keeps the circular logo inside Android's safe zone
- *   - adaptive background is opaque white
+ * Composition already baked into the source:
+ *   - opaque white circular orbit filling the mid-edges
+ *   - green badge centered INSIDE that orbit with safe padding
+ *   - transparent corners outside the white circle
+ *
+ * Generation:
+ *   - legacy icon: source on opaque white square
+ *   - adaptive foreground: source as-is (white orbit + inset badge)
+ *   - adaptive background: opaque white
  */
 import fs from "node:fs/promises";
 import crypto from "node:crypto";
@@ -22,7 +27,7 @@ const TRANSPARENT_RGBA = { r: 0, g: 0, b: 0, alpha: 0 };
 const WHITE_RGBA = { r: 255, g: 255, b: 255, alpha: 1 };
 const ADAPTIVE_BACKGROUND = "#FFFFFF";
 const ADAPTIVE_BACKGROUND_RGB = { r: 255, g: 255, b: 255 };
-const APPROVED_SOURCE_SHA256 = "2bd7a0ab02fa9535d94ee55b8d396bad4755fc05a88947cff4f48fe7f654af56";
+const APPROVED_SOURCE_SHA256 = "b689ce5ece9f35c3a8e78fb03bc301254ea020fb461f29cbc0566208ddc35a4a";
 
 const SOURCE_APPROVED = path.join(root, "assets/brand/logo_icon.png");
 const KAC_DIR = path.join(root, "assets/brand/kac");
@@ -39,10 +44,9 @@ const OUT_MASK_PREVIEW_MIUI = path.join(KAC_DIR, "mask_preview_miui_rounded.png"
 const ANDROID_RES = path.join(root, "android/app/src/main/res");
 
 const MASTER_SIZE = 1024;
-const LEGACY_LOGO_DIAMETER = 720;
-const ADAPTIVE_LOGO_DIAMETER = 720;
-const MIN_LOGO_RATIO = 0.68;
-const MAX_LOGO_RATIO = 0.74;
+/** Green badge content inside the white orbit (baked into source). */
+const MIN_BADGE_RATIO = 0.60;
+const MAX_BADGE_RATIO = 0.72;
 
 const LEGACY_SIZES = {
   "mipmap-mdpi": 48,
@@ -77,21 +81,6 @@ async function ensureApprovedSource() {
   }
 }
 
-function circularLogoSvg({ logo, size, diameter }) {
-  const offset = Math.round((size - diameter) / 2);
-  const radius = diameter / 2;
-  return Buffer.from(
-    `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <clipPath id="logoClip">
-          <circle cx="${size / 2}" cy="${size / 2}" r="${radius}"/>
-        </clipPath>
-      </defs>
-      <image x="${offset}" y="${offset}" width="${diameter}" height="${diameter}" href="data:image/png;base64,${logo.toString("base64")}" clip-path="url(#logoClip)"/>
-    </svg>`
-  );
-}
-
 function launcherMaskSvg(kind, size) {
   if (kind === "circle") {
     return Buffer.from(`<svg width="${size}" height="${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${size / 2}" fill="#fff"/></svg>`);
@@ -100,9 +89,9 @@ function launcherMaskSvg(kind, size) {
   return Buffer.from(`<svg width="${size}" height="${size}"><rect x="0" y="0" width="${size}" height="${size}" rx="${radius}" ry="${radius}" fill="#fff"/></svg>`);
 }
 
-async function buildCircularLogo(diameter, opaqueWhite = false) {
-  const logo = await sharp(SOURCE_APPROVED)
-    .resize(diameter, diameter, {
+async function buildLegacyIcon() {
+  const source = await sharp(SOURCE_APPROVED)
+    .resize(MASTER_SIZE, MASTER_SIZE, {
       fit: "contain",
       kernel: sharp.kernel.lanczos3,
       background: TRANSPARENT_RGBA
@@ -110,11 +99,6 @@ async function buildCircularLogo(diameter, opaqueWhite = false) {
     .png()
     .toBuffer();
 
-  const circularLogo = await sharp(circularLogoSvg({ logo, size: MASTER_SIZE, diameter }))
-    .png({ compressionLevel: 9 })
-    .toBuffer();
-
-  if (!opaqueWhite) return circularLogo;
   return sharp({
     create: {
       width: MASTER_SIZE,
@@ -123,7 +107,18 @@ async function buildCircularLogo(diameter, opaqueWhite = false) {
       background: WHITE_RGBA
     }
   })
-    .composite([{ input: circularLogo }])
+    .composite([{ input: source }])
+    .png({ compressionLevel: 9 })
+    .toBuffer();
+}
+
+async function buildAdaptiveForeground() {
+  return sharp(SOURCE_APPROVED)
+    .resize(MASTER_SIZE, MASTER_SIZE, {
+      fit: "contain",
+      kernel: sharp.kernel.lanczos3,
+      background: TRANSPARENT_RGBA
+    })
     .png({ compressionLevel: 9 })
     .toBuffer();
 }
@@ -145,8 +140,8 @@ async function buildLauncherIcons() {
   await fs.mkdir(KAC_DIR, { recursive: true });
 
   const [master, foreground, background] = await Promise.all([
-    buildCircularLogo(LEGACY_LOGO_DIAMETER, true),
-    buildCircularLogo(ADAPTIVE_LOGO_DIAMETER),
+    buildLegacyIcon(),
+    buildAdaptiveForeground(),
     buildAdaptiveBackground()
   ]);
 
@@ -278,21 +273,40 @@ async function assertOpaqueWhiteCorners(imagePath) {
   }
 }
 
-function assertLogoRatios() {
-  for (const [name, diameter] of [
-    ["legacy", LEGACY_LOGO_DIAMETER],
-    ["adaptive", ADAPTIVE_LOGO_DIAMETER]
-  ]) {
-    const ratio = diameter / MASTER_SIZE;
-    if (ratio < MIN_LOGO_RATIO || ratio > MAX_LOGO_RATIO) {
-      throw new Error(`${name} logo diameter ratio ${ratio.toFixed(4)} is outside 68–74%`);
+function contentBounds(data, width, height, predicate) {
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const o = (y * width + x) * 4;
+      if (!predicate([data[o], data[o + 1], data[o + 2], data[o + 3]])) continue;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxX < minX) throw new Error("No badge content detected in generated icon");
+  return { width: maxX - minX + 1, height: maxY - minY + 1 };
+}
+
+async function assertBadgeSafeInsideOrbit(imagePath) {
+  const { data, info } = await sharp(imagePath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const bounds = contentBounds(data, info.width, info.height, ([r, g, b, a]) => a > 8 && (r < 245 || g < 245 || b < 245));
+  for (const dim of [bounds.width, bounds.height]) {
+    const ratio = dim / info.width;
+    if (ratio < MIN_BADGE_RATIO || ratio > MAX_BADGE_RATIO) {
+      throw new Error(
+        `${path.relative(root, imagePath)} green badge ratio ${ratio.toFixed(4)} must stay ${MIN_BADGE_RATIO}-${MAX_BADGE_RATIO} inside the white orbit`
+      );
     }
   }
 }
 
 async function main() {
   await ensureApprovedSource();
-  assertLogoRatios();
   await buildLauncherIcons();
   await ensureAndroidColor("iconBackground", ADAPTIVE_BACKGROUND);
   await writeAndroidMipmaps();
@@ -301,13 +315,13 @@ async function main() {
   await Promise.all([
     assertOpaqueWhiteCorners(OUT_APP_ICON),
     assertTransparentCorners(OUT_ADAPTIVE_FG),
-    assertOpaqueWhiteCorners(OUT_ADAPTIVE_BG)
+    assertOpaqueWhiteCorners(OUT_ADAPTIVE_BG),
+    assertBadgeSafeInsideOrbit(OUT_APP_ICON),
+    assertBadgeSafeInsideOrbit(OUT_ADAPTIVE_FG)
   ]);
 
   console.log("Circular launcher icon generated:");
-  console.log(`  source: ${path.relative(root, SOURCE_APPROVED)}`);
-  console.log(`  legacy logo diameter: ${LEGACY_LOGO_DIAMETER}px`);
-  console.log(`  adaptive logo diameter: ${ADAPTIVE_LOGO_DIAMETER}px`);
+  console.log(`  source: ${path.relative(root, SOURCE_APPROVED)} (white orbit + inset badge)`);
   console.log(`  adaptive foreground: ${path.relative(root, OUT_ADAPTIVE_FG)}`);
   console.log(`  adaptive background: ${ADAPTIVE_BACKGROUND}`);
   console.log("  android/app/src/main/res/mipmap-*/ic_launcher*.webp");

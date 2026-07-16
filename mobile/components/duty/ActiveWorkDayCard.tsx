@@ -50,11 +50,11 @@ export function ActiveWorkDayCard({
 
       <View style={styles.metaRow}>
         <View style={styles.metaCell}>
-          <Text style={styles.metaLabel}>Remaining</Text>
+          <Text style={styles.metaLabel}>{t("workdayUx.remaining")}</Text>
           <Text style={styles.metaValue}>{remaining}</Text>
         </View>
         <View style={styles.metaCell}>
-          <Text style={styles.metaLabel}>Expected End</Text>
+          <Text style={styles.metaLabel}>{t("workdayUx.expectedEnd")}</Text>
           <Text style={styles.metaValue}>{formatShortTime(expectedEndAt)}</Text>
         </View>
         <View style={styles.metaCell}>
@@ -113,6 +113,7 @@ const styles = StyleSheet.create({
   },
   metaRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: Spacing.md
   },
   metaCell: {
@@ -129,6 +130,7 @@ const styles = StyleSheet.create({
   },
   metaValue: {
     color: Colors.text1,
+    flexShrink: 1,
     fontSize: FontSize.h3,
     fontWeight: FontWeight.bold
   },

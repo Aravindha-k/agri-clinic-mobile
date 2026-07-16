@@ -1,3 +1,4 @@
+/** @legacy-mobile-screen — not wired into RootNavigator; do not import into active V2 routes. */
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { StepIndicator } from "../../components/visit/StepIndicator";

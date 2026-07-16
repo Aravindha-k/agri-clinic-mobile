@@ -203,11 +203,21 @@ export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
           returnKeyType="search"
         />
         {directory.villageLabel ? (
-          <Pressable onPress={directory.clearVillage} hitSlop={8}>
+          <Pressable
+            onPress={directory.clearVillage}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel={t("a11y.clearVillageFilter")}
+          >
             <Ionicons name="close-circle" size={16} color={Colors.text4} />
           </Pressable>
         ) : (
-          <Pressable onPress={() => villageSheetRef.current?.open()} hitSlop={8}>
+          <Pressable
+            onPress={() => villageSheetRef.current?.open()}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel={t("a11y.filterByVillage")}
+          >
             <Ionicons name="filter-outline" size={16} color={Colors.text3} />
           </Pressable>
         )}

@@ -15,10 +15,10 @@ function readinessLabel(readiness: LocationReadiness, t: (key: string) => string
     case "ready":
       return t("daySummary.gpsActive");
     case "services_off":
-      return "GPS Off";
+      return t("workdayUx.gpsOff");
     case "permission_required":
     case "permission_blocked":
-      return "Location Required";
+      return t("workdayUx.locationRequiredShort");
     case "unavailable":
       return t("workdayUx.unableToGetLocation");
     default:
@@ -68,9 +68,14 @@ export function GpsStatusBadge({ gpsEnabled = true, permissionDenied }: Props) {
   if (!label) return null;
 
   const palette = readinessStyle(effectiveReadiness);
+  const accessibilityLabel = effectiveReadiness === "ready" ? t("a11y.gpsActive") : label;
 
   return (
-    <View style={[styles.badge, { backgroundColor: palette.bg, borderColor: palette.border }]}>
+    <View
+      style={[styles.badge, { backgroundColor: palette.bg, borderColor: palette.border }]}
+      accessibilityRole="text"
+      accessibilityLabel={accessibilityLabel}
+    >
       <Text style={[styles.text, { color: palette.text }]}>{label}</Text>
     </View>
   );

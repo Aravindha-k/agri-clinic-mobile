@@ -1,3 +1,4 @@
+/** @legacy-mobile-screen — not wired into RootNavigator; do not import into active V2 routes. */
 import { useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";

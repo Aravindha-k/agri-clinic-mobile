@@ -15,6 +15,7 @@ import { useRefreshControlProps } from "../../../src/hooks/useRefreshControlProp
 import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
 import { useTabBarBottomInset } from "../../../src/hooks/useTabBarBottomInset";
 import { useI18n } from "../../../src/i18n/I18nContext";
+import { announceA11y } from "../../../src/utils/a11yAnnounce";
 import { useEmployee } from "../../../src/storage/EmployeeContext";
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
 import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
@@ -209,6 +210,7 @@ export default function TodayTabScreen() {
       setStartPhase("starting");
       const started = await startDuty();
       if (!started) return;
+      announceA11y(t("a11y.workdayStarted"));
       await Promise.all([
         refreshTrackingState().catch(() => undefined),
         refreshBootstrap({ force: true }).catch(() => undefined),

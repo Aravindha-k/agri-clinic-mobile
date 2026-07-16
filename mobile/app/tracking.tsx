@@ -8,6 +8,7 @@ import { logDayTabApi, logDayTabError, logDayTabOpen } from "../../src/utils/day
 import { useRefreshControlProps } from "../../src/hooks/useRefreshControlProps";
 import { useTabBarBottomInset } from "../../src/hooks/useTabBarBottomInset";
 import { useI18n } from "../../src/i18n/I18nContext";
+import { announceA11y } from "../../src/utils/a11yAnnounce";
 import { useOfflineSync } from "../../src/storage/OfflineSyncContext";
 import { useTracking } from "../../src/storage/TrackingContext";
 import { useDuty } from "../../src/features/duty/store/DutyContext";
@@ -158,6 +159,7 @@ function TrackingWorkspaceScreenInner() {
             setEnding(true);
             try {
               await endDuty();
+              announceA11y(t("a11y.workdayEnded"));
               await refreshTrackingState().catch(() => undefined);
               await loadSummary();
             } finally {
@@ -197,10 +199,7 @@ function TrackingWorkspaceScreenInner() {
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: dutyPresentation.isActive ? tabInset + 88 : tabInset + Layout.scrollBottomExtra }
-        ]}
+        contentContainerStyle={[styles.content, { paddingBottom: tabInset + Layout.scrollBottomExtra }]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} {...refreshControlProps} />
         }

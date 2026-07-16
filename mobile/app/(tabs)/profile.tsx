@@ -132,6 +132,8 @@ function MenuItemCard({ row }: { row: MenuRow }) {
   return (
     <Pressable
       onPress={row.onPress}
+      accessibilityRole="button"
+      accessibilityLabel={row.title}
       style={({ pressed }) => [styles.menuItem, pressed && { opacity: 0.92 }]}
     >
       <View style={styles.menuIconBox}>
@@ -165,12 +167,18 @@ function LanguageMenuItem({
       <View style={styles.langToggle}>
         <Pressable
           onPress={() => onSelect("en")}
+          accessibilityRole="button"
+          accessibilityLabel={t("profile.english")}
+          accessibilityState={{ selected: language === "en" }}
           style={[styles.langPill, language === "en" ? styles.langPillActive : styles.langPillInactive]}
         >
           <Text style={[styles.langPillText, language === "en" && styles.langPillTextActive]}>EN</Text>
         </Pressable>
         <Pressable
           onPress={() => onSelect("ta")}
+          accessibilityRole="button"
+          accessibilityLabel={t("profile.tamil")}
+          accessibilityState={{ selected: language === "ta" }}
           style={[styles.langPill, language === "ta" ? styles.langPillActive : styles.langPillInactive]}
         >
           <Text style={[styles.langPillText, language === "ta" && styles.langPillTextActive]}>தமிழ்</Text>

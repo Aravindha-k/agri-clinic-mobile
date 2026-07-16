@@ -26,7 +26,8 @@ export function WorkdayActionFooter({ visible, loading, disabled, onEnd }: Props
         disabled={disabled || loading}
         variant="destructive"
         style={styles.button}
-        accessibilityLabel={t("workdayUx.endWorkday")}
+        accessibilityLabel={t("a11y.endWorkday")}
+        accessibilityHint={t("a11y.endWorkdayHint")}
       />
     </View>
   );
@@ -37,13 +38,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderTopColor: Colors.border,
     borderTopWidth: StyleSheet.hairlineWidth,
-    bottom: 0,
-    left: 0,
     paddingBottom: Spacing.lg,
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    position: "absolute",
-    right: 0
+    paddingTop: Spacing.md
   },
   button: {
     width: "100%"

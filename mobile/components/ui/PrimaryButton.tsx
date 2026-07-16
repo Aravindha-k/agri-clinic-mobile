@@ -13,6 +13,7 @@ type Props = {
   variant?: ButtonVariant;
   style?: ViewStyle;
   accessibilityLabel?: string;
+  accessibilityHint?: string;
 };
 
 function variantStyles(variant: ButtonVariant, pressed: boolean, disabled: boolean) {
@@ -76,7 +77,8 @@ export function PrimaryButton({
   disabled,
   variant = "primary",
   style,
-  accessibilityLabel
+  accessibilityLabel,
+  accessibilityHint
 }: Props) {
   const isDisabled = Boolean(disabled || loading);
 
@@ -84,6 +86,7 @@ export function PrimaryButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: isDisabled, busy: Boolean(loading) }}
       onPress={onPress}
       disabled={isDisabled}

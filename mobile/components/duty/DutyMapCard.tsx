@@ -106,7 +106,8 @@ export function DutyMapCard({ onMarkerPress, onPendingMarkerPress }: Props) {
         id: "current-live",
         lat: dutyMap.currentLiveLocation.latitude,
         lng: dutyMap.currentLiveLocation.longitude,
-        title: "Current location",
+        title: t("myLocation.legendYou"),
+        description: t("myLocation.liveLocationHint"),
         kind: "current"
       });
     }
@@ -115,7 +116,7 @@ export function DutyMapCard({ onMarkerPress, onPendingMarkerPress }: Props) {
         id: "route-end",
         lat: dutyMap.endMarker.latitude,
         lng: dutyMap.endMarker.longitude,
-        title: "Work end",
+        title: t("daySummary.endWorkday"),
         kind: "route_end"
       });
     }
@@ -129,10 +130,20 @@ export function DutyMapCard({ onMarkerPress, onPendingMarkerPress }: Props) {
 
   const showMap = previewWidth > 0;
   const isEmpty = markers.length === 0;
+  const visitCount = dutyMap?.visitMarkers?.length ?? 0;
+  const pendingCount = pendingVisits.filter((v) => pendingCoord(v)).length;
+  const mapSummary = t("a11y.mapSummary", { visits: visitCount, pending: pendingCount });
 
   return (
-    <View style={styles.section}>
-      <Text style={styles.title}>{t("daySummary.routeSummary")}</Text>
+    <View
+      style={styles.section}
+      accessible
+      accessibilityRole="summary"
+      accessibilityLabel={`${t("daySummary.routeSummary")}. ${mapSummary}`}
+    >
+      <Text style={styles.title} accessibilityRole="header">
+        {t("daySummary.routeSummary")}
+      </Text>
       <View
         style={styles.mapWrap}
         onLayout={(e) => {

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Animated, StyleSheet, type ViewStyle } from "react-native";
+import { usePremiumMotion } from "../../../src/hooks/usePremiumMotion";
 import { Colors, Radius } from "../../lib/theme";
 
 type Props = {
@@ -9,10 +10,16 @@ type Props = {
   style?: ViewStyle;
 };
 
+/** Loading placeholder — static when reduced motion is enabled. */
 export function Skeleton({ width, height, borderRadius = Radius.sm, style }: Props) {
-  const opacity = useRef(new Animated.Value(0.4)).current;
+  const opacity = useRef(new Animated.Value(0.55)).current;
+  const { coreMotion } = usePremiumMotion();
 
   useEffect(() => {
+    if (!coreMotion) {
+      opacity.setValue(0.55);
+      return;
+    }
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(opacity, { toValue: 1, duration: 600, useNativeDriver: true }),
@@ -21,7 +28,7 @@ export function Skeleton({ width, height, borderRadius = Radius.sm, style }: Pro
     );
     loop.start();
     return () => loop.stop();
-  }, [opacity]);
+  }, [coreMotion, opacity]);
 
   return (
     <Animated.View
@@ -36,6 +43,8 @@ export function Skeleton({ width, height, borderRadius = Radius.sm, style }: Pro
         },
         style
       ]}
+      accessibilityRole="progressbar"
+      accessibilityState={{ busy: true }}
     />
   );
 }

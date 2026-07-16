@@ -56,7 +56,8 @@ export function StartWorkDayCard({
         loading={busy}
         disabled={busy}
         style={styles.button}
-        accessibilityLabel={label}
+        accessibilityLabel={t("a11y.startWorkday")}
+        accessibilityHint={t("a11y.startWorkdayHint")}
       />
     </View>
   );

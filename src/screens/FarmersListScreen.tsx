@@ -1,3 +1,4 @@
+/** @legacy-mobile-screen — not wired into RootNavigator; do not import into active V2 routes. */
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlashList } from "@shopify/flash-list";

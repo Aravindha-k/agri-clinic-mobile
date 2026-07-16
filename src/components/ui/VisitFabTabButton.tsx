@@ -11,6 +11,7 @@ import {
 import { useI18n } from "../../i18n/I18nContext";
 import { navigateToVisitFlow } from "../../navigation/navigateVisitFlow";
 import { useActiveWorkday } from "../../hooks/useActiveWorkday";
+import { usePremiumMotion } from "../../hooks/usePremiumMotion";
 import { useTracking } from "../../storage/TrackingContext";
 import { useDuty } from "../../features/duty/store/DutyContext";
 import { requestGpsForFieldWork, requestVisitLocationAccess } from "../../utils/locationRequiredModal";
@@ -44,6 +45,7 @@ export function VisitFabTabButton({
 }: BottomTabBarButtonProps) {
   const navigation = useNavigation<any>();
   const { t } = useI18n();
+  const { reduced } = usePremiumMotion();
   const [visitFlowOpen, setVisitFlowOpen] = useState(false);
   const { isActive } = useActiveWorkday();
   const { busy, currentLocation } = useTracking();
@@ -72,6 +74,10 @@ export function VisitFabTabButton({
   );
 
   useEffect(() => {
+    if (reduced) {
+      glowPulse.setValue(0);
+      return;
+    }
     const glowLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(glowPulse, {
@@ -85,7 +91,7 @@ export function VisitFabTabButton({
     );
     glowLoop.start();
     return () => glowLoop.stop();
-  }, [glowPulse]);
+  }, [glowPulse, reduced]);
 
   useEffect(() => {
     type NavLike = {
@@ -179,10 +185,15 @@ export function VisitFabTabButton({
   const a11yLabel = accessibilityLabel ?? t("tabs.newVisit");
 
   const onPressIn = () => {
+    if (reduced) return;
     Animated.spring(pressScale, { toValue: 0.9, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
   };
 
   const onPressOut = () => {
+    if (reduced) {
+      pressScale.setValue(1);
+      return;
+    }
     Animated.spring(pressScale, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 6 }).start();
   };
 
@@ -192,6 +203,7 @@ export function VisitFabTabButton({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={a11yLabel}
+          accessibilityHint={t("a11y.openNewVisitHint")}
           accessibilityState={accessibilityState}
           hitSlop={{ top: 12, bottom: 8, left: 14, right: 14 }}
           onPress={handlePress}

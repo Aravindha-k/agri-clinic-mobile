@@ -266,7 +266,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
                 onPress={handleBack}
                 style={styles.iconBtn}
                 accessibilityRole="button"
-                accessibilityLabel="Go back"
+                accessibilityLabel={t("a11y.goBack")}
               >
                 <Ionicons name="arrow-back" size={18} color={Colors.text1} />
               </Pressable>
@@ -290,7 +290,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
                 onPress={handleBack}
                 style={styles.iconBtn}
                 accessibilityRole="button"
-                accessibilityLabel="Go back"
+                accessibilityLabel={t("a11y.goBack")}
               >
                 <Ionicons name="arrow-back" size={18} color={Colors.text1} />
               </Pressable>
@@ -332,7 +332,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
           onPress={handleBack}
           style={styles.iconBtn}
           accessibilityRole="button"
-          accessibilityLabel="Go back"
+          accessibilityLabel={t("a11y.goBack")}
         >
           <Ionicons name="arrow-back" size={18} color={Colors.text1} />
         </Pressable>
@@ -346,7 +346,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
               onPress={() => setEditMode(true)}
               style={styles.iconBtn}
               accessibilityRole="button"
-              accessibilityLabel="Edit visit"
+              accessibilityLabel={t("a11y.editVisit")}
             >
               <Ionicons name="create-outline" size={18} color={Colors.text1} />
             </Pressable>
@@ -601,7 +601,13 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
           {viewerIndex != null && imageUrls[viewerIndex] ? (
             <Image source={{ uri: imageUrls[viewerIndex] }} style={styles.viewerImage} resizeMode="contain" />
           ) : null}
-          <Pressable style={styles.viewerClose} onPress={() => setViewerIndex(null)}>
+          <Pressable
+            style={styles.viewerClose}
+            onPress={() => setViewerIndex(null)}
+            accessibilityRole="button"
+            accessibilityLabel={t("a11y.closeViewer")}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <Ionicons name="close" size={22} color={Colors.surface} />
           </Pressable>
         </Pressable>
@@ -921,12 +927,12 @@ const styles = StyleSheet.create({
   viewerClose: {
     alignItems: "center",
     backgroundColor: Colors.onPrimaryGlass,
-    borderRadius: 20,
-    height: 40,
+    borderRadius: 24,
+    height: 48,
     justifyContent: "center",
     position: "absolute",
-    right: 20,
-    top: 56,
-    width: 40
+    right: 16,
+    top: 52,
+    width: 48
   }
 });

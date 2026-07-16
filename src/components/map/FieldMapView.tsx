@@ -4,6 +4,7 @@ import type MapViewType from "react-native-maps";
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
 import MapView, { Circle, Polyline } from "react-native-maps";
 import { useTheme } from "../../theme";
+import { useI18n } from "../../i18n/I18nContext";
 import { FIELD_MAP_TYPE } from "../../types/mapType";
 import type { MapRegion } from "../../types/map";
 import { hasValidMapCoords, parseMapCoord, filterMapCoordinates } from "../../utils/mapCoords";
@@ -24,7 +25,6 @@ type Props = FieldMapViewProps & {
 };
 
 const MIN_MAP_HEIGHT = 220;
-const MAP_FALLBACK_MESSAGE = "Map could not load. Please enable GPS and try again.";
 
 function RoutePolylines({
   route,
@@ -95,6 +95,7 @@ export function FieldMapView({
   onMarkerPress
 }: Props) {
   const { theme } = useTheme();
+  const { t } = useI18n();
 
   const internalRef = useRef<MapView>(null);
   const mapRef = externalRef ?? internalRef;
@@ -354,13 +355,22 @@ export function FieldMapView({
       : errorMessage ??
     emptyMessage ??
     (locationDenied
-      ? "Location not available. Please enable GPS and try again."
+      ? t("map.locationUnavailable")
       : loading || !permissionResolved
-        ? "Loading map…"
-        : MAP_FALLBACK_MESSAGE);
+        ? t("map.loading")
+        : t("map.couldNotLoad"));
 
   const shellBg = theme.colors.cardMuted ?? "#e8f0ea";
   const placeholderColor = theme.colors.muted ?? "#6B7F74";
+  const mapStateAccessibilityLabel = !canRenderMap
+    ? loading || !permissionResolved
+      ? t("map.loading")
+      : errorMessage
+        ? `${t("map.unavailable")}. ${placeholderMessage}`
+        : !hasRenderableCoordinates
+          ? emptyMessage ?? t("map.noLocationYet")
+          : placeholderMessage
+    : undefined;
 
   return (
     <MapErrorBoundary height={mapHeight} screenName={screenName} fallbackMessage={placeholderMessage}>
@@ -369,6 +379,7 @@ export function FieldMapView({
           styles.shell,
           { height: mapHeight, width: shellWidth, minHeight: mapHeight, backgroundColor: shellBg }
         ]}
+        accessibilityLabel={mapStateAccessibilityLabel}
       >
         {!canRenderMap ? (
           <View style={styles.placeholder}>
@@ -380,14 +391,14 @@ export function FieldMapView({
             ) : errorMessage ? (
               <>
                 <Ionicons name="alert-circle-outline" size={32} color={theme.colors.warning ?? "#C2410C"} />
-                <Text style={[styles.placeholderTitle, { color: theme.colors.text }]}>Map unavailable</Text>
+                <Text style={[styles.placeholderTitle, { color: theme.colors.text }]}>{t("map.unavailable")}</Text>
                 <Text style={[styles.placeholderText, { color: placeholderColor }]}>{placeholderMessage}</Text>
               </>
             ) : !hasRenderableCoordinates ? (
               <>
                 <Ionicons name="map-outline" size={32} color={placeholderColor} />
                 <Text style={[styles.placeholderText, { color: placeholderColor }]}>
-                  {emptyMessage ?? "No location to show yet."}
+                  {emptyMessage ?? t("map.noLocationYet")}
                 </Text>
               </>
             ) : (
@@ -470,10 +481,7 @@ export function FieldMapView({
         {canRenderMap && !hasRenderableCoordinates && (emptyMessage || locationDenied) ? (
           <View pointerEvents="none" style={styles.overlayHint}>
             <Text style={styles.overlayHintText}>
-              {emptyMessage ??
-                (locationDenied
-                  ? "Enable location to see your position on the map."
-                  : "No location to show yet.")}
+              {emptyMessage ?? (locationDenied ? t("map.enableLocation") : t("map.noLocationYet"))}
             </Text>
           </View>
         ) : null}

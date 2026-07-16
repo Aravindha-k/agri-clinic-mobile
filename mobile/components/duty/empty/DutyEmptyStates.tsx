@@ -59,8 +59,16 @@ export function DutyLoadingState({ message }: { message?: string }) {
 }
 
 export function DutyErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  const { t } = useI18n();
   return (
-    <EmptyState icon="alert-circle-outline" title={message} action={onRetry ? "Retry" : undefined} onAction={onRetry} compact style={styles.pad} />
+    <EmptyState
+      icon="alert-circle-outline"
+      title={message}
+      action={onRetry ? t("common.retry") : undefined}
+      onAction={onRetry}
+      compact
+      style={styles.pad}
+    />
   );
 }
 

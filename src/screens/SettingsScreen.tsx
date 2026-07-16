@@ -91,6 +91,16 @@ export function SettingsScreen() {
         <FlatCard padded={false}>
           <LanguageRow language={language} onSelect={(lang) => void setLanguage(lang)} t={t} />
         </FlatCard>
+        <Text style={styles.languageHintCaption}>{t("settings.languageSwitchApplies")}</Text>
+
+        <Text style={styles.sectionLabel}>{t("settings.appearance")}</Text>
+        <FlatCard padded={false}>
+          <SettingRow
+            icon="contrast-outline"
+            title={t("settings.lightThemeOnly")}
+            subtitle={t("settings.lightThemeOnlyHint")}
+          />
+        </FlatCard>
 
         <Text style={styles.sectionLabel}>{t("settings.sync")}</Text>
         <FlatCard padded={false}>
@@ -329,6 +339,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginTop: Spacing.md,
     textTransform: "uppercase"
+  },
+  languageHintCaption: {
+    color: Colors.text3,
+    fontSize: FontSize.sm,
+    marginTop: Spacing.xs,
+    paddingHorizontal: Spacing.xs
   },
   row: {
     alignItems: "center",

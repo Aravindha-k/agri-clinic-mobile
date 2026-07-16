@@ -12,27 +12,47 @@ export function SyncStatusBadge({ offline, pendingCount = 0, syncing }: Props) {
   const { t } = useI18n();
 
   if (syncing) {
+    const label = t("home.syncing");
     return (
-      <View style={[styles.badge, styles.syncing]}>
-        <Text style={[styles.text, styles.syncingText]}>{t("home.syncing")}</Text>
+      <View
+        style={[styles.badge, styles.syncing]}
+        accessibilityRole="text"
+        accessibilityLabel={label}
+        accessibilityLiveRegion="polite"
+      >
+        <Text style={[styles.text, styles.syncingText]}>{label}</Text>
       </View>
     );
   }
 
   if (offline) {
+    const label = t("daySummary.offline");
     return (
-      <View style={[styles.badge, styles.offline]}>
-        <Text style={[styles.text, styles.offlineText]}>{t("daySummary.offline")}</Text>
+      <View
+        style={[styles.badge, styles.offline]}
+        accessibilityRole="text"
+        accessibilityLabel={label}
+        accessibilityLiveRegion="polite"
+      >
+        <Text style={[styles.text, styles.offlineText]}>{label}</Text>
       </View>
     );
   }
 
   if (pendingCount > 0) {
+    const text = `${t("workdayUx.pendingSync")} (${pendingCount})`;
+    const accessibilityLabel = t(
+      pendingCount === 1 ? "a11y.syncPending_one" : "a11y.syncPending_other",
+      { count: pendingCount }
+    );
     return (
-      <View style={[styles.badge, styles.pending]}>
-        <Text style={[styles.text, styles.pendingText]}>
-          {t("workdayUx.pendingSync")} ({pendingCount})
-        </Text>
+      <View
+        style={[styles.badge, styles.pending]}
+        accessibilityRole="text"
+        accessibilityLabel={accessibilityLabel}
+        accessibilityLiveRegion="polite"
+      >
+        <Text style={[styles.text, styles.pendingText]}>{text}</Text>
       </View>
     );
   }

@@ -1,3 +1,4 @@
+/** @legacy-mobile-screen — not wired into RootNavigator; do not import into active V2 routes. */
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import { Alert, AppState, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";

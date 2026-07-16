@@ -41,6 +41,8 @@ import { ApiRequestError, getNetworkMessage, isNetworkError } from "../utils/api
 const CARD_TOP_RADIUS = 24;
 const CARD_PAD = 24;
 
+// Module-level fallback used before i18n context is available; overridden by
+// t("login.biometrics") wherever this status is actually displayed.
 const EMPTY_BIOMETRIC_STATUS: BiometricLoginStatus = {
   hardwareAvailable: false,
   enrolled: false,
@@ -143,7 +145,7 @@ export function LoginScreen() {
   async function handleLogin() {
     const user = empId.trim();
     if (!user || !password.trim()) {
-      setLoginError("Enter your Employee ID and password.");
+      setLoginError(t("login.missingCredentials"));
       return;
     }
 
@@ -155,11 +157,11 @@ export function LoginScreen() {
       await offerBiometricEnrollmentIfNeeded();
     } catch (error) {
       if (error instanceof ApiRequestError && error.code === "INVALID_CREDENTIALS") {
-        setLoginError(error.message || "Please check your ID and password.");
+        setLoginError(error.message || t("login.invalidCredentials"));
       } else if (isNetworkError(error)) {
         setLoginError(getNetworkMessage());
       } else {
-        setLoginError(error instanceof Error ? error.message : "Please check your ID and password.");
+        setLoginError(error instanceof Error ? error.message : t("login.invalidCredentials"));
       }
     } finally {
       setLoading(false);
@@ -177,7 +179,7 @@ export function LoginScreen() {
     try {
       const unlocked = await unlockSessionWithBiometrics();
       if (!unlocked) {
-        setLoginError("Biometric unlock was cancelled or is unavailable. Use your password.");
+        setLoginError(t("login.biometricCancelled"));
         await refreshBiometricState();
         return;
       }
@@ -193,13 +195,13 @@ export function LoginScreen() {
         await refreshBiometricState();
         setLoginError(
           error.code === "ACCOUNT_DISABLED" || error.status === 403
-            ? "Your account is currently disabled. Please contact your administrator."
-            : "Saved session expired. Use your password."
+            ? t("login.accountDisabled")
+            : t("login.sessionExpired")
         );
       } else if (isNetworkError(error)) {
         setLoginError(getNetworkMessage());
       } else {
-        setLoginError(error instanceof Error ? error.message : "Biometric unlock failed.");
+        setLoginError(error instanceof Error ? error.message : t("login.biometricFailed"));
       }
     } finally {
       setBiometricBusy(false);
@@ -237,12 +239,14 @@ export function LoginScreen() {
           <View style={styles.card}>
             <View style={styles.loginTitleRow}>
               <Ionicons name="person-circle-outline" size={24} color={Colors.brand700} />
-              <Text style={styles.loginTitle}>Login</Text>
+              <Text style={styles.loginTitle} accessibilityRole="header">
+                {t("login.title")}
+              </Text>
             </View>
-            <Text style={styles.loginSub}>Enter your Employee ID and password</Text>
+            <Text style={styles.loginSub}>{t("login.subtitle")}</Text>
 
             {loginError ? (
-              <View style={styles.errorBox}>
+              <View style={styles.errorBox} accessibilityRole="alert" accessibilityLiveRegion="polite">
                 <Ionicons name="alert-circle" size={16} color={Colors.redText} />
                 <Text style={styles.errorText}>{loginError}</Text>
               </View>
@@ -254,47 +258,49 @@ export function LoginScreen() {
               </TechnicalDetailsCollapsible>
             ) : null}
 
-            <Text style={styles.fieldLabel}>Employee ID</Text>
+            <Text style={styles.fieldLabel}>{t("login.employeeId")}</Text>
             <EnterpriseTextField
               leftIcon="person-outline"
               value={empId}
-              onChangeText={(t) => {
-                setEmpId(t);
+              onChangeText={(v) => {
+                setEmpId(v);
                 if (loginError) setLoginError("");
               }}
               onFocus={() => handleFieldFocus("empId")}
-              placeholder="Example: AG-8821"
+              placeholder={t("login.employeeIdPlaceholder")}
               autoCapitalize="none"
               autoCorrect={false}
               editable={!loading}
               returnKeyType="next"
+              accessibilityLabel={t("login.employeeId")}
               containerStyle={styles.fieldGap}
             />
 
-            <Text style={styles.fieldLabel}>Password</Text>
+            <Text style={styles.fieldLabel}>{t("login.password")}</Text>
             <EnterpriseTextField
               leftIcon="lock-closed-outline"
               value={password}
-              onChangeText={(t) => {
-                setPassword(t);
+              onChangeText={(v) => {
+                setPassword(v);
                 if (loginError) setLoginError("");
               }}
               onFocus={() => handleFieldFocus("password")}
-              placeholder="Enter your password"
+              placeholder={t("login.passwordPlaceholder")}
               secureTextEntry={!showPw}
               editable={!loading}
               onSubmitEditing={() => void handleLogin()}
               returnKeyType="go"
               rightIcon={showPw ? "eye-off-outline" : "eye-outline"}
-              rightIconAccessibilityLabel={showPw ? "Hide password" : "Show password"}
+              rightIconAccessibilityLabel={showPw ? t("login.hidePassword") : t("login.showPassword")}
               onRightIconPress={() => setShowPw((p) => !p)}
+              accessibilityLabel={t("login.password")}
               containerStyle={styles.fieldGap}
             />
 
-            <Text style={styles.forgotText}>Forgot password? Contact your administrator.</Text>
+            <Text style={styles.forgotText}>{t("login.forgotPassword")}</Text>
 
             <PrimaryButton
-              label={loading ? "Logging in…" : "Login"}
+              label={loading ? t("login.submitting") : t("login.submit")}
               onPress={() => void handleLogin()}
               loading={loading}
               disabled={loading}

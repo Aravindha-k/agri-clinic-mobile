@@ -9,11 +9,11 @@ import { getNetworkMessage, SERVER_MESSAGE } from "../utils/apiError";
 import { useI18n } from "../i18n/I18nContext";
 import { markContinueOffline, clearContinueOffline } from "../bootstrap/startupCoordinator";
 
-function issueCopy(issue: BootstrapIssue) {
+function issueCopy(issue: BootstrapIssue, t: (key: string) => string) {
   if (issue === "network") {
-    return { title: "Cannot reach server", message: getNetworkMessage() };
+    return { title: t("startup.cannotReachServer"), message: getNetworkMessage() };
   }
-  return { title: "Server unavailable", message: SERVER_MESSAGE };
+  return { title: t("startup.serverUnavailable"), message: SERVER_MESSAGE };
 }
 
 /**
@@ -49,14 +49,14 @@ export function StartupScreen({
         title: t("startup.recoveryTitle"),
         message: t("startup.recoveryBody")
       }
-    : issueCopy(bootstrapIssue);
+    : issueCopy(bootstrapIssue, t);
   const devApiHint = __DEV__ ? `\n\nAPI: ${API_BASE_URL}` : "";
 
   return (
     <View style={startupTimedOut ? styles.recovery : styles.wait}>
       <AppFallbackScreen
         title={copy.title}
-        message={`${copy.message}${startupTimedOut ? "" : " Your session is still saved."}${devApiHint}`}
+        message={`${copy.message}${startupTimedOut ? "" : ` ${t("startup.sessionStillSaved")}`}${devApiHint}`}
         primaryLabel={retrying ? t("startup.retrying") : t("common.retry")}
         onPrimary={() => {
           if (retrying) return;

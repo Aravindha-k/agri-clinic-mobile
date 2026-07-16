@@ -23,8 +23,14 @@ export const Colors = {
   text1: "#111827",
   text2: "#374151",
   text3: "#6B7280",
-  /** Lowest-emphasis readable text/icon color (4.5:1+ on white). */
-  text4: "#667085",
+  /**
+   * Muted readable text/icon color.
+   * Raised slightly for WCAG AA (~4.5:1+) on white and common tinted surfaces (bg / surfaceMuted).
+   * Prefer Semantic.textMutedReadable for new UI.
+   */
+  text4: "#5B6B7A",
+  /** Alias kept for gradual migration — same as text4. */
+  textMutedReadable: "#5B6B7A",
 
   // Semantic
   amber: "#F59E0B",
@@ -51,7 +57,7 @@ export const Colors = {
   overlay: "rgba(17, 24, 39, 0.45)",
   photoOverlay: "rgba(0, 0, 0, 0.55)",
   scrim: "rgba(17, 24, 39, 0.92)",
-  placeholder: "#667085",
+  placeholder: "#5B6B7A",
   inputFill: "#F3F4F6",
   disabled: "#9CA3AF",
   disabledBg: "#F3F4F6"
@@ -67,6 +73,7 @@ export const Semantic = {
   background: Colors.bg,
   surface: Colors.surface,
   border: Colors.border,
+  borderSubtle: Colors.border,
   success: Colors.green,
   successBg: Colors.greenBg,
   warning: Colors.amber,
@@ -76,11 +83,15 @@ export const Semantic = {
   info: Colors.blue,
   infoBg: Colors.blueBg,
   disabled: Colors.disabled,
+  disabledText: Colors.disabled,
+  disabledBackground: Colors.disabledBg,
   disabledBg: Colors.disabledBg,
   textPrimary: Colors.text1,
   textSecondary: Colors.text2,
   textMuted: Colors.text3,
-  textDisabled: Colors.text4
+  /** Prefer for captions/helpers that must stay readable on tinted cards. */
+  textMutedReadable: Colors.textMutedReadable,
+  textDisabled: Colors.disabled
 } as const;
 
 export type ColorToken = keyof typeof Colors;

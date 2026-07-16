@@ -26,7 +26,7 @@ function statusMeta(status: DutySessionStatus, t: (key: string) => string) {
     case "active":
       return { label: t("workdayUx.statusWorking"), color: Colors.greenText, bg: Colors.greenBg };
     case "auto_completed":
-      return { label: "Auto Completed", color: Colors.amberText, bg: Colors.amberBg };
+      return { label: t("workdayUx.autoCompleted"), color: Colors.amberText, bg: Colors.amberBg };
     case "completed":
       return { label: t("workdayUx.statusCompleted"), color: Colors.brand700, bg: Colors.brand50 };
     default:
@@ -61,18 +61,18 @@ export function DutyStatusCard({
 
       <View style={styles.metaGrid}>
         <View style={styles.metaCell}>
-          <Text style={styles.metaLabel}>Started</Text>
+          <Text style={styles.metaLabel}>{t("workdayUx.started")}</Text>
           <Text style={styles.metaValue}>{formatShortTime(startedAt)}</Text>
         </View>
         <View style={styles.metaCell}>
-          <Text style={styles.metaLabel}>Expected End</Text>
+          <Text style={styles.metaLabel}>{t("workdayUx.expectedEnd")}</Text>
           <Text style={styles.metaValue}>{formatShortTime(expectedEndAt)}</Text>
         </View>
       </View>
 
       <DutyTimer elapsed={elapsed} />
       <View style={styles.remainingBlock}>
-        <Text style={styles.remainingCaption}>Remaining</Text>
+        <Text style={styles.remainingCaption}>{t("workdayUx.remaining")}</Text>
         <Text style={styles.remainingTimer}>{remaining}</Text>
       </View>
 
@@ -119,6 +119,7 @@ const styles = StyleSheet.create({
   },
   metaGrid: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: Spacing.md
   },
   metaCell: {

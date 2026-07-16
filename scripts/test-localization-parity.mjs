@@ -1,12 +1,25 @@
 #!/usr/bin/env node
 /**
  * en/ta localization key parity + interpolation placeholder parity.
- * Run with: node --experimental-strip-types scripts/test-localization-parity.mjs
- * (package.json wires the same flag)
+ * Pure .mjs — evaluates catalog object literals from .ts sources (no strip-types).
  */
 import assert from "node:assert/strict";
-import { en } from "../src/i18n/en.ts";
-import { ta } from "../src/i18n/ta.ts";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+const root = resolve(import.meta.dirname, "..");
+
+function loadCatalog(relPath) {
+  let source = readFileSync(resolve(root, relPath), "utf8");
+  // Remove TypeScript-only syntax so the object literal is plain JS.
+  source = source
+    .replace(/^import\s+type\s+[\s\S]*?;\s*/m, "")
+    .replace(/^export\s+type\s+[\s\S]*$/gm, "")
+    .replace(/\s+as\s+const\s*;?\s*$/m, ";")
+    .replace(/^export\s+const\s+(\w+)(?::\s*[\w.]+)?\s*=\s*/m, "return ");
+  // eslint-disable-next-line no-new-func
+  return new Function(source)();
+}
 
 function flatten(obj, prefix = "", out = new Map()) {
   if (obj == null || typeof obj !== "object") return out;
@@ -22,8 +35,8 @@ function placeholders(s) {
   return [...s.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]).sort().join(",");
 }
 
-const enMap = flatten(en);
-const taMap = flatten(ta);
+const enMap = flatten(loadCatalog("src/i18n/en.ts"));
+const taMap = flatten(loadCatalog("src/i18n/ta.ts"));
 
 const missingInTa = [...enMap.keys()].filter((k) => !taMap.has(k));
 const missingInEn = [...taMap.keys()].filter((k) => !enMap.has(k));

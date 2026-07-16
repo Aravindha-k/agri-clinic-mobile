@@ -1,30 +1,62 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { FieldMapView } from "../../../src/components/map/FieldMapView";
 import type { MapPin } from "../../../src/components/map/FieldMapView.types";
 import { useDuty } from "../../../src/features/duty/store/DutyContext";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { DEFAULT_MAP_REGION, fitMapRegion } from "../../../src/utils/mapRegion";
+import { readPendingVisits, type PendingVisitRecord } from "../../lib/pendingVisitsQueue";
+import { subscribeVisitDataRefresh } from "../../lib/visit/visitDataRefresh";
 import { Colors, FontSize, Spacing } from "../../lib/theme";
 
 const MAP_HEIGHT = 240;
 
 type Props = {
   onMarkerPress?: (visitId: number | string) => void;
+  onPendingMarkerPress?: (localSyncId: string) => void;
 };
 
-export function DutyMapCard({ onMarkerPress }: Props) {
+function pendingCoord(visit: PendingVisitRecord): { lat: number; lng: number } | null {
+  const lat = Number(visit.values.latitude);
+  const lng = Number(visit.values.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat === 0 || lng === 0) return null;
+  return { lat, lng };
+}
+
+export function DutyMapCard({ onMarkerPress, onPendingMarkerPress }: Props) {
   const { t } = useI18n();
   const { dutyMap } = useDuty();
   const [previewWidth, setPreviewWidth] = useState(0);
+  const [pendingVisits, setPendingVisits] = useState<PendingVisitRecord[]>([]);
 
-  const fitCoordinates = useMemo(
-    () => (dutyMap?.bounds?.length ? dutyMap.bounds : []),
-    [dutyMap?.bounds]
-  );
+  useEffect(() => {
+    let active = true;
+    const load = () => {
+      void readPendingVisits().then((rows) => {
+        if (active) setPendingVisits(rows);
+      });
+    };
+    load();
+    return subscribeVisitDataRefresh(load);
+  }, []);
+
+  const fitCoordinates = useMemo(() => {
+    const bounds = dutyMap?.bounds?.length ? [...dutyMap.bounds] : [];
+    for (const visit of pendingVisits) {
+      const coord = pendingCoord(visit);
+      if (coord) bounds.push({ latitude: coord.lat, longitude: coord.lng });
+    }
+    return bounds;
+  }, [dutyMap?.bounds, pendingVisits]);
 
   const markers = useMemo((): MapPin[] => {
     const rows: MapPin[] = [];
+    const serverKeys = new Set<string>();
+    for (const marker of dutyMap?.visitMarkers ?? []) {
+      serverKeys.add(String(marker.id));
+      if (marker.visitId != null) serverKeys.add(String(marker.visitId));
+    }
+
     if (dutyMap?.startMarker) {
       rows.push({
         id: "route-start",
@@ -35,13 +67,40 @@ export function DutyMapCard({ onMarkerPress }: Props) {
         kind: "route_start"
       });
     }
+
     for (const marker of dutyMap?.visitMarkers ?? []) {
       rows.push({
         ...marker,
+        id: marker.visitId != null ? `visit-${marker.visitId}` : marker.id,
         label: marker.sequence,
-        pending: marker.pending
+        pending: Boolean(marker.pending)
       });
     }
+
+    let pendingIndex = (dutyMap?.visitMarkers?.length ?? 0) + 1;
+    for (const visit of pendingVisits) {
+      if (
+        serverKeys.has(visit.local_sync_id) ||
+        serverKeys.has(`visit-${visit.local_sync_id}`) ||
+        serverKeys.has(`pending-${visit.local_sync_id}`)
+      ) {
+        continue;
+      }
+      const coord = pendingCoord(visit);
+      if (!coord) continue;
+      rows.push({
+        id: `pending-${visit.local_sync_id}`,
+        lat: coord.lat,
+        lng: coord.lng,
+        title: visit.values.farmer_name || t("visitFlow.farmer"),
+        description: t("visitFlow.pendingStatus_pending"),
+        kind: "visit",
+        label: pendingIndex++,
+        pending: true,
+        visitId: visit.local_sync_id
+      });
+    }
+
     if (dutyMap?.currentLiveLocation) {
       rows.push({
         id: "current-live",
@@ -61,7 +120,7 @@ export function DutyMapCard({ onMarkerPress }: Props) {
       });
     }
     return rows;
-  }, [dutyMap, t]);
+  }, [dutyMap, pendingVisits, t]);
 
   const mapRegion = useMemo(() => {
     if (fitCoordinates.length === 0) return DEFAULT_MAP_REGION;
@@ -102,9 +161,13 @@ export function DutyMapCard({ onMarkerPress }: Props) {
             interactive
             emptyMessage={isEmpty ? t("myLocation.noRouteMapHint") : undefined}
             onMarkerPress={
-              onMarkerPress
+              onMarkerPress || onPendingMarkerPress
                 ? (marker) => {
-                    if (marker.visitId != null) onMarkerPress(marker.visitId);
+                    if (marker.pending && marker.visitId != null) {
+                      onPendingMarkerPress?.(String(marker.visitId));
+                      return;
+                    }
+                    if (marker.visitId != null) onMarkerPress?.(marker.visitId);
                   }
                 : undefined
             }

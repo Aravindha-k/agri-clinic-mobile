@@ -13,6 +13,7 @@ import { generateLocalSyncId } from "../../mobile/lib/pendingVisitsQueue";
 import { useSyncStore } from "../../mobile/lib/store/syncStore";
 import { useFieldDataRefresh } from "./FieldDataRefreshContext";
 import { subscribeFieldQueueChanges } from "../../mobile/lib/sync/syncQueueNotifier";
+import { emitVisitDataRefresh } from "../../mobile/lib/visit/visitDataRefresh";
 
 export type QueuedVisit = {
   id: string;
@@ -81,7 +82,10 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
     () =>
       subscribeFieldQueueChanges((event) => {
         void refreshQueue();
-        if (event === "sync_progress") bumpAfterVisitChange();
+        if (event === "sync_progress") {
+          bumpAfterVisitChange();
+          emitVisitDataRefresh();
+        }
       }),
     [bumpAfterVisitChange, refreshQueue]
   );

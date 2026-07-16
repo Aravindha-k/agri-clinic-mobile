@@ -23,6 +23,7 @@ import {
   subscribeActiveSyncUserId
 } from "../lib/sync/queueOwnership";
 import { storage } from "../lib/storage";
+import { generateLocalSyncId } from "../lib/sync/queueIds";
 
 export type VisitGpsCoords = {
   latitude: number;
@@ -79,6 +80,8 @@ type VisitFormState = {
   extraAttachments: PendingVisitAttachment[];
   nextVisitDate: string | null;
   submissionLocalSyncId: string | null;
+  visitedAt: string | null;
+  draftUpdatedAt: string | null;
   setStep: (step: 1 | 2 | 3 | 4) => void;
   setFarmer: (farmer: Farmer | null) => void;
   setNewFarmer: (patch: Partial<NewFarmerDraft>) => void;
@@ -108,6 +111,9 @@ type VisitFormState = {
   clearExtraAttachments: () => void;
   setNextVisitDate: (value: string | null) => void;
   setSubmissionLocalSyncId: (value: string | null) => void;
+  setVisitedAt: (value: string | null) => void;
+  touchDraft: () => void;
+  ensureLocalSyncId: () => string;
   applyRevisitPrefill: (loaded: LoadedRevisitPrefill) => void;
   hasFormData: () => boolean;
   reset: () => void;
@@ -180,8 +186,10 @@ export const useVisitFormStore = create<VisitFormState>()(
   visitKind: "first" as VisitKind,
   gpsCoords: null,
   submissionLocalSyncId: null,
+  visitedAt: null,
+  draftUpdatedAt: null,
   ...initialStep2,
-  setStep: (step) => set({ step }),
+  setStep: (step) => set({ step, draftUpdatedAt: new Date().toISOString() }),
   setFarmer: (farmer) =>
     set({
       farmer,
@@ -292,6 +300,15 @@ export const useVisitFormStore = create<VisitFormState>()(
   clearExtraAttachments: () => set({ extraAttachments: [] }),
   setNextVisitDate: (nextVisitDate) => set({ nextVisitDate, followUpDate: nextVisitDate }),
   setSubmissionLocalSyncId: (submissionLocalSyncId) => set({ submissionLocalSyncId }),
+  setVisitedAt: (visitedAt) => set({ visitedAt, draftUpdatedAt: new Date().toISOString() }),
+  touchDraft: () => set({ draftUpdatedAt: new Date().toISOString() }),
+  ensureLocalSyncId: () => {
+    const existing = get().submissionLocalSyncId;
+    if (existing) return existing;
+    const id = generateLocalSyncId();
+    set({ submissionLocalSyncId: id, draftUpdatedAt: new Date().toISOString() });
+    return id;
+  },
   applyRevisitPrefill: (loaded) => {
     const values = loaded.values;
     const meta = loaded.meta;
@@ -367,6 +384,8 @@ export const useVisitFormStore = create<VisitFormState>()(
       visitKind: "first",
       gpsCoords: null,
       submissionLocalSyncId: null,
+      visitedAt: null,
+      draftUpdatedAt: null,
       ...initialStep2
     })
     }),
@@ -406,7 +425,9 @@ export const useVisitFormStore = create<VisitFormState>()(
         photos: state.photos,
         extraAttachments: state.extraAttachments,
         nextVisitDate: state.nextVisitDate,
-        submissionLocalSyncId: state.submissionLocalSyncId
+        submissionLocalSyncId: state.submissionLocalSyncId,
+        visitedAt: state.visitedAt,
+        draftUpdatedAt: state.draftUpdatedAt
       })
     }
   )
@@ -439,6 +460,10 @@ export function rehydrateVisitDraftForActiveUser(userId: number | null): Promise
   return Promise.resolve(useVisitFormStore.persist.rehydrate()).then(() => {
     if (generation !== draftSessionGeneration) {
       return;
+    }
+    const state = useVisitFormStore.getState();
+    if (state.hasFormData() || state.step > 1) {
+      state.ensureLocalSyncId();
     }
   });
 }

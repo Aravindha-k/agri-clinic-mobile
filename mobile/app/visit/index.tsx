@@ -18,6 +18,7 @@ import { ScreenCanvas, ScreenEntranceBloom } from "../../components/layout";
 import { VisitEntranceProvider } from "../../context/VisitEntranceContext";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
 import { beginNewVisit } from "../../lib/beginNewVisit";
+import { isVisitSubmitInFlight } from "../../lib/visit/visitSubmitCoordinator";
 import { useVisitFormStore } from "../../store/visitFormStore";
 import VisitCreateStep, { VisitCreateStep2, VisitCreateStep3, VisitCreateStep4 } from "./create";
 
@@ -155,6 +156,10 @@ export default function VisitFlowShell() {
   useEffect(
     () =>
       navigation.addListener("beforeRemove", (event: any) => {
+        if (isVisitSubmitInFlight()) {
+          event.preventDefault();
+          return;
+        }
         if (!hasDraft || allowRemoval.current) return;
         event.preventDefault();
         if (guardDialogOpen.current) return;
@@ -181,7 +186,7 @@ export default function VisitFlowShell() {
             onPress: () => {
               guardDialogOpen.current = false;
               allowRemoval.current = true;
-              beginNewVisit();
+              beginNewVisit({ discardMedia: true });
               navigation.dispatch(event.data.action);
             }
           }

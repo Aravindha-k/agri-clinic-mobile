@@ -36,12 +36,13 @@ test("Profile shows compact duty chip without timer display", () => {
   assert.doesNotMatch(profile, /WorkdayStartPanel/);
 });
 
-test("Duty map card uses DutyContext map only with marker press and no route polyline", () => {
+test("Duty map card uses DutyContext map with pending overlay, marker press, and no route polyline", () => {
   const mapCard = read("mobile/components/duty/DutyMapCard.tsx");
   assert.match(mapCard, /const \{ dutyMap \} = useDuty\(\);/);
   assert.match(mapCard, /onMarkerPress/);
+  assert.match(mapCard, /readPendingVisits/);
+  assert.match(mapCard, /pending-\$\{visit\.local_sync_id\}/);
   assert.doesNotMatch(mapCard, /route=/);
-  assert.doesNotMatch(mapCard, /readPendingVisits/);
   assert.doesNotMatch(mapCard, /fetchVisitsForMapMarkers/);
 });
 

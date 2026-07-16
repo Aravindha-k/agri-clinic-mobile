@@ -1,12 +1,16 @@
 import { Alert } from "react-native";
 import { getFieldPendingCounts, hasBlockingPendingFieldData } from "./pendingCounts";
 import { runAutomaticSync } from "./automaticSyncCoordinator";
+import { useVisitFormStore } from "../../store/visitFormStore";
 
 export type LogoutPendingCheckResult =
   | { allowed: true }
-  | { allowed: false; reason: "pending_data"; counts: ReturnType<typeof getFieldPendingCounts> };
+  | { allowed: false; reason: "pending_data" | "unsaved_visit"; counts: ReturnType<typeof getFieldPendingCounts> };
 
 export function checkLogoutAllowed(): LogoutPendingCheckResult {
+  if (useVisitFormStore.getState().hasFormData()) {
+    return { allowed: false, reason: "unsaved_visit", counts: getFieldPendingCounts() };
+  }
   if (!hasBlockingPendingFieldData()) {
     return { allowed: true };
   }

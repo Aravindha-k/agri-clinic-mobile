@@ -146,6 +146,14 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
                   })}
                 </Text>
               </>
+            ) : evidenceWarning ? (
+              <>
+                <Text style={styles.title}>{t("visitFlow.mediaPendingTitle")}</Text>
+                {visitId > 0 ? (
+                  <Text style={styles.visitId}>{t("visitFlow.visitNumber", { id: visitId })}</Text>
+                ) : null}
+                <Text style={styles.evidenceWarn}>{evidenceWarning}</Text>
+              </>
             ) : (
               <>
                 <Text style={styles.title}>{t("visitFlow.visitSubmitted")}</Text>
@@ -169,7 +177,6 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
                     <SummaryRow label={t("visitFlow.gpsSummary")} value={gpsLabel} />
                   </View>
                 </FlatCard>
-                {evidenceWarning ? <Text style={styles.evidenceWarn}>{evidenceWarning}</Text> : null}
               </>
             )}
 
@@ -179,7 +186,7 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
                 onPress={addAnotherVisit}
                 style={styles.actionBtn}
               />
-              {queued ? (
+              {queued || evidenceWarning ? (
                 <GhostButton
                   label={t("visitFlow.viewPendingVisits")}
                   onPress={viewPendingVisits}

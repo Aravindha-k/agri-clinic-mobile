@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
 import * as SecureStore from "expo-secure-store";
 import {
+  pendingAttachmentLabel,
   uploadAllPendingAttachments,
   type PendingVisitAttachment
 } from "../../../src/visit/pendingAttachments";
@@ -403,7 +404,19 @@ export async function flushVisitQueue(
             if (visitId > 0 && pendingAttachments?.length) {
               const { failed } = await uploadAllPendingAttachments(visitId, pendingAttachments);
               if (failed.length > 0) {
-                throw new Error(`Photo upload failed: ${failed.join(", ")}`);
+                // Visit is acknowledged — keep only failed media for retry, never recreate Visit.
+                const failedSet = new Set(failed);
+                const failedAttachments = pendingAttachments.filter((a) =>
+                  failedSet.has(pendingAttachmentLabel(a))
+                );
+                if (failedAttachments.length) {
+                  const { enqueueFailedVisitEvidence } = await import("./pendingEvidenceQueue");
+                  await enqueueFailedVisitEvidence({
+                    visitId,
+                    attachments: failedAttachments,
+                    localSyncId: visit.local_sync_id
+                  });
+                }
               }
             }
             const next = readVisitQueue().filter((v) => v.local_sync_id !== visit.local_sync_id);

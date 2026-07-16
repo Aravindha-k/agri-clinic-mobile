@@ -14,7 +14,7 @@ import { useDuty } from "../../src/features/duty/store/DutyContext";
 import { useDutyTimer } from "../../src/features/duty/hooks/useDutyTimer";
 import { useDutyPresentation } from "../../src/features/duty/hooks/useDutyPresentation";
 import { autoFlushPendingGps } from "../lib/sync/offlineSyncManager";
-import { readPendingVisits } from "../lib/pendingVisitsQueue";
+import { readPendingVisits, type PendingVisitRecord } from "../lib/pendingVisitsQueue";
 import { isSameVisitLocalDay } from "../../src/utils/format";
 import { getHomeVisits } from "../../src/utils/visitsCache";
 import { ScreenCanvas, ScreenEntranceBloom, ScreenPageHeader } from "../components/layout";
@@ -27,6 +27,7 @@ import {
   WorkdayActionFooter
 } from "../components/duty";
 import { DutyNoWorkDayState } from "../components/duty/empty/DutyEmptyStates";
+import { PendingVisitDetail } from "../components/visits/PendingVisitDetail";
 import { ScreenLoader } from "../components/layout/ScreenLoader";
 import { useScreenEntrance } from "../hooks/useScreenEntrance";
 import { fetchDashboard } from "../lib/homeApi";
@@ -76,6 +77,7 @@ function TrackingWorkspaceScreenInner() {
   const [completedVisits, setCompletedVisits] = useState(0);
   const [queuedVisits, setQueuedVisits] = useState(0);
   const [failedVisits, setFailedVisits] = useState(0);
+  const [pendingDetail, setPendingDetail] = useState<PendingVisitRecord | null>(null);
   const entranceTick = useScreenEntrance();
 
   const loadSummary = useCallback(async () => {
@@ -177,6 +179,12 @@ function TrackingWorkspaceScreenInner() {
     navigation.navigate("Work", { screen: "VisitDetail", params: { id } });
   }
 
+  async function openPending(localSyncId: string) {
+    const rows = await readPendingVisits().catch(() => []);
+    const match = rows.find((row) => row.local_sync_id === localSyncId) ?? null;
+    setPendingDetail(match);
+  }
+
   const pendingSync = pendingGpsCount + pendingCount;
   const hasDuty = dutyPresentation.hasDuty;
 
@@ -222,7 +230,7 @@ function TrackingWorkspaceScreenInner() {
             </FadeInSection>
 
             <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
-              <DutyMapCard onMarkerPress={openVisit} />
+              <DutyMapCard onMarkerPress={openVisit} onPendingMarkerPress={(id) => void openPending(id)} />
             </FadeInSection>
 
             {summaryLoading ? (
@@ -257,6 +265,11 @@ function TrackingWorkspaceScreenInner() {
         loading={ending}
         disabled={busy}
         onEnd={() => void handleEndWorkday()}
+      />
+      <PendingVisitDetail
+        visit={pendingDetail}
+        onClose={() => setPendingDetail(null)}
+        onChanged={() => void loadSummary()}
       />
     </SafeAreaView>
   );

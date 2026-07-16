@@ -122,10 +122,5 @@ export async function removePendingVisit(id: string): Promise<void> {
   );
 }
 
-export function generateLocalSyncId() {
-  if (typeof globalThis.crypto?.randomUUID === "function") {
-    return globalThis.crypto.randomUUID();
-  }
-  const rand = Math.random().toString(36).slice(2, 10);
-  return `sync-${Date.now()}-${rand}`;
-}
+/** Canonical ID generator — re-exported so screens never invent a second implementation. */
+export { generateLocalSyncId } from "./sync/queueIds";

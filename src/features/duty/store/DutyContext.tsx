@@ -29,6 +29,7 @@ import {
   writeCachedDutyBootstrap
 } from "../storage/dutyCacheStorage";
 import type { DutyMapSummary, DutyStateSnapshot, MobileBootstrap } from "../types/duty";
+import { subscribeVisitDataRefresh } from "../../../../mobile/lib/visit/visitDataRefresh";
 
 type BootstrapHydrationInput = {
   bootstrap: MobileBootstrap | null;
@@ -394,6 +395,18 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
       await clearDutyState({ preserveCache: false });
     });
   }, [clearDutyState]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const unsubscribe = subscribeVisitDataRefresh(() => {
+      if (cancelled) return;
+      void refreshDutyMap().catch(() => undefined);
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [refreshDutyMap]);
 
   const value = useMemo(
     () => ({

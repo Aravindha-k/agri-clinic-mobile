@@ -29,6 +29,7 @@ import {
   showLogoutBlockedAlert,
   trySyncBeforeLogout
 } from "../../lib/sync/logoutGuard";
+import { beginNewVisit } from "../../lib/beginNewVisit";
 import { formatDisplayRole } from "../../../src/utils/formatRole";
 import { cacheBustPhotoUrl, extractPhotoUrl, photoCacheVersion } from "../../../src/utils/profilePhotoUrl";
 import { fetchVisitsPage } from "../../../src/api/visits";
@@ -262,6 +263,26 @@ export default function ProfileTabScreen() {
   function confirmSignOut() {
     const blocked = checkLogoutAllowed();
     if (!blocked.allowed) {
+      if (blocked.reason === "unsaved_visit") {
+        Alert.alert(t("visitFlow.leaveVisitTitle"), t("visitFlow.leaveVisitBody"), [
+          { text: t("visitFlow.continueEditing"), style: "cancel" },
+          {
+            text: t("visitFlow.saveDraft"),
+            onPress: () => {
+              void signOut();
+            }
+          },
+          {
+            text: t("visitFlow.discard"),
+            style: "destructive",
+            onPress: () => {
+              beginNewVisit({ discardMedia: true });
+              void signOut();
+            }
+          }
+        ]);
+        return;
+      }
       showLogoutBlockedAlert({
         title: t("fieldWorkflow.logoutBlockedTitle"),
         message: t("fieldWorkflow.logoutBlocked"),

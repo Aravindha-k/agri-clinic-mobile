@@ -109,6 +109,11 @@ export async function runOrderedFieldSync(options?: {
         useSyncStore.getState().setLastSynced(new Date().toISOString());
       }
 
+      if (visits.synced > 0 || evidence.uploaded > 0) {
+        const { emitVisitDataRefresh } = await import("../visit/visitDataRefresh");
+        emitVisitDataRefresh();
+      }
+
       return { visits, evidence, gps, workdayEnd, phase };
     } finally {
       useSyncStore.getState().setSyncing(false);

@@ -30,6 +30,8 @@ import {
 } from "../storage/dutyCacheStorage";
 import type { DutyMapSummary, DutyStateSnapshot, MobileBootstrap } from "../types/duty";
 import { subscribeVisitDataRefresh } from "../../../../mobile/lib/visit/visitDataRefresh";
+import { STARTUP_TIMEOUTS, markDutyReady } from "../../../bootstrap/startupCoordinator";
+import { logStartup } from "../../../utils/startupDiagnostics";
 
 type BootstrapHydrationInput = {
   bootstrap: MobileBootstrap | null;
@@ -359,24 +361,50 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!sessionReady) return;
+    if (state.hydrationStatus === "ready" || state.hydrationStatus === "error") {
+      markDutyReady(state.hydrationStatus);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setState((prev) => {
+        if (prev.hydrationStatus === "ready" || prev.hydrationStatus === "error") return prev;
+        logStartup("duty_hydration_timeout", "forcing ready with offline-safe duty state");
+        markDutyReady("timeout_offline_fallback");
+        return {
+          ...prev,
+          hydrationStatus: "ready",
+          isOffline: true,
+          syncStatus: "offline",
+          bootstrapError: prev.bootstrapError ?? "Duty hydration timed out — continuing offline."
+        };
+      });
+    }, STARTUP_TIMEOUTS.dutyHydrationMs);
+    return () => clearTimeout(timer);
+  }, [sessionReady, state.hydrationStatus]);
+
+  useEffect(() => {
+    if (!sessionReady) return;
     return NetInfo.addEventListener((next) => {
       const online = Boolean(next.isConnected && next.isInternetReachable !== false);
       setState((prev) => ({ ...prev, isOffline: !online }));
       if (online) {
-        void refreshBootstrap().then(() => flushTrackingGpsQueue().catch(() => undefined));
+        void refreshBootstrap()
+          .then(() => refreshDutyMap().catch(() => undefined))
+          .then(() => flushTrackingGpsQueue().catch(() => undefined));
       }
     });
-  }, [refreshBootstrap, sessionReady]);
+  }, [refreshBootstrap, refreshDutyMap, sessionReady]);
 
   useEffect(() => {
     if (!sessionReady) return;
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (nextState === "active") {
         void refreshCurrentDuty().catch(() => undefined);
+        void refreshDutyMap().catch(() => undefined);
       }
     });
     return () => subscription.remove();
-  }, [refreshCurrentDuty, sessionReady]);
+  }, [refreshCurrentDuty, refreshDutyMap, sessionReady]);
 
   useEffect(() => {
     dutyBootstrapBridge = {

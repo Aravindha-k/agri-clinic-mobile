@@ -8,6 +8,12 @@ import { SPLASH_ASSETS } from "./src/components/brand/splashAssets";
 import { NATIVE_LAUNCH_BG } from "./src/components/brand/splashColors";
 import { hideNativeSplashSafe, holdNativeSplash } from "./src/bootstrap/nativeSplash";
 import { onSplashReplayRequested } from "./src/bootstrap/splashReplay";
+import {
+  STARTUP_TIMEOUTS,
+  markAssetsLoaded,
+  markStartupBegin,
+  markStartupFailed
+} from "./src/bootstrap/startupCoordinator";
 import { logStartup, logStartupError } from "./src/utils/startupDiagnostics";
 import { installGlobalErrorHandlers } from "./src/utils/globalErrorHandlers";
 
@@ -18,9 +24,9 @@ const APP_BG = "#F8F7F2";
 
 type StartupPhase = "cinematic" | "revealing" | "app";
 /** Must fire before the cinematic's 6.5s hard ceiling so recovery is already painted. */
-const PROVIDERS_WATCHDOG_MS = 5500;
+const PROVIDERS_WATCHDOG_MS = STARTUP_TIMEOUTS.providersModuleMs;
 /** Last-resort native splash hide if cinematic onReady never fires (OEM layout hangs). */
-const NATIVE_SPLASH_FAILSAFE_MS = 8000;
+const NATIVE_SPLASH_FAILSAFE_MS = STARTUP_TIMEOUTS.nativeSplashFailsafeMs;
 
 function preloadSplashAssets() {
   const bg = Image.resolveAssetSource(SPLASH_ASSETS.background);
@@ -28,7 +34,13 @@ function preloadSplashAssets() {
   return Promise.all([
     bg.uri ? Image.prefetch(bg.uri) : Promise.resolve(false),
     logo.uri ? Image.prefetch(logo.uri) : Promise.resolve(false)
-  ]).catch(() => undefined);
+  ])
+    .then(() => {
+      markAssetsLoaded("splash_branding");
+    })
+    .catch(() => {
+      markAssetsLoaded("splash_branding_partial");
+    });
 }
 
 export default function App() {
@@ -42,6 +54,7 @@ export default function App() {
 
   useEffect(() => {
     installGlobalErrorHandlers();
+    markStartupBegin("App root");
     logStartup("first_render");
     void holdNativeSplash();
     void preloadSplashAssets();
@@ -58,6 +71,7 @@ export default function App() {
       if (!active) return;
       watchdogFired = true;
       logStartupError("App providers did not load before the startup watchdog");
+      markStartupFailed("providers_module", "providers watchdog timeout");
       setBootError("timeout");
       setCriticalReady(true);
     }, PROVIDERS_WATCHDOG_MS);
@@ -75,6 +89,7 @@ export default function App() {
         clearTimeout(watchdog);
         const message = err instanceof Error ? err.message : String(err);
         logStartupError(message);
+        markStartupFailed("providers_module", message);
         setBootError(message);
         setCriticalReady(true);
       });

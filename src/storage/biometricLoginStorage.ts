@@ -2,6 +2,7 @@ import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
 import { getRefreshToken } from "./tokenStorage";
 import { refreshAccessTokenOnce } from "../api/tokenRefresh";
+import { STARTUP_TIMEOUTS } from "../bootstrap/startupCoordinator";
 import { withTimeout } from "../utils/withTimeout";
 
 const ENABLED_KEY = "biometric_login_enabled";
@@ -9,6 +10,8 @@ const PROMPT_DISMISSED_KEY = "biometric_login_prompt_dismissed";
 /** @deprecated legacy plaintext password — always cleared on migration */
 const LEGACY_PASS_KEY = "biometric_login_pass";
 const LEGACY_USER_KEY = "biometric_login_user";
+/** OEM biometric prompts that never settle must not block login forever. */
+const BIOMETRIC_PROMPT_MS = 45_000;
 
 export type BiometricLoginStatus = {
   hardwareAvailable: boolean;
@@ -103,9 +106,9 @@ export async function getBiometricLoginStatus(): Promise<BiometricLoginStatus> {
   try {
     await migrateLegacyBiometricPasswords();
     const [hardwareAvailable, enrolled, enabledFlag] = await Promise.all([
-      withTimeout(LocalAuthentication.hasHardwareAsync().catch(() => false), 2500, false, "hasHardwareAsync"),
-      withTimeout(LocalAuthentication.isEnrolledAsync().catch(() => false), 2500, false, "isEnrolledAsync"),
-      withTimeout(SecureStore.getItemAsync(ENABLED_KEY).catch(() => null), 2500, null, "biometric_enabled_flag")
+      withTimeout(LocalAuthentication.hasHardwareAsync().catch(() => false), STARTUP_TIMEOUTS.biometricLookupMs, false, "hasHardwareAsync"),
+      withTimeout(LocalAuthentication.isEnrolledAsync().catch(() => false), STARTUP_TIMEOUTS.biometricLookupMs, false, "isEnrolledAsync"),
+      withTimeout(SecureStore.getItemAsync(ENABLED_KEY).catch(() => null), STARTUP_TIMEOUTS.biometricLookupMs, null, "biometric_enabled_flag")
     ]);
 
     const status = {
@@ -208,11 +211,16 @@ export async function enableBiometricLoginWithVerification(): Promise<boolean> {
   biometricPromptInProgress = true;
   logBiometric("setup_started");
   try {
-    const auth = await LocalAuthentication.authenticateAsync({
-      promptMessage: "Confirm fingerprint to enable faster login",
-      cancelLabel: "Cancel",
-      disableDeviceFallback: false
-    });
+    const auth = await withTimeout(
+      LocalAuthentication.authenticateAsync({
+        promptMessage: "Confirm fingerprint to enable faster login",
+        cancelLabel: "Cancel",
+        disableDeviceFallback: false
+      }),
+      BIOMETRIC_PROMPT_MS,
+      { success: false, error: "timeout" } as LocalAuthentication.LocalAuthenticationResult,
+      "biometric_setup_prompt"
+    );
     if (!auth.success) {
       logBiometric("setup_failed", { reason: auth.error ?? "not_successful" });
       return false;
@@ -254,11 +262,16 @@ export async function unlockSessionWithBiometrics(): Promise<boolean> {
   unlockAttemptedThisLaunch = true;
   logBiometric("login_prompt_started");
   try {
-    const auth = await LocalAuthentication.authenticateAsync({
-      promptMessage: "Unlock your field workspace",
-      cancelLabel: "Cancel",
-      disableDeviceFallback: false
-    });
+    const auth = await withTimeout(
+      LocalAuthentication.authenticateAsync({
+        promptMessage: "Unlock your field workspace",
+        cancelLabel: "Cancel",
+        disableDeviceFallback: false
+      }),
+      BIOMETRIC_PROMPT_MS,
+      { success: false, error: "timeout" } as LocalAuthentication.LocalAuthenticationResult,
+      "biometric_login_prompt"
+    );
     if (!auth.success) {
       logBiometric("login_cancelled", { error: auth.error ?? "not_successful" });
       return false;

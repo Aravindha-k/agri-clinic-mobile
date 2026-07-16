@@ -44,6 +44,12 @@ import {
   patchStartupSnapshot
 } from "./src/utils/startupDiagnostics";
 import { applyAndroidChromeColors } from "./src/utils/androidChrome";
+import {
+  STARTUP_TIMEOUTS,
+  markFontsLoaded,
+  markStartupBegin,
+  markStartupFailed
+} from "./src/bootstrap/startupCoordinator";
 
 LogBox.ignoreLogs([
   /expo-notifications: Android Push notifications/i,
@@ -106,6 +112,7 @@ function CriticalStartupGate({
   const { isReady } = useAuth();
   const firedRef = useRef(false);
   const [timedOut, setTimedOut] = useState(false);
+  const [offlineContinued, setOfflineContinued] = useState(false);
 
   useEffect(() => {
     if (!fontsReady || !isReady) return;
@@ -121,15 +128,19 @@ function CriticalStartupGate({
     const timer = setTimeout(() => {
       setTimedOut(true);
       logStartup("auth_bootstrap_timeout", "critical startup watchdog");
+      markStartupFailed("critical_gate", "fonts_or_auth_timeout");
       if (!firedRef.current && onCriticalReady) {
         firedRef.current = true;
         onCriticalReady();
       }
-    }, 5500);
+    }, STARTUP_TIMEOUTS.providersModuleMs);
     return () => clearTimeout(timer);
   }, [fontsReady, isReady, onCriticalReady]);
 
-  return timedOut ? <StartupScreen startupTimedOut /> : null;
+  if (offlineContinued) return null;
+  return timedOut ? (
+    <StartupScreen startupTimedOut onContinueOffline={() => setOfflineContinued(true)} />
+  ) : null;
 }
 
 type Props = {
@@ -145,21 +156,28 @@ export default function AppProviders({ onShellReady, onCriticalReady }: Props) {
     Inter_700Bold,
     Inter_800ExtraBold
   });
-  const fontsReady = fontsLoaded || fontError != null;
+  const [fontsForced, setFontsForced] = useState(false);
+  const fontsReady = fontsLoaded || fontError != null || fontsForced;
 
   useEffect(() => {
+    markStartupBegin("AppProviders");
     logStartup("fonts_loading");
     onShellReady?.();
     const timer = setTimeout(() => {
-      if (!fontsLoaded) logStartup("fonts_timeout");
-    }, 4000);
+      if (!fontsLoaded && fontError == null) {
+        logStartup("fonts_timeout");
+        setFontsForced(true);
+        markFontsLoaded("forced_after_timeout");
+      }
+    }, STARTUP_TIMEOUTS.fontsMs);
     return () => clearTimeout(timer);
-  }, [fontsLoaded, onShellReady]);
+  }, [fontsLoaded, fontError, onShellReady]);
 
   useEffect(() => {
     if (fontsLoaded) {
       patchStartupSnapshot({ fontsLoaded: true });
       logStartup("fonts_ready");
+      markFontsLoaded();
       applyGlobalFonts();
     }
   }, [fontsLoaded]);

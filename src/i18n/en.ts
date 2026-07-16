@@ -33,9 +33,13 @@ export const en = {
   startup: {
     takingLonger: "Startup is taking longer",
     offlineSafeMessage:
-      "We could not finish the local startup check. Your saved offline work is safe on this device. Retry, or reset the local session to return to sign in.",
+      "We could not finish the local startup check. Your saved offline work is safe on this device. Retry, or continue offline with your saved session.",
     retrying: "Retrying…",
-    resetSession: "Reset local session"
+    resetSession: "Sign out",
+    continueOffline: "Continue Offline",
+    recoveryTitle: "Unable to finish startup",
+    recoveryBody:
+      "The app could not complete startup. Your offline data on this device is still safe. Retry the failed steps, continue offline, or sign out."
   },
   tabs: {
     today: "Today",

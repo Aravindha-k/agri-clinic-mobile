@@ -7,6 +7,7 @@ import { useAuth, type BootstrapIssue } from "../storage/AuthContext";
 import { API_BASE_URL } from "../api/config";
 import { getNetworkMessage, SERVER_MESSAGE } from "../utils/apiError";
 import { useI18n } from "../i18n/I18nContext";
+import { markContinueOffline, clearContinueOffline } from "../bootstrap/startupCoordinator";
 
 function issueCopy(issue: BootstrapIssue) {
   if (issue === "network") {
@@ -15,11 +16,25 @@ function issueCopy(issue: BootstrapIssue) {
   return { title: "Server unavailable", message: SERVER_MESSAGE };
 }
 
-/** Bootstrap error screen — manual retry when server validation fails (non-blocking at startup). */
-export function StartupScreen({ startupTimedOut = false }: { startupTimedOut?: boolean }) {
+/**
+ * Recoverable startup surface — Retry / Continue Offline / Sign Out.
+ * No stack traces. Diagnostics remain on the Diagnostics screen only.
+ */
+export function StartupScreen({
+  startupTimedOut = false,
+  onContinueOffline
+}: {
+  startupTimedOut?: boolean;
+  onContinueOffline?: () => void;
+}) {
   const { sessionValidating, bootstrapIssue, retryBootstrap, resetLocalSession } = useAuth();
   const { t } = useI18n();
   const [retrying, setRetrying] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+
+  if (dismissed) {
+    return null;
+  }
 
   if (!startupTimedOut && (sessionValidating || bootstrapIssue === "none")) {
     return (
@@ -31,11 +46,12 @@ export function StartupScreen({ startupTimedOut = false }: { startupTimedOut?: b
 
   const copy = startupTimedOut
     ? {
-        title: t("startup.takingLonger"),
-        message: t("startup.offlineSafeMessage")
+        title: t("startup.recoveryTitle"),
+        message: t("startup.recoveryBody")
       }
     : issueCopy(bootstrapIssue);
   const devApiHint = __DEV__ ? `\n\nAPI: ${API_BASE_URL}` : "";
+
   return (
     <View style={startupTimedOut ? styles.recovery : styles.wait}>
       <AppFallbackScreen
@@ -44,14 +60,21 @@ export function StartupScreen({ startupTimedOut = false }: { startupTimedOut?: b
         primaryLabel={retrying ? t("startup.retrying") : t("common.retry")}
         onPrimary={() => {
           if (retrying) return;
+          clearContinueOffline();
           setRetrying(true);
           void retryBootstrap()
             .catch(() => undefined)
             .finally(() => setRetrying(false));
         }}
-        secondaryLabel={t("startup.resetSession")}
+        secondaryLabel={t("startup.continueOffline")}
         onSecondary={() => {
-          void resetLocalSession("startup error screen").catch(() => undefined);
+          markContinueOffline("startup_recovery");
+          setDismissed(true);
+          onContinueOffline?.();
+        }}
+        tertiaryLabel={t("startup.resetSession")}
+        onTertiary={() => {
+          void resetLocalSession("startup recovery sign out").catch(() => undefined);
         }}
       />
     </View>

@@ -48,7 +48,20 @@ export type StartupPhase =
   | "splash_replay"
   | "splash_start"
   | "splash_end"
-  | "splash_timeout";
+  | "splash_timeout"
+  | "startup_begin"
+  | "fonts_loaded"
+  | "assets_loaded"
+  | "auth_restored"
+  | "bootstrap_begin"
+  | "bootstrap_success"
+  | "bootstrap_timeout"
+  | "bootstrap_failed"
+  | "duty_ready"
+  | "duty_hydration_timeout"
+  | "startup_complete"
+  | "startup_failed"
+  | "continue_offline";
 
 export type StartupSnapshot = {
   releaseMode: boolean;

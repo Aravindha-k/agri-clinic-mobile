@@ -1,4 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { AppState, type AppStateStatus } from "react-native";
+import NetInfo from "@react-native-community/netinfo";
 import { loginRequest, logoutRequest } from "../api/auth";
 import { Employee, getCurrentEmployee, isFieldEmployee } from "../api/employees";
 import { clearInflightRequests } from "../api/requestDedupe";
@@ -19,9 +21,17 @@ import { clearDutyBootstrapState, hydrateDutyFromBootstrap } from "../features/d
 import { isDeviceSessionConflict } from "./sessionConflict";
 import { logStartup, patchStartupSnapshot } from "../utils/startupDiagnostics";
 import { setActiveSyncUserId } from "../../mobile/lib/sync/queueOwnership";
+import {
+  STARTUP_TIMEOUTS,
+  markAuthRestored,
+  markBootstrapBegin,
+  markBootstrapFailed,
+  markBootstrapSuccess,
+  markBootstrapTimeout
+} from "../bootstrap/startupCoordinator";
 
 const FIELD_EMPLOYEE_ONLY_MESSAGE = "This app is only for field employees.";
-const BOOTSTRAP_TIMEOUT_MS = 12000;
+const BOOTSTRAP_TIMEOUT_MS = STARTUP_TIMEOUTS.bootstrapNetworkMs;
 
 export type BootstrapIssue = "none" | "network" | "server";
 
@@ -188,6 +198,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setSessionValidating(true);
       logStartup("auth_validate_background_start");
+      markBootstrapBegin("background_validate");
 
       let endedIssue: BootstrapIssue = "none";
 
@@ -228,11 +239,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await hydrateDutyFromBootstrap({ bootstrap, userId: profile.id });
           setBootstrapIssue("none");
           endedIssue = "none";
+          markBootstrapSuccess(`employee=${profile.id}`);
           logStartup("session_restored", `employee=${profile.id}`);
         } catch (err) {
           if (isStale()) return;
           if (isDeviceSessionConflict(err)) {
             return;
+          }
+          const timedOut =
+            err instanceof Error && /timed out/i.test(err.message);
+          if (timedOut) {
+            markBootstrapTimeout(err.message);
+          } else {
+            markBootstrapFailed(err instanceof Error ? err.message : "bootstrap_failed");
           }
           if (shouldForceReLoginOnBootstrap(err)) {
             await performLocalSignOut({
@@ -241,8 +260,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             });
             return;
           }
-          if (isRetriableAuthError(err)) {
-            const issue = isNetworkError(err) ? "network" : "server";
+          if (isRetriableAuthError(err) || timedOut) {
+            const issue = timedOut || isNetworkError(err) ? "network" : "server";
             await hydrateDutyFromBootstrap({
               bootstrap: null,
               userId: employee?.id ?? null,
@@ -317,6 +336,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       endedAuthenticated = true;
+      setIsAuthenticated(true);
       logStartup("session_restored", "token present — validating bootstrap");
     } catch (err) {
       setIsAuthenticated(false);
@@ -329,6 +349,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAuthLoading(false);
       setIsReady(true);
       bootstrapRunningRef.current = false;
+      markAuthRestored(`authenticated=${endedAuthenticated}`);
       patchStartupSnapshot({
         authLoading: false,
         isReady: true,
@@ -359,12 +380,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsReady((prev) => {
         if (prev) return prev;
         logStartup("auth_bootstrap_timeout", "AuthProvider hard ceiling — forcing isReady");
+        markAuthRestored("forced_after_timeout");
         setAuthLoading(false);
         return true;
       });
-    }, 6000);
+    }, STARTUP_TIMEOUTS.authLocalMs);
     return () => clearTimeout(timer);
   }, []);
+
+  /** Foreground: re-validate session / bootstrap if stale — do not recreate timers. */
+  useEffect(() => {
+    if (!isReady || !isAuthenticated) return;
+    const onAppState = (next: AppStateStatus) => {
+      if (next === "active") {
+        void validateSessionInBackground();
+      }
+    };
+    const sub = AppState.addEventListener("change", onAppState);
+    return () => sub.remove();
+  }, [isAuthenticated, isReady, validateSessionInBackground]);
+
+  /** Reconnect: validate auth → bootstrap (server wins). Duty/map/queues refresh elsewhere. */
+  useEffect(() => {
+    if (!isReady || !isAuthenticated) return;
+    let wasOffline = false;
+    return NetInfo.addEventListener((state) => {
+      const online = Boolean(state.isConnected && state.isInternetReachable !== false);
+      if (wasOffline && online) {
+        void validateSessionInBackground();
+      }
+      wasOffline = !online;
+    });
+  }, [isAuthenticated, isReady, validateSessionInBackground]);
 
   const retryBootstrap = useCallback(async () => {
     if (!isReady) {

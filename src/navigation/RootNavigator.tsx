@@ -32,6 +32,7 @@ import TrackingWorkspaceScreen from "../../mobile/app/tracking";
 import VisitDetailScreen from "../../mobile/app/visit/[id]";
 import { VisitFlowNavigator } from "./VisitFlowNavigator";
 import { logStartup, patchStartupSnapshot } from "../utils/startupDiagnostics";
+import { isStartupContinueOffline, markStartupComplete } from "../bootstrap/startupCoordinator";
 import { registerNavigateHome } from "./navigationRecovery";
 import { rootNavigationRef } from "./rootNavigationRef";
 import { NavigationErrorBoundary } from "../components/NavigationErrorBoundary";
@@ -181,6 +182,7 @@ function AppRoutes() {
     if (navLoggedRef.current === key) return;
     navLoggedRef.current = key;
     logStartup(phase, detail);
+    markStartupComplete(phase);
   }, []);
 
   useEffect(() => {
@@ -215,7 +217,9 @@ function AppRoutes() {
   }
 
   if (isAuthenticated) {
-    if (hydrationStatus === "idle" || hydrationStatus === "loading") {
+    const allowWithoutDuty =
+      isStartupContinueOffline() || hydrationStatus === "ready" || hydrationStatus === "error";
+    if (!allowWithoutDuty && (hydrationStatus === "idle" || hydrationStatus === "loading")) {
       return <LoadingState message="Loading workday..." />;
     }
     logNavOnce("nav_home");

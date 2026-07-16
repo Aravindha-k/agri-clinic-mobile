@@ -5,7 +5,7 @@ import { withTimeout } from "../utils/withTimeout";
 const ACCESS_TOKEN_KEY = "agri_clinic_access_token";
 const REFRESH_TOKEN_KEY = "agri_clinic_refresh_token";
 /** OEM Keystore can hang indefinitely — never block bootstrap. */
-const STORE_READ_MS = 2500;
+const STORE_READ_MS = 2500; // aligns with STARTUP_TIMEOUTS.secureStoreReadMs
 
 export type StoredTokens = {
   access: string;

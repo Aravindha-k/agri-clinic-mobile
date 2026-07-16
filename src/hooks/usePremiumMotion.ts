@@ -1,6 +1,8 @@
 import * as Battery from "expo-battery";
 import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Platform } from "react-native";
+import { withTimeout } from "../utils/withTimeout";
+import { STARTUP_TIMEOUTS } from "../bootstrap/startupCoordinator";
 
 export type PremiumMotionState = {
   /** Accessibility and power preferences have been resolved at least once. */
@@ -40,7 +42,12 @@ function buildMotionState(
 async function resolveMotionState(): Promise<PremiumMotionState> {
   let reduced = false;
   try {
-    reduced = await AccessibilityInfo.isReduceMotionEnabled();
+    reduced = await withTimeout(
+      AccessibilityInfo.isReduceMotionEnabled(),
+      STARTUP_TIMEOUTS.motionPreferenceMs,
+      false,
+      "reduce_motion"
+    );
   } catch {
     reduced = false;
   }
@@ -48,7 +55,12 @@ async function resolveMotionState(): Promise<PremiumMotionState> {
   let batterySaver = false;
   if (BATTERY_SUPPORTED) {
     try {
-      batterySaver = await Battery.isLowPowerModeEnabledAsync();
+      batterySaver = await withTimeout(
+        Battery.isLowPowerModeEnabledAsync(),
+        STARTUP_TIMEOUTS.motionPreferenceMs,
+        false,
+        "battery_saver"
+      );
     } catch {
       batterySaver = false;
     }

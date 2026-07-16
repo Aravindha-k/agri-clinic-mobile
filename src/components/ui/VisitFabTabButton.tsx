@@ -12,6 +12,7 @@ import { useI18n } from "../../i18n/I18nContext";
 import { navigateToVisitFlow } from "../../navigation/navigateVisitFlow";
 import { useActiveWorkday } from "../../hooks/useActiveWorkday";
 import { useTracking } from "../../storage/TrackingContext";
+import { useDuty } from "../../features/duty/store/DutyContext";
 import { requestGpsForFieldWork, requestVisitLocationAccess } from "../../utils/locationRequiredModal";
 import { hasValidMapCoords, parseMapCoord } from "../../utils/mapCoords";
 import { FAB_RISE_ABOVE_BAR, FAB_SIZE } from "../../theme/tabBar";
@@ -45,7 +46,8 @@ export function VisitFabTabButton({
   const { t } = useI18n();
   const [visitFlowOpen, setVisitFlowOpen] = useState(false);
   const { isActive } = useActiveWorkday();
-  const { startDay, busy, currentLocation } = useTracking();
+  const { busy, currentLocation } = useTracking();
+  const { startDuty } = useDuty();
   const workdaySheetRef = useRef<WorkdayRequiredSheetRef>(null);
   const visitGateRef = useRef(false);
   const fabRotate = useRef(new Animated.Value(0)).current;
@@ -164,14 +166,14 @@ export function VisitFabTabButton({
     try {
       const allowed = await requestGpsForFieldWork(gpsRequestOptions);
       if (!allowed) return;
-      const started = await startDay();
+      const started = await startDuty();
       if (!started) return;
       workdaySheetRef.current?.close();
       openNewVisit();
     } catch {
       /* keep sheet open for retry */
     }
-  }, [gpsRequestOptions, openNewVisit, startDay]);
+  }, [gpsRequestOptions, openNewVisit, startDuty]);
 
   const label = t("tabs.visitShort");
   const a11yLabel = accessibilityLabel ?? t("tabs.newVisit");

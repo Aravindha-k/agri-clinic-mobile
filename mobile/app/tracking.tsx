@@ -11,7 +11,6 @@ import {
   RefreshControl
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { API_BASE_URL, buildApiUrl } from "../../src/api/config";
 import { AppErrorBoundary } from "../../src/components/AppErrorBoundary";
 import { getExpoBuildUrl, shouldShowExpoGoDevWarning } from "../../src/utils/expoRuntime";
 import { logDayTabApi, logDayTabError, logDayTabOpen } from "../../src/utils/dayTabDiagnostics";
@@ -20,10 +19,8 @@ import { useTabBarBottomInset } from "../../src/hooks/useTabBarBottomInset";
 import { useI18n } from "../../src/i18n/I18nContext";
 import { useOfflineSync } from "../../src/storage/OfflineSyncContext";
 import { useTracking } from "../../src/storage/TrackingContext";
-import type { TrackingErrorSource } from "../../src/types/trackingError";
-import { ensureLocationForWorkdayStart } from "../../src/utils/workdayLocationGate";
+import { useDuty } from "../../src/features/duty/store/DutyContext";
 import { navigateMyLocation } from "../../src/navigation/rootNavigationRef";
-import { workdayStartGateCopy } from "../../src/utils/workdayStartCopy";
 import { autoFlushPendingGps } from "../lib/sync/offlineSyncManager";
 import { readPendingVisits } from "../lib/pendingVisitsQueue";
 import { isSameVisitLocalDay } from "../../src/utils/format";
@@ -38,12 +35,12 @@ import { ScreenLoader } from "../components/layout/ScreenLoader";
 import { useScreenEntrance } from "../hooks/useScreenEntrance";
 import {
   countVillagesFromVisitsToday,
-  fetchDashboard,
-  fetchWorkStatus
+  fetchDashboard
 } from "../lib/homeApi";
 import { formatDistanceKm, formatShortTime } from "../lib/format";
 import type { DashboardRecentVisit } from "../lib/types";
 import { Colors, FontSize, FontWeight, Layout, Spacing } from "../lib/theme";
+import { useDutyTimer } from "../../src/features/duty/hooks/useDutyTimer";
 
 function formatStartedTime(startedAt: string | null) {
   if (!startedAt) return null;
@@ -79,33 +76,17 @@ function TrackingWorkspaceScreenInner() {
   const tabInset = useTabBarBottomInset();
   const refreshControlProps = useRefreshControlProps();
   const {
-    isActive,
-    workdaySessionStatus,
-    workdaySessionHydrated,
-    workdayServerReconciled,
-    timerDisplay,
-    startedAt: trackingStartedAt,
     busy,
     error: trackingError,
-    errorSource: trackingErrorSource,
-    startDay,
-    endDay,
-    workday,
-    refreshTracking,
-    lastSyncTime,
-    pendingSyncCount,
-    cachedDistanceKm
+    pendingGpsCount,
+    refreshTrackingState
   } = useTracking();
+  const { currentDuty, dutyMap, refreshBootstrap, refreshDutyMap, endDuty } = useDuty();
+  const dutyTimer = useDutyTimer();
 
   const [refreshing, setRefreshing] = useState(false);
   const [ending, setEnding] = useState(false);
-  const [starting, setStarting] = useState(false);
-  const [startPhase, setStartPhase] = useState<"idle" | "location" | "starting">("idle");
-  const [gateError, setGateError] = useState<string | null>(null);
-  const [dismissedError, setDismissedError] = useState("");
-  const [dismissedErrorSource, setDismissedErrorSource] = useState<TrackingErrorSource | null>(null);
   const [distanceKm, setDistanceKm] = useState(0);
-  const [workdayId, setWorkdayId] = useState<number | undefined>();
   const [visitsToday, setVisitsToday] = useState(0);
   const [farmersCovered, setFarmersCovered] = useState(0);
   const [villagesCovered, setVillagesCovered] = useState(0);
@@ -113,46 +94,31 @@ function TrackingWorkspaceScreenInner() {
   const [summaryLoading, setSummaryLoading] = useState(true);
   const entranceTick = useScreenEntrance();
 
-  const startedAt = trackingStartedAt;
-
-  const resolvedWorkdayId = workdayId ?? workday?.workday_id;
+  const startedAt = currentDuty?.start_time ?? currentDuty?.started_at ?? null;
 
   const loadSummary = useCallback(async () => {
-    const workStatusUrl = buildApiUrl("mobile/work/status/", API_BASE_URL);
-    const dashboardUrl = buildApiUrl("mobile/dashboard/", API_BASE_URL);
-
     try {
-      const [workStatus, visits, dashboard] = await Promise.all([
-        fetchWorkStatus().catch((err) => {
-          logDayTabApi("work_status", workStatusUrl, false, err instanceof Error ? err.message : String(err));
-          return { is_active: isActive, distance_km: 0 };
+      const [mapSummary, visits, dashboard] = await Promise.all([
+        refreshDutyMap().catch((err) => {
+          logDayTabApi("duty_map", "tracking/duty/current/map/", false, err instanceof Error ? err.message : String(err));
+          return dutyMap;
         }),
         getHomeVisits({ pageSize: 100 }).catch((err) => {
           logDayTabError("visits", err);
           return { visits: [] };
         }),
         fetchDashboard().catch((err) => {
-          logDayTabApi("dashboard", dashboardUrl, false, err instanceof Error ? err.message : String(err));
+          logDayTabApi("dashboard", "mobile/dashboard/", false, err instanceof Error ? err.message : String(err));
           return null;
         })
       ]);
 
-      logDayTabApi(
-        "work_status",
-        workStatusUrl,
-        true,
-        `active=${workStatus.is_active} km=${workStatus.distance_km ?? 0}`
-      );
+      logDayTabApi("duty_map", "tracking/duty/current/map/", true, `points=${mapSummary?.routePoints.length ?? 0}`);
       if (dashboard) {
-        logDayTabApi("dashboard", dashboardUrl, true, `visits_today=${dashboard.visits_today ?? 0}`);
+        logDayTabApi("dashboard", "mobile/dashboard/", true, `visits_today=${dashboard.visits_today ?? 0}`);
       }
 
-      setDistanceKm(Number(workStatus.distance_km) || 0);
-      const nextWorkdayId =
-        "workday_id" in workStatus && typeof workStatus.workday_id === "number"
-          ? workStatus.workday_id
-          : workday?.workday_id;
-      setWorkdayId(nextWorkdayId);
+      setDistanceKm(Number(mapSummary?.distanceKm) || 0);
 
       const today = new Date();
       const todayVisits = (visits.visits ?? []).filter((v) => isSameVisitLocalDay(v, today));
@@ -194,7 +160,6 @@ function TrackingWorkspaceScreenInner() {
     } catch (err) {
       logDayTabError("loadSummary", err);
       setDistanceKm(0);
-      setWorkdayId(undefined);
       setVisitsToday(0);
       setFarmersCovered(0);
       setVillagesCovered(0);
@@ -202,52 +167,25 @@ function TrackingWorkspaceScreenInner() {
     } finally {
       setSummaryLoading(false);
     }
-  }, [isActive, workday?.workday_id]);
+  }, [dutyMap, refreshDutyMap]);
 
   useFocusEffect(
     useCallback(() => {
       logDayTabOpen();
       void autoFlushPendingGps();
       void loadSummary();
-      void refreshTracking().catch(() => undefined);
-    }, [loadSummary, refreshTracking])
+      void refreshTrackingState().catch(() => undefined);
+    }, [loadSummary, refreshTrackingState])
   );
 
   async function onRefresh() {
     setRefreshing(true);
-    await Promise.all([loadSummary(), refreshTracking().catch(() => undefined)]);
+    await Promise.all([
+      loadSummary(),
+      refreshTrackingState().catch(() => undefined),
+      refreshBootstrap({ force: true }).catch(() => undefined)
+    ]);
     setRefreshing(false);
-  }
-
-  async function handleStartWorkday() {
-    if (busy || starting) return;
-    setStarting(true);
-    setGateError(null);
-    setDismissedError("");
-    setStartPhase("location");
-    try {
-      const gate = await ensureLocationForWorkdayStart(workdayStartGateCopy(t));
-      if (!gate.ok) {
-        if (gate.reason === "services_cancelled") {
-          setGateError(t("workdayUx.servicesOffBody"));
-        } else if (gate.reason === "permission_required") {
-          setGateError(t("workdayUx.permissionBody"));
-        } else if (gate.reason === "permission_blocked") {
-          setGateError(t("workdayUx.permissionBlockedBody"));
-        } else if (gate.reason === "services_unavailable") {
-          setGateError(t("workdayUx.servicesResolutionUnavailable"));
-        }
-        return;
-      }
-      setStartPhase("starting");
-      const started = await startDay();
-      if (!started) return;
-      await refreshTracking().catch(() => undefined);
-      await loadSummary();
-    } finally {
-      setStarting(false);
-      setStartPhase("idle");
-    }
   }
 
   async function handleEndWorkday() {
@@ -261,8 +199,8 @@ function TrackingWorkspaceScreenInner() {
           void (async () => {
             setEnding(true);
             try {
-              await endDay();
-              await refreshTracking().catch(() => undefined);
+              await endDuty();
+              await refreshTrackingState().catch(() => undefined);
               await loadSummary();
             } finally {
               setEnding(false);
@@ -276,26 +214,12 @@ function TrackingWorkspaceScreenInner() {
   function openBuildApkPage() {
     void Linking.openURL(getExpoBuildUrl()).catch(() => undefined);
   }
-
-  const visibleTrackingError = (() => {
-    if (gateError) {
-      return { message: gateError, source: "start_workday" as const };
-    }
-    if (!trackingError) {
-      return null;
-    }
-    if (trackingError === dismissedError && trackingErrorSource === dismissedErrorSource) {
-      return null;
-    }
-    if (!isActive && trackingErrorSource && trackingErrorSource !== "start_workday") {
-      return null;
-    }
-    if (isActive && trackingErrorSource === "start_workday") {
-      return null;
-    }
-    return { message: trackingError, source: trackingErrorSource };
-  })();
-  const displayDistanceKm = distanceKm || cachedDistanceKm || 0;
+  const displayDistanceKm = distanceKm || Number(dutyMap?.distanceKm) || 0;
+  const workdayStatus = currentDuty?.is_active
+    ? "active"
+    : currentDuty?.ended_at || currentDuty?.end_time || currentDuty?.is_active === false
+      ? "completed"
+      : "not_started";
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
@@ -325,41 +249,36 @@ function TrackingWorkspaceScreenInner() {
 
         {shouldShowExpoGoDevWarning() ? <ExpoGoDevBanner onBuildApk={openBuildApkPage} /> : null}
 
-        <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
-          <WorkdayStartPanel
-            workdayStatus={workdaySessionStatus}
-            presentation="tracking"
-            hydrating={!workdaySessionHydrated || !workdayServerReconciled}
-            active={isActive || workdaySessionStatus === "completed"}
-            busy={busy}
-            starting={starting}
-            ending={ending}
-            startingLabel={
-              startPhase === "location"
-                ? t("workdayUx.gettingLocation")
-                : startPhase === "starting"
-                  ? t("workdayUx.startingWorkday")
-                  : null
-            }
-            error={visibleTrackingError?.message ?? null}
-            errorSource={visibleTrackingError?.source ?? null}
-            onDismissError={() => {
-              setGateError(null);
-              setDismissedError(trackingError || "");
-              setDismissedErrorSource(trackingErrorSource);
-            }}
-            timerDisplay={timerDisplay}
-            startedAtLabel={formatStartedTime(startedAt)}
-            distanceKm={displayDistanceKm}
-            visitsToday={visitsToday}
-            pendingSync={pendingSyncCount + pendingCount}
-            showVisitActions={false}
-            onStart={() => void handleStartWorkday()}
-            onEnd={isActive ? () => void handleEndWorkday() : undefined}
-            onRetryStart={() => void handleStartWorkday()}
-            onMyRoute={() => navigateMyLocation()}
-          />
-        </FadeInSection>
+        {currentDuty ? (
+          <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
+            <WorkdayStartPanel
+              workdayStatus={workdayStatus as any}
+              presentation="tracking"
+              hydrating={false}
+              active
+              busy={busy}
+              ending={ending}
+              error={trackingError || null}
+              errorSource={trackingError ? "start_workday" : null}
+              timerDisplay={dutyTimer.elapsedDisplay}
+              startedAtLabel={formatStartedTime(startedAt)}
+              distanceKm={displayDistanceKm}
+              visitsToday={visitsToday}
+              pendingSync={pendingGpsCount + pendingCount}
+              showVisitActions={false}
+              onStart={() => undefined}
+              onEnd={currentDuty.is_active ? () => void handleEndWorkday() : undefined}
+              onMyRoute={() => navigateMyLocation()}
+            />
+          </FadeInSection>
+        ) : (
+          <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>{t("myLocation.empty.noWorkday")}</Text>
+              <Text style={styles.emptyBody}>{t("daySummary.reflectSubtitle")}</Text>
+            </View>
+          </FadeInSection>
+        )}
 
         {summaryLoading ? (
           <ScreenLoader message={t("common.loading")} />
@@ -400,11 +319,10 @@ function TrackingWorkspaceScreenInner() {
           <DaySummaryRouteCard
           title={t("daySummary.routeSummary")}
           distanceLabel={t("daySummary.totalRouteDistance")}
-          distanceValue={`${formatDistanceKm(distanceKm)} km`}
-          workdayId={resolvedWorkdayId}
-          dutySessionId={workday?.duty_session_id}
-          serverStart={workday}
-          refreshToken={lastSyncTime}
+          distanceValue={`${formatDistanceKm(displayDistanceKm)} km`}
+          workdayId={currentDuty?.workday_id}
+          dutySessionId={currentDuty?.duty_session_id}
+          refreshToken={dutyMap?.raw ? JSON.stringify(dutyMap.raw).slice(0, 32) : null}
           onPress={() => navigateMyLocation()}
         />
         </FadeInSection>
@@ -449,6 +367,22 @@ const styles = StyleSheet.create({
   },
   content: {
     gap: 0
+  },
+  emptyState: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    marginHorizontal: Spacing.lg,
+    padding: Spacing.lg
+  },
+  emptyTitle: {
+    color: Colors.text1,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold
+  },
+  emptyBody: {
+    color: Colors.text3,
+    fontSize: FontSize.xs,
+    marginTop: 6
   },
   expoDevBanner: {
     backgroundColor: Colors.amberBg,

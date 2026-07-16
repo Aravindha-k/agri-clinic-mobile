@@ -7,6 +7,7 @@ import { useI18n } from "../../../src/i18n/I18nContext";
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
 import { useMasterData } from "../../../src/storage/MasterDataContext";
 import { useTracking } from "../../../src/storage/TrackingContext";
+import { useDuty } from "../../../src/features/duty/store/DutyContext";
 import { getForegroundLocation } from "../../../src/utils/location";
 import { buildSubmittedVisitSummary } from "../../../src/types/submittedVisitSummary";
 import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal";
@@ -63,7 +64,8 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
   const replayKey = useVisitEntranceKey();
   const online = useConnectivityOnline();
   const { bumpAfterVisitChange } = useFieldDataRefresh();
-  const { isActive, startDay, busy: workdayBusy } = useTracking();
+  const { busy: workdayBusy } = useTracking();
+  const { currentDuty, startDuty, refreshCurrentDuty, refreshDutyMap } = useDuty();
   const setGpsCoords = useVisitFormStore((s) => s.setGpsCoords);
 
   const submitInFlightRef = useRef(false);
@@ -120,8 +122,8 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
     setSubmitHint("");
 
     try {
-      if (!isActive) {
-        const started = await startDay();
+      if (!currentDuty?.is_active) {
+        const started = await startDuty();
         if (!started) {
           setSubmitHint(t("visitFlow.workdayFirstBody"));
           return;
@@ -202,6 +204,10 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
           localSyncId
         });
       }
+      await Promise.all([
+        refreshCurrentDuty().catch(() => undefined),
+        refreshDutyMap().catch(() => undefined)
+      ]);
       bumpAfterVisitChange();
       const summary = buildSubmittedVisitSummary({
         visitId: visit.id,

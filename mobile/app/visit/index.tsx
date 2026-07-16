@@ -7,6 +7,7 @@ import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useMasterData } from "../../../src/storage/MasterDataContext";
 import { useTracking } from "../../../src/storage/TrackingContext";
+import { useDuty } from "../../../src/features/duty/store/DutyContext";
 import { loadRevisitPrefill } from "../../../src/utils/farmerPrefill";
 import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal";
 import {
@@ -28,7 +29,8 @@ export default function VisitFlowShell() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { districts, villages } = useMasterData();
-  const { isActive, startDay, busy: workdayBusy } = useTracking();
+  const { busy: workdayBusy } = useTracking();
+  const { currentDuty, startDuty } = useDuty();
   const workdaySheetRef = useRef<WorkdayRequiredSheetRef>(null);
   const dutyGateShown = useRef(false);
   const step = useVisitFormStore((s) => s.step);
@@ -89,8 +91,8 @@ export default function VisitFlowShell() {
     const stub: Farmer = { id: Number(farmerId), name: route.params.prefill.farmer_name || "" };
 
     void (async () => {
-      if (!isActive) {
-        const started = await startDay();
+      if (!currentDuty?.is_active) {
+        const started = await startDuty();
         if (!started) {
           fastRevisitStarted.current = false;
           navigation.setParams({ fastRevisit: undefined });
@@ -137,15 +139,15 @@ export default function VisitFlowShell() {
     setStep,
     t,
     villages,
-    isActive,
-    startDay
+    currentDuty?.is_active,
+    startDuty
   ]);
 
   useEffect(() => {
-    if (isActive || dutyGateShown.current || route.params?.fastRevisit) return;
+    if (currentDuty?.is_active || dutyGateShown.current || route.params?.fastRevisit) return;
     dutyGateShown.current = true;
     workdaySheetRef.current?.open();
-  }, [isActive, route.params?.fastRevisit]);
+  }, [currentDuty?.is_active, route.params?.fastRevisit]);
 
   const entranceTick = useScreenEntrance();
   const entranceKey = `${entranceTick}-${displayedStep}`;
@@ -217,7 +219,7 @@ export default function VisitFlowShell() {
         ref={workdaySheetRef}
         busy={workdayBusy}
         onStart={async () => {
-          const started = await startDay();
+          const started = await startDuty();
           if (started) {
             workdaySheetRef.current?.close();
           }

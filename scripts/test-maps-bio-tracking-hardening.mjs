@@ -82,17 +82,13 @@ test("Password login never persists a plaintext password", () => {
   assert.doesNotMatch(bio, /AsyncStorage/);
 });
 
-test("Background-location lifecycle keys off primitive workday id, not callbacks", () => {
+test("Tracking context reacts to DutyContext and exposes bridge controls", () => {
   const ctx = read("src/storage/TrackingContext.tsx");
-  // Stable refs exist for the tracking callbacks.
-  assert.match(ctx, /const resumeTrackingRef = useRef\(resumeActiveWorkdayTracking\);/);
-  assert.match(ctx, /const stopAllTrackingLoopsRef = useRef\(stopAllTrackingLoops\);/);
-  // Active-workday effect depends only on the primitive id.
-  assert.match(ctx, /void resumeTrackingRef\.current\(\);\s*\n\s*return \(\) => stopAllTrackingLoopsRef\.current\(\);\s*\n\s*\}, \[activeWorkdayId\]\);/);
-  // Battery-saver effect only cycles tracking when the setting actually changes.
-  assert.match(ctx, /const prevBatterySaverRef = useRef\(trackingBatterySaver\);/);
-  assert.match(ctx, /const changed = prevBatterySaverRef\.current !== trackingBatterySaver;/);
-  assert.match(ctx, /if \(!activeWorkdayId \|\| !changed\) \{/);
+  assert.match(ctx, /const \{ currentDuty, startDuty, endDuty \} = duty;/);
+  assert.match(ctx, /trackingBridge = \{\s*start: startTracking,\s*stop: stopTracking,\s*flush: flushGpsQueue\s*\};/);
+  assert.match(ctx, /if \(currentDuty\?\.is_active\) \{\s*void startTracking\(\);/);
+  assert.match(ctx, /\} else \{\s*void stopTracking\(\);/);
+  assert.match(ctx, /setTrackingBatterySaverEnabled\(trackingBatterySaver\);/);
 });
 
 test("Background start is idempotent (guards on already-started before starting)", () => {
@@ -102,8 +98,10 @@ test("Background start is idempotent (guards on already-started before starting)
   assert.match(svc, /return \{ ok: true, alreadyRunning: true \};/);
 });
 
-test("Elapsed workday timer cannot be duplicated", () => {
+test("Duty timer lives in the duty feature, not TrackingContext", () => {
   const ctx = read("src/storage/TrackingContext.tsx");
-  const loop = ctx.slice(ctx.indexOf("const startElapsedLoop = useCallback("));
-  assert.match(loop.slice(0, 200), /if \(elapsedIntervalRef\.current\) \{\s*\n\s*return;/);
+  const dutyTimer = read("src/features/duty/hooks/useDutyTimer.ts");
+  assert.doesNotMatch(ctx, /elapsedIntervalRef/);
+  assert.match(dutyTimer, /const id = setInterval\(\(\) => setNow\(Date\.now\(\)\), 1000\);/);
+  assert.match(dutyTimer, /const authoritativeNow = completed && endedMs != null \? endedMs : now \+ serverTimeOffsetMs;/);
 });

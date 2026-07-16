@@ -9,10 +9,12 @@ import MainTabBar from "../../mobile/components/navigation/MainTabBar";
 import { VisitFabTabButton } from "../components/ui/VisitFabTabButton";
 import { useI18n } from "../i18n/I18nContext";
 import { useAuth } from "../storage/AuthContext";
+import { useDuty } from "../features/duty/store/DutyContext";
 import { useTheme } from "../theme";
 import { Colors } from "../../mobile/lib/theme";
 import { useSyncStore } from "../../mobile/lib/store/syncStore";
 import { AuthStartScreen } from "../screens/AuthStartScreen";
+import { LoadingState } from "../components/LoadingState";
 import HomeTabScreen from "../../mobile/app/(tabs)/index";
 import WorkTabScreen from "../../mobile/app/(tabs)/work";
 import FarmerProfileScreen from "../../mobile/app/farmer/[id]";
@@ -170,6 +172,7 @@ function MainTabs() {
 
 function AppRoutes() {
   const { isReady, isAuthenticated } = useAuth();
+  const { hydrationStatus } = useDuty();
   const [forceLogin, setForceLogin] = useState(false);
   const navLoggedRef = useRef<string | null>(null);
 
@@ -194,8 +197,7 @@ function AppRoutes() {
   }, [forceLogin, isAuthenticated]);
 
   if (!isReady) {
-    // Match splash exit wash — never spin forever; AuthProvider hard-ceiling forces isReady ≤6s.
-    return <View style={{ flex: 1, backgroundColor: Colors.bg }} />;
+    return <LoadingState message="Loading session..." />;
   }
 
   if (forceLogin) {
@@ -213,6 +215,9 @@ function AppRoutes() {
   }
 
   if (isAuthenticated) {
+    if (hydrationStatus === "idle" || hydrationStatus === "loading") {
+      return <LoadingState message="Loading workday..." />;
+    }
     logNavOnce("nav_home");
     return (
       <NavigationErrorBoundary>

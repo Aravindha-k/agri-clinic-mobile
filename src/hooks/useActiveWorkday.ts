@@ -1,9 +1,12 @@
 import { useCallback } from "react";
-import { useTracking } from "../storage/TrackingContext";
+import { useDuty } from "../features/duty/store/DutyContext";
 
 /** Blocks actions that require an active workday (visits, tracking sync). */
 export function useActiveWorkday() {
-  const { isActive, requireActiveWorkday } = useTracking();
+  const { currentDuty } = useDuty();
+  const isActive = Boolean(currentDuty?.is_active);
+
+  const requireActiveWorkday = useCallback(() => isActive, [isActive]);
 
   const guardActiveWorkday = useCallback(() => requireActiveWorkday(), [requireActiveWorkday]);
 

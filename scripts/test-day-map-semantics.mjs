@@ -15,15 +15,16 @@ test("Day map renders markers without movement polyline and never follows the ca
   assert.match(screen, /locationGranted=\{locationGranted\}/);
 });
 
-test("Day card loads fresh paginated markers and exposes button semantics", () => {
+test("Day card renders only canonical duty-map data and exposes button semantics", () => {
   const card = read("mobile/components/daySummary/DaySummaryRouteCard.tsx");
-  const cache = read("src/utils/visitsCache.ts");
-  assert.match(card, /fetchVisitsForMapMarkers\(\{\s*pageSize:\s*100,\s*maxPages:\s*10/);
+  assert.match(card, /const \{ dutyMap \} = useDuty\(\);/);
+  assert.doesNotMatch(card, /fetchVisitsForMapMarkers/);
+  assert.doesNotMatch(card, /readPendingVisits/);
+  assert.doesNotMatch(card, /readPendingGpsBuffer/);
   assert.match(card, /accessibilityRole="button"/);
   assert.match(card, /accessibilityLabel=/);
-  assert.match(cache, /export async function fetchVisitsForMapMarkers/);
-  assert.match(cache, /for \(let pageIndex = 0; pageIndex < maxPages; pageIndex \+= 1\)/);
-  assert.match(cache, /nextUrl\s*\?\s*\{\s*nextUrl\s*\}/);
+  assert.match(card, /DEFAULT_MAP_REGION/);
+  assert.match(card, /fitCoordinates\.length \? fitCoordinates : undefined/);
 });
 
 test("Day start prefers explicit server coordinates and only then local queue", () => {

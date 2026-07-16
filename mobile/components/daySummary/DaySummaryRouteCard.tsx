@@ -1,27 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { FieldMapView } from "../../../src/components/map/FieldMapView";
+import type { MapPin } from "../../../src/components/map/FieldMapView.types";
+import { useDuty } from "../../../src/features/duty/store/DutyContext";
 import { useI18n } from "../../../src/i18n/I18nContext";
-import { readPendingGpsBuffer } from "../../../mobile/lib/gps/trackingService";
-import { readPendingVisits } from "../../lib/pendingVisitsQueue";
-import {
-  buildDayMarkerFitCoords,
-  buildDayRouteMarkers,
-  extractWorkdayStartPoint
-} from "../../../src/utils/dayRouteMap";
-import { logDayTabError } from "../../../src/utils/dayTabDiagnostics";
-import { isSameVisitLocalDay } from "../../../src/utils/format";
-import { fitMapRegion } from "../../../src/utils/mapRegion";
-import { visitRowFromApi, type VisitMapPoint } from "../../../src/utils/visitMapFlow";
-import { fetchVisitsForMapMarkers } from "../../../src/utils/visitsCache";
+import { DEFAULT_MAP_REGION, fitMapRegion } from "../../../src/utils/mapRegion";
 import { Colors, FontSize, FontWeight, Spacing } from "../../lib/theme";
 import { FlatCard } from "../layout/FlatCard";
 import { SectionHeader } from "../ui/SectionHeader";
 
 const MAP_HEIGHT = 132;
-const VISITS_REFRESH_MS = 60_000;
 
 type Props = {
   title: string;
@@ -43,133 +32,59 @@ export function DaySummaryRouteCard({
   distanceLabel,
   distanceValue,
   workdayId,
-  dutySessionId,
-  serverStart,
-  refreshToken,
   onPress
 }: Props) {
   const { t } = useI18n();
-  const mountedRef = useRef(true);
+  const { dutyMap } = useDuty();
   const [previewWidth, setPreviewWidth] = useState(0);
-  const [loading, setLoading] = useState(Boolean(workdayId));
-  const [visitsToday, setVisitsToday] = useState<VisitMapPoint[]>([]);
-  const [pendingTrackTick, setPendingTrackTick] = useState(0);
-
-  const pendingPoints = useMemo(() => {
-    void pendingTrackTick;
-    if (!workdayId) return [];
-    return readPendingGpsBuffer();
-  }, [pendingTrackTick, workdayId]);
-
-  const startPoint = useMemo(
-    () =>
-      workdayId
-        ? extractWorkdayStartPoint({
-            serverStart,
-            pendingPoints,
-            workdayId,
-            dutySessionId
-          })
-        : null,
-    [dutySessionId, pendingPoints, serverStart, workdayId]
-  );
+  const loading = false;
 
   const fitCoordinates = useMemo(
-    () =>
-      buildDayMarkerFitCoords({
-        startPoint,
-        visits: visitsToday
-      }),
-    [startPoint, visitsToday]
+    () => (dutyMap?.bounds?.length ? dutyMap.bounds : []),
+    [dutyMap?.bounds]
   );
 
   const markers = useMemo(
     () =>
-      buildDayRouteMarkers({
-        startPoint,
-        visits: visitsToday,
-        startLabel: t("myLocation.legendRouteStart"),
-        startDescription: t("myLocation.workStartHint")
-      }),
-    [startPoint, t, visitsToday]
+      [
+        dutyMap?.startMarker
+          ? {
+              id: "route-start",
+              lat: dutyMap.startMarker.latitude,
+              lng: dutyMap.startMarker.longitude,
+              title: t("myLocation.legendRouteStart"),
+              description: t("myLocation.workStartHint"),
+              kind: "route_start" as const
+            }
+          : null,
+        ...(dutyMap?.visitMarkers ?? []),
+        dutyMap?.endMarker
+          ? {
+              id: "route-end",
+              lat: dutyMap.endMarker.latitude,
+              lng: dutyMap.endMarker.longitude,
+              title: "Work end",
+              kind: "route_end" as const
+            }
+          : null,
+        dutyMap?.currentLiveLocation
+          ? {
+              id: "current-live",
+              lat: dutyMap.currentLiveLocation.latitude,
+              lng: dutyMap.currentLiveLocation.longitude,
+              title: "Current location",
+              kind: "current" as const
+            }
+          : null
+      ].filter((marker): marker is MapPin => marker != null),
+    [dutyMap, t]
   );
 
   const mapRegion = useMemo(() => {
-    if (fitCoordinates.length === 0) return undefined;
+    if (fitCoordinates.length === 0) return DEFAULT_MAP_REGION;
     return fitMapRegion(fitCoordinates.map((p) => ({ lat: p.latitude, lng: p.longitude })));
   }, [fitCoordinates]);
-
-  const loadDayRoute = useCallback(async () => {
-    if (!workdayId) {
-      setVisitsToday([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    try {
-      const [freshVisits, pendingVisits] = await Promise.all([
-        fetchVisitsForMapMarkers({ pageSize: 100, maxPages: 10, dateFilter: "today" }),
-        readPendingVisits().catch(() => [])
-      ]);
-      if (!mountedRef.current) return;
-
-      const today = new Date();
-      const rows = freshVisits
-        .filter((v) => isSameVisitLocalDay(v, today))
-        .map(visitRowFromApi)
-        .filter((row): row is VisitMapPoint => row != null);
-      const queuedRows = pendingVisits
-        .filter((row) => isSameVisitLocalDay({ created_at: row.createdAt }, today))
-        .map((row) =>
-          visitRowFromApi({
-            id: row.local_sync_id,
-            latitude: row.values.latitude,
-            longitude: row.values.longitude,
-            farmer_name: row.values.farmer_name,
-            village_name: row.values.village,
-            visit_date: row.values.visit_date,
-            created_at: row.createdAt
-          })
-        )
-        .filter((row): row is VisitMapPoint => row != null);
-
-      setVisitsToday([...rows, ...queuedRows]);
-      setPendingTrackTick((tick) => tick + 1);
-    } catch (err) {
-      logDayTabError("day_route_visits", err);
-      if (mountedRef.current) {
-        setVisitsToday([]);
-      }
-    } finally {
-      if (mountedRef.current) setLoading(false);
-    }
-  }, [workdayId]);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    void loadDayRoute();
-  }, [loadDayRoute, refreshToken]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void loadDayRoute();
-    }, [loadDayRoute])
-  );
-
-  useEffect(() => {
-    if (!workdayId) return;
-    const timer = setInterval(() => void loadDayRoute(), VISITS_REFRESH_MS);
-    return () => clearInterval(timer);
-  }, [loadDayRoute, workdayId]);
-
-  const hasMapContent = fitCoordinates.length > 0;
-  const showMap = !loading && hasMapContent && mapRegion && previewWidth > 0;
+  const showMap = !loading && previewWidth > 0;
 
   return (
     <View style={styles.section}>
@@ -201,7 +116,8 @@ export function DaySummaryRouteCard({
                 width={previewWidth}
                 region={mapRegion}
                 markers={markers}
-                fitCoordinates={fitCoordinates}
+                route={dutyMap?.routePoints}
+                fitCoordinates={fitCoordinates.length ? fitCoordinates : undefined}
                 fitEdgePadding={{ top: 28, right: 28, bottom: 28, left: 28 }}
                 showsUserLocation={false}
                 locationGranted={false}

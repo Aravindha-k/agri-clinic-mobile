@@ -14,11 +14,14 @@ import { runPreSignOutHandlers } from "./preSignOut";
 import { getAccessToken, saveTokens, clearTokens, type StoredTokens } from "./tokenStorage";
 import { canUseBiometricLogin } from "./biometricLoginStorage";
 import { ApiRequestError, isAuthExpiredError, isNetworkError, isServerError } from "../utils/apiError";
+import { fetchMobileBootstrap } from "../features/duty/api/mobileBootstrapApi";
+import { clearDutyBootstrapState, hydrateDutyFromBootstrap } from "../features/duty/store/DutyContext";
 import { isDeviceSessionConflict } from "./sessionConflict";
 import { logStartup, patchStartupSnapshot } from "../utils/startupDiagnostics";
 import { setActiveSyncUserId } from "../../mobile/lib/sync/queueOwnership";
 
 const FIELD_EMPLOYEE_ONLY_MESSAGE = "This app is only for field employees.";
+const BOOTSTRAP_TIMEOUT_MS = 12000;
 
 export type BootstrapIssue = "none" | "network" | "server";
 
@@ -62,6 +65,20 @@ function shouldForceReLoginOnBootstrap(err: unknown): boolean {
   return false;
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isReady, setIsReady] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
@@ -88,6 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await clearTokens();
     await clearDeviceSessionId();
     await clearMasterDataCache().catch(() => undefined);
+    await clearDutyBootstrapState({ userId: employee?.id ?? null, preserveCache: false }).catch(() => undefined);
     clearInflightRequests();
     resetApiTelemetry();
     setEmployee(null);
@@ -104,7 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (options?.notice) {
       setLoginNotice(options.notice);
     }
-  }, [invalidateBootstrap]);
+  }, [employee?.id, invalidateBootstrap]);
 
   const refreshUser = useCallback(async () => {
     const token = await getAccessToken();
@@ -190,7 +208,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         try {
-          const profile = await getCurrentEmployee();
+          const bootstrap = await withTimeout(
+            fetchMobileBootstrap(),
+            BOOTSTRAP_TIMEOUT_MS,
+            "Mobile bootstrap timed out."
+          );
+          const profile = bootstrap.user ?? (await getCurrentEmployee());
           if (isStale()) return;
           if (!isFieldEmployee(profile)) {
             try {
@@ -202,6 +225,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           setEmployee(profile);
           setActiveSyncUserId(profile.id);
+          await hydrateDutyFromBootstrap({ bootstrap, userId: profile.id });
           setBootstrapIssue("none");
           endedIssue = "none";
           logStartup("session_restored", `employee=${profile.id}`);
@@ -219,6 +243,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           if (isRetriableAuthError(err)) {
             const issue = isNetworkError(err) ? "network" : "server";
+            await hydrateDutyFromBootstrap({
+              bootstrap: null,
+              userId: employee?.id ?? null,
+              error: err
+            }).catch(() => undefined);
             setBootstrapIssue(issue);
             endedIssue = issue;
             return;
@@ -241,7 +270,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         settleValidation();
       }
     },
-    [performLocalSignOut]
+    [employee?.id, performLocalSignOut]
   );
 
   const runFastLocalBootstrap = useCallback(async () => {
@@ -287,9 +316,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      setIsAuthenticated(true);
       endedAuthenticated = true;
-      logStartup("session_restored", "token present — home unlocked");
+      logStartup("session_restored", "token present — validating bootstrap");
     } catch (err) {
       setIsAuthenticated(false);
       endedAuthenticated = false;
@@ -362,7 +390,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const profile = await getCurrentEmployee();
+      const bootstrap = await withTimeout(
+        fetchMobileBootstrap(),
+        BOOTSTRAP_TIMEOUT_MS,
+        "Mobile bootstrap timed out."
+      );
+      const profile = bootstrap.user ?? (await getCurrentEmployee());
       if (!isFieldEmployee(profile)) {
         try {
           await logoutRequest();
@@ -373,11 +406,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setEmployee(profile);
       setActiveSyncUserId(profile.id);
+      await hydrateDutyFromBootstrap({ bootstrap, userId: profile.id });
       setBootstrapIssue("none");
       setIsAuthenticated(true);
       setIsReady(true);
     } catch (err) {
       if (isRetriableAuthError(err)) {
+        await hydrateDutyFromBootstrap({
+          bootstrap: null,
+          userId: employee?.id ?? null,
+          error: err
+        }).catch(() => undefined);
         setIsAuthenticated(true);
         setBootstrapIssue(isNetworkError(err) ? "network" : "server");
         setIsReady(true);
@@ -385,7 +424,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       throw err;
     }
-  }, [performLocalSignOut]);
+  }, [employee?.id, performLocalSignOut]);
 
   const signIn = useCallback(
     async (username: string, password: string) => {

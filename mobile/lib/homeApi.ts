@@ -281,41 +281,17 @@ export async function fetchDashboard(options?: { force?: boolean }): Promise<Das
 }
 
 export async function fetchWorkStatus(): Promise<MobileWorkStatus> {
-  try {
-    const data = await apiClient<Record<string, unknown>>("mobile/work/status/", { source: "HomeDashboard" });
-    const startedAtSource = {
-      started_at:
-        typeof data.started_at === "string"
-          ? data.started_at
-          : typeof data.start_time === "string"
-            ? data.start_time
-            : null,
-      start_time: typeof data.start_time === "string" ? data.start_time : null,
-      date: typeof data.date === "string" ? data.date : null
-    };
+  const result = await fetchCurrentWorkday();
+  if (result.kind === "active") {
+    const w = result.workday;
     return {
-      is_active: Boolean(data.is_active ?? data.active),
-      started_at: resolveWorkdayStartedAt(startedAtSource),
-      distance_km: typeof data.distance_km === "number" ? data.distance_km : Number(data.distance_km) || 0,
-      route_points:
-        typeof data.route_points === "number"
-          ? data.route_points
-          : Number(data.route_points ?? data.points_today ?? data.gps_points ?? 0) || 0,
-      workday_id: typeof data.workday_id === "number" ? data.workday_id : undefined
+      is_active: true,
+      started_at: resolveWorkdayStartedAt(w),
+      distance_km: 0,
+      workday_id: w.workday_id ?? w.id
     };
-  } catch {
-    const result = await fetchCurrentWorkday();
-    if (result.kind === "active") {
-      const w = result.workday;
-      return {
-        is_active: true,
-        started_at: resolveWorkdayStartedAt(w),
-        distance_km: 0,
-        workday_id: w.workday_id ?? w.id
-      };
-    }
-    return { is_active: false };
   }
+  return { is_active: false };
 }
 
 export async function fetchUnreadNotificationCount(fallback = 0): Promise<number> {
@@ -332,13 +308,6 @@ export async function fetchUnreadNotificationCount(fallback = 0): Promise<number
 }
 
 export async function postStartWorkday(coords: { latitude: number; longitude: number; accuracy?: number | null }) {
-  return apiClient("mobile/work/start/", {
-    method: "POST",
-    body: JSON.stringify({
-      latitude: coords.latitude,
-      longitude: coords.longitude,
-      accuracy: coords.accuracy ?? undefined
-    }),
-    source: "HomeDashboard"
-  });
+  const { startDutySession } = await import("../../src/api/tracking");
+  return startDutySession(coords);
 }

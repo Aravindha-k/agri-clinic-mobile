@@ -12,6 +12,7 @@ import { FAB_RISE_ABOVE_BAR, FAB_SIZE, TAB_BAR_CONTENT_HEIGHT } from "../../them
 import { useGpsWorkGuard } from "../../hooks/useGpsWorkGuard";
 import { useActiveWorkday } from "../../hooks/useActiveWorkday";
 import { useTracking } from "../../storage/TrackingContext";
+import { useDuty } from "../../features/duty/store/DutyContext";
 import { useSyncStore } from "../../../mobile/lib/store/syncStore";
 import { useI18n } from "../../i18n/I18nContext";
 
@@ -39,7 +40,8 @@ export function BottomNav({ state, descriptors, navigation }: BottomTabBarProps)
   const safeBottom = Math.max(insets.bottom, 0);
   const { canRunWorkAction } = useGpsWorkGuard();
   const { isActive } = useActiveWorkday();
-  const { startDay, busy } = useTracking();
+  const { busy } = useTracking();
+  const { startDuty } = useDuty();
   const pendingVisitsCount = useSyncStore((state) => state.pendingVisitsCount);
   const unreadNotifCount = useSyncStore((state) => state.unreadNotifCount);
   const workdaySheetRef = useRef<WorkdayRequiredSheetRef>(null);
@@ -58,11 +60,11 @@ export function BottomNav({ state, descriptors, navigation }: BottomTabBarProps)
   }, [canRunWorkAction, isActive, navigateToNewVisit]);
 
   const handleStartWorkdayFromSheet = useCallback(async () => {
-    const started = await startDay();
+    const started = await startDuty();
     if (!started) return;
     workdaySheetRef.current?.close();
     navigateToNewVisit();
-  }, [navigateToNewVisit, startDay]);
+  }, [navigateToNewVisit, startDuty]);
 
   return (
     <View

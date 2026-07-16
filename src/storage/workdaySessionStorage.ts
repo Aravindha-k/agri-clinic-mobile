@@ -157,52 +157,7 @@ export async function readCachedActiveWorkday(
         return null;
       }
     }
-
-    const fromLegacy = await readRawCache(LEGACY_CACHE_KEY);
-    if (fromLegacy) {
-      const decision = legacyWorkdayMigrationDecision(resolvedUserId, fromLegacy.user_id);
-      if (decision === "reject") {
-        if (fromLegacy.user_id == null) {
-          await clearLegacyWorkdayKeys();
-        }
-        return null;
-      }
-      if (decision === "migrate") {
-        const migrated = { ...fromLegacy, user_id: resolvedUserId! };
-        await saveCachedActiveWorkday(migrated);
-        return migrated;
-      }
-      return fromLegacy;
-    }
-
-    const [idRaw, startedRaw, ownerRaw] = await Promise.all([
-      SecureStore.getItemAsync(LEGACY_ID_KEY),
-      SecureStore.getItemAsync(LEGACY_STARTED_KEY),
-      SecureStore.getItemAsync(LEGACY_OWNER_KEY)
-    ]);
-    const id = idRaw ? Number(idRaw) : NaN;
-    if (!Number.isFinite(id) || id <= 0 || !startedRaw?.trim()) return null;
-    const legacyOwnerId = parseOwnerId(ownerRaw);
-    const primitiveDecision = legacyWorkdayMigrationDecision(resolvedUserId, legacyOwnerId);
-    if (primitiveDecision === "reject") {
-      if (legacyOwnerId == null) {
-        await clearLegacyWorkdayKeys();
-      }
-      return null;
-    }
-
-    const startedAt = startedRaw.trim();
-    const migrated: CachedWorkdayRecord = {
-      workday_id: id,
-      started_at: startedAt,
-      work_date: workDateFromIso(startedAt) ?? getLocalWorkDate(),
-      status: "in_progress",
-      last_known_distance: 0,
-      last_known_points: 0,
-      user_id: resolvedUserId ?? undefined
-    };
-    await saveCachedActiveWorkday(migrated);
-    return migrated;
+    return null;
   } catch {
     return null;
   }
@@ -224,13 +179,6 @@ export async function saveCachedActiveWorkday(snapshot: CachedWorkdayRecord): Pr
   if (snapshot.user_id != null) {
     await SecureStore.deleteItemAsync(LEGACY_CACHE_KEY).catch(() => undefined);
   }
-  if (snapshot.status === "in_progress") {
-    await SecureStore.setItemAsync(LEGACY_ID_KEY, String(snapshot.workday_id));
-    await SecureStore.setItemAsync(LEGACY_STARTED_KEY, snapshot.started_at);
-    if (snapshot.user_id != null) {
-      await SecureStore.setItemAsync(LEGACY_OWNER_KEY, String(snapshot.user_id));
-    }
-  }
 }
 
 export async function clearCachedActiveWorkday(userId?: number | null): Promise<void> {
@@ -239,6 +187,10 @@ export async function clearCachedActiveWorkday(userId?: number | null): Promise<
     keys.add(workdayCacheKeyForUser(userId));
   }
   await Promise.all([...keys].map((key) => SecureStore.deleteItemAsync(key).catch(() => undefined)));
+}
+
+export async function clearObsoleteWorkdayAuthorityKeys(): Promise<void> {
+  await clearLegacyWorkdayKeys();
 }
 
 export async function updateCachedWorkdayMetrics(
@@ -330,9 +282,7 @@ export async function setActiveWorkdayId(workdayId: number | null): Promise<void
   const existing = await readCachedActiveWorkday(null);
   if (existing) {
     await saveCachedActiveWorkday({ ...existing, workday_id: workdayId });
-    return;
   }
-  await SecureStore.setItemAsync(LEGACY_ID_KEY, String(workdayId));
 }
 
 export async function getWorkdayStartedAt(): Promise<string | null> {
@@ -347,7 +297,5 @@ export async function setWorkdayStartedAt(iso: string | null): Promise<void> {
   const existing = await readCachedActiveWorkday(null);
   if (existing) {
     await saveCachedActiveWorkday({ ...existing, started_at: iso });
-    return;
   }
-  await SecureStore.setItemAsync(LEGACY_STARTED_KEY, iso);
 }

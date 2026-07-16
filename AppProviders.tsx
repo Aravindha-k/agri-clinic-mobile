@@ -31,6 +31,7 @@ import { I18nProvider } from "./src/i18n/I18nContext";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 import { StartupScreen } from "./src/screens/StartupScreen";
 import { TrackingProvider } from "./src/storage/TrackingContext";
+import { DutyProvider } from "./src/features/duty/store/DutyContext";
 import { GpsComplianceProvider } from "./src/storage/GpsComplianceContext";
 import { NotificationsProvider } from "./src/storage/NotificationsContext";
 import { ToastProvider } from "./src/storage/ToastContext";
@@ -183,6 +184,7 @@ export default function AppProviders({ onShellReady, onCriticalReady }: Props) {
                             <OfflineSyncProvider>
                               <AutomaticSyncProvider>
                               <GpsComplianceProvider>
+                                <DutyProvider>
                                 <TrackingProvider>
                                   <BottomSheetModalProvider>
                                     <ToastProvider>
@@ -195,6 +197,7 @@ export default function AppProviders({ onShellReady, onCriticalReady }: Props) {
                                     </ToastProvider>
                                   </BottomSheetModalProvider>
                                 </TrackingProvider>
+                                </DutyProvider>
                               </GpsComplianceProvider>
                               </AutomaticSyncProvider>
                             </OfflineSyncProvider>

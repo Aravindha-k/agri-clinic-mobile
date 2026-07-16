@@ -199,22 +199,16 @@ test("same employee still restores an owner-scoped offline workday", () => {
   assert.equal(shouldRestoreWorkdayRecord(record, 7), true);
 });
 
-test("legacy primitive cache is owner-bound and ambiguous keys are cleared", () => {
+test("legacy primitive cache keys remain defined but are no longer active authority", () => {
   assert.match(workdayStorageSource, /LEGACY_OWNER_KEY/);
-  assert.match(workdayStorageSource, /legacyWorkdayMigrationDecision/);
-  assert.match(
-    workdayStorageSource,
-    /primitiveDecision === "reject"[\s\S]*legacyOwnerId == null[\s\S]*clearLegacyWorkdayKeys/
-  );
+  assert.match(workdayStorageSource, /export async function clearObsoleteWorkdayAuthorityKeys\(\)/);
+  assert.doesNotMatch(workdayStorageSource, /const primitiveDecision = legacyWorkdayMigrationDecision/);
 });
 
-test("workday reconciliation shares the active promise", () => {
-  assert.match(trackingSource, /workdaySyncPromiseRef/);
-  assert.match(
-    trackingSource,
-    /if \(workdaySyncPromiseRef\.current\) \{\s*await workdaySyncPromiseRef\.current/
-  );
-  assert.doesNotMatch(trackingSource, /workdaySyncInFlightRef/);
+test("bootstrap hydration is single-flight in DutyContext", () => {
+  const dutySource = readFileSync(resolve(import.meta.dirname, "../src/features/duty/store/DutyContext.tsx"), "utf8");
+  assert.match(dutySource, /const bootstrapPromiseRef = useRef<Promise<void> \| null>\(null\);/);
+  assert.match(dutySource, /if \(bootstrapPromiseRef\.current\) \{\s*await bootstrapPromiseRef\.current;/);
 });
 
 test("server time offset keeps timer accurate with wrong device clock", () => {

@@ -31,7 +31,7 @@ assert.match(shell, /beginNewVisit\(\);\s*navigation\.dispatch/, "discard must r
 assert.match(review, /submissionLocalSyncId \?\? generateLocalSyncId\(\)/);
 assert.match(review, /resolveVisitReviewFarmer/);
 assert.ok(
-  review.indexOf("submitInFlightRef.current = true") < review.indexOf("await startDay()"),
+  review.indexOf("submitInFlightRef.current = true") < review.indexOf("await startDuty()"),
   "submit lock must be acquired before the first await"
 );
 assert.match(

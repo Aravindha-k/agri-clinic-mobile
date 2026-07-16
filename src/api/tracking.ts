@@ -2,12 +2,9 @@ import { apiClient } from "./client";
 import {
   DUTY_TRACKING_ROUTES,
   dutyTrackingGet,
-  dutyTrackingPost,
-  LEGACY_TRACKING_ROUTES
+  dutyTrackingPost
 } from "./dutyTrackingApi";
 import { getDeviceInfo } from "../utils/deviceInfo";
-import { asArray } from "../utils/format";
-import { resolveList } from "../utils/apiUnwrap";
 import { ApiRequestError } from "../utils/apiError";
 import {
   isWorkdayAlreadyActiveMessage,
@@ -85,31 +82,26 @@ export type WorkdayStatus = {
   start_time?: string;
   started_at?: string;
   end_time?: string | null;
+  ended_at?: string | null;
   is_active?: boolean;
   auto_ended?: boolean;
   last_heartbeat?: string | null;
   last_location?: TrackingLocation | null;
   server_time?: string;
   total_work_duration_ms?: number;
-};
-
-type PaginatedLocations = {
-  results?: LocationLogPoint[];
-  next?: string | null;
-  count?: number;
+  duration_limit_seconds?: number;
 };
 
 export function isWorkdayActive(status: WorkdayStatus | null | undefined) {
   return normalizeActiveWorkday(status) !== null;
 }
 
-/** Fetch active duty session; falls back to legacy workday/current. */
+/** Fetch active canonical duty session. */
 export async function fetchCurrentDuty(): Promise<WorkdayFetchResult> {
   try {
     const data = await dutyTrackingGet<unknown>(
       DUTY_TRACKING_ROUTES.current,
-      { source: "Tracking" },
-      LEGACY_TRACKING_ROUTES.current
+      { source: "Tracking" }
     );
     const row = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
     const statusRaw = typeof row?.status === "string" ? String(row.status).toLowerCase() : "";
@@ -162,43 +154,12 @@ export async function getCurrentWorkday() {
   return null;
 }
 
-export async function getWorkdayHistory() {
-  const data = await apiClient<WorkdayStatus[] | PaginatedLocations>("tracking/workdays/history/");
-  return asArray<WorkdayStatus>(data).length ? asArray<WorkdayStatus>(data) : resolveList<WorkdayStatus>(data);
-}
-
 export async function getTodayWorkday(): Promise<WorkdayStatus | null> {
   const result = await fetchCurrentWorkday();
   if (result.kind === "active") {
     return result.workday;
   }
-
-  const todayKey = new Date().toISOString().slice(0, 10);
-  const history = await getWorkdayHistory();
-  return (
-    history.find((w) => {
-      const d = w.date ? String(w.date).slice(0, 10) : "";
-      return d === todayKey && w.is_active !== false;
-    }) ?? null
-  );
-}
-
-export async function getWorkdayLocationsPage(workdayId: number, page = 1, pageSize = 200) {
-  return apiClient<PaginatedLocations>(
-    `tracking/workday/${workdayId}/locations/?page=${page}&page_size=${pageSize}`
-  );
-}
-
-/** All GPS points for a workday (paginated fetch). */
-export async function getAllWorkdayLocations(workdayId: number): Promise<LocationLogPoint[]> {
-  const all: LocationLogPoint[] = [];
-  for (let page = 1; page <= 25; page += 1) {
-    const data = await getWorkdayLocationsPage(workdayId, page);
-    const batch = Array.isArray(data?.results) ? data.results : resolveList<LocationLogPoint>(data);
-    all.push(...batch);
-    if (!data?.next || batch.length === 0) break;
-  }
-  return all;
+  return null;
 }
 
 export type WorkdayStartCoords = {
@@ -222,8 +183,7 @@ export async function startDutySession(coords: WorkdayStartCoords): Promise<Work
         accuracy: coords.accuracy ?? undefined
       }),
       source: "Tracking"
-    },
-    LEGACY_TRACKING_ROUTES.start
+    }
   );
   return normalizeActiveWorkday(normalizeWorkdayRow(data));
 }
@@ -260,7 +220,7 @@ export async function ensureActiveWorkday(coords: WorkdayStartCoords): Promise<W
       }
     }
     if (!isWorkdayAlreadyActiveMessage(message) && !isWorkdayInactiveMessage(message)) {
-      await startMobileWorkSession(coords);
+      throw error;
     }
   }
 
@@ -283,27 +243,6 @@ export async function ensureActiveWorkday(coords: WorkdayStartCoords): Promise<W
   throw new ApiRequestError("Could not confirm your workday. Please try again.");
 }
 
-/** Best-effort mobile dashboard work session — must not block tracking workday start. */
-export async function startMobileWorkSession(coords: {
-  latitude: number;
-  longitude: number;
-  accuracy?: number | null;
-}) {
-  try {
-    await apiClient("mobile/work/start/", {
-      method: "POST",
-      body: JSON.stringify({
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        accuracy: coords.accuracy ?? undefined
-      }),
-      source: "Tracking"
-    });
-  } catch {
-    // tracking/workday/start/ remains source of truth
-  }
-}
-
 export function endDutySession(dutySessionId?: number | null) {
   const body =
     dutySessionId != null && Number.isFinite(dutySessionId) && dutySessionId > 0
@@ -315,8 +254,7 @@ export function endDutySession(dutySessionId?: number | null) {
       method: "POST",
       body: JSON.stringify(body),
       source: "Tracking"
-    },
-    LEGACY_TRACKING_ROUTES.end
+    }
   );
 }
 
@@ -351,8 +289,7 @@ export async function pushLocation(
       method: "POST",
       body: JSON.stringify(body),
       source: "Tracking"
-    },
-    LEGACY_TRACKING_ROUTES.locationPush
+    }
   );
 }
 

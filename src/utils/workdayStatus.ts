@@ -100,13 +100,16 @@ export function normalizeWorkdayRow(raw: unknown): WorkdayStatus | null {
     start_time: typeof row.start_time === "string" ? row.start_time : startedAt,
     started_at: startedAt,
     end_time: (row.end_time as string | null | undefined) ?? (row.end_work_time as string | null | undefined) ?? null,
+    ended_at: (row.ended_at as string | null | undefined) ?? (row.end_time as string | null | undefined) ?? null,
     is_active: isActive,
     auto_ended: Boolean(row.auto_ended),
     last_heartbeat: typeof row.last_heartbeat === "string" ? row.last_heartbeat : null,
     last_location: (row.last_location as WorkdayStatus["last_location"]) ?? null,
     server_time: typeof row.server_time === "string" ? row.server_time : undefined,
     total_work_duration_ms:
-      typeof row.total_work_duration_ms === "number" ? row.total_work_duration_ms : undefined
+      typeof row.total_work_duration_ms === "number" ? row.total_work_duration_ms : undefined,
+    duration_limit_seconds:
+      typeof row.duration_limit_seconds === "number" ? row.duration_limit_seconds : undefined
   };
 }
 

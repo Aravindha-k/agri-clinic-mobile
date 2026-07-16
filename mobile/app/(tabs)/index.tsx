@@ -21,10 +21,9 @@ import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
 import { useTracking } from "../../../src/storage/TrackingContext";
 import { useDuty } from "../../../src/features/duty/store/DutyContext";
 import { useDutyTimer } from "../../../src/features/duty/hooks/useDutyTimer";
-import type { TrackingErrorSource } from "../../../src/types/trackingError";
-import { formatShortTime } from "../../lib/format";
+import { useDutyPresentation } from "../../../src/features/duty/hooks/useDutyPresentation";
+import { extractPhotoUrl, photoCacheVersion } from "../../../src/utils/profilePhotoUrl";
 import { autoFlushPendingGps } from "../../lib/sync/offlineSyncManager";
-import { useFieldWeather } from "../../../src/hooks/useFieldWeather";
 import { FadeInSection, entranceStagger } from "../../components/ui/FadeInSection";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
 import { ScreenCanvas, ScreenEntranceRipple } from "../../components/layout";
@@ -38,7 +37,12 @@ import {
 import { OfflineBanner } from "../../components/ui";
 import { SyncHealthIndicator } from "../../components/sync/SyncHealthIndicator";
 import { ScreenLoader } from "../../components/layout/ScreenLoader";
-import { WorkdayStartPanel } from "../../components/workday/WorkdayStartPanel";
+import {
+  ActiveWorkDayCard,
+  CompletedWorkDayCard,
+  HomeDashboardStatusRow,
+  StartWorkDayCard
+} from "../../components/duty";
 import { readDashboardCache } from "../../lib/dashboardCache";
 import { formatHeaderDate } from "../../lib/format";
 import { fetchDashboard } from "../../lib/homeApi";
@@ -53,12 +57,6 @@ function greetingKey(hour: number) {
   if (hour < 12) return "home.goodMorning";
   if (hour < 17) return "home.goodAfternoon";
   return "home.goodEvening";
-}
-
-function parseCoord(value?: string | null) {
-  if (!value) return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
 }
 
 export default function TodayTabScreen() {
@@ -76,14 +74,16 @@ export default function TodayTabScreen() {
   const { pendingCount, lastSyncAt, syncing } = useOfflineSync();
   const { visitsVersion } = useFieldDataRefresh();
   const {
-    currentLocation,
     busy,
     error: trackingError,
     pendingGpsCount,
+    gpsEnabled,
+    permissionDenied,
     refreshTrackingState
   } = useTracking();
-  const { hydrationStatus, currentDuty, dutyMap, refreshBootstrap, refreshDutyMap, startDuty } = useDuty();
+  const { hydrationStatus, currentDuty, isOffline, refreshBootstrap, refreshDutyMap, startDuty } = useDuty();
   const dutyTimer = useDutyTimer();
+  const dutyPresentation = useDutyPresentation(currentDuty);
   const unreadNotifCount = useSyncStore((state) => state.unreadNotifCount);
 
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
@@ -94,25 +94,22 @@ export default function TodayTabScreen() {
   const [startPhase, setStartPhase] = useState<"idle" | "location" | "starting">("idle");
   const [gateError, setGateError] = useState<string | null>(null);
   const [dismissedError, setDismissedError] = useState("");
-  const [dismissedErrorSource, setDismissedErrorSource] = useState<TrackingErrorSource | null>(null);
-  const trackingErrorSource: TrackingErrorSource | null = trackingError ? "start_workday" : null;
   const dashboardRef = useRef<DashboardData | null>(null);
   dashboardRef.current = dashboard;
   const entranceTick = useScreenEntrance();
-  const showOfflineBanner = lanOnly;
+  const showOfflineBanner = lanOnly || isOffline;
   const headerStep = showOfflineBanner ? 1 : 0;
-  const planStep = headerStep + 3;
-  const insightsStep = planStep + 1;
+  const insightsStep = headerStep + 4;
   const actionsStep = insightsStep + 1;
   const activityStep = actionsStep + 1;
-
-  const weatherLat = parseCoord(currentLocation?.latitude);
-  const weatherLng = parseCoord(currentLocation?.longitude);
-  const { weather: fieldWeather, loading: weatherLoading } = useFieldWeather(weatherLat, weatherLng);
 
   const employeeName = employee?.full_name || employee?.name || employee?.username || null;
   const dateLabel = formatHeaderDate();
   const greeting = t(greetingKey(new Date().getHours()));
+  const photoUrl = extractPhotoUrl(employee);
+  const photoVersion = photoCacheVersion(employee) ?? Date.now();
+  const pendingSync = pendingGpsCount + pendingCount;
+  const visitsToday = dashboard?.visits_today ?? 0;
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -139,34 +136,29 @@ export default function TodayTabScreen() {
 
   useEffect(() => {
     void readDashboardCache().then((cached) => {
-      if (cached) {
-        setDashboard(cached);
-      }
+      if (cached) setDashboard(cached);
       setCacheHydrated(true);
     });
   }, []);
 
-  const loadAll = useCallback(
-    async (isRefresh = false) => {
-      if (isRefresh) {
-        setRefreshing(true);
-      } else if (!dashboardRef.current) {
-        setLoading(true);
-      }
-      try {
-        const dash = await fetchDashboard({ force: isRefresh });
-        setDashboard(dash);
-        void getBadgeCount(true);
-      } catch {
-        const cachedDash = await readDashboardCache();
-        if (cachedDash) setDashboard(cachedDash);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    },
-    []
-  );
+  const loadAll = useCallback(async (isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else if (!dashboardRef.current) {
+      setLoading(true);
+    }
+    try {
+      const dash = await fetchDashboard({ force: isRefresh });
+      setDashboard(dash);
+      void getBadgeCount(true);
+    } catch {
+      const cachedDash = await readDashboardCache();
+      if (cachedDash) setDashboard(cachedDash);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -177,8 +169,10 @@ export default function TodayTabScreen() {
   useEffect(() => {
     void autoFlushPendingGps();
     void refreshTrackingState().catch(() => undefined);
-    void loadAll(false);
-  }, [loadAll, refreshTrackingState]);
+    if (dutyPresentation.isActive || dutyPresentation.isCompleted) {
+      void loadAll(false);
+    }
+  }, [dutyPresentation.isActive, dutyPresentation.isCompleted, loadAll, refreshTrackingState]);
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
@@ -190,10 +184,10 @@ export default function TodayTabScreen() {
   }, [refreshTrackingState]);
 
   useEffect(() => {
-    if (visitsVersion > 0) {
+    if (visitsVersion > 0 && dutyPresentation.isActive) {
       void fetchDashboard({ force: true }).then(setDashboard).catch(() => undefined);
     }
-  }, [visitsVersion]);
+  }, [dutyPresentation.isActive, visitsVersion]);
 
   async function onRefresh() {
     setRefreshing(true);
@@ -230,19 +224,12 @@ export default function TodayTabScreen() {
   }
 
   const visibleTrackingError = (() => {
-    if (gateError) return { message: gateError, source: "start_workday" as const };
+    if (gateError) return gateError;
     if (!trackingError) return null;
-    if (trackingError === dismissedError && trackingErrorSource === dismissedErrorSource) return null;
-    if (currentDuty?.is_active) return null;
-    return trackingError ? { message: trackingError, source: "start_workday" as const } : null;
+    if (trackingError === dismissedError) return null;
+    if (dutyPresentation.isActive) return null;
+    return trackingError;
   })();
-
-  const startedAtLabel = currentDuty?.start_time ? formatShortTime(currentDuty.start_time) : null;
-  const workdayStatus = currentDuty?.is_active
-    ? "active"
-    : currentDuty?.ended_at || currentDuty?.end_time || currentDuty?.is_active === false
-      ? "completed"
-      : "not_started";
 
   const quickActions: TodayQuickAction[] = useMemo(
     () => [
@@ -280,8 +267,9 @@ export default function TodayTabScreen() {
 
   const recentVisits = dashboard?.recent_visits ?? [];
   const lastSyncDate = lastSyncAt ? new Date(lastSyncAt) : null;
-  const showSkeleton = loading && !dashboard && cacheHydrated;
-  const showContent = !showSkeleton;
+  const showSkeleton = loading && !dashboard && cacheHydrated && dutyPresentation.isActive;
+  const showWorkInsights = dutyPresentation.isActive;
+  const hydrating = hydrationStatus === "loading" || hydrationStatus === "idle";
 
   return (
     <SafeAreaView style={styles.screen} edges={topEdges}>
@@ -303,7 +291,7 @@ export default function TodayTabScreen() {
               lastSyncedAt={lastSyncDate}
               syncing={syncing}
               lanOnly={lanOnly}
-              offline={lanOnly}
+              offline={lanOnly || isOffline}
             />
           </FadeInSection>
         ) : null}
@@ -324,47 +312,71 @@ export default function TodayTabScreen() {
           {showSkeleton ? <ScreenLoader message={t("common.loading")} /> : null}
         </Animated.View>
 
-        <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
-          <WorkdayStartPanel
-            presentation="dashboard"
-            workdayStatus={workdayStatus as any}
-            hydrating={hydrationStatus === "loading" || hydrationStatus === "idle"}
-            active={Boolean(currentDuty)}
-            busy={busy}
-            starting={starting}
-            startingLabel={
-              startPhase === "location"
-                ? t("workdayUx.gettingLocation")
-                : startPhase === "starting"
-                  ? t("workdayUx.startingWorkday")
-                  : null
-            }
-            error={visibleTrackingError?.message ?? null}
-            errorSource={visibleTrackingError?.source ?? null}
-            onDismissError={() => {
-              setGateError(null);
-              setDismissedError(trackingError || "");
-              setDismissedErrorSource("start_workday");
-            }}
-            timerDisplay={dutyTimer.elapsedDisplay}
-            startedAtLabel={startedAtLabel}
-            distanceKm={Number(dutyMap?.distanceKm) || 0}
-            visitsToday={dashboard?.visits_today ?? 0}
-            pendingSync={pendingGpsCount + pendingCount}
-            onStart={() => void handleStartWorkday()}
-            onMyRoute={() => rootNav?.navigate("MyLocation")}
-            onOpenTracking={() => navigation.navigate("Day")}
+        <FadeInSection replayKey={entranceTick} delay={entranceStagger(headerStep + 1)}>
+          <HomeDashboardStatusRow
+            photoUrl={photoUrl}
+            photoVersion={photoVersion}
+            offline={lanOnly || isOffline}
+            pendingSync={pendingSync}
+            gpsEnabled={gpsEnabled}
+            permissionDenied={permissionDenied}
           />
         </FadeInSection>
 
-        {showContent ? (
+        <FadeInSection replayKey={entranceTick} delay={entranceStagger(headerStep + 2)}>
+          {hydrating ? (
+            <ScreenLoader message={t("workdayUx.loadingWorkday")} />
+          ) : dutyPresentation.isActive ? (
+            <ActiveWorkDayCard
+              startedAt={dutyPresentation.startedAt}
+              elapsed={dutyTimer.elapsedDisplay}
+              remaining={dutyTimer.remainingDisplay}
+              expectedEndAt={dutyTimer.expectedEndAt}
+              visitsToday={visitsToday}
+              pendingSync={pendingSync}
+              offline={lanOnly || isOffline}
+              gpsEnabled={gpsEnabled}
+              permissionDenied={permissionDenied}
+              onOpenDay={() => navigation.navigate("Day")}
+            />
+          ) : dutyPresentation.isCompleted ? (
+            <CompletedWorkDayCard
+              elapsed={dutyTimer.elapsedDisplay}
+              startedAt={dutyPresentation.startedAt}
+              endedAt={dutyPresentation.endedAt}
+              autoCompleted={dutyPresentation.sessionStatus === "auto_completed"}
+            />
+          ) : (
+            <StartWorkDayCard
+              loading={busy}
+              starting={starting}
+              startingLabel={
+                startPhase === "location"
+                  ? t("workdayUx.gettingLocation")
+                  : startPhase === "starting"
+                    ? t("workdayUx.startingWorkday")
+                    : null
+              }
+              error={visibleTrackingError}
+              onStart={() => void handleStartWorkday()}
+              onDismissError={() => {
+                setGateError(null);
+                setDismissedError(trackingError || "");
+              }}
+              offline={lanOnly || isOffline}
+              pendingSync={pendingSync}
+              gpsEnabled={gpsEnabled}
+              permissionDenied={permissionDenied}
+            />
+          )}
+        </FadeInSection>
+
+        {showWorkInsights ? (
           <Animated.View style={[styles.belowHero, contentParallaxStyle]}>
             <TodayStatsGrid
               dashboard={dashboard}
               farmersCovered={dashboard?.farmers_covered ?? 0}
-              weather={fieldWeather}
-              weatherLoading={weatherLoading}
-              visitsSubtitle={t("home.visitsCompleted", { count: dashboard?.visits_today ?? 0 })}
+              visitsSubtitle={t("home.visitsCompleted", { count: visitsToday })}
               farmersSubtitle={t("home.farmersTotal", { count: dashboard?.farmers_covered ?? 0 })}
               entrance={{ replayKey: entranceTick, sectionStep: insightsStep }}
             />
@@ -383,9 +395,7 @@ export default function TodayTabScreen() {
               emptyLabel={t("home.noVisitsYet")}
               items={recentVisits}
               onViewAll={() => navigation.navigate("Work", { screen: "WorkHome", params: { segment: "visits" } })}
-              onPressVisit={(id) =>
-                navigation.navigate("Work", { screen: "VisitDetail", params: { id } })
-              }
+              onPressVisit={(id) => navigation.navigate("Work", { screen: "VisitDetail", params: { id } })}
               entrance={{ replayKey: entranceTick, sectionStep: activityStep }}
             />
           </Animated.View>

@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import { Marker } from "react-native-maps";
 import type { MapPinKind } from "./FieldMapView.types";
 
@@ -10,7 +10,10 @@ type Props = {
   title?: string;
   description?: string;
   kind?: MapPinKind;
+  label?: number | string;
+  pending?: boolean;
   compact?: boolean;
+  onPress?: () => void;
 };
 
 type MarkerStyle = {
@@ -20,19 +23,39 @@ type MarkerStyle = {
   showIcon: boolean;
 };
 
-function resolveMarkerStyle(kind: MapPinKind | undefined, compact: boolean): MarkerStyle {
+function resolveMarkerStyle(
+  kind: MapPinKind | undefined,
+  compact: boolean,
+  pending?: boolean
+): MarkerStyle {
+  const queuedBorder = pending ? "#F59E0B" : "#FFFFFF";
+
   if (compact) {
     switch (kind) {
       case "route_start":
         return {
-          backgroundColor: "#D97706",
-          borderColor: "#FFFFFF",
+          backgroundColor: "#16A34A",
+          borderColor: queuedBorder,
           size: 10,
           showIcon: false
         };
       case "visit":
         return {
           backgroundColor: "#16A34A",
+          borderColor: queuedBorder,
+          size: 10,
+          showIcon: false
+        };
+      case "route_end":
+        return {
+          backgroundColor: "#DC2626",
+          borderColor: "#FFFFFF",
+          size: 10,
+          showIcon: false
+        };
+      case "current":
+        return {
+          backgroundColor: "#2563EB",
           borderColor: "#FFFFFF",
           size: 10,
           showIcon: false
@@ -50,7 +73,7 @@ function resolveMarkerStyle(kind: MapPinKind | undefined, compact: boolean): Mar
   switch (kind) {
     case "route_start":
       return {
-        backgroundColor: "#D97706",
+        backgroundColor: "#16A34A",
         borderColor: "#FFFFFF",
         size: 18,
         showIcon: false
@@ -58,13 +81,20 @@ function resolveMarkerStyle(kind: MapPinKind | undefined, compact: boolean): Mar
     case "visit":
       return {
         backgroundColor: "#16A34A",
-        borderColor: "#FFFFFF",
-        size: 16,
+        borderColor: queuedBorder,
+        size: labelSize(kind),
         showIcon: false
       };
     case "route_end":
       return {
-        backgroundColor: "#C2410C",
+        backgroundColor: "#DC2626",
+        borderColor: "#FFFFFF",
+        size: 18,
+        showIcon: false
+      };
+    case "current":
+      return {
+        backgroundColor: "#2563EB",
         borderColor: "#FFFFFF",
         size: 18,
         showIcon: false
@@ -86,8 +116,23 @@ function resolveMarkerStyle(kind: MapPinKind | undefined, compact: boolean): Mar
   }
 }
 
-function FieldMapMarkerInner({ id, latitude, longitude, title, description, kind, compact = false }: Props) {
-  const style = resolveMarkerStyle(kind, compact);
+function labelSize(kind: MapPinKind | undefined) {
+  return kind === "visit" ? 22 : 16;
+}
+
+function FieldMapMarkerInner({
+  id,
+  latitude,
+  longitude,
+  title,
+  description,
+  kind,
+  label,
+  pending,
+  compact = false,
+  onPress
+}: Props) {
+  const style = resolveMarkerStyle(kind, compact, pending);
   const [tracksViewChanges, setTracksViewChanges] = useState(Platform.OS === "android");
 
   useEffect(() => {
@@ -105,6 +150,7 @@ function FieldMapMarkerInner({ id, latitude, longitude, title, description, kind
       anchor={{ x: 0.5, y: 0.5 }}
       tracksViewChanges={tracksViewChanges}
       zIndex={5}
+      onPress={onPress}
     >
       <View
         style={[
@@ -116,9 +162,14 @@ function FieldMapMarkerInner({ id, latitude, longitude, title, description, kind
             borderRadius: style.size / 2,
             backgroundColor: style.backgroundColor,
             borderColor: style.borderColor
-          }
+          },
+          label != null && styles.shellLabeled
         ]}
-      />
+      >
+        {label != null ? (
+          <Text style={[styles.label, compact && styles.labelCompact]}>{String(label)}</Text>
+        ) : null}
+      </View>
     </Marker>
   );
 }
@@ -142,5 +193,18 @@ const styles = StyleSheet.create({
   },
   shellCompact: {
     borderWidth: 1.5
+  },
+  shellLabeled: {
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  label: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "800",
+    textAlign: "center"
+  },
+  labelCompact: {
+    fontSize: 8
   }
 });

@@ -91,7 +91,8 @@ export function FieldMapView({
   compactMarkers = false,
   interactive = true,
   liveFocus,
-  liveFocusDelta = 0.006
+  liveFocusDelta = 0.006,
+  onMarkerPress
 }: Props) {
   const { theme } = useTheme();
 
@@ -457,7 +458,10 @@ export function FieldMapView({
                 title={m.title}
                 description={m.description}
                 kind={m.kind}
+                label={m.label}
+                pending={m.pending}
                 compact={compactMarkers}
+                onPress={onMarkerPress ? () => onMarkerPress(m) : undefined}
               />
             ))}
           </MapView>

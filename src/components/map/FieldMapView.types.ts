@@ -17,6 +17,11 @@ export type MapPin = {
   description?: string;
   /** Custom marker style — prefer `kind` for consistent icons. */
   kind?: MapPinKind;
+  /** Visit sequence label shown on numbered visit markers. */
+  label?: number | string;
+  /** Queued / pending visit — amber outline. */
+  pending?: boolean;
+  visitId?: number | string;
   /** @deprecated Android only accepts named pin colors; use `kind` instead. */
   pinColor?: string;
 };
@@ -58,4 +63,5 @@ export type FieldMapViewProps = {
   /** Smoothly center map on this coordinate while tracking (WhatsApp-style follow). */
   liveFocus?: MapCoordinate | null;
   liveFocusDelta?: number;
+  onMarkerPress?: (marker: MapPin) => void;
 };

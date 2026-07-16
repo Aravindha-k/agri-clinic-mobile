@@ -22,7 +22,8 @@ import { useTabBarBottomInset } from "../../../src/hooks/useTabBarBottomInset";
 import { useAuth } from "../../../src/storage/AuthContext";
 import { useEmployee } from "../../../src/storage/EmployeeContext";
 import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
-import { useTracking } from "../../../src/storage/TrackingContext";
+import { useDuty } from "../../../src/features/duty/store/DutyContext";
+import { useDutyPresentation } from "../../../src/features/duty/hooks/useDutyPresentation";
 import {
   checkLogoutAllowed,
   showLogoutBlockedAlert,
@@ -191,13 +192,8 @@ export default function ProfileTabScreen() {
   const { pendingCount, lastSyncAt, refreshQueue, syncAll, syncing } = useOfflineSync();
   const pendingGpsCount = useSyncStore((state) => state.pendingGPSCount);
   const { t, language, setLanguage } = useI18n();
-  const {
-    isActive,
-    workdaySessionStatus,
-    workdaySessionHydrated,
-    workdayServerReconciled,
-    timerDisplay
-  } = useTracking();
+  const { currentDuty, hydrationStatus } = useDuty();
+  const dutyPresentation = useDutyPresentation(currentDuty);
 
   const [profile, setProfile] = useState<Employee | null>(employee);
   const [loading, setLoading] = useState(!employee);
@@ -310,12 +306,12 @@ export default function ProfileTabScreen() {
   const lastSyncedLabel = formatRelativeTimeLocalized(language, lastSyncAt);
   const neverSynced = !lastSyncAt;
   const workdayStatusLabel =
-    !workdaySessionHydrated || !workdayServerReconciled
+    hydrationStatus === "loading" || hydrationStatus === "idle"
       ? t("workdayUx.loadingWorkday")
-      : workdaySessionStatus === "in_progress"
-        ? `${t("workdayUx.workdayActive")} · ${timerDisplay}`
-        : workdaySessionStatus === "completed"
-          ? t("daySummary.workdayComplete")
+      : dutyPresentation.isActive
+        ? t("workdayUx.workdayActive")
+        : dutyPresentation.isCompleted
+          ? t("workdayUx.statusCompleted")
           : t("workdayUx.startYourWorkday");
 
   const menuRows: MenuRow[] = useMemo(
@@ -442,7 +438,7 @@ export default function ProfileTabScreen() {
             onPress={() => tabsNav?.navigate("Day")}
             style={({ pressed }) => [styles.workdayStatusLink, pressed && { opacity: 0.92 }]}
           >
-            <View style={[styles.workdayStatusDot, isActive && styles.workdayStatusDotActive]} />
+            <View style={[styles.workdayStatusDot, dutyPresentation.isActive && styles.workdayStatusDotActive]} />
             <View style={styles.workdayStatusCopy}>
               <Text style={styles.workdayStatusTitle}>{workdayStatusLabel}</Text>
               <Text style={styles.workdayStatusHint}>{t("tabs.day")}</Text>

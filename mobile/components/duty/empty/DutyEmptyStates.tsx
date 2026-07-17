@@ -10,7 +10,7 @@ export function DutyNoWorkDayState() {
       icon="calendar-outline"
       title={t("daySummary.idleTitle")}
       subtitle={t("daySummary.idleSubtitle")}
-      compact
+      showBrandLogo
       style={styles.pad}
     />
   );
@@ -22,6 +22,7 @@ export function DutyNoVisitsState() {
     <EmptyState
       icon="clipboard-outline"
       title={t("daySummary.noVisitsYet")}
+      showBrandLogo
       compact
       style={styles.pad}
     />

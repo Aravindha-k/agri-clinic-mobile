@@ -239,22 +239,22 @@ const styles = StyleSheet.create({
   },
   glassShell: {
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderColor: "rgba(15, 107, 67, 0.22)",
-    borderWidth: 2,
+    backgroundColor: "transparent",
+    borderColor: "rgba(15, 107, 67, 0.18)",
+    borderWidth: 1.5,
     justifyContent: "center",
     overflow: "hidden",
     position: "relative"
   },
   logoClip: {
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "transparent",
     justifyContent: "center",
     overflow: "hidden"
   },
   badge: {
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "transparent",
     borderColor: "rgba(15, 107, 67, 0.2)",
     borderWidth: StyleSheet.hairlineWidth,
     justifyContent: "center",

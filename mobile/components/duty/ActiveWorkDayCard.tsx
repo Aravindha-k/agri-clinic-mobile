@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from "react-native";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { formatShortTime } from "../../lib/format";
-import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
+import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from "../../lib/theme";
 import { DutyTimer } from "./DutyTimer";
 import { GpsStatusBadge } from "./GpsStatusBadge";
 import { SyncStatusBadge } from "./SyncStatusBadge";
@@ -13,6 +13,8 @@ type Props = {
   remaining: string;
   expectedEndAt?: string | null;
   visitsToday: number;
+  farmersToday?: number;
+  distanceKm?: number | null;
   pendingSync: number;
   offline?: boolean;
   gpsEnabled?: boolean;
@@ -26,6 +28,8 @@ export function ActiveWorkDayCard({
   remaining,
   expectedEndAt,
   visitsToday,
+  farmersToday = 0,
+  distanceKm,
   pendingSync,
   offline,
   gpsEnabled,
@@ -33,6 +37,8 @@ export function ActiveWorkDayCard({
   onOpenDay
 }: Props) {
   const { t } = useI18n();
+  const distanceLabel =
+    distanceKm != null && Number.isFinite(distanceKm) ? `${distanceKm.toFixed(1)} km` : "—";
 
   return (
     <View style={styles.card}>
@@ -57,9 +63,20 @@ export function ActiveWorkDayCard({
           <Text style={styles.metaLabel}>{t("workdayUx.expectedEnd")}</Text>
           <Text style={styles.metaValue}>{formatShortTime(expectedEndAt)}</Text>
         </View>
+      </View>
+
+      <View style={styles.metaRow}>
         <View style={styles.metaCell}>
           <Text style={styles.metaLabel}>{t("home.visitsToday")}</Text>
           <Text style={styles.metaValue}>{visitsToday}</Text>
+        </View>
+        <View style={styles.metaCell}>
+          <Text style={styles.metaLabel}>{t("home.farmers")}</Text>
+          <Text style={styles.metaValue}>{farmersToday}</Text>
+        </View>
+        <View style={styles.metaCell}>
+          <Text style={styles.metaLabel}>{t("workdayUx.distance")}</Text>
+          <Text style={styles.metaValue}>{distanceLabel}</Text>
         </View>
       </View>
 
@@ -86,7 +103,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     gap: Spacing.md,
     marginHorizontal: Spacing.screen,
-    padding: Spacing.lg
+    padding: Spacing.lg,
+    ...Shadow.cardRaised
   },
   headerRow: {
     gap: Spacing.xs
@@ -121,6 +139,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.inner,
     flex: 1,
     gap: 2,
+    minWidth: "28%",
     padding: Spacing.md
   },
   metaLabel: {

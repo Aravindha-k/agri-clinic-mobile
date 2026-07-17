@@ -40,8 +40,8 @@ export function BrandInlineLogo({ size = BRAND_LOGO_INLINE }: Props) {
 const styles = StyleSheet.create({
   chip: {
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderColor: "rgba(15, 107, 67, 0.22)",
+    backgroundColor: "transparent",
+    borderColor: "rgba(15, 107, 67, 0.18)",
     borderWidth: 1.5,
     flexShrink: 0,
     justifyContent: "center",
@@ -49,11 +49,11 @@ const styles = StyleSheet.create({
   },
   chipShadow: Platform.select({
     ios: {
-      shadowColor: "#0A3D28",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4
+      shadowColor: "#062818",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.16,
+      shadowRadius: 8
     },
-    default: { elevation: 2 }
+    default: { elevation: 4 }
   })
 });

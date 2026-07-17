@@ -82,7 +82,7 @@ export default function TodayTabScreen() {
     permissionDenied,
     refreshTrackingState
   } = useTracking();
-  const { hydrationStatus, currentDuty, isOffline, refreshBootstrap, refreshDutyMap, startDuty } = useDuty();
+  const { hydrationStatus, currentDuty, dutyMap, isOffline, refreshBootstrap, refreshDutyMap, startDuty } = useDuty();
   const dutyTimer = useDutyTimer();
   const dutyPresentation = useDutyPresentation(currentDuty);
   const unreadNotifCount = useSyncStore((state) => state.unreadNotifCount);
@@ -335,6 +335,8 @@ export default function TodayTabScreen() {
               remaining={dutyTimer.remainingDisplay}
               expectedEndAt={dutyTimer.expectedEndAt}
               visitsToday={visitsToday}
+              farmersToday={dashboard?.farmers_covered ?? 0}
+              distanceKm={dutyMap?.distanceKm ?? null}
               pendingSync={pendingSync}
               offline={lanOnly || isOffline}
               gpsEnabled={gpsEnabled}

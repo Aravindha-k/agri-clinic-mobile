@@ -60,7 +60,18 @@ const splash = await fs.readFile(path.join(root, "src/components/brand/splashAss
 assert.match(splash, /require\("\.\.\/\.\.\/\.\.\/logo\.png"\)/);
 
 const login = await fs.readFile(path.join(root, "src/components/auth/LoginHeroHeader.tsx"), "utf8");
-assert.match(login, /require\("\.\.\/\.\.\/\.\.\/logo\.png"\)/);
+assert.match(login, /CompanyLogoMark/);
+assert.doesNotMatch(login, /backgroundColor:\s*Colors\.surface/);
+assert.doesNotMatch(login, /backgroundColor:\s*"#FFFFFF"/);
+
+const brandLogo = await fs.readFile(path.join(root, "src/components/brand/BrandLogo.tsx"), "utf8");
+assert.match(brandLogo, /CompanyLogoMark/);
+assert.doesNotMatch(brandLogo, /plate:\s*true/);
+assert.doesNotMatch(brandLogo, /backgroundColor:\s*"#FFFFFF"/);
+
+const companyMark = await fs.readFile(path.join(root, "src/components/brand/CompanyLogoMark.tsx"), "utf8");
+assert.match(companyMark, /LOGO_IMAGE/);
+assert.match(companyMark, /backgroundColor:\s*"transparent"/);
 
 const brandConfig = await fs.readFile(path.join(root, "src/config/brand.config.js"), "utf8");
 assert.match(brandConfig, /logoAsset:\s*"\.\/logo\.png"/);

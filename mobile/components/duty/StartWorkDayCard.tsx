@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from "react-native";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { PrimaryButton } from "../ui";
-import { Colors, FontSize, FontWeight, Radius, Spacing, TextStyles } from "../../lib/theme";
+import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing, TextStyles } from "../../lib/theme";
 import { GpsStatusBadge } from "./GpsStatusBadge";
 import { SyncStatusBadge } from "./SyncStatusBadge";
 
@@ -71,7 +71,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     gap: Spacing.md,
     marginHorizontal: Spacing.screen,
-    padding: Spacing.lg
+    padding: Spacing.lg,
+    ...Shadow.cardRaised
   },
   title: {
     ...TextStyles.h2,

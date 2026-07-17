@@ -127,16 +127,16 @@ const styles = StyleSheet.create({
   },
   plate: {
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "transparent",
     justifyContent: "center"
   },
   plateLoading: {
-    borderColor: "rgba(15, 107, 67, 0.1)",
+    borderColor: "rgba(15, 107, 67, 0.12)",
     borderWidth: 1,
     elevation: 4,
     shadowColor: "#0F6B43",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.14,
     shadowRadius: 12
   },
   logo: {

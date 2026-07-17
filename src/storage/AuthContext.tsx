@@ -17,6 +17,7 @@ import { getAccessToken, saveTokens, clearTokens, type StoredTokens } from "./to
 import { canUseBiometricLogin } from "./biometricLoginStorage";
 import { ApiRequestError, isAuthExpiredError, isNetworkError, isServerError } from "../utils/apiError";
 import { fetchMobileBootstrap } from "../features/duty/api/mobileBootstrapApi";
+import { clearLocalFieldQueuesOnSessionReplace } from "./clearLocalFieldQueues";
 import { clearDutyBootstrapState, hydrateDutyFromBootstrap } from "../features/duty/store/DutyContext";
 import { isDeviceSessionConflict } from "./sessionConflict";
 import { logStartup, patchStartupSnapshot } from "../utils/startupDiagnostics";
@@ -151,7 +152,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await logoutRequest().catch(() => undefined);
     } finally {
-      await performLocalSignOut({ notice: SESSION_REPLACED_MESSAGE });
+      clearLocalFieldQueuesOnSessionReplace();
+      await performLocalSignOut({ notice: SESSION_REPLACED_MESSAGE, reason: "session_replaced" });
     }
   }, [performLocalSignOut]);
 

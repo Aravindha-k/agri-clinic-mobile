@@ -336,27 +336,27 @@ const styles = StyleSheet.create({
   },
   logoShell: {
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderColor: "rgba(15, 107, 67, 0.22)",
-    borderWidth: 2,
+    backgroundColor: "transparent",
+    borderColor: "rgba(15, 107, 67, 0.18)",
+    borderWidth: 1.5,
     justifyContent: "center",
     overflow: "hidden"
   },
   logoClip: {
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "transparent",
     justifyContent: "center",
     overflow: "hidden"
   },
   logoShadow: Platform.select({
     ios: {
       shadowColor: "#062818",
-      shadowOffset: { width: 0, height: 5 },
-      shadowOpacity: 0.1,
-      shadowRadius: 12
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.18,
+      shadowRadius: 14
     },
     default: {
-      elevation: 3
+      elevation: 6
     }
   }),
   particle: {

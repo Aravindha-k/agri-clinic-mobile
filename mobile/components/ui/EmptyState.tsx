@@ -1,24 +1,42 @@
 import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, Text, View, type ViewStyle } from "react-native";
+import { CompanyLogoMark } from "../../../src/components/brand/CompanyLogoMark";
 import { Colors, Enterprise, Shadow, Spacing, TextStyles } from "../../lib/theme";
 import { PrimaryButton } from "./PrimaryButton";
 
 type Props = {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon?: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle?: string;
   action?: string;
   onAction?: () => void;
   compact?: boolean;
   style?: ViewStyle;
+  /** Prefer company logo for branded empty states. */
+  showBrandLogo?: boolean;
 };
 
-export function EmptyState({ icon, title, subtitle, action, onAction, compact, style }: Props) {
+export function EmptyState({
+  icon = "leaf-outline",
+  title,
+  subtitle,
+  action,
+  onAction,
+  compact,
+  style,
+  showBrandLogo = false
+}: Props) {
   return (
     <View style={[styles.wrap, compact && styles.wrapCompact, style]}>
-      <View style={[styles.iconWrap, compact && styles.iconWrapCompact]}>
-        <Ionicons name={icon} size={compact ? 36 : 44} color={Colors.brand700} />
-      </View>
+      {showBrandLogo ? (
+        <View style={styles.logoWrap}>
+          <CompanyLogoMark size={compact ? 56 : 72} />
+        </View>
+      ) : (
+        <View style={[styles.iconWrap, compact && styles.iconWrapCompact]}>
+          <Ionicons name={icon} size={compact ? 36 : 44} color={Colors.brand700} />
+        </View>
+      )}
       <Text style={[styles.title, compact && styles.titleCompact]}>{title}</Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       {action && onAction ? (
@@ -35,6 +53,9 @@ const styles = StyleSheet.create({
   },
   wrapCompact: {
     paddingHorizontal: Spacing.lg
+  },
+  logoWrap: {
+    marginBottom: Spacing.lg
   },
   iconWrap: {
     alignItems: "center",

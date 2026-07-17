@@ -4,6 +4,7 @@ export { AppLogo, type AppLogoSize } from "./AppLogo";
 export { AnimatedBrandLogo } from "./AnimatedBrandLogo";
 export { AppLoadingLogo } from "./AppLoadingLogo";
 export { BrandLogo, type BrandLogoSize, type BrandLogoVariant } from "./BrandLogo";
+export { CompanyLogoMark } from "./CompanyLogoMark";
 export { KavyaCinematicSplash, KAVYA_CINEMATIC_SPLASH_MS } from "./KavyaCinematicSplash";
 /** @deprecated Use KavyaCinematicSplash */
 export { AgriHarvestSplashScreen, SPLASH_INTRO_MS, SPLASH_REDUCE_MOTION_MS } from "./AgriHarvestSplashScreen";

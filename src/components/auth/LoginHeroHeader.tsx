@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Image, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import Reanimated, {
   Easing,
   useAnimatedStyle,
@@ -8,22 +8,20 @@ import Reanimated, {
   withSequence,
   withTiming
 } from "react-native-reanimated";
+import { CompanyLogoMark } from "../brand/CompanyLogoMark";
 import { FONTS } from "../../theme/fonts";
-import { Colors, Shadow, Spacing } from "../../../mobile/lib/theme";
-
-const SPLASH_LOGO = require("../../../logo.png");
+import { Colors, Spacing } from "../../../mobile/lib/theme";
 
 /** Space for login card overlap below the header. */
 export const LOGIN_HEADER_OVERLAP = 24;
 
-const LOGO_RING = 104;
-const LOGO_IMAGE = 88;
+const LOGO_SIZE = 104;
 
 type Props = {
   topInset: number;
 };
 
-/** Clean login header with animated brand logo — no background photos. */
+/** Clean login header with circular company logo — no white plate. */
 export function LoginHeroHeader({ topInset }: Props) {
   const { height: screenH } = useWindowDimensions();
   const headerHeight = Math.max(220, Math.round(screenH * 0.28));
@@ -48,12 +46,7 @@ export function LoginHeroHeader({ topInset }: Props) {
     <View style={[styles.shell, { height: headerHeight, paddingTop: topInset + Spacing.lg }]}>
       <View style={styles.content}>
         <Reanimated.View style={[styles.logoWrap, logoAnimStyle]}>
-          <Image
-            source={SPLASH_LOGO}
-            style={styles.logo}
-            resizeMode="contain"
-            accessibilityLabel="Kavya Agri Clinic logo"
-          />
+          <CompanyLogoMark size={LOGO_SIZE} />
         </Reanimated.View>
 
         <Text style={styles.greeting}>Welcome back</Text>
@@ -78,19 +71,8 @@ const styles = StyleSheet.create({
   },
   logoWrap: {
     alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderRadius: LOGO_RING / 2,
-    borderWidth: StyleSheet.hairlineWidth,
-    height: LOGO_RING,
     justifyContent: "center",
-    marginBottom: Spacing.lg,
-    width: LOGO_RING,
-    ...Shadow.cardRaised
-  },
-  logo: {
-    height: LOGO_IMAGE,
-    width: LOGO_IMAGE
+    marginBottom: Spacing.lg
   },
   greeting: {
     color: Colors.text1,

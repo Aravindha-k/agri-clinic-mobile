@@ -62,6 +62,7 @@ export function isLanOnlyError(error: unknown): boolean {
 
 export function isNetworkError(error: unknown): boolean {
   if (isLanOnlyError(error)) return true;
+  if (error instanceof ApiRequestError && error.code === "CONFIG_ERROR") return false;
   if (error instanceof TypeError) return true;
   if (error instanceof ApiRequestError && error.code === "NETWORK_ERROR") return true;
   if (error instanceof Error) {

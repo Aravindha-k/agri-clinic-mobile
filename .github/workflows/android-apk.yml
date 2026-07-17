@@ -6,6 +6,15 @@ on:
       - main
       - master
   workflow_dispatch:
+    inputs:
+      diagnostic_clean_build:
+        description: Disable Gradle/npm caches for one clean diagnostic build
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 concurrency:
   group: android-apk-${{ github.ref }}
@@ -28,6 +37,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Resolve APK artifact metadata
+        id: apkmeta
+        run: |
+          SHA="${GITHUB_SHA::7}"
+          RUN="${GITHUB_RUN_NUMBER}"
+          VERSION="1.0.1"
+          BASENAME="Kavya_Agri_Clinic_QA_${VERSION}_${SHA}_${RUN}"
+          echo "basename=${BASENAME}" >> "$GITHUB_OUTPUT"
+          echo "filename=${BASENAME}.apk" >> "$GITHUB_OUTPUT"
+          echo "APK artifact basename: ${BASENAME}"
+
       - name: Validate production API environment
         run: node scripts/validate-production-api-env.mjs
 
@@ -48,6 +68,7 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Cache Gradle
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.diagnostic_clean_build != 'true' }}
         uses: actions/cache@v4
         with:
           path: |
@@ -138,19 +159,35 @@ jobs:
           EXPO_PUBLIC_API_BASE_URL: ${{ env.EXPO_PUBLIC_API_BASE_URL }}
           EXPO_PUBLIC_ENV: production
           EXPO_PUBLIC_ALLOW_INSECURE_HTTP: "1"
-          GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.caching=true -Dorg.gradle.parallel=true
-        run: ./gradlew assembleRelease --build-cache --no-daemon --stacktrace
+          GITHUB_SHA: ${{ github.sha }}
+          GRADLE_OPTS: -Dorg.gradle.daemon=false ${{ github.event_name == 'workflow_dispatch' && inputs.diagnostic_clean_build == 'true' && '-Dorg.gradle.caching=false' || '-Dorg.gradle.caching=true' }} -Dorg.gradle.parallel=true
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.diagnostic_clean_build }}" = "true" ]; then
+            ./gradlew clean assembleRelease --no-build-cache --no-daemon --stacktrace
+          else
+            ./gradlew assembleRelease --build-cache --no-daemon --stacktrace
+          fi
 
       - name: Print release API hostname (safe)
         run: node scripts/validate-production-api-env.mjs
 
+      - name: Print APK build metadata (safe)
+        run: |
+          echo "versionName=1.0.1"
+          echo "versionCode=6"
+          echo "package=com.kavya.agriclinic"
+          echo "gitCommit=${GITHUB_SHA::7}"
+          echo "workflowRun=${GITHUB_RUN_NUMBER}"
+          echo "apiHostname=$(node -e "const u=new URL(process.env.EXPO_PUBLIC_API_BASE_URL); console.log(u.hostname)")"
+          echo "buildEnv=production"
+
       - name: Rename APK for client delivery
-        run: cp android/app/build/outputs/apk/release/app-release.apk Kavya_Agri_Clinic_Client_QA_v1.0.1.apk
+        run: cp android/app/build/outputs/apk/release/app-release.apk "${{ steps.apkmeta.outputs.filename }}"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Kavya_Agri_Clinic_Client_QA_v1.0.1
-          path: Kavya_Agri_Clinic_Client_QA_v1.0.1.apk
+          name: ${{ steps.apkmeta.outputs.basename }}
+          path: ${{ steps.apkmeta.outputs.filename }}
           if-no-files-found: error
           retention-days: 30

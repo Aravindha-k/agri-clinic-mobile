@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "./config";
+import { API_BASE_URL, getApiConfigError, hasValidApiConfig } from "./config";
 import { applyDeviceSessionHeader } from "./deviceSessionHeaders";
 import { refreshAccessTokenOnce } from "./tokenRefresh";
 import { SESSION_REPLACED_CODES, SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
@@ -179,10 +179,22 @@ async function handleAuth401AfterRefresh(response: Response, auth: boolean): Pro
   throw401Error(data, auth);
 }
 
+function throwConfigError(): never {
+  const configError = getApiConfigError();
+  throw new ApiRequestError(
+    configError?.message ??
+      "App configuration error. Reinstall the latest APK from your administrator.",
+    { code: "CONFIG_ERROR" }
+  );
+}
+
 async function executeApiClient<T>(path: string, options: ApiOptions = {}, attempt = 0): Promise<T> {
   const { auth = true, headers, body, source, signal, baseUrl, method: rawMethod, ...rest } = options;
   const method = (rawMethod || "GET").toUpperCase();
   const apiRoot = baseUrl ?? API_BASE_URL;
+  if (!baseUrl && !hasValidApiConfig()) {
+    throwConfigError();
+  }
   const { signal: requestSignal, cleanup } = createApiTimeoutSignal(DEFAULT_API_TIMEOUT_MS, signal);
   const requestHeaders = new Headers(headers);
   requestHeaders.set("Accept", "application/json");

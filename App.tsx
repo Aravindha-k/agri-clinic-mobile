@@ -14,6 +14,7 @@ import {
   markStartupBegin,
   markStartupFailed
 } from "./src/bootstrap/startupCoordinator";
+import { getApiBuildDiagnostics, getApiConfigError } from "./src/api/config";
 import { logStartup, logStartupError } from "./src/utils/startupDiagnostics";
 import { installGlobalErrorHandlers } from "./src/utils/globalErrorHandlers";
 
@@ -43,7 +44,28 @@ function preloadSplashAssets() {
     });
 }
 
+function StartupConfigRecovery() {
+  const diag = getApiBuildDiagnostics();
+  const configError = getApiConfigError();
+  return (
+    <View style={styles.recovery}>
+      <Image source={SPLASH_ASSETS.logo} style={styles.recoveryLogo} resizeMode="contain" />
+      <Text style={styles.recoveryTitle}>The app could not start</Text>
+      <Text style={styles.recoveryMessage}>
+        App configuration error. Reinstall the latest APK from your administrator.
+        {"\n\n"}
+        செயலி கட்டமைப்பு பிழை. நிர்வாகியிடமிருந்து சமீபத்திய APK ஐ மீண்டும் நிறுவவும்.
+      </Text>
+      <Text style={styles.recoveryMeta}>
+        Build {diag.appVersion} · {diag.gitCommit}
+        {configError ? `\n${configError.code}` : ""}
+      </Text>
+    </View>
+  );
+}
+
 export default function App() {
+  const startupConfigError = getApiConfigError();
   const [phase, setPhase] = useState<StartupPhase>("cinematic");
   const [splashKey, setSplashKey] = useState(0);
   const [Providers, setProviders] = useState<ProvidersComponent | null>(null);
@@ -54,6 +76,11 @@ export default function App() {
 
   useEffect(() => {
     installGlobalErrorHandlers();
+    if (startupConfigError) {
+      void hideNativeSplashSafe("config_error");
+      logStartupError(`config:${startupConfigError.code}`);
+      return;
+    }
     markStartupBegin("App root");
     logStartup("first_render");
     void holdNativeSplash();
@@ -62,9 +89,10 @@ export default function App() {
       void hideNativeSplashSafe("absolute_failsafe");
     }, NATIVE_SPLASH_FAILSAFE_MS);
     return () => clearTimeout(failsafe);
-  }, []);
+  }, [startupConfigError]);
 
   useEffect(() => {
+    if (startupConfigError) return;
     let active = true;
     let watchdogFired = false;
     const watchdog = setTimeout(() => {
@@ -97,7 +125,7 @@ export default function App() {
       active = false;
       clearTimeout(watchdog);
     };
-  }, [providerAttempt]);
+  }, [providerAttempt, startupConfigError]);
 
   useEffect(() => {
     return onSplashReplayRequested((reason) => {
@@ -152,6 +180,16 @@ export default function App() {
   /** Keep providers mounted for auth/fonts, but hide until exit fade so login cannot flash under splash. */
   const shellVisible = phase === "revealing" || phase === "app";
   const rootBg = showSplash ? NATIVE_LAUNCH_BG : APP_BG;
+
+  if (startupConfigError) {
+    return (
+      <GestureHandlerRootView style={[styles.root, { backgroundColor: APP_BG }]}>
+        <SafeAreaProvider>
+          <StartupConfigRecovery />
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    );
+  }
 
   return (
     <GestureHandlerRootView style={[styles.root, { backgroundColor: rootBg }]}>
@@ -241,6 +279,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     marginTop: 10,
+    textAlign: "center"
+  },
+  recoveryMeta: {
+    color: "#7A8F86",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 16,
     textAlign: "center"
   },
   retryButton: {

@@ -1,8 +1,9 @@
 import {
   API_BASE_URL,
   buildApiUrl,
-  PRODUCTION_API_ENDPOINTS,
-  PRODUCTION_API_ORIGIN
+  getApiBuildDiagnostics,
+  getApiHostname,
+  getProductionApiEndpoints
 } from "../api/config";
 
 export type StartupPhase =
@@ -66,8 +67,11 @@ export type StartupPhase =
 export type StartupSnapshot = {
   releaseMode: boolean;
   apiBaseUrl: string;
+  apiHostname: string;
   loginUrl: string;
-  buildEnvOrigin: string;
+  buildEnv: string;
+  appVersion: string;
+  gitCommit: string;
   fontsLoaded: boolean | null;
   authLoading: boolean | null;
   isReady: boolean | null;
@@ -83,11 +87,16 @@ export type StartupSnapshot = {
 
 const MAX_PHASE_LOG = 40;
 
+const buildDiag = getApiBuildDiagnostics();
+
 const snapshot: StartupSnapshot = {
   releaseMode: typeof __DEV__ !== "undefined" ? !__DEV__ : true,
   apiBaseUrl: API_BASE_URL,
+  apiHostname: buildDiag.apiHostname,
   loginUrl: buildApiUrl("mobile/auth/login/", API_BASE_URL),
-  buildEnvOrigin: PRODUCTION_API_ORIGIN,
+  buildEnv: buildDiag.buildEnv,
+  appVersion: buildDiag.appVersion,
+  gitCommit: buildDiag.gitCommit,
   fontsLoaded: null,
   authLoading: null,
   isReady: null,
@@ -102,10 +111,15 @@ const snapshot: StartupSnapshot = {
 };
 
 function touch() {
+  const diag = getApiBuildDiagnostics();
   snapshot.updatedAt = new Date().toISOString();
   snapshot.releaseMode = !__DEV__;
   snapshot.apiBaseUrl = API_BASE_URL;
+  snapshot.apiHostname = diag.apiHostname;
   snapshot.loginUrl = buildApiUrl("mobile/auth/login/", API_BASE_URL);
+  snapshot.buildEnv = diag.buildEnv;
+  snapshot.appVersion = diag.appVersion;
+  snapshot.gitCommit = diag.gitCommit;
 }
 
 export function logStartupError(message: string) {
@@ -156,12 +170,17 @@ export function getStartupSnapshot(): Readonly<StartupSnapshot> {
   return { ...snapshot, phases: [...snapshot.phases] };
 }
 
-/** Release-safe API constants — URLs only in development logs. */
+/** Release-safe API constants — hostname only, never tokens. */
 export function logReleaseStartupConstants() {
-  console.log("[Startup] release mode:", !__DEV__);
+  const diag = getApiBuildDiagnostics();
+  console.warn("[Startup] release mode:", !__DEV__);
+  console.warn("[Startup] build env:", diag.buildEnv);
+  console.warn("[Startup] API hostname:", diag.apiHostname);
+  console.warn("[Startup] app version:", diag.appVersion);
+  console.warn("[Startup] build commit:", diag.gitCommit);
   if (__DEV__) {
     console.log("[Startup] API base URL:", API_BASE_URL);
-    console.log("[Startup] Login URL:", PRODUCTION_API_ENDPOINTS.login);
+    console.log("[Startup] Login URL:", getProductionApiEndpoints().login);
     console.log(
       "[Startup] Build env EXPO_PUBLIC_API_BASE_URL:",
       process.env.EXPO_PUBLIC_API_BASE_URL ?? "(unset)"

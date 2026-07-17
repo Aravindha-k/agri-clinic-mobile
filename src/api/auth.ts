@@ -1,4 +1,4 @@
-import { buildApiUrl } from "./config";
+import { API_BASE_URL, buildApiUrl, getApiHostname } from "./config";
 import { apiClient } from "./client";
 import {
   DEVICE_SESSION_STORAGE_ERROR,
@@ -9,6 +9,7 @@ import {
 import { getOrCreateDeviceId } from "../storage/deviceIdStorage";
 import { getRefreshToken, StoredTokens } from "../storage/tokenStorage";
 import { getDeviceInfo } from "../utils/deviceInfo";
+import { categorizeLoginNetworkError, logAuthEvent } from "../utils/loginDiagnostics";
 import { normalizeLoginResponse } from "../utils/parseLoginResponse";
 
 const MOBILE_AUTH_LOGIN = "mobile/auth/login/";
@@ -42,7 +43,14 @@ async function persistLoginSession(normalized: ReturnType<typeof normalizeLoginR
 }
 
 export async function loginRequest(identifier: string, password: string): Promise<StoredTokens> {
+  logAuthEvent("login_pressed");
   const trimmed = identifier.trim();
+  if (!trimmed || !password.trim()) {
+    logAuthEvent("validation_failed", "missing_credentials");
+    throw new Error("Missing credentials");
+  }
+
+  logAuthEvent("validation_passed");
   const deviceInfo = getDeviceInfo();
   const deviceId = await getOrCreateDeviceId();
 
@@ -50,20 +58,31 @@ export async function loginRequest(identifier: string, password: string): Promis
     ? { employee_id: trimmed, password, device_id: deviceId, ...deviceInfo }
     : { username: trimmed, password, device_id: deviceId, ...deviceInfo };
 
-  console.warn("[Auth] Login URL:", buildApiUrl(MOBILE_AUTH_LOGIN));
+  logAuthEvent("request_start", `host=${getApiHostname()} path=${MOBILE_AUTH_LOGIN}`);
 
-  const raw = await apiClient<unknown>(MOBILE_AUTH_LOGIN, {
-    method: "POST",
-    auth: false,
-    body: JSON.stringify(loginBody)
-  });
+  try {
+    const raw = await apiClient<unknown>(MOBILE_AUTH_LOGIN, {
+      method: "POST",
+      auth: false,
+      body: JSON.stringify(loginBody),
+      source: "login"
+    });
 
-  devLogLogin("login success received");
+    logAuthEvent("response_ok", `host=${getApiHostname()}`);
+    devLogLogin("login success received");
 
-  const normalized = normalizeLoginResponse(raw);
-  await persistLoginSession(normalized, deviceId);
+    const normalized = normalizeLoginResponse(raw);
+    await persistLoginSession(normalized, deviceId);
 
-  return { access: normalized.access, refresh: normalized.refresh };
+    return { access: normalized.access, refresh: normalized.refresh };
+  } catch (error) {
+    const category = categorizeLoginNetworkError(error);
+    logAuthEvent("request_failed", `category=${category} host=${getApiHostname()} path=${MOBILE_AUTH_LOGIN}`);
+    if (__DEV__) {
+      console.warn(`[Auth] Login URL: ${buildApiUrl(MOBILE_AUTH_LOGIN, API_BASE_URL)}`);
+    }
+    throw error;
+  }
 }
 
 export async function logoutRequest() {

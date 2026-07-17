@@ -1,11 +1,11 @@
 import {
   API_BASE_URL,
   buildApiUrl,
-  PRODUCTION_API_BASE_URL,
-  PRODUCTION_API_ENDPOINTS,
-  PRODUCTION_API_HOST,
-  PRODUCTION_API_ORIGIN,
-  PRODUCTION_MEDIA_ORIGIN
+  getApiBuildDiagnostics,
+  getApiHostname,
+  getApiOrigin,
+  getProductionApiEndpoints,
+  PRODUCTION_API_HOST
 } from "../api/config";
 
 export type ApiFailureRecord = {
@@ -52,7 +52,7 @@ export function recordApiFailure(input: {
     at: new Date().toISOString()
   };
   console.warn(
-    `[API] Failure recorded: ${input.status ?? "network"} ${input.url} — ${input.message}`
+    `[API] Failure recorded: ${input.status ?? "network"} host=${getApiHostname()} — ${input.message}`
   );
 }
 
@@ -61,18 +61,25 @@ export function getLastApiFailure(): ApiFailureRecord | null {
 }
 
 export function getProductionDiagnosticsSnapshot() {
+  const endpoints = getProductionApiEndpoints();
+  const build = getApiBuildDiagnostics();
+  const origin = getApiOrigin();
   return {
     apiBaseUrl: API_BASE_URL,
+    apiHostname: build.apiHostname,
     loginUrl: buildApiUrl("mobile/auth/login/", API_BASE_URL),
-    farmersUrl: PRODUCTION_API_ENDPOINTS.farmers,
-    visitsUrl: PRODUCTION_API_ENDPOINTS.visits,
-    dutyStartUrl: PRODUCTION_API_ENDPOINTS.dutyStart,
-    locationUpdateUrl: PRODUCTION_API_ENDPOINTS.locationUpdate,
-    locationBulkUrl: PRODUCTION_API_ENDPOINTS.locationBulk,
-    heartbeatUrl: PRODUCTION_API_ENDPOINTS.heartbeat,
-    mediaOrigin: PRODUCTION_MEDIA_ORIGIN,
-    buildEnvOrigin: PRODUCTION_API_ORIGIN,
-    cleartextAssumed: true,
+    farmersUrl: endpoints.farmers,
+    visitsUrl: endpoints.visits,
+    dutyStartUrl: endpoints.dutyStart,
+    locationUpdateUrl: endpoints.locationUpdate,
+    locationBulkUrl: endpoints.locationBulk,
+    heartbeatUrl: endpoints.heartbeat,
+    mediaOrigin: origin,
+    buildEnv: build.buildEnv,
+    appVersion: build.appVersion,
+    gitCommit: build.gitCommit,
+    configSource: build.configSource,
+    cleartextAssumed: API_BASE_URL.startsWith("http://"),
     lastFailure: lastApiFailure,
     lastSmokeAt,
     lastSmokeResults
@@ -106,13 +113,14 @@ async function probeUrl(url: string, timeoutMs = 15000): Promise<BackendSmokeRes
   }
 }
 
-/** Safe connectivity probe — no auth, no secrets. */
+/** Safe connectivity probe — uses the configured runtime API origin (HTTP or HTTPS). */
 export async function runBackendSmokeTest(): Promise<BackendSmokeResult[]> {
+  const origin = getApiOrigin();
   const targets = [
-    `${PRODUCTION_API_ORIGIN}/healthz/`,
-    `${PRODUCTION_API_ORIGIN}/health/`,
-    PRODUCTION_API_BASE_URL,
-    PRODUCTION_API_ENDPOINTS.farmers
+    `${origin}/healthz/`,
+    `${origin}/health/`,
+    API_BASE_URL,
+    buildApiUrl("farmers/", API_BASE_URL)
   ];
 
   const results: BackendSmokeResult[] = [];

@@ -15,18 +15,28 @@ function normalizeApiUrl(raw) {
   return `${url}/`;
 }
 
-const resolvedApiUrl = normalizeApiUrl(
-  process.env.EXPO_PUBLIC_API_BASE_URL ||
-    process.env.EXPO_PUBLIC_API_URL ||
-    PRODUCTION_API_ORIGIN
-);
-const isProductionApi = resolvedApiUrl.includes(PRODUCTION_API_HOST);
+const rawApiEnv =
+  process.env.EXPO_PUBLIC_API_BASE_URL?.trim() || process.env.EXPO_PUBLIC_API_URL?.trim() || "";
 const isProductionEnv =
   process.env.EXPO_PUBLIC_ENV === "production" ||
   process.env.EAS_BUILD_PROFILE === "production-apk" ||
   process.env.EAS_BUILD_PROFILE === "production-aab";
+const isCiBuild = process.env.GITHUB_ACTIONS === "true" || process.env.EAS_BUILD === "true";
+
+if (isCiBuild && !rawApiEnv) {
+  throw new Error(
+    "EXPO_PUBLIC_API_BASE_URL (or EXPO_PUBLIC_API_URL) is required for CI Android builds. " +
+      "Add repository secret EXPO_PUBLIC_API_BASE_URL or set it in the workflow env block."
+  );
+}
+
+const resolvedApiUrl = normalizeApiUrl(rawApiEnv || PRODUCTION_API_ORIGIN);
+const isProductionApi = resolvedApiUrl.includes(PRODUCTION_API_HOST);
+const allowInsecureHttp = process.env.EXPO_PUBLIC_ALLOW_INSECURE_HTTP === "1";
 const allowCleartext =
-  process.env.EXPO_PUBLIC_ALLOW_CLEARTEXT === "1" || !isProductionEnv;
+  allowInsecureHttp ||
+  process.env.EXPO_PUBLIC_ALLOW_CLEARTEXT === "1" ||
+  !isProductionEnv;
 
 const googleMapsAndroidApiKey = process.env.GOOGLE_MAPS_ANDROID_API_KEY?.trim() || "";
 
@@ -173,6 +183,9 @@ module.exports = () => ({
     apiUrl: resolvedApiUrl,
     apiBaseUrl: resolvedApiUrl,
     production: isProductionApi,
+    buildEnv: process.env.EXPO_PUBLIC_ENV || (isProductionEnv ? "production" : "development"),
+    gitCommit: process.env.GITHUB_SHA || process.env.EAS_BUILD_GIT_COMMIT_HASH || "",
+    appVersion: "1.0.1",
     mapsNativeConfigured: Boolean(googleMapsAndroidApiKey)
   }
 });

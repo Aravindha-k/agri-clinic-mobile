@@ -37,6 +37,10 @@ import { PrimaryButton, EnterpriseTextField } from "../../mobile/components/ui";
 import { ProductionApiDiagnosticsPanel } from "../../mobile/components/diagnostics/ProductionApiDiagnosticsPanel";
 import { TechnicalDetailsCollapsible } from "../../mobile/components/layout";
 import { ApiRequestError, getNetworkMessage, isNetworkError } from "../utils/apiError";
+import {
+  categorizeLoginNetworkError,
+  loginErrorMessageForCategory
+} from "../utils/loginDiagnostics";
 
 const CARD_TOP_RADIUS = 24;
 const CARD_PAD = 24;
@@ -158,8 +162,11 @@ export function LoginScreen() {
     } catch (error) {
       if (error instanceof ApiRequestError && error.code === "INVALID_CREDENTIALS") {
         setLoginError(error.message || t("login.invalidCredentials"));
-      } else if (isNetworkError(error)) {
-        setLoginError(getNetworkMessage());
+      } else if (isNetworkError(error) || error instanceof ApiRequestError) {
+        const category = categorizeLoginNetworkError(error);
+        setLoginError(
+          loginErrorMessageForCategory(category, getNetworkMessage())
+        );
       } else {
         setLoginError(error instanceof Error ? error.message : t("login.invalidCredentials"));
       }

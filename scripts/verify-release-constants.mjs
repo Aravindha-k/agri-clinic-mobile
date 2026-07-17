@@ -4,6 +4,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { normalizeApiBaseUrl, validateProductionApiEnv } from "./lib/apiConfigEnv.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const AWS_HOST = "13.207.17.117";
@@ -12,15 +13,6 @@ const EXPECTED_LOGIN = `${EXPECTED_API_BASE}mobile/auth/login/`;
 
 function read(rel) {
   return fs.readFileSync(path.join(ROOT, rel), "utf8");
-}
-
-function normalizeApiBase(raw) {
-  let url = String(raw || "").trim().replace(/\/+$/, "");
-  url = url.replace(/(\/api\/v1)+$/i, "/api/v1");
-  if (!/\/api\/v1$/i.test(url)) {
-    url = /\/api$/i.test(url) ? `${url}/v1` : `${url}/api/v1`;
-  }
-  return `${url}/`;
 }
 
 const configTs = read("src/api/config.ts");
@@ -34,13 +26,13 @@ const workflow = fs.existsSync(path.join(ROOT, ".github/workflows/android-apk.ym
 const checks = [];
 
 if (
-  configTs.includes('if (!__DEV__)') &&
+  configTs.includes("if (!__DEV__)") &&
   configTs.includes("EXPO_PUBLIC_API_BASE_URL") &&
-  configTs.includes("PRODUCTION_API_BASE_URL")
+  configTs.includes("readExpoExtraApiBase")
 ) {
-  checks.push(["Release uses EXPO_PUBLIC_API_BASE_URL with AWS fallback", true]);
+  checks.push(["Release uses EXPO_PUBLIC_API_BASE_URL + expo.extra fallback", true]);
 } else {
-  checks.push(["Release uses EXPO_PUBLIC_API_BASE_URL with AWS fallback", false]);
+  checks.push(["Release uses EXPO_PUBLIC_API_BASE_URL + expo.extra fallback", false]);
 }
 
 const envBaseMatch = envProd.match(/EXPO_PUBLIC_API_BASE_URL=(.+)/);
@@ -56,20 +48,28 @@ if (envUrl && envUrl.includes(AWS_HOST)) {
 
 if (
   workflow.includes("EXPO_PUBLIC_API_BASE_URL") &&
-  workflow.includes(AWS_HOST) &&
+  workflow.includes("validate-production-api-env") &&
+  workflow.includes("verify-production-api-health") &&
   workflow.includes("assembleRelease")
 ) {
   checks.push(["GHA workflow production APK build", true]);
-} else if (workflow.includes(`EXPO_PUBLIC_API_URL: http://${AWS_HOST}`)) {
-  checks.push(["GHA workflow EXPO_PUBLIC_API_URL", true]);
 } else {
   checks.push(["GHA workflow production APK build", false]);
 }
 
-const normalizedFromEnv = normalizeApiBase(envUrl || `http://${AWS_HOST}`);
+let validatedBase = EXPECTED_API_BASE;
+try {
+  validatedBase = validateProductionApiEnv({
+    EXPO_PUBLIC_API_BASE_URL: envUrl || EXPECTED_API_BASE,
+    EXPO_PUBLIC_ALLOW_INSECURE_HTTP: "1"
+  }).base;
+} catch {
+  validatedBase = normalizeApiBaseUrl(envUrl || `http://${AWS_HOST}`);
+}
+
 checks.push([
   "Normalized API base from env",
-  normalizedFromEnv === EXPECTED_API_BASE ? normalizedFromEnv : `expected ${EXPECTED_API_BASE}, got ${normalizedFromEnv}`
+  validatedBase === EXPECTED_API_BASE ? validatedBase : `expected ${EXPECTED_API_BASE}, got ${validatedBase}`
 ]);
 
 console.log("=== Release APK expected constants ===\n");
@@ -81,7 +81,7 @@ console.log(`  Never uses LAN (192.168.x) in release\n`);
 console.log("Build-time env:");
 console.log(`  EXPO_PUBLIC_API_BASE_URL (production): ${envBaseMatch?.[1]?.trim() || "(unset)"}`);
 console.log(`  EXPO_PUBLIC_API_URL (production): ${envUrlMatch?.[1]?.trim() || "(unset)"}`);
-console.log(`  Normalized runtime base: ${normalizedFromEnv}\n`);
+console.log(`  Normalized runtime base: ${validatedBase}\n`);
 
 console.log("Checks:");
 let failed = 0;

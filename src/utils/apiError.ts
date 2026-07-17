@@ -89,8 +89,8 @@ export function isServerError(error: unknown): boolean {
   return false;
 }
 
-export function networkError(message = getNetworkMessage()) {
-  return new ApiRequestError(message, { code: "NETWORK_ERROR" });
+export function networkError(message = getNetworkMessage(), code = "NETWORK_ERROR") {
+  return new ApiRequestError(message, { code });
 }
 
 export function serverError(message = SERVER_MESSAGE, status = 500) {

@@ -32,10 +32,18 @@ export function ProductionApiDiagnosticsPanel({ compact = false }: Props) {
   return (
     <View style={[styles.panel, compact && styles.panelCompact]}>
       <Text style={styles.title}>Production connectivity</Text>
+      <DiagRow label="Build env" value={snapshot.buildEnv} />
+      <DiagRow label="App version" value={snapshot.appVersion} />
+      <DiagRow label="Build commit" value={snapshot.gitCommit} />
+      <DiagRow label="Config source" value={snapshot.configSource} />
+      <DiagRow label="API hostname" value={snapshot.apiHostname} />
       <DiagRow label="API base" value={snapshot.apiBaseUrl} />
       <DiagRow label="Login URL" value={snapshot.loginUrl} />
       <DiagRow label="Media origin" value={snapshot.mediaOrigin} />
-      <DiagRow label="Cleartext HTTP" value="enabled (13.207.17.117)" />
+      <DiagRow
+        label="Cleartext HTTP"
+        value={snapshot.cleartextAssumed ? `enabled (${snapshot.apiHostname})` : "disabled (HTTPS)"}
+      />
       {snapshot.lastFailure ? (
         <>
           <DiagRow label="Last failed URL" value={snapshot.lastFailure.url} warn />

@@ -252,7 +252,7 @@ async function executeApiClient<T>(path: string, options: ApiOptions = {}, attem
     return (await parseResponse(response, { auth })) as T;
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
-      throw err;
+      throw networkError("Request timed out. Check your network and try again.", "NETWORK_TIMEOUT");
     }
     if (isDeviceSessionConflict(err) || isAuthExpiredError(err)) {
       throw err;

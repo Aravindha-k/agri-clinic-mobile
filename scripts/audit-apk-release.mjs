@@ -44,7 +44,8 @@ if (!configTs.includes(AWS_HOST)) fail("src/api/config.ts missing AWS host");
 else pass("src/api/config.ts has AWS host");
 if (!configTs.includes("if (!__DEV__)")) fail("src/api/config.ts missing release guard");
 else if (!configTs.includes("EXPO_PUBLIC_API_BASE_URL")) fail("src/api/config.ts missing EXPO_PUBLIC_API_BASE_URL");
-else pass("Release builds use EXPO_PUBLIC_API_BASE_URL with AWS fallback");
+else if (!configTs.includes("readExpoExtraApiBase")) fail("src/api/config.ts missing expo.extra.apiBaseUrl fallback");
+else pass("Release builds use EXPO_PUBLIC_API_BASE_URL + expo.extra fallback");
 
 const envProd = read(".env.production") ?? "";
 if (!envProd.includes(`http://${AWS_HOST}`)) fail(".env.production missing AWS origin");
@@ -62,13 +63,15 @@ const workflow = read(".github/workflows/android-apk.yml") ?? "";
 if (
   workflow.includes("EXPO_PUBLIC_API_BASE_URL") &&
   workflow.includes(AWS_HOST) &&
-  workflow.includes("assembleRelease")
+  workflow.includes("assembleRelease") &&
+  workflow.includes("validate-production-api-env") &&
+  workflow.includes("verify-production-api-health")
 ) {
-  pass("GitHub workflow EXPO_PUBLIC_API_BASE_URL + assembleRelease");
+  pass("GitHub workflow EXPO_PUBLIC_API_BASE_URL + validation + health check + assembleRelease");
 } else if (workflow.includes(`EXPO_PUBLIC_API_URL: http://${AWS_HOST}`)) {
   pass("GitHub workflow EXPO_PUBLIC_API_URL is host-only");
 } else {
-  fail("GitHub workflow missing production API URL / assembleRelease");
+  fail("GitHub workflow missing production API URL / validation / assembleRelease");
 }
 
 if (

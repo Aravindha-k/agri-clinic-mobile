@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { AppState } from "react-native";
 import { FIELD_MAX_WORKDAY_MS } from "../../../constants/fieldTracking";
 import { useDuty } from "../store/DutyContext";
 
@@ -26,6 +27,11 @@ function dutyNumber(duty: Record<string, unknown>, keys: string[]): number | nul
   return null;
 }
 
+/**
+ * Workday elapsed time is wall-clock based (now - started_at).
+ * JS intervals freeze while minimized/locked, but elapsed stays correct and
+ * snaps forward immediately when the app becomes active again.
+ */
 export function useDutyTimer() {
   const { currentDuty, serverTimeOffsetMs } = useDuty();
   const [now, setNow] = useState(() => Date.now());
@@ -38,7 +44,15 @@ export function useDutyTimer() {
     setNow(Date.now());
     if (completed) return;
     const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active") {
+        setNow(Date.now());
+      }
+    });
+    return () => {
+      clearInterval(id);
+      sub.remove();
+    };
   }, [completed, currentDuty?.started_at, currentDuty?.start_time]);
 
   return useMemo(() => {

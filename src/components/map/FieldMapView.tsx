@@ -13,7 +13,7 @@ import {
   MAP_CONFIG_UNAVAILABLE_MESSAGE
 } from "../../utils/mapsNativeConfig";
 import { logMapDiagnostics, logMapEvent } from "../../utils/mapDebug";
-import { sanitizeRegion } from "../../utils/mapRegion";
+import { sanitizeRegion, SINGLE_POINT_MAP_DELTA } from "../../utils/mapRegion";
 import { FieldMapMarker } from "./FieldMapMarker";
 import { MapErrorBoundary } from "./MapErrorBoundary";
 import type { FieldMapViewProps, MapCoordinate, MapPin } from "./FieldMapView.types";
@@ -292,8 +292,8 @@ export function FieldMapView({
           sanitizeRegion({
             latitude: point.latitude,
             longitude: point.longitude,
-            latitudeDelta: 0.05,
-            longitudeDelta: 0.05
+            latitudeDelta: SINGLE_POINT_MAP_DELTA,
+            longitudeDelta: SINGLE_POINT_MAP_DELTA
           }),
           400
         );

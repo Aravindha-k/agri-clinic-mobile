@@ -1,12 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useConnectivityOnline } from "../../../src/hooks/useConnectivityOnline";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
 import { useMasterData } from "../../../src/storage/MasterDataContext";
-import { useTracking } from "../../../src/storage/TrackingContext";
 import { useDuty } from "../../../src/features/duty/store/DutyContext";
 import { FlatCard } from "../../components/layout/FlatCard";
 import { LocationPreviewMap } from "../../../src/components/map/LocationPreviewMap";
@@ -22,10 +21,17 @@ import {
   submitVisitCoordinator,
   type VisitSubmitProgress
 } from "../../lib/visit/visitSubmitCoordinator";
+import {
+  captureVisitGps,
+  visitGpsIsUsable,
+  type VisitGpsCaptureResult
+} from "../../lib/visit/visitGpsCapture";
 import { farmerDisplayName, useVisitFormStore } from "../../store/visitFormStore";
 import { resolveVisitReviewFarmer } from "../../lib/visitReviewFarmer";
 import { EntranceBlocks } from "../../components/ui/EntranceBlocks";
 import { useVisitEntranceKey } from "../../context/VisitEntranceContext";
+import { navigateRoot } from "../../../src/navigation/rootNavigationRef";
+import { openLocationPermissionSettings } from "../../../src/features/fieldTrackingSetup";
 import { Colors, FontSize, FontWeight, Layout, Radius, Spacing, TextStyles, minTouchStyle } from "../../lib/theme";
 
 type Props = {
@@ -35,15 +41,7 @@ type Props = {
   onEditStep3: () => void;
 };
 
-function gpsStatusText(accuracy: number | null | undefined, t: (k: string, p?: Record<string, string | number>) => string) {
-  if (accuracy == null || accuracy > 35) return t("visitFlow.gpsNotCaptured");
-  return t("visitFlow.gpsCaptured", { meters: Math.round(accuracy) });
-}
-
-function gpsDotColor(accuracy: number | null | undefined) {
-  if (accuracy == null || accuracy > 35) return Colors.amber;
-  return Colors.green;
-}
+type GpsUiState = "capturing" | "ready" | "permission_missing" | "services_disabled" | "failed";
 
 function progressHint(phase: VisitSubmitProgress, t: (k: string) => string): string {
   switch (phase) {
@@ -62,6 +60,15 @@ function progressHint(phase: VisitSubmitProgress, t: (k: string) => string): str
   }
 }
 
+function formatCapturedAt(iso: string | undefined): string {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
 export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3 }: Props) {
   const { t } = useI18n();
   const navigation = useNavigation<any>();
@@ -69,7 +76,6 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
   const replayKey = useVisitEntranceKey();
   const online = useConnectivityOnline();
   const { bumpAfterVisitChange } = useFieldDataRefresh();
-  const { busy: workdayBusy } = useTracking();
   const { currentDuty, startDuty, refreshCurrentDuty, refreshDutyMap } = useDuty();
 
   const farmer = useVisitFormStore((s) => s.farmer);
@@ -80,15 +86,21 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
   const selectedProblem = useVisitFormStore((s) => s.selectedProblem);
   const otherProblemDescription = useVisitFormStore((s) => s.otherProblemDescription);
   const gpsCoords = useVisitFormStore((s) => s.gpsCoords);
+  const visitedAt = useVisitFormStore((s) => s.visitedAt);
   const fieldNotes = useVisitFormStore((s) => s.fieldNotes);
-  const observation = useVisitFormStore((s) => s.observation);
-  const recommendation = useVisitFormStore((s) => s.recommendation);
   const photos = useVisitFormStore((s) => s.photos);
   const extraAttachments = useVisitFormStore((s) => s.extraAttachments);
+  const setGpsCoords = useVisitFormStore((s) => s.setGpsCoords);
+  const setVisitedAt = useVisitFormStore((s) => s.setVisitedAt);
 
   const [submitting, setSubmitting] = useState(false);
   const [submitHint, setSubmitHint] = useState("");
-  const [phase, setPhase] = useState<VisitSubmitProgress>("idle");
+  const [gpsUi, setGpsUi] = useState<GpsUiState>(() =>
+    visitGpsIsUsable(gpsCoords) ? "ready" : "capturing"
+  );
+  const [gpsMessage, setGpsMessage] = useState("");
+  const [gpsSource, setGpsSource] = useState<"fresh" | "cached" | null>(null);
+  const captureInFlight = useRef(false);
 
   const isOtherProblem = problemCategoryCode === "other";
   const problemLabel = isOtherProblem
@@ -101,13 +113,94 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
   const farmerVillage = reviewFarmer.village;
   const visitTypeLabel = visitKind === "revisit" ? t("visitFlow.revisit") : t("visitFlow.firstVisit");
   const evidenceCount = photos.length + extraAttachments.length;
-  const observationText = observation.trim() || fieldNotes.trim();
+  const notesText = fieldNotes.trim();
+
+  const applyGpsResult = useCallback(
+    (result: VisitGpsCaptureResult) => {
+      if (result.ok) {
+        setGpsCoords({
+          latitude: result.coords.latitude,
+          longitude: result.coords.longitude,
+          accuracy: result.coords.accuracy
+        });
+        setVisitedAt(result.coords.capturedAt);
+        setGpsSource(result.coords.source);
+        setGpsUi("ready");
+        setGpsMessage("");
+        // eslint-disable-next-line no-console
+        console.log("[VisitGPS] review_location_ready", {
+          accuracy: result.coords.accuracy,
+          source: result.coords.source
+        });
+        return;
+      }
+      setGpsSource(null);
+      if (result.reason === "permission_missing") setGpsUi("permission_missing");
+      else if (result.reason === "services_disabled") setGpsUi("services_disabled");
+      else setGpsUi("failed");
+      setGpsMessage(result.message);
+    },
+    [setGpsCoords, setVisitedAt]
+  );
+
+  const runGpsCapture = useCallback(async () => {
+    if (captureInFlight.current) return;
+    captureInFlight.current = true;
+    setGpsUi("capturing");
+    setGpsMessage("");
+    try {
+      const result = await captureVisitGps({ requestPermission: false });
+      applyGpsResult(result);
+    } finally {
+      captureInFlight.current = false;
+    }
+  }, [applyGpsResult]);
+
+  useEffect(() => {
+    if (visitGpsIsUsable(gpsCoords)) {
+      setGpsUi("ready");
+      // eslint-disable-next-line no-console
+      console.log("[VisitGPS] review_location_ready", { accuracy: gpsCoords?.accuracy, source: "store" });
+      return;
+    }
+    void runGpsCapture();
+  }, []);
+
+  useEffect(() => {
+    let lastRecheckAt = 0;
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      if (gpsUi !== "permission_missing" && gpsUi !== "services_disabled" && gpsUi !== "failed") {
+        return;
+      }
+      const now = Date.now();
+      if (now - lastRecheckAt < 4_000) return;
+      lastRecheckAt = now;
+      // Recheck once after Settings return — never auto-open Settings.
+      void runGpsCapture();
+    });
+    return () => sub.remove();
+  }, [gpsUi, runGpsCapture]);
 
   async function handleSubmit() {
     if (submitting || isVisitSubmitInFlight()) return;
+    if (gpsUi === "capturing") {
+      setSubmitHint(t("visitFlow.gpsGettingLocation"));
+      return;
+    }
+    if (!visitGpsIsUsable(useVisitFormStore.getState().gpsCoords)) {
+      setSubmitHint(gpsMessage || t("visitFlow.gpsNotCaptured"));
+      if (gpsUi === "ready") void runGpsCapture();
+      return;
+    }
+
+    // eslint-disable-next-line no-console
+    console.log("[VisitGPS] submit_location_validated", {
+      accuracy: useVisitFormStore.getState().gpsCoords?.accuracy
+    });
+
     setSubmitting(true);
     setSubmitHint("");
-    setPhase("idle");
 
     try {
       const result = await submitVisitCoordinator({
@@ -119,7 +212,6 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
         bumpAfterVisitChange,
         t,
         onProgress: (next) => {
-          setPhase(next);
           const hint = progressHint(next, t);
           if (hint) setSubmitHint(hint);
         }
@@ -133,9 +225,11 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
       navigation.navigate("VisitSuccess", { summary: result.summary });
     } finally {
       setSubmitting(false);
-      setPhase("idle");
     }
   }
+
+  const gpsReady = gpsUi === "ready" && visitGpsIsUsable(gpsCoords);
+  const submitDisabled = submitting || isVisitSubmitInFlight() || gpsUi === "capturing" || !gpsReady;
 
   return (
     <View style={styles.screen}>
@@ -193,7 +287,7 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
 
         <FlatCard style={styles.reviewCard}>
           <View style={styles.reviewHead}>
-            <Text style={styles.reviewLabel}>{t("visitFlow.adviceSummary")}</Text>
+            <Text style={styles.reviewLabel}>{t("visitFlow.fieldNotes")}</Text>
             <Pressable
               onPress={onEditStep3}
               accessibilityRole="button"
@@ -204,15 +298,24 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
               <Text style={styles.editLink}>{t("visitFlow.change")}</Text>
             </Pressable>
           </View>
-          <Text style={styles.reviewBlockLabel}>{t("visitFlow.observationOptional")}</Text>
           <Text style={styles.reviewValue}>
-            {observationText || t("visitFlow.noObservationOptional")}
+            {notesText || t("visitFlow.noFieldNotes")}
           </Text>
-          <Text style={styles.reviewBlockLabel}>{t("visitFlow.recommendation")}</Text>
-          <Text style={styles.reviewValue}>
-            {recommendation.trim() || t("visitFlow.noRecommendation")}
-          </Text>
-          <Text style={styles.reviewBlockLabel}>{t("visitFlow.evidenceOptional")}</Text>
+        </FlatCard>
+
+        <FlatCard style={styles.reviewCard}>
+          <View style={styles.reviewHead}>
+            <Text style={styles.reviewLabel}>{t("visitFlow.evidenceOptional")}</Text>
+            <Pressable
+              onPress={onEditStep3}
+              accessibilityRole="button"
+              accessibilityLabel={t("visitFlow.change")}
+              style={styles.editChip}
+            >
+              <Ionicons name="create-outline" size={14} color={Colors.brand700} />
+              <Text style={styles.editLink}>{t("visitFlow.change")}</Text>
+            </Pressable>
+          </View>
           <Text style={styles.reviewValue}>
             {evidenceCount > 0
               ? t("visitFlow.evidenceCount", { count: evidenceCount })
@@ -223,23 +326,91 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
         <View style={styles.gpsRow}>
           <Text style={styles.reviewLabel}>{t("visitFlow.gpsSummary")}</Text>
           <View style={styles.gpsStatus}>
-            <View style={[styles.gpsDot, { backgroundColor: gpsDotColor(gpsCoords?.accuracy) }]} />
-            <Text style={styles.gpsText}>{gpsStatusText(gpsCoords?.accuracy, t)}</Text>
+            <View
+              style={[
+                styles.gpsDot,
+                {
+                  backgroundColor:
+                    gpsUi === "ready"
+                      ? Colors.green
+                      : gpsUi === "capturing"
+                        ? Colors.amber
+                        : Colors.red
+                }
+              ]}
+            />
+            <Text style={styles.gpsText}>
+              {gpsUi === "capturing"
+                ? t("visitFlow.gpsGettingLocation")
+                : gpsUi === "ready" && gpsCoords
+                  ? gpsCoords.accuracy != null
+                    ? t("visitFlow.gpsCapturedDetail", {
+                        meters: Math.round(gpsCoords.accuracy),
+                        time: formatCapturedAt(visitedAt ?? undefined)
+                      })
+                    : t("visitFlow.gpsAutoFixed")
+                  : gpsUi === "permission_missing"
+                    ? t("visitFlow.gpsPermissionRequired")
+                    : gpsUi === "services_disabled"
+                      ? t("visitFlow.gpsTurnOnPhone")
+                      : t("visitFlow.gpsCouldNotGet")}
+            </Text>
           </View>
         </View>
+        {gpsSource === "cached" && gpsUi === "ready" ? (
+          <Text style={styles.gpsFixedHint}>{t("visitFlow.gpsRecentFixUsed")}</Text>
+        ) : (
+          <Text style={styles.gpsFixedHint}>{t("visitFlow.gpsAutoFixedHint")}</Text>
+        )}
 
         <View style={styles.mapPreviewWrap}>
           <Text style={styles.reviewLabel}>{t("visitFlow.fieldLocation")}</Text>
-          <LocationPreviewMap
-            height={180}
-            latitude={gpsCoords?.latitude ?? farmer?.latitude}
-            longitude={gpsCoords?.longitude ?? farmer?.longitude}
-            title={farmerName}
-            description={farmerVillage}
-            markerKind="visit"
-            showLiveLocation
-            emptyMessage={t("visitFlow.gpsNotCaptured")}
-          />
+          {gpsUi === "ready" && gpsCoords ? (
+            <LocationPreviewMap
+              height={180}
+              latitude={gpsCoords.latitude}
+              longitude={gpsCoords.longitude}
+              title={farmerName}
+              description={farmerVillage}
+              markerKind="visit"
+              showLiveLocation={false}
+              interactive={false}
+              emptyMessage={t("visitFlow.gpsNotCaptured")}
+            />
+          ) : (
+            <View style={styles.gpsActionPanel}>
+              <Text style={styles.gpsActionBody}>
+                {gpsMessage ||
+                  (gpsUi === "capturing"
+                    ? t("visitFlow.gpsGettingLocation")
+                    : t("visitFlow.gpsCouldNotGet"))}
+              </Text>
+              {gpsUi === "permission_missing" ? (
+                <PrimaryButton
+                  label={t("visitFlow.gpsFixLocationAccess")}
+                  onPress={() => navigateRoot("FieldTrackingSetup", { focusMissing: ["foreground"] })}
+                  style={styles.gpsActionBtn}
+                />
+              ) : null}
+              {gpsUi === "services_disabled" ? (
+                <PrimaryButton
+                  label={t("visitFlow.gpsOpenLocationSettings")}
+                  onPress={() => void openLocationPermissionSettings()}
+                  style={styles.gpsActionBtn}
+                />
+              ) : null}
+              {gpsUi === "failed" || gpsUi === "permission_missing" || gpsUi === "services_disabled" ? (
+                <Pressable onPress={() => void runGpsCapture()} style={styles.retryLink}>
+                  <Text style={styles.retryLinkText}>{t("visitFlow.gpsRetry")}</Text>
+                </Pressable>
+              ) : null}
+              {gpsUi === "failed" ? (
+                <Pressable onPress={onBack} style={styles.retryLink}>
+                  <Text style={styles.retryLinkText}>{t("common.goBack")}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          )}
         </View>
         </EntranceBlocks>
       </ScrollView>
@@ -248,8 +419,8 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
         <PrimaryButton
           label={online ? t("visitFlow.submitVisit") : t("visitFlow.saveOffline")}
           onPress={() => void handleSubmit()}
-          loading={submitting || workdayBusy || phase !== "idle"}
-          disabled={submitting || workdayBusy || isVisitSubmitInFlight()}
+          loading={submitting || gpsUi === "capturing"}
+          disabled={submitDisabled}
           icon={
             <Ionicons
               name={online ? "send-outline" : "cloud-upload-outline"}
@@ -348,7 +519,10 @@ const styles = StyleSheet.create({
   gpsStatus: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 6
+    flexShrink: 1,
+    gap: 6,
+    justifyContent: "flex-end",
+    maxWidth: "70%"
   },
   gpsDot: {
     borderRadius: 4,
@@ -357,11 +531,46 @@ const styles = StyleSheet.create({
   },
   gpsText: {
     color: Colors.text3,
-    fontSize: FontSize.sm
+    flexShrink: 1,
+    fontSize: FontSize.sm,
+    textAlign: "right"
   },
   mapPreviewWrap: {
     gap: 8,
     paddingVertical: 4
+  },
+  gpsFixedHint: {
+    color: Colors.text3,
+    fontSize: FontSize.sm,
+    lineHeight: 18
+  },
+  gpsActionPanel: {
+    alignItems: "center",
+    backgroundColor: Colors.surfaceMuted,
+    borderColor: Colors.border,
+    borderRadius: Radius.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: Spacing.sm,
+    minHeight: 160,
+    justifyContent: "center",
+    padding: Spacing.lg
+  },
+  gpsActionBody: {
+    color: Colors.text2,
+    fontSize: FontSize.md,
+    lineHeight: 20,
+    textAlign: "center"
+  },
+  gpsActionBtn: {
+    width: "100%"
+  },
+  retryLink: {
+    paddingVertical: 6
+  },
+  retryLinkText: {
+    color: Colors.brand700,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semibold
   },
   footerBtn: {
     width: "100%"

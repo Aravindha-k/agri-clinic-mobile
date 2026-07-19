@@ -1,5 +1,5 @@
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { AlertTriangle, ClipboardList, Map, Users } from "lucide-react-native";
+import { AlertTriangle, ClipboardList, Map, PlusCircle, Users } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState, RefreshControl, StyleSheet } from "react-native";
 import Animated, {
@@ -23,7 +23,6 @@ import { useTracking } from "../../../src/storage/TrackingContext";
 import { useDuty } from "../../../src/features/duty/store/DutyContext";
 import { useDutyTimer } from "../../../src/features/duty/hooks/useDutyTimer";
 import { useDutyPresentation } from "../../../src/features/duty/hooks/useDutyPresentation";
-import { extractPhotoUrl, photoCacheVersion } from "../../../src/utils/profilePhotoUrl";
 import { autoFlushPendingGps } from "../../lib/sync/offlineSyncManager";
 import { FadeInSection, entranceStagger } from "../../components/ui/FadeInSection";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
@@ -31,18 +30,16 @@ import { ScreenCanvas, ScreenEntranceRipple } from "../../components/layout";
 import {
   RecentActivitySection,
   TodayHeader,
-  TodayStatsGrid,
   TodayQuickActions,
   type TodayQuickAction
 } from "../../components/today";
+import { TodayEssentialsRow } from "../../components/today/TodayEssentialsRow";
 import { OfflineBanner } from "../../components/ui";
-import { SyncHealthIndicator } from "../../components/sync/SyncHealthIndicator";
 import { ScreenLoader } from "../../components/layout/ScreenLoader";
 import {
-  ActiveWorkDayCard,
   CompletedWorkDayCard,
-  HomeDashboardStatusRow,
-  StartWorkDayCard
+  StartWorkDayCard,
+  TodayCompactStatusCard
 } from "../../components/duty";
 import { readDashboardCache } from "../../lib/dashboardCache";
 import { formatHeaderDate } from "../../lib/format";
@@ -51,7 +48,6 @@ import { getBadgeCount } from "../../lib/notificationsApi";
 import { useSyncStore } from "../../lib/store/syncStore";
 import { useScreenTopEdges } from "../../hooks/useScreenTopEdges";
 import { Colors, Layout, Spacing } from "../../lib/theme";
-import { TODAY_SECTION_GAP } from "../../lib/todayLayout";
 import type { DashboardData } from "../../lib/types";
 
 function greetingKey(hour: number) {
@@ -74,18 +70,13 @@ export default function TodayTabScreen() {
   const { employee } = useEmployee();
   const { pendingCount, lastSyncAt, syncing } = useOfflineSync();
   const { visitsVersion } = useFieldDataRefresh();
-  const {
-    busy,
-    error: trackingError,
-    pendingGpsCount,
-    gpsEnabled,
-    permissionDenied,
-    refreshTrackingState
-  } = useTracking();
+  const { busy, error: trackingError, pendingGpsCount, gpsEnabled, permissionDenied, refreshTrackingState } =
+    useTracking();
   const { hydrationStatus, currentDuty, dutyMap, isOffline, refreshBootstrap, refreshDutyMap, startDuty } = useDuty();
   const dutyTimer = useDutyTimer();
   const dutyPresentation = useDutyPresentation(currentDuty);
   const unreadNotifCount = useSyncStore((state) => state.unreadNotifCount);
+  const pendingSync = pendingGpsCount + pendingCount;
 
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [cacheHydrated, setCacheHydrated] = useState(false);
@@ -100,17 +91,15 @@ export default function TodayTabScreen() {
   const entranceTick = useScreenEntrance();
   const showOfflineBanner = lanOnly || isOffline;
   const headerStep = showOfflineBanner ? 1 : 0;
-  const insightsStep = headerStep + 4;
-  const actionsStep = insightsStep + 1;
+  const essentialsStep = headerStep + 2;
+  const actionsStep = essentialsStep + 1;
   const activityStep = actionsStep + 1;
 
   const employeeName = employee?.full_name || employee?.name || employee?.username || null;
   const dateLabel = formatHeaderDate();
   const greeting = t(greetingKey(new Date().getHours()));
-  const photoUrl = extractPhotoUrl(employee);
-  const photoVersion = photoCacheVersion(employee) ?? Date.now();
-  const pendingSync = pendingGpsCount + pendingCount;
   const visitsToday = dashboard?.visits_today ?? 0;
+  const farmersCovered = dashboard?.farmers_covered ?? 0;
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -207,6 +196,21 @@ export default function TodayTabScreen() {
     setDismissedError("");
     setStartPhase("location");
     try {
+      const {
+        ensureFieldTrackingReadyForWorkday,
+        showFieldTrackingNeedsAttentionAlert
+      } = await import("../../../src/features/fieldTrackingSetup");
+      const { navigateRoot } = await import("../../../src/navigation/rootNavigationRef");
+      const health = await ensureFieldTrackingReadyForWorkday();
+      if (!health.ok) {
+        setStarting(false);
+        setStartPhase("idle");
+        showFieldTrackingNeedsAttentionAlert(health.missing, () => {
+          navigateRoot("FieldTrackingSetup", { focusMissing: health.missing });
+        });
+        return;
+      }
+
       setStartPhase("starting");
       const started = await startDuty();
       if (!started) return;
@@ -238,30 +242,32 @@ export default function TodayTabScreen() {
       {
         key: "farmers",
         label: t("home.farmers"),
-        subtitle: t("home.farmersSubtitle"),
         icon: Users,
         onPress: () => navigation.navigate("Work", { screen: "WorkHome", params: { segment: "queue" } })
       },
       {
+        key: "newVisit",
+        label: "New Visit",
+        icon: PlusCircle,
+        onPress: () => rootNav?.navigate("StartVisit")
+      },
+      {
         key: "visits",
         label: t("home.myVisits"),
-        subtitle: t("home.myVisitsSubtitle"),
         icon: ClipboardList,
         onPress: () => navigation.navigate("Work", { screen: "WorkHome", params: { segment: "visits" } })
       },
       {
-        key: "problems",
-        label: t("home.problems"),
-        subtitle: t("home.problemsSubtitle"),
-        icon: AlertTriangle,
-        onPress: () => navigation.navigate("Me", { screen: "ProblemsCatalog" })
-      },
-      {
         key: "routes",
-        label: t("home.myRoutes"),
-        subtitle: t("home.myRoutesSubtitle"),
+        label: "My Location",
         icon: Map,
         onPress: () => rootNav?.navigate("MyLocation")
+      },
+      {
+        key: "problems",
+        label: "Report Problem",
+        icon: AlertTriangle,
+        onPress: () => navigation.navigate("Me", { screen: "ProblemsCatalog" })
       }
     ],
     [navigation, rootNav, t]
@@ -298,8 +304,6 @@ export default function TodayTabScreen() {
           </FadeInSection>
         ) : null}
 
-        <SyncHealthIndicator onPress={() => rootNav?.navigate("SyncStatus")} />
-
         <Animated.View style={[styles.headerHeroZone, headerParallaxStyle]}>
           <TodayHeader
             greeting={greeting}
@@ -315,37 +319,17 @@ export default function TodayTabScreen() {
         </Animated.View>
 
         <FadeInSection replayKey={entranceTick} delay={entranceStagger(headerStep + 1)}>
-          <HomeDashboardStatusRow
-            photoUrl={photoUrl}
-            photoVersion={photoVersion}
-            offline={lanOnly || isOffline}
-            pendingSync={pendingSync}
-            gpsEnabled={gpsEnabled}
-            permissionDenied={permissionDenied}
-          />
-        </FadeInSection>
-
-        <FadeInSection replayKey={entranceTick} delay={entranceStagger(headerStep + 2)}>
           {hydrating ? (
             <ScreenLoader message={t("workdayUx.loadingWorkday")} />
           ) : dutyPresentation.isActive ? (
-            <ActiveWorkDayCard
+            <TodayCompactStatusCard
               startedAt={dutyPresentation.startedAt}
-              elapsed={dutyTimer.elapsedDisplay}
-              remaining={dutyTimer.remainingDisplay}
               expectedEndAt={dutyTimer.expectedEndAt}
-              visitsToday={visitsToday}
-              farmersToday={dashboard?.farmers_covered ?? 0}
-              distanceKm={dutyMap?.distanceKm ?? null}
-              pendingSync={pendingSync}
-              offline={lanOnly || isOffline}
-              gpsEnabled={gpsEnabled}
-              permissionDenied={permissionDenied}
+              statusLabel={t("workdayUx.workdayActive")}
               onOpenDay={() => navigation.navigate("Day")}
             />
           ) : dutyPresentation.isCompleted ? (
             <CompletedWorkDayCard
-              elapsed={dutyTimer.elapsedDisplay}
               startedAt={dutyPresentation.startedAt}
               endedAt={dutyPresentation.endedAt}
               autoCompleted={dutyPresentation.sessionStatus === "auto_completed"}
@@ -377,12 +361,9 @@ export default function TodayTabScreen() {
 
         {showWorkInsights ? (
           <Animated.View style={[styles.belowHero, contentParallaxStyle]}>
-            <TodayStatsGrid
-              dashboard={dashboard}
-              farmersCovered={dashboard?.farmers_covered ?? 0}
-              visitsSubtitle={t("home.visitsCompleted", { count: visitsToday })}
-              farmersSubtitle={t("home.farmersTotal", { count: dashboard?.farmers_covered ?? 0 })}
-              entrance={{ replayKey: entranceTick, sectionStep: insightsStep }}
+            <TodayEssentialsRow
+              visitsToday={visitsToday}
+              farmersCovered={farmersCovered}
             />
 
             <TodayQuickActions
@@ -427,7 +408,7 @@ const styles = StyleSheet.create({
     gap: 0
   },
   belowHero: {
-    gap: TODAY_SECTION_GAP,
-    paddingTop: TODAY_SECTION_GAP
+    gap: Spacing.md,
+    paddingTop: Spacing.md
   }
 });

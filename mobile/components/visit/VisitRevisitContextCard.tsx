@@ -13,7 +13,7 @@ export function VisitRevisitContextCard({ context }: Props) {
     context.cropLabel ? { label: t("visitFlow.previousCrop"), value: context.cropLabel } : null,
     context.problemLabel ? { label: t("visitFlow.previousProblem"), value: context.problemLabel } : null,
     context.recommendationLabel
-      ? { label: t("visitFlow.previousRecommendation"), value: context.recommendationLabel }
+      ? { label: t("visitFlow.previousFieldNotes"), value: context.recommendationLabel }
       : null
   ].filter(Boolean) as { label: string; value: string }[];
 

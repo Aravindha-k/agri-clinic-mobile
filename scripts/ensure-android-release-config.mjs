@@ -24,15 +24,20 @@ mkdirSync(nscDir, { recursive: true });
 writeFileSync(
   nscPath,
   `<?xml version="1.0" encoding="utf-8"?>
+<!-- Cleartext only for known HTTP API hosts — not a global allow-all. -->
 <network-security-config>
   <domain-config cleartextTrafficPermitted="true">
+    <domain includeSubdomains="false">192.168.29.18</domain>
+    <domain includeSubdomains="false">10.0.2.2</domain>
+    <domain includeSubdomains="false">localhost</domain>
+    <domain includeSubdomains="false">127.0.0.1</domain>
     <domain includeSubdomains="false">${AWS_HOST}</domain>
   </domain-config>
-  <base-config cleartextTrafficPermitted="true" />
+  <base-config cleartextTrafficPermitted="false" />
 </network-security-config>
 `
 );
-console.log("[ensure-android-release-config] wrote network_security_config.xml");
+console.log("[ensure-android-release-config] wrote network_security_config.xml (scoped cleartext)");
 
 const manifestPath = resolve(androidDir, "app/src/main/AndroidManifest.xml");
 let manifest = readFileSync(manifestPath, "utf8");
@@ -198,7 +203,6 @@ if (existsSync(stylesPath)) {
     <item name="windowSplashScreenAnimatedIcon">@drawable/splashscreen_icon</item>
     <item name="windowSplashScreenIconBackgroundColor">@color/splashscreen_background</item>
     <item name="postSplashScreenTheme">@style/AppTheme</item>
-    <item name="android:windowSplashScreenBehavior">icon_preferred</item>
   </style>
 </resources>
 `;
@@ -226,7 +230,7 @@ console.log("[ensure-android-release-config] wrote values-v31 splash overrides")
 const splashScript = resolve(ROOT, "scripts/generate-splash-logo.mjs");
 if (existsSync(splashScript)) {
   execSync(`node "${splashScript}"`, { stdio: "inherit", cwd: ROOT });
-  console.log("[ensure-android-release-config] generated transparent native splash drawables");
+  console.log("[ensure-android-release-config] generated circular native splash drawables");
 }
 
 const launcherBgPath = resolve(androidDir, "app/src/main/res/drawable/ic_launcher_background.xml");

@@ -345,7 +345,7 @@ export const Elevation = {
 export const Layout = {
   touchTargetMin: 48,
   buttonHeight: Enterprise.buttonHeight,
-  tabBarHeight: 60,
+  tabBarHeight: 58,
   cardBorderWidth: StyleSheet.hairlineWidth,
   fabSize: 56,
   fabRaise: 18,

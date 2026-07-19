@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
   },
   glass: {
     marginTop: Spacing.sm,
-    minHeight: 288,
+    minHeight: 220,
     overflow: "visible"
   },
   brandHeader: {

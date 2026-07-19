@@ -20,14 +20,13 @@ import { useSecureScreen } from "../hooks/useSecureScreen";
 import { useAuth } from "../storage/AuthContext";
 import {
   canUseBiometricLogin,
-  clearBiometricLogin,
   dismissBiometricEnrollmentPrompt,
   enableBiometricLoginWithVerification,
   getBiometricLoginStatus,
   hasAttemptedBiometricUnlockThisLaunch,
   markBiometricUnlockAttempted,
   shouldOfferBiometricEnrollment,
-  unlockSessionWithBiometrics,
+  shouldPreferPasswordLoginThisSession,
   type BiometricLoginStatus
 } from "../storage/biometricLoginStorage";
 import { useI18n } from "../i18n/I18nContext";
@@ -41,6 +40,7 @@ import {
   categorizeLoginNetworkError,
   loginErrorMessageForCategory
 } from "../utils/loginDiagnostics";
+import { hasSplashUiReady, onSplashUiReady } from "../bootstrap/splashUiGate";
 
 const CARD_TOP_RADIUS = 24;
 const CARD_PAD = 24;
@@ -58,7 +58,7 @@ export function LoginScreen() {
   useSecureScreen();
   const insets = useSafeAreaInsets();
   const { t } = useI18n();
-  const { signIn, loginNotice, clearLoginNotice, completeBiometricUnlock } = useAuth();
+  const { signIn, loginNotice, clearLoginNotice, completeBiometricUnlock, attemptBiometricUnlock } = useAuth();
 
   const scrollRef = useRef<ScrollView>(null);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
@@ -72,6 +72,7 @@ export function LoginScreen() {
   const [biometricReady, setBiometricReady] = useState(false);
   const [biometricCanLogin, setBiometricCanLogin] = useState(false);
   const [biometricBusy, setBiometricBusy] = useState(false);
+  const [splashReady, setSplashReady] = useState(hasSplashUiReady);
 
   const refreshBiometricState = useCallback(async () => {
     try {
@@ -85,6 +86,8 @@ export function LoginScreen() {
       setBiometricReady(true);
     }
   }, []);
+
+  useEffect(() => onSplashUiReady(() => setSplashReady(true)), []);
 
   useFocusEffect(
     useCallback(() => {
@@ -159,6 +162,8 @@ export function LoginScreen() {
     try {
       await signIn(user, password);
       await offerBiometricEnrollmentIfNeeded();
+      const { maybeOfferFieldTrackingSetupAfterLogin } = await import("../features/fieldTrackingSetup");
+      await maybeOfferFieldTrackingSetupAfterLogin();
     } catch (error) {
       if (error instanceof ApiRequestError && error.code === "INVALID_CREDENTIALS") {
         setLoginError(error.message || t("login.invalidCredentials"));
@@ -176,7 +181,7 @@ export function LoginScreen() {
   }
 
   async function handleBiometricLogin() {
-    if (biometricBusy || loading) {
+    if (biometricBusy || loading || !hasSplashUiReady()) {
       return;
     }
 
@@ -184,9 +189,25 @@ export function LoginScreen() {
     setLoginError("");
 
     try {
-      const unlocked = await unlockSessionWithBiometrics();
-      if (!unlocked) {
-        setLoginError(t("login.biometricCancelled"));
+      const unlocked = await attemptBiometricUnlock();
+      if (!unlocked.ok) {
+        if (
+          unlocked.outcome === "user_cancel" ||
+          unlocked.outcome === "authentication_failed" ||
+          unlocked.outcome === "timeout" ||
+          unlocked.outcome === "prompt_busy"
+        ) {
+          setLoginError(t("login.biometricCancelled"));
+        } else if (
+          unlocked.outcome === "token_refresh_failed" ||
+          unlocked.outcome === "no_refresh_token"
+        ) {
+          setLoginError(t("login.sessionExpired"));
+        } else if (unlocked.outcome === "lockout") {
+          setLoginError(t("login.biometricFailed"));
+        } else {
+          setLoginError(t("login.biometricFailed"));
+        }
         await refreshBiometricState();
         return;
       }
@@ -198,7 +219,7 @@ export function LoginScreen() {
           error.code === "ACCOUNT_DISABLED" ||
           error.status === 403)
       ) {
-        await clearBiometricLogin();
+        // Do not clear fingerprint preference — password login reconnects it.
         await refreshBiometricState();
         setLoginError(
           error.code === "ACCOUNT_DISABLED" || error.status === 403
@@ -216,13 +237,14 @@ export function LoginScreen() {
   }
 
   useEffect(() => {
-    if (!biometricReady || !biometricCanLogin || biometricBusy || loading) return;
-    // One automatic prompt per app launch. Survives LoginScreen remounts so
-    // tab switches, Profile visits, and repeated foregrounding never re-open it.
+    if (!splashReady || !biometricReady || !biometricCanLogin || biometricBusy || loading) return;
+    // Unlock gate owns the cold-start prompt. Login only auto-prompts when
+    // password fallback was not chosen and unlock was never attempted.
+    if (shouldPreferPasswordLoginThisSession()) return;
     if (hasAttemptedBiometricUnlockThisLaunch()) return;
     markBiometricUnlockAttempted();
     void handleBiometricLogin();
-  }, [biometricBusy, biometricCanLogin, biometricReady, loading]);
+  }, [biometricBusy, biometricCanLogin, biometricReady, loading, splashReady]);
 
   return (
     <View style={styles.screen}>

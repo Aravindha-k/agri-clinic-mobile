@@ -80,8 +80,12 @@ export function PendingVisitDetail({
             <Detail label={t("visitFlow.cropSummary")} value={visit.values.crop_name || "—"} />
             <Detail label={t("visitFlow.problemSummary")} value={visit.values.problem_seen || "—"} />
             <Detail
-              label={t("visitFlow.observationOptional")}
-              value={visit.values.observation?.trim() || t("visitFlow.noObservationOptional")}
+              label={t("visitFlow.fieldNotes")}
+              value={
+                visit.values.field_notes?.trim() ||
+                visit.values.observation?.trim() ||
+                t("visitFlow.noFieldNotes")
+              }
             />
             <Detail label={t("visitFlow.attempts")} value={String(visit.attempts)} />
             <Detail label={t("visitFlow.photos")} value={String(visit.photos.length)} />

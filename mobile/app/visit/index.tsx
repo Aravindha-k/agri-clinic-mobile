@@ -1,6 +1,6 @@
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Animated, Dimensions, Easing, StyleSheet } from "react-native";
+import { Alert, Animated, Easing, StyleSheet, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { Farmer } from "../../../src/api/farmers";
 import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
@@ -9,7 +9,10 @@ import { useMasterData } from "../../../src/storage/MasterDataContext";
 import { useTracking } from "../../../src/storage/TrackingContext";
 import { useDuty } from "../../../src/features/duty/store/DutyContext";
 import { loadRevisitPrefill } from "../../../src/utils/farmerPrefill";
-import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal";
+import {
+  ensureLocationReadyForVisit,
+  promptFixLocationAccess
+} from "../../../src/features/fieldTrackingSetup";
 import {
   WorkdayRequiredSheet,
   type WorkdayRequiredSheetRef
@@ -22,11 +25,10 @@ import { isVisitSubmitInFlight } from "../../lib/visit/visitSubmitCoordinator";
 import { useVisitFormStore } from "../../store/visitFormStore";
 import VisitCreateStep, { VisitCreateStep2, VisitCreateStep3, VisitCreateStep4 } from "./create";
 
-const SCREEN_WIDTH = Dimensions.get("window").width;
-
 export default function VisitFlowShell() {
   useSecureScreen();
   const { t } = useI18n();
+  const { width: screenWidth } = useWindowDimensions();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { districts, villages } = useMasterData();
@@ -53,13 +55,13 @@ export default function VisitFlowShell() {
     prevStep.current = step;
 
     Animated.timing(slideAnim, {
-      toValue: -dir * SCREEN_WIDTH,
+      toValue: -dir * screenWidth,
       duration: 220,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true
     }).start(() => {
       setDisplayedStep(step);
-      slideAnim.setValue(dir * SCREEN_WIDTH);
+      slideAnim.setValue(dir * screenWidth);
       Animated.timing(slideAnim, {
         toValue: 0,
         duration: 200,
@@ -67,7 +69,7 @@ export default function VisitFlowShell() {
         useNativeDriver: true
       }).start();
     });
-  }, [slideAnim, step]);
+  }, [screenWidth, slideAnim, step]);
 
   useEffect(() => {
     let active = true;
@@ -92,43 +94,46 @@ export default function VisitFlowShell() {
     const stub: Farmer = { id: Number(farmerId), name: route.params.prefill.farmer_name || "" };
 
     void (async () => {
-      if (!currentDuty?.is_active) {
-        const started = await startDuty();
-        if (!started) {
+      try {
+        if (!currentDuty?.is_active) {
+          const started = await startDuty();
+          if (!started) {
+            // startDuty already showed recovery UI — keep visit stack; do not crash.
+            fastRevisitStarted.current = false;
+            navigation.setParams({ fastRevisit: undefined });
+            return;
+          }
+        }
+
+        const ready = await ensureLocationReadyForVisit();
+        if (!ready.ok) {
           fastRevisitStarted.current = false;
           navigation.setParams({ fastRevisit: undefined });
-          navigation.goBack();
+          promptFixLocationAccess(ready, { title: t("visitFlow.revisitGpsTitle") });
           return;
         }
-      }
 
-      const allowed = await requestGpsForFieldWork();
-      if (!allowed) {
-        fastRevisitStarted.current = false;
-        navigation.setParams({ fastRevisit: undefined });
-        Alert.alert(t("visitFlow.revisitGpsTitle"), t("visitFlow.revisitGpsBody"), [
-          { text: t("common.cancel"), style: "cancel", onPress: () => navigation.goBack() }
-        ]);
-        return;
-      }
-
-      try {
-        const loaded = await loadRevisitPrefill(stub, { districts, villages });
-        applyRevisitPrefill(loaded);
-        setStep(2);
-        navigation.setParams({ fastRevisit: undefined });
+        try {
+          const loaded = await loadRevisitPrefill(stub, { districts, villages });
+          applyRevisitPrefill(loaded);
+          setStep(2);
+          navigation.setParams({ fastRevisit: undefined });
+        } catch {
+          fastRevisitStarted.current = false;
+          Alert.alert(t("visitFlow.revisitPrefillTitle"), t("visitFlow.revisitPrefillBody"), [
+            {
+              text: t("common.retry"),
+              onPress: () => {
+                fastRevisitStarted.current = false;
+                navigation.setParams({ fastRevisit: true });
+              }
+            },
+            { text: t("common.cancel"), style: "cancel", onPress: () => navigation.goBack() }
+          ]);
+        }
       } catch {
         fastRevisitStarted.current = false;
-        Alert.alert(t("visitFlow.revisitPrefillTitle"), t("visitFlow.revisitPrefillBody"), [
-          {
-            text: t("common.retry"),
-            onPress: () => {
-              fastRevisitStarted.current = false;
-              navigation.setParams({ fastRevisit: true });
-            }
-          },
-          { text: t("common.cancel"), style: "cancel", onPress: () => navigation.goBack() }
-        ]);
+        navigation.setParams({ fastRevisit: undefined });
       }
     })();
   }, [
@@ -224,9 +229,13 @@ export default function VisitFlowShell() {
         ref={workdaySheetRef}
         busy={workdayBusy}
         onStart={async () => {
-          const started = await startDuty();
-          if (started) {
-            workdaySheetRef.current?.close();
+          try {
+            const started = await startDuty();
+            if (started) {
+              workdaySheetRef.current?.close();
+            }
+          } catch {
+            // startDuty is fail-safe; never crash the visit shell.
           }
         }}
       />

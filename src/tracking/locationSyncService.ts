@@ -19,7 +19,7 @@ import {
 } from "../storage/lastSentRouteStorage";
 import { getActiveDutySessionId, getActiveWorkdayId } from "../storage/workdaySessionStorage";
 import { toTrackingPayload } from "../utils/location";
-import { isDutySessionMismatchMessage } from "../utils/workdayStatus";
+import { isDutySessionMismatchMessage, isWorkdayInactiveMessage } from "../utils/workdayStatus";
 import { shouldSendLocation, type RoutePoint } from "./shouldSendLocation";
 import { trackingDevLog } from "./trackingDevLog";
 import { getBatteryPercent } from "../../mobile/lib/gps/trackingService";
@@ -27,17 +27,29 @@ import { isDutyTrackingSessionActive, restoreDutySessionFromStorage } from "./tr
 import { notifyRouteSynced } from "../utils/routeSyncBus";
 import { refreshSyncStoreCounts } from "../../mobile/lib/sync/offlineSyncManager";
 import { applyGpsBulkAcknowledgement } from "../../mobile/lib/sync/gpsBulkAck";
+import { generateLocalPointId } from "../../mobile/lib/sync/queueIds";
 import { readActiveUserGpsQueue, replaceActiveUserGpsQueue } from "../../mobile/lib/sync/gpsQueueStore";
+import { assertTrackingAuthReady } from "./trackingAuthGate";
+import { clearCachedActiveWorkday } from "../storage/workdaySessionStorage";
 
 export type LocationHandleResult = "sent" | "skipped" | "queued";
 
 let locationUploadInFlight = false;
 let locationHandleInFlight = false;
+/** Single-flight resume flush so AppState + sync + home don't triple-upload. */
+let resumeFlushPromise: Promise<number> | null = null;
 
 function scheduleBackgroundGpsFlush() {
   void import("../../mobile/lib/sync/offlineSyncManager").then(({ autoFlushPendingGps }) => {
     void autoFlushPendingGps();
   });
+}
+
+async function stopTrackingAfterDutyEnded(reason: string): Promise<void> {
+  trackingDevLog("tracking_stopped", reason);
+  await clearCachedActiveWorkday().catch(() => undefined);
+  const { stopTrackingBridge } = await import("../storage/TrackingContext");
+  await stopTrackingBridge().catch(() => undefined);
 }
 
 function locationToRoutePoint(location: Location.LocationObject): RoutePoint {
@@ -72,6 +84,7 @@ async function buildPayload(
     getBatteryPercent(),
     getGpsStateReport(options)
   ]);
+  const clientPointId = generateLocalPointId();
   return {
     ...toTrackingPayload(
       location,
@@ -79,8 +92,10 @@ async function buildPayload(
         workdayId: workdayId ?? undefined,
         dutySessionId: dutySessionId ?? undefined
       },
-      batteryLevel
+      batteryLevel,
+      clientPointId
     ),
+    client_point_id: clientPointId,
     gps_enabled: gpsState.gps_enabled,
     location_permission_status: gpsState.location_permission_status,
     background_tracking_enabled: gpsState.background_tracking_enabled
@@ -105,6 +120,13 @@ async function flushSinglePoint(point: LocationPushPayload): Promise<number> {
 
 /** Try live upload; queue locally on failure. */
 export async function syncLocationPoint(payload: LocationPushPayload): Promise<void> {
+  const gate = await assertTrackingAuthReady("syncLocationPoint");
+  if (!gate.ready) {
+    await appendLocationPush(payload);
+    refreshSyncStoreCounts();
+    return;
+  }
+
   if (locationUploadInFlight) {
     await appendLocationPush(payload);
     return;
@@ -123,8 +145,21 @@ export async function syncLocationPoint(payload: LocationPushPayload): Promise<v
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : "upload failed";
-      if (isDutySessionMismatchMessage(message)) {
-        trackingDevLog("duty_session_mismatch", message);
+      if (message.startsWith("TRACKING_DEFERRED_AUTH:")) {
+        await appendLocationPush(payload);
+        refreshSyncStoreCounts();
+        trackingDevLog("tracking_deferred_auth_not_ready", message);
+        return;
+      }
+      if (isDutySessionMismatchMessage(message) || isWorkdayInactiveMessage(message)) {
+        trackingDevLog(
+          isDutySessionMismatchMessage(message) ? "duty_session_mismatch" : "skipped_reason",
+          message
+        );
+        await stopTrackingAfterDutyEnded(
+          isWorkdayInactiveMessage(message) ? "workday_inactive_or_expired" : "duty_session_mismatch"
+        );
+        return;
       } else {
         await appendLocationPush(payload);
         refreshSyncStoreCounts();
@@ -138,71 +173,88 @@ export async function syncLocationPoint(payload: LocationPushPayload): Promise<v
   }
 }
 
-/** Flush MMKV offline queue — used on reconnect / app foreground. */
+/** Flush MMKV offline queue — used on reconnect / app foreground. Single-flight. */
 export async function flushOfflineLocationQueue(): Promise<number> {
-  await hydrateLocationPushDeviceSession();
-  const rawQueue = await readLocationPushQueue();
-  if (!rawQueue.length || locationUploadInFlight) {
-    return 0;
+  if (resumeFlushPromise) {
+    return resumeFlushPromise;
   }
 
-  const activeDutyId = await getActiveDutySessionId();
-  const queue = rawQueue.map((point) => ({
-    ...point,
-    duty_session_id: activeDutyId ?? point.duty_session_id
-  }));
-  const sentPointIds = queue
-    .map((point) => point.client_point_id)
-    .filter((id): id is string => Boolean(id));
+  resumeFlushPromise = (async () => {
+    const gate = await assertTrackingAuthReady("flushOfflineLocationQueue");
+    if (!gate.ready) {
+      return 0;
+    }
 
-  locationUploadInFlight = true;
-  try {
-    let removed = 0;
-    if (queue.length === 1) {
-      removed = await flushSinglePoint(queue[0]);
-    } else {
-      try {
-        const ack = await pushLocationsBulk(queue);
-        removed = applyBulkAckToStore(ack, sentPointIds);
-        if (removed === 0 && ack.success_count > 0 && sentPointIds.length > 0) {
-          removed = await acknowledgeLocationPushPoints(sentPointIds.slice(0, ack.success_count));
-        }
-      } catch (bulkErr) {
-        const bulkMessage = bulkErr instanceof Error ? bulkErr.message : "";
-        if (isDutySessionMismatchMessage(bulkMessage)) {
-          trackingDevLog("duty_session_mismatch", bulkMessage);
-          throw bulkErr;
-        }
-        for (const point of queue) {
-          try {
-            removed += await flushSinglePoint(point);
-          } catch {
-            /* retain point in queue */
+    await hydrateLocationPushDeviceSession();
+    const rawQueue = await readLocationPushQueue();
+    if (!rawQueue.length || locationUploadInFlight) {
+      return 0;
+    }
+
+    const activeDutyId = await getActiveDutySessionId();
+    const queue = rawQueue.map((point) => ({
+      ...point,
+      duty_session_id: activeDutyId ?? point.duty_session_id
+    }));
+    const sentPointIds = queue
+      .map((point) => point.client_point_id)
+      .filter((id): id is string => Boolean(id));
+
+    locationUploadInFlight = true;
+    try {
+      let removed = 0;
+      if (queue.length === 1) {
+        removed = await flushSinglePoint(queue[0]);
+      } else {
+        try {
+          const ack = await pushLocationsBulk(queue);
+          removed = applyBulkAckToStore(ack, sentPointIds);
+          if (removed === 0 && ack.success_count > 0 && sentPointIds.length > 0) {
+            removed = await acknowledgeLocationPushPoints(sentPointIds.slice(0, ack.success_count));
+          }
+        } catch (bulkErr) {
+          const bulkMessage = bulkErr instanceof Error ? bulkErr.message : "";
+          if (isDutySessionMismatchMessage(bulkMessage) || isWorkdayInactiveMessage(bulkMessage)) {
+            trackingDevLog("duty_session_mismatch", bulkMessage);
+            await stopTrackingAfterDutyEnded("flush_duty_inactive");
+            throw bulkErr;
+          }
+          for (const point of queue) {
+            try {
+              removed += await flushSinglePoint(point);
+            } catch {
+              /* retain point in queue */
+            }
           }
         }
       }
-    }
 
-    const remaining = readActiveUserGpsQueue();
-    const lastAcked = queue.find((p) => p.client_point_id && !remaining.some(
-      (r) => r.local_point_id === p.client_point_id
-    ));
-    if (lastAcked) {
-      await setLastSentRoutePoint(payloadToRoutePoint(lastAcked));
+      const remaining = readActiveUserGpsQueue();
+      const lastAcked = queue.find((p) => p.client_point_id && !remaining.some(
+        (r) => r.local_point_id === p.client_point_id
+      ));
+      if (lastAcked) {
+        await setLastSentRoutePoint(payloadToRoutePoint(lastAcked));
+      }
+      refreshSyncStoreCounts();
+      if (removed > 0) {
+        notifyRouteSynced();
+      }
+      trackingDevLog("tracking_queue_flush", `removed=${removed} remaining=${remaining.length}`);
+      trackingDevLog("offline_flush", `removed=${removed} remaining=${remaining.length}`);
+      return removed;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "flush failed";
+      trackingDevLog("offline_flush_failed", message);
+      return 0;
+    } finally {
+      locationUploadInFlight = false;
     }
-    refreshSyncStoreCounts();
-    if (removed > 0) {
-      notifyRouteSynced();
-    }
-    trackingDevLog("offline_flush", `removed=${removed} remaining=${remaining.length}`);
-    return removed;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "flush failed";
-    trackingDevLog("offline_flush_failed", message);
-    return 0;
-  } finally {
-    locationUploadInFlight = false;
-  }
+  })().finally(() => {
+    resumeFlushPromise = null;
+  });
+
+  return resumeFlushPromise;
 }
 
 /**

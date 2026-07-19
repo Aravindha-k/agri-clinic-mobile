@@ -1,12 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { CompanyLogo } from "../brand/CompanyLogo";
 
 type Props = {
   children: ReactNode;
   height: number;
   screenName?: string;
   fallbackMessage?: string;
+  onRetry?: () => void;
 };
 
 type State = { hasError: boolean };
@@ -22,16 +24,30 @@ export class MapErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.warn(`[MapErrorBoundary:${this.props.screenName ?? "unknown"}]`, error.message, info.componentStack);
+    // Never expose raw exception text to employees.
+    console.warn(
+      `[MapErrorBoundary:${this.props.screenName ?? "unknown"}]`,
+      error.message,
+      info.componentStack
+    );
   }
+
+  private handleRetry = () => {
+    this.setState({ hasError: false });
+    this.props.onRetry?.();
+  };
 
   render() {
     if (this.state.hasError) {
       return (
         <View style={[styles.fallback, { minHeight: Math.max(this.props.height, 220) }]}>
-          <Ionicons name="map-outline" size={32} color="#6B7F74" />
+          <CompanyLogo size={48} />
           <Text style={styles.title}>Map unavailable</Text>
           <Text style={styles.body}>{this.props.fallbackMessage ?? DEFAULT_MESSAGE}</Text>
+          <Pressable onPress={this.handleRetry} style={styles.retryBtn} accessibilityRole="button">
+            <Ionicons name="refresh-outline" size={16} color="#1F7A4F" />
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
         </View>
       );
     }
@@ -60,5 +76,18 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginTop: 6,
     textAlign: "center"
+  },
+  retryBtn: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  retryText: {
+    color: "#1F7A4F",
+    fontSize: 14,
+    fontWeight: "700"
   }
 });

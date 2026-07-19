@@ -243,27 +243,25 @@ export async function ensureActiveWorkday(coords: WorkdayStartCoords): Promise<W
   throw new ApiRequestError("Could not confirm your workday. Please try again.");
 }
 
-export function endDutySession(dutySessionId?: number | null) {
-  const body =
-    dutySessionId != null && Number.isFinite(dutySessionId) && dutySessionId > 0
-      ? { duty_session_id: dutySessionId }
-      : {};
-  return dutyTrackingPost(
-    DUTY_TRACKING_ROUTES.end,
-    {
-      method: "POST",
-      body: JSON.stringify(body),
-      source: "Tracking"
-    }
+export function endDutySession(_dutySessionId?: number | null): never {
+  // Employees cannot manually end workdays — auto 9h expiry or admin only.
+  throw new ApiRequestError(
+    "Employees cannot end the workday manually. It ends automatically after 9 hours or by an administrator.",
+    { status: 403, code: "EMPLOYEE_END_FORBIDDEN" }
   );
 }
 
-/** @deprecated Use endDutySession */
+/** @deprecated Use endDutySession — always rejected for employees. */
 export function endWorkday() {
   return endDutySession();
 }
 
 export async function sendTrackingHeartbeat(options?: { gpsEnabledHint?: boolean }) {
+  const { assertTrackingAuthReady } = await import("../tracking/trackingAuthGate");
+  const gate = await assertTrackingAuthReady("sendTrackingHeartbeat");
+  if (!gate.ready) {
+    return null;
+  }
   const { getGpsStateReport } = await import("../utils/gpsStateReport");
   const report = await getGpsStateReport(options);
   return apiClient("tracking/heartbeat/", {
@@ -281,6 +279,11 @@ export async function pushLocation(
   location: LocationPushPayload,
   options?: { gpsEnabledHint?: boolean }
 ) {
+  const { assertTrackingAuthReady } = await import("../tracking/trackingAuthGate");
+  const gate = await assertTrackingAuthReady("pushLocation");
+  if (!gate.ready) {
+    throw new Error(`TRACKING_DEFERRED_AUTH:${gate.reason ?? "not_ready"}`);
+  }
   const { enrichLocationPushPayload } = await import("../utils/gpsStateReport");
   const body = await enrichLocationPushPayload(location, options);
   return dutyTrackingPost(
@@ -315,6 +318,11 @@ function toBulkPoint(location: LocationPushPayload) {
 
 /** Flush offline route points via bulk endpoint (falls back to per-point location/update). */
 export async function pushLocationsBulk(locations: LocationPushPayload[]): Promise<GpsBulkSyncResult> {
+  const { assertTrackingAuthReady } = await import("../tracking/trackingAuthGate");
+  const gate = await assertTrackingAuthReady("pushLocationsBulk");
+  if (!gate.ready) {
+    throw new Error(`TRACKING_DEFERRED_AUTH:${gate.reason ?? "not_ready"}`);
+  }
   const { enrichLocationPushPayload } = await import("../utils/gpsStateReport");
   const device = getDeviceInfo();
   const enriched = await Promise.all(locations.map((point) => enrichLocationPushPayload(point)));

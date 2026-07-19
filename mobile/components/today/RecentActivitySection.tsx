@@ -2,10 +2,9 @@ import { ChevronRight, Clock } from "lucide-react-native";
 import { StyleSheet, Text, View } from "react-native";
 import type { DashboardRecentVisit } from "../../lib/types";
 import { Grid, Harvest, IconSize, PremiumShadow, Typography } from "../../lib/designSystem";
-import { TODAY_CARD_RADIUS, TODAY_PAGE_PAD, TODAY_SECTION_GAP } from "../../lib/todayLayout";
+import { TODAY_CARD_RADIUS, TODAY_PAGE_PAD } from "../../lib/todayLayout";
 import { TodaySurfaces } from "../../lib/todaySurfaces";
 import { Colors, FontWeight } from "../../lib/theme";
-import { formatRelativeTime } from "../../../src/utils/formatRelativeTime";
 import { Avatar, PressableCard } from "../ui";
 import { LucideGlyph } from "../ui/AppIcon";
 import { SectionHeader } from "../ui/SectionHeader";
@@ -84,7 +83,14 @@ export function RecentActivitySection({
                       <View style={styles.statusChip}>
                         <Text style={styles.statusText}>Completed</Text>
                       </View>
-                      <Text style={styles.time}>{formatRelativeTime(item.visited_at)}</Text>
+                      <Text style={styles.time}>
+                        {item.visited_at
+                          ? new Date(item.visited_at).toLocaleTimeString(undefined, {
+                              hour: "2-digit",
+                              minute: "2-digit"
+                            })
+                          : "—"}
+                      </Text>
                       <LucideGlyph icon={ChevronRight} size={IconSize.sm} color={Harvest.textMuted} />
                     </View>
                   </View>
@@ -116,7 +122,7 @@ export function RecentActivitySection({
 const styles = StyleSheet.create({
   section: {
     gap: Grid.sm,
-    marginTop: TODAY_SECTION_GAP
+    marginTop: Grid.md
   },
   headerPad: {
     paddingHorizontal: TODAY_PAGE_PAD

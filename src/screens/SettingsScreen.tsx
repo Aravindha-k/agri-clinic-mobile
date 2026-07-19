@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSecureScreen } from "../hooks/useSecureScreen";
@@ -15,25 +15,45 @@ import {
   getBiometricLoginStatus,
   type BiometricLoginStatus
 } from "../storage/biometricLoginStorage";
+import { getFieldTrackingHealth } from "../features/fieldTrackingSetup";
+import { navigateRoot } from "../navigation/rootNavigationRef";
 import type { AppLanguage } from "../i18n";
 import { FlatCard, ScreenCanvas, StackScreenHeader } from "../../mobile/components/layout";
 import { Colors, FontSize, FontWeight, Layout, Radius, Spacing } from "../../mobile/lib/theme";
+import { useStackBottomInset } from "../hooks/useStackBottomInset";
 
 export function SettingsScreen() {
   useSecureScreen();
   const navigation = useNavigation<any>();
+  const stackBottom = useStackBottomInset();
   const { autoSyncOnReconnect, wifiOnlySync, trackingBatterySaver, reminderSoundsEnabled, setPreference } =
     useAppPreferences();
   const { t, language, setLanguage } = useI18n();
   const [biometricStatus, setBiometricStatus] = useState<BiometricLoginStatus | null>(null);
+  const [trackingReady, setTrackingReady] = useState<boolean | null>(null);
 
   const refreshBiometricStatus = useCallback(async () => {
     setBiometricStatus(await getBiometricLoginStatus());
   }, []);
 
+  const refreshTrackingSetup = useCallback(async () => {
+    try {
+      const health = await getFieldTrackingHealth();
+      setTrackingReady(health.ready);
+    } catch {
+      setTrackingReady(null);
+    }
+  }, []);
+
   useEffect(() => {
     void refreshBiometricStatus();
   }, [refreshBiometricStatus]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshTrackingSetup();
+    }, [refreshTrackingSetup])
+  );
 
   async function testReminderSound() {
     if (reminderSoundsEnabled) {
@@ -86,7 +106,11 @@ export function SettingsScreen() {
         onBack={() => navigation.goBack()}
         includeSafeTop={false}
       />
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[styles.body, { paddingBottom: stackBottom }]}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.sectionLabel}>{t("settings.language")}</Text>
         <FlatCard padded={false}>
           <LanguageRow language={language} onSelect={(lang) => void setLanguage(lang)} t={t} />
@@ -177,6 +201,28 @@ export function SettingsScreen() {
 
         <Text style={styles.sectionLabel}>{t("settings.tracking")}</Text>
         <FlatCard padded={false}>
+          <Pressable
+            onPress={() => navigateRoot("FieldTrackingSetup", undefined)}
+            accessibilityRole="button"
+            accessibilityLabel={t("settings.fieldTrackingSetup")}
+            style={({ pressed }) => [pressed && { opacity: 0.92 }]}
+          >
+            <SettingRow
+              icon="navigate-circle-outline"
+              title={t("settings.fieldTrackingSetup")}
+              subtitle={
+                trackingReady == null
+                  ? t("settings.fieldTrackingChecking")
+                  : trackingReady
+                    ? t("settings.fieldTrackingReady")
+                    : t("settings.fieldTrackingNeedsAttention")
+              }
+              right={
+                <Ionicons name="chevron-forward" size={18} color={Colors.text3} />
+              }
+            />
+          </Pressable>
+          <View style={styles.divider} />
           <SettingRow
             icon="battery-charging-outline"
             title={t("settings.batterySaver")}
@@ -331,7 +377,7 @@ const styles = StyleSheet.create({
     flex: 1
   },
   scrollView: { flex: 1 },
-  body: { gap: Spacing.sm, padding: Spacing.screen, paddingBottom: Layout.stackScrollBottom },
+  body: { gap: Spacing.sm, padding: Spacing.screen },
   sectionLabel: {
     color: Colors.text3,
     fontSize: FontSize.sm,

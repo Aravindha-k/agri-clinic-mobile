@@ -22,15 +22,18 @@ export const BRAND_COLORS = {
 
 /**
  * Official company logo for ALL in-app branding (splash, login, headers, loaders).
- * Source of truth: project-root `logo.png` (bundled relative require — no Windows absolute paths).
- * Never use launcher assets (logo_icons / app_icon / adaptive foreground) here.
+ * Source of truth: assets/brand/logo_circle_transparent.png
+ * Never use launcher assets (app_icon / adaptive foreground) in UI.
  */
 export const BRAND = {
   ...brandMeta,
   /** @deprecated Use `companyName` */
   name: brandMeta.companyName,
-  logo: require("../../logo.png") as number
+  logo: require("../../assets/brand/logo_circle_transparent.png") as number
 } as const;
 
-/** Set to null to use leaf fallback in logo components. */
-export const LOGO_IMAGE: number | null = BRAND.logo;
+/** Bundled module id for the canonical circular logo. Prefer `<CompanyLogo />` in UI. */
+export const LOGO_IMAGE: number = BRAND.logo;
+
+/** Relative path used by Expo splash plugin / app.config. */
+export const CANONICAL_LOGO_ASSET = "./assets/brand/logo_circle_transparent.png";

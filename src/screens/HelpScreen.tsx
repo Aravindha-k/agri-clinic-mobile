@@ -8,10 +8,12 @@ import { useI18n } from "../i18n/I18nContext";
 import { BRAND } from "../brand/constants";
 import { FlatCard, ScreenCanvas, StackScreenHeader } from "../../mobile/components/layout";
 import { Colors, FontSize, FontWeight, Layout, Radius, Spacing } from "../../mobile/lib/theme";
+import { useStackBottomInset } from "../hooks/useStackBottomInset";
 
 export function HelpScreen() {
   useSecureScreen();
   const navigation = useNavigation<any>();
+  const stackBottom = useStackBottomInset();
   const { t } = useI18n();
 
   const tips = [
@@ -30,7 +32,7 @@ export function HelpScreen() {
         onBack={() => navigation.goBack()}
         includeSafeTop={false}
       />
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.body}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={[styles.body, { paddingBottom: stackBottom }]}>
         <FlatCard style={styles.hero}>
           <Text style={styles.heroTitle}>{BRAND.appName}</Text>
           <Text style={styles.heroSub}>{BRAND.tagline}</Text>
@@ -64,7 +66,7 @@ const styles = StyleSheet.create({
     flex: 1
   },
   scrollView: { flex: 1 },
-  body: { gap: Spacing.sm, padding: Spacing.screen, paddingBottom: Layout.stackScrollBottom },
+  body: { gap: Spacing.sm, padding: Spacing.screen },
   hero: {
     gap: Spacing.xs,
     padding: Spacing.cardLg

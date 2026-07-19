@@ -1,4 +1,6 @@
 export { TodayStatsGrid } from "./TodayStatsGrid";
+export { TodayKpiGrid, buildTodayKpis } from "./TodayKpiGrid";
+export { TodayEssentialsRow } from "./TodayEssentialsRow";
 export { TodayInsightsRow } from "./TodayInsightsRow";
 export { TodayHeader } from "./TodayHeader";
 export { FollowUpCarousel } from "./FollowUpCarousel";

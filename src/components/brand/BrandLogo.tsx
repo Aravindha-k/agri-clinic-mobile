@@ -2,7 +2,7 @@ import { StyleSheet, Text, View, ViewStyle } from "react-native";
 import { BRAND } from "../../config/brand";
 import { LOGO_SIZES } from "../../brand/logoSizing";
 import { useTheme } from "../../theme";
-import { CompanyLogoMark } from "./CompanyLogoMark";
+import { CompanyLogo } from "./CompanyLogo";
 
 export type BrandLogoVariant = "default" | "header" | "login" | "splash" | "watermark" | "onPrimary";
 
@@ -48,7 +48,7 @@ export function BrandLogo({
 
   return (
     <View style={[styles.wrap, style, preset.opacity != null && { opacity: preset.opacity }]}>
-      <CompanyLogoMark size={markSize} />
+      <CompanyLogo size={markSize} />
       {showText ? (
         <View style={styles.textBlock}>
           <Text style={[styles.appName, { color: theme.colors.primaryDark }]} numberOfLines={2}>

@@ -22,6 +22,11 @@ type Props = {
   markerKind?: "visit" | "farmer";
   loading?: boolean;
   emptyMessage?: string;
+  /**
+   * When false, map pan/zoom is locked — visit GPS must not look user-editable.
+   * Defaults to true for other preview uses.
+   */
+  interactive?: boolean;
 };
 
 export function LocationPreviewMap({
@@ -33,7 +38,8 @@ export function LocationPreviewMap({
   showLiveLocation = false,
   markerKind = "visit",
   loading: externalLoading = false,
-  emptyMessage = "No GPS recorded for this location yet."
+  emptyMessage = "No GPS recorded for this location yet.",
+  interactive = true
 }: Props) {
   const { width } = useWindowDimensions();
   const mapWidth = Math.max(width - 48, 280);
@@ -162,6 +168,7 @@ export function LocationPreviewMap({
         permissionResolved={permissionResolved}
         loading={loading}
         emptyMessage={emptyMessage}
+        interactive={interactive}
       />
     </MapErrorBoundary>
   );

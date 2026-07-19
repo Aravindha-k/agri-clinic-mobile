@@ -3,6 +3,7 @@ import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from "reac
 import Svg, { Circle } from "react-native-svg";
 import Animated, {
   Easing,
+  cancelAnimation,
   type SharedValue,
   useAnimatedStyle,
   useSharedValue,
@@ -12,7 +13,7 @@ import Animated, {
 import { AgriProductIcon, AGRI_CLUSTER_ICONS, AGRI_ORBIT_ICONS } from "./agriProductIcons";
 import { BRAND_ORBIT_GAP_RATIO } from "./brandHeaderSpacing";
 
-const ORBIT_DURATION_MS = 28_000;
+const ORBIT_DURATION_MS = 10_000;
 const ORBIT_CHIP_PADDING = 8;
 
 /** Orbit gap in px from logo edge (20% of logo diameter by default). */
@@ -21,10 +22,11 @@ export function computeOrbitGap(diameter: number, gapRatio = BRAND_ORBIT_GAP_RAT
 }
 
 export function computeOrbitChipSize(diameter: number, compact = true) {
-  const chipPad = compact ? 5 : ORBIT_CHIP_PADDING;
+  const chipPad = compact ? 6 : ORBIT_CHIP_PADDING;
+  // Readable orbit icons — previously compact capped near 12dp and looked static/tiny.
   const iconSize = Math.max(
-    compact ? 12 : 15,
-    Math.round(diameter * (compact ? 0.1 : 0.13))
+    compact ? 24 : 28,
+    Math.round(diameter * (compact ? 0.24 : 0.26))
   );
   return iconSize + chipPad * 2 + 2;
 }
@@ -167,7 +169,9 @@ export function AgriNatureOrbit({
   compact = false,
   /** Single dashed ring — used on Home hero. */
   minimalTrack = false,
-  durationMs = ORBIT_DURATION_MS
+  durationMs = ORBIT_DURATION_MS,
+  /** Optional explicit glyph size (Today hero uses responsive sizing). */
+  iconSizeOverride
 }: {
   diameter: number;
   animate?: boolean;
@@ -176,16 +180,16 @@ export function AgriNatureOrbit({
   compact?: boolean;
   minimalTrack?: boolean;
   durationMs?: number;
+  iconSizeOverride?: number;
 }) {
-  const chipPad = compact ? 5 : ORBIT_CHIP_PADDING;
-  const iconSize = Math.max(
-    compact ? 12 : 15,
-    Math.round(diameter * (compact ? 0.1 : 0.13))
-  );
+  const chipPad = compact ? 6 : ORBIT_CHIP_PADDING;
+  const iconSize =
+    iconSizeOverride ??
+    Math.max(compact ? 24 : 28, Math.round(diameter * (compact ? 0.24 : 0.26)));
   const chipSize = iconSize + chipPad * 2 + 2;
   const logoRadius = diameter / 2;
   const gap = computeOrbitGap(diameter, gapRatio);
-  // Orbit track and chips run 20% of logo diameter away from the filled logo edge.
+  // Orbit track and chips run outside the filled logo edge.
   const trackRadius = logoRadius + gap;
   const chipRadius = logoRadius + gap + chipSize * 0.5;
   const stage = computeOrbitStageSize(diameter, { gapRatio, compact });
@@ -195,15 +199,18 @@ export function AgriNatureOrbit({
 
   useEffect(() => {
     if (!animate) {
+      cancelAnimation(rotation);
       rotation.value = 0;
       return;
     }
+    cancelAnimation(rotation);
     rotation.value = 0;
     rotation.value = withRepeat(
       withTiming(Math.PI * 2, { duration: durationMs, easing: Easing.linear }),
       -1,
       false
     );
+    return () => cancelAnimation(rotation);
   }, [animate, durationMs, rotation]);
 
   return (

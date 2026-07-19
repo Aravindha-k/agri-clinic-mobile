@@ -126,6 +126,14 @@ function CriticalStartupGate({
   useEffect(() => {
     if (fontsReady && isReady) return;
     const timer = setTimeout(() => {
+      if (__DEV__) {
+        // Slow fonts/auth in Expo Go / Metro must not become a fatal startup screen.
+        console.warn(
+          "[Startup] critical_gate_slow — fonts/auth still pending (dev; keeping branded splash, not fatal)"
+        );
+        logStartup("waiting_for_metro_bundle", "critical_gate_dev_soft");
+        return;
+      }
       setTimedOut(true);
       logStartup("auth_bootstrap_timeout", "critical startup watchdog");
       markStartupFailed("critical_gate", "fonts_or_auth_timeout");
@@ -133,7 +141,7 @@ function CriticalStartupGate({
         firedRef.current = true;
         onCriticalReady();
       }
-    }, STARTUP_TIMEOUTS.providersModuleMs);
+    }, STARTUP_TIMEOUTS.criticalBootstrapMs);
     return () => clearTimeout(timer);
   }, [fontsReady, isReady, onCriticalReady]);
 
@@ -146,9 +154,10 @@ function CriticalStartupGate({
 type Props = {
   onShellReady?: () => void;
   onCriticalReady?: () => void;
+  onFatalError?: (error: unknown) => void;
 };
 
-export default function AppProviders({ onShellReady, onCriticalReady }: Props) {
+export default function AppProviders({ onShellReady, onCriticalReady, onFatalError }: Props) {
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -158,11 +167,15 @@ export default function AppProviders({ onShellReady, onCriticalReady }: Props) {
   });
   const [fontsForced, setFontsForced] = useState(false);
   const fontsReady = fontsLoaded || fontError != null || fontsForced;
+  const shellReadyFired = useRef(false);
 
   useEffect(() => {
     markStartupBegin("AppProviders");
     logStartup("fonts_loading");
-    onShellReady?.();
+    if (!shellReadyFired.current) {
+      shellReadyFired.current = true;
+      onShellReady?.();
+    }
     const timer = setTimeout(() => {
       if (!fontsLoaded && fontError == null) {
         logStartup("fonts_timeout");
@@ -186,7 +199,7 @@ export default function AppProviders({ onShellReady, onCriticalReady }: Props) {
     <WebMobileFrame>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider initialMetrics={initialWindowMetrics ?? FALLBACK_METRICS}>
-          <AppErrorBoundary>
+          <AppErrorBoundary onError={onFatalError}>
             <ThemeProvider>
               <AuthProvider>
                 <FieldDataRefreshProvider>

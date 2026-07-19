@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import { Animated, Easing, StyleSheet, View, type ViewStyle } from "react-native";
 import { LOGO_SIZES } from "../../brand/logoSizing";
-import { LOGO_IMAGE } from "../../config/brand";
 import { usePremiumMotion } from "../../hooks/usePremiumMotion";
+import { CompanyLogo } from "./CompanyLogo";
 
 type Props = {
   size?: number;
@@ -21,7 +21,7 @@ export function AnimatedBrandLogo({
   const breathe = useRef(new Animated.Value(1)).current;
   const glow = useRef(new Animated.Value(0.25)).current;
   const { reduced } = usePremiumMotion();
-  const shouldAnimate = animate && !reduced && Boolean(LOGO_IMAGE);
+  const shouldAnimate = animate && !reduced;
 
   useEffect(() => {
     if (!shouldAnimate) {
@@ -63,10 +63,6 @@ export function AnimatedBrandLogo({
     };
   }, [breathe, glow, shouldAnimate, showGlow]);
 
-  if (!LOGO_IMAGE) {
-    return null;
-  }
-
   return (
     <View style={[styles.wrap, { width: size, height: size }, style]}>
       {shouldAnimate && showGlow ? (
@@ -83,16 +79,9 @@ export function AnimatedBrandLogo({
           ]}
         />
       ) : null}
-      <Animated.Image
-        source={LOGO_IMAGE}
-        style={[
-          styles.logo,
-          { width: size, height: size },
-          shouldAnimate ? { transform: [{ scale: breathe }] } : null
-        ]}
-        resizeMode="contain"
-        accessibilityLabel="Clinic logo"
-      />
+      <Animated.View style={shouldAnimate ? { transform: [{ scale: breathe }] } : undefined}>
+        <CompanyLogo size={size} accessibilityLabel="Clinic logo" />
+      </Animated.View>
     </View>
   );
 }
@@ -105,8 +94,5 @@ const styles = StyleSheet.create({
   glow: {
     backgroundColor: "rgba(45, 106, 79, 0.1)",
     position: "absolute"
-  },
-  logo: {
-    aspectRatio: 1
   }
 });

@@ -50,10 +50,6 @@ export function visitRecommendationText(visit: Visit): string {
   return parts.join("\n");
 }
 
-import { resolveMediaUrl } from "../../src/utils/resolveMediaUrl";
-
-export { resolveMediaUrl } from "../../src/utils/resolveMediaUrl";
-
 export function parseFieldNotes(raw?: string | null): ParsedFieldNotes {
   const lines = (raw ?? "").split("\n");
   let severity: VisitSeverity | null = null;
@@ -68,6 +64,25 @@ export function parseFieldNotes(raw?: string | null): ParsedFieldNotes {
   }
   return { severity, fieldNotes: notes.join("\n").trim() };
 }
+
+/** Employee-facing Field Notes — merges legacy observation + recommendation for display. */
+export function visitFieldNotesText(visit: Visit): string {
+  const parsed = parseFieldNotes(visit.field_notes);
+  const fromNotes = parsed.fieldNotes.trim();
+  const observation = visit.observation?.trim() || "";
+  const recommendation = visitRecommendationText(visit).trim();
+  const parts = [fromNotes || observation, recommendation].filter(Boolean);
+  // Deduplicate if observation was mirrored into field_notes historically.
+  const unique: string[] = [];
+  for (const part of parts) {
+    if (!unique.some((row) => row === part)) unique.push(part);
+  }
+  return unique.join("\n\n").trim();
+}
+
+import { resolveMediaUrl } from "../../src/utils/resolveMediaUrl";
+
+export { resolveMediaUrl } from "../../src/utils/resolveMediaUrl";
 
 export function severityVariant(level: VisitSeverity): "green" | "amber" | "red" {
   if (level === "low") return "green";

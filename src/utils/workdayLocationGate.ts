@@ -76,7 +76,7 @@ export async function ensureLocationForWorkdayStart(
   }
 }
 
-/** App permission only — does not require device GPS to already be on. */
+/** App permission only — check-only, never requests OS dialog. */
 async function ensureAppLocationPermission(): Promise<WorkdayLocationGateResult> {
   try {
     const current = await Location.getForegroundPermissionsAsync();
@@ -84,14 +84,7 @@ async function ensureAppLocationPermission(): Promise<WorkdayLocationGateResult>
       return { ok: true };
     }
 
-    // Always show the in-app permission dialog first — some release/OEM builds report
-    // denied + canAskAgain:false before the user has ever been prompted.
-    const requested = await Location.requestForegroundPermissionsAsync();
-    if (requested.status === "granted") {
-      return { ok: true };
-    }
-
-    if (requested.status === "denied" && !requested.canAskAgain) {
+    if (current.status === "denied" && !current.canAskAgain) {
       return { ok: false, reason: "permission_blocked" };
     }
 

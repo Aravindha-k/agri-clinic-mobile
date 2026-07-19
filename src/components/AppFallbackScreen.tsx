@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { CompanyLogoMark } from "./brand/CompanyLogoMark";
+import { CompanyLogo } from "./brand/CompanyLogo";
 import { BRAND } from "../config/brand";
 import { colors } from "../theme/colors";
 import { space } from "../theme/layout";
@@ -27,7 +27,7 @@ export function AppFallbackScreen({
 }: Props) {
   return (
     <View style={styles.root}>
-      <CompanyLogoMark size={72} />
+      <CompanyLogo size={72} />
       <Text style={styles.brand}>{BRAND.appName}</Text>
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.message}>{message}</Text>

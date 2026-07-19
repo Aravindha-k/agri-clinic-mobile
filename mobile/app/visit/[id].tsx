@@ -49,8 +49,7 @@ import {
   severityLabel,
   severityVariant,
   uploadVisitPhoto,
-  visitObservationText,
-  visitRecommendationText
+  visitFieldNotesText
 } from "../../lib/visitDetailApi";
 import { Avatar, EmptyState, GhostButton, PrimaryButton, SectionHeader, StatusChip } from "../../components/ui";
 import { LocationPreviewMap } from "../../../src/components/map/LocationPreviewMap";
@@ -109,8 +108,6 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   const [draftFieldNotes, setDraftFieldNotes] = useState("");
-  const [draftObservation, setDraftObservation] = useState("");
-  const [draftRecommendation, setDraftRecommendation] = useState("");
 
   const photoWidth = (width - Spacing.screen * 2 - 10) / 2;
   const imageUrls = useMemo(
@@ -128,9 +125,8 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
         const row = await fetchVisitDetail(visitId);
         setVisit(row);
         const parsed = parseFieldNotes(row.field_notes);
-        setDraftFieldNotes(parsed.fieldNotes);
-        setDraftObservation(visitObservationText(row));
-        setDraftRecommendation(visitRecommendationText(row));
+        const combined = visitFieldNotesText(row) || parsed.fieldNotes;
+        setDraftFieldNotes(combined);
 
         const atts = await fetchVisitAttachments(visitId).catch(() => [] as VisitAttachment[]);
         setAttachments(atts);
@@ -170,42 +166,22 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
   const address = visit ? formatVisitPlaceLine(visit, "Location not recorded") : "";
   const hasGps = visit?.latitude != null && visit?.longitude != null && String(visit.latitude) !== "";
 
-  const adviceBlocks = useMemo(() => {
-    if (!visit) return [];
-    return [
-      { key: "fertilizer", label: "Fertilizer advice", value: visit.fertilizer_advice },
-      { key: "pesticide", label: "Pesticide advice", value: visit.pesticide_advice },
-      { key: "irrigation", label: "Irrigation advice", value: visit.irrigation_advice },
-      { key: "general", label: "General advice", value: visit.general_advice }
-    ].filter((row) => row.value?.trim());
-  }, [visit]);
-
   function cancelEdit() {
     if (!visit) return;
-    const parsed = parseFieldNotes(visit.field_notes);
-    setDraftFieldNotes(parsed.fieldNotes);
-    setDraftObservation(visitObservationText(visit));
-    setDraftRecommendation(visitRecommendationText(visit));
+    setDraftFieldNotes(visitFieldNotesText(visit));
     setEditMode(false);
   }
 
   async function handleSave() {
     if (!visit) return;
-    const observation = draftObservation.trim();
-    const recommendation = draftRecommendation.trim();
-    if (!observation && !recommendation) {
-      Alert.alert(t("visitFlow.editVisit"), t("visitFlow.errObservationOrAdvice"));
-      return;
-    }
+    const notes = draftFieldNotes.trim();
     setSaving(true);
     try {
       const severityLine = `Severity: ${severityLabel(severity)}`;
-      const mergedNotes = [draftFieldNotes.trim(), severityLine].filter(Boolean).join("\n");
+      const mergedNotes = [notes, severityLine].filter(Boolean).join("\n");
+      // Temporary adapter: Field Notes → observation + field_notes (not recommendation).
       const updated = await patchMobileVisit(visit.id, {
-        observation,
-        recommendation: recommendation || undefined,
-        action_taken: recommendation || undefined,
-        general_advice: recommendation || undefined,
+        observation: notes,
         field_notes: mergedNotes
       });
       setVisit(updated);
@@ -312,9 +288,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
     );
   }
 
-  const fieldNotesText = editMode ? draftFieldNotes : parsedNotes.fieldNotes;
-  const observationText = editMode ? draftObservation : visitObservationText(visit);
-  const recommendationText = editMode ? draftRecommendation : visitRecommendationText(visit);
+  const fieldNotesText = editMode ? draftFieldNotes : visitFieldNotesText(visit);
   const statusLabel = "Submitted";
   const statusVariant = "green" as const;
   const scrollBottomPad = editMode ? Layout.buttonHeight + Spacing.xxl : Spacing.xxl;
@@ -438,44 +412,6 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
 
         <FadeInSection replayKey={entranceTick} delay={entranceStagger(2)} variant="card">
         <View style={styles.card}>
-          <Text style={styles.sectionLabel}>{t("visitFlow.observation")}</Text>
-          {editMode ? (
-            <TextInput
-              value={draftObservation}
-              onChangeText={setDraftObservation}
-              multiline
-              style={styles.editInput}
-              placeholder={t("visitFlow.observationPlaceholder")}
-              placeholderTextColor={Colors.text4}
-              textAlignVertical="top"
-            />
-          ) : (
-            <Text style={observationText ? styles.bodyText : styles.mutedText}>
-              {observationText || t("visitFlow.noObservation")}
-            </Text>
-          )}
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionLabel}>{t("visitFlow.recommendation")}</Text>
-          {editMode ? (
-            <TextInput
-              value={draftRecommendation}
-              onChangeText={setDraftRecommendation}
-              multiline
-              style={styles.editInput}
-              placeholder={t("visitFlow.recommendationPlaceholder")}
-              placeholderTextColor={Colors.text4}
-              textAlignVertical="top"
-            />
-          ) : (
-            <Text style={recommendationText ? styles.bodyText : styles.mutedText}>
-              {recommendationText || t("visitFlow.noRecommendation")}
-            </Text>
-          )}
-        </View>
-
-        <View style={styles.card}>
           <Text style={styles.sectionLabel}>{t("visitFlow.fieldNotes")}</Text>
           {editMode ? (
             <TextInput
@@ -483,31 +419,19 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
               onChangeText={setDraftFieldNotes}
               multiline
               style={styles.editInput}
-              placeholder="Field notes"
+              placeholder={t("visitFlow.fieldNotesPlaceholder")}
               placeholderTextColor={Colors.text4}
               textAlignVertical="top"
             />
           ) : (
             <Text style={fieldNotesText ? styles.bodyText : styles.mutedText}>
-              {fieldNotesText || "No field notes recorded."}
+              {fieldNotesText || t("visitFlow.noFieldNotes")}
             </Text>
           )}
         </View>
         </FadeInSection>
 
         <FadeInSection replayKey={entranceTick} delay={entranceStagger(3)} variant="card">
-        {!editMode && adviceBlocks.length > 0 ? (
-          <View style={styles.card}>
-            <SectionHeader title={t("visitFlow.adviceSummary")} />
-            {adviceBlocks.map((block) => (
-              <View key={block.key} style={styles.adviceBlock}>
-                <Text style={styles.adviceLabel}>{block.label}</Text>
-                <Text style={styles.bodyText}>{block.value}</Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
         <View style={styles.locationCard}>
           <View style={styles.locationLeft}>
             <Ionicons name="location-outline" size={18} color={Colors.brand700} />
@@ -602,7 +526,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
             <Image source={{ uri: imageUrls[viewerIndex] }} style={styles.viewerImage} resizeMode="contain" />
           ) : null}
           <Pressable
-            style={styles.viewerClose}
+            style={[styles.viewerClose, { top: Math.max(safeTop, 12) + 8 }]}
             onPress={() => setViewerIndex(null)}
             accessibilityRole="button"
             accessibilityLabel={t("a11y.closeViewer")}
@@ -823,14 +747,6 @@ const styles = StyleSheet.create({
     minHeight: 88,
     padding: 12
   },
-  adviceBlock: {
-    gap: 4
-  },
-  adviceLabel: {
-    color: Colors.text4,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold
-  },
   locationCard: {
     alignItems: "center",
     backgroundColor: Colors.surface,
@@ -932,7 +848,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     position: "absolute",
     right: 16,
-    top: 52,
     width: 48
   }
 });

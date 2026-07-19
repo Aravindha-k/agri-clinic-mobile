@@ -8,6 +8,7 @@ import { qaLogCrash } from "../utils/qaLog";
 
 type Props = {
   children: ReactNode;
+  onError?: (error: unknown) => void;
 };
 
 type State = {
@@ -26,6 +27,11 @@ export class AppErrorBoundary extends Component<Props, State> {
     logStartupError(`app:${error.message}`);
     qaLogCrash("App", error, info.componentStack ?? undefined);
     console.warn("[AppErrorBoundary]", error.message, info.componentStack);
+    try {
+      this.props.onError?.(error);
+    } catch {
+      // ignore callback failures
+    }
   }
 
   private handleRetry = () => {

@@ -4,6 +4,7 @@ import { getRefreshToken } from "./tokenStorage";
 import { refreshAccessTokenOnce } from "../api/tokenRefresh";
 import { STARTUP_TIMEOUTS } from "../bootstrap/startupCoordinator";
 import { withTimeout } from "../utils/withTimeout";
+import { ApiRequestError, isNetworkError, isServerError } from "../utils/apiError";
 
 const ENABLED_KEY = "biometric_login_enabled";
 const PROMPT_DISMISSED_KEY = "biometric_login_prompt_dismissed";
@@ -20,6 +21,27 @@ export type BiometricLoginStatus = {
   label: string;
 };
 
+export type BiometricUnlockOutcome =
+  | "success"
+  | "user_cancel"
+  | "authentication_failed"
+  | "lockout"
+  | "not_enrolled"
+  | "hardware_unavailable"
+  | "key_invalidated"
+  | "no_refresh_token"
+  | "token_refresh_failed"
+  | "network_error"
+  | "server_error"
+  | "prompt_busy"
+  | "not_enabled"
+  | "timeout";
+
+export type BiometricUnlockResult = {
+  ok: boolean;
+  outcome: BiometricUnlockOutcome;
+};
+
 /** Structured biometric logs. Never includes tokens/secrets/secure-store values. */
 type BiometricLogEvent =
   | "capability_checked"
@@ -28,12 +50,15 @@ type BiometricLogEvent =
   | "setup_started"
   | "setup_success"
   | "setup_failed"
+  | "prompt_started"
+  | "prompt_result"
   | "login_prompt_started"
   | "login_success"
   | "login_cancelled"
   | "login_failed"
   | "prompt_suppressed_duplicate"
-  | "enabled_flag_cleared";
+  | "enabled_flag_cleared"
+  | "biometric_material_cleared";
 
 export function logBiometric(event: BiometricLogEvent, detail?: Record<string, unknown>) {
   // eslint-disable-next-line no-console
@@ -55,6 +80,9 @@ let biometricPromptInProgress = false;
  */
 let unlockAttemptedThisLaunch = false;
 
+/** User chose password on the unlock screen — do not auto-prompt again this session. */
+let preferPasswordLoginThisSession = false;
+
 export function hasAttemptedBiometricUnlockThisLaunch(): boolean {
   return unlockAttemptedThisLaunch;
 }
@@ -63,8 +91,28 @@ export function markBiometricUnlockAttempted(): void {
   unlockAttemptedThisLaunch = true;
 }
 
+export function resetBiometricUnlockAttemptForTests(): void {
+  unlockAttemptedThisLaunch = false;
+  biometricPromptInProgress = false;
+  preferPasswordLoginThisSession = false;
+}
+
+/** Allow a fresh auto-prompt after sign-out / splash replay. */
+export function resetBiometricUnlockAttemptThisLaunch(): void {
+  unlockAttemptedThisLaunch = false;
+  biometricPromptInProgress = false;
+}
+
 export function isBiometricPromptInProgress(): boolean {
   return biometricPromptInProgress;
+}
+
+export function setPreferPasswordLoginThisSession(value: boolean): void {
+  preferPasswordLoginThisSession = value;
+}
+
+export function shouldPreferPasswordLoginThisSession(): boolean {
+  return preferPasswordLoginThisSession;
 }
 
 /** Remove any historically stored plaintext passwords. Safe to call often. */
@@ -235,31 +283,92 @@ export async function enableBiometricLoginWithVerification(): Promise<boolean> {
   }
 }
 
+function mapLocalAuthError(error: string | undefined): BiometricUnlockOutcome {
+  const code = (error ?? "").toLowerCase();
+  if (!code || code === "user_cancel" || code === "system_cancel" || code === "app_cancel" || code === "user_fallback") {
+    return "user_cancel";
+  }
+  if (code === "authentication_failed" || code === "not_interactive") {
+    return "authentication_failed";
+  }
+  if (code === "lockout" || code === "lockout_permanent") {
+    return "lockout";
+  }
+  if (code === "not_enrolled") {
+    return "not_enrolled";
+  }
+  if (code === "timeout") {
+    return "timeout";
+  }
+  if (
+    code === "passcode_not_set" ||
+    code === "not_available" ||
+    code === "missing_usage_description" ||
+    code === "no_hardware"
+  ) {
+    return "hardware_unavailable";
+  }
+  // Expo / OEM may surface invalidated keys as unknown or unable_to_process.
+  if (code.includes("invalidat") || code === "unable_to_process") {
+    return "key_invalidated";
+  }
+  return "authentication_failed";
+}
+
+/**
+ * Clear only biometric preference material — never tokens or device session.
+ * Use for permanent key invalidation or explicit user disable in Settings.
+ */
+export async function clearBiometricCredentialMaterial(reason: string): Promise<void> {
+  await Promise.all([
+    SecureStore.deleteItemAsync(ENABLED_KEY).catch(() => undefined),
+    SecureStore.deleteItemAsync(PROMPT_DISMISSED_KEY).catch(() => undefined),
+    SecureStore.deleteItemAsync(LEGACY_PASS_KEY).catch(() => undefined),
+    SecureStore.deleteItemAsync(LEGACY_USER_KEY).catch(() => undefined)
+  ]);
+  logBiometric("biometric_material_cleared", { reason });
+}
+
 /**
  * Prompt biometrics, then refresh the access token using the stored refresh token.
- * Returns true when the session can continue without re-entering a password.
+ * Cancel / mismatch / lockout never clears tokens or the biometric-enabled flag.
  */
-export async function unlockSessionWithBiometrics(): Promise<boolean> {
+export async function unlockSessionWithBiometrics(): Promise<BiometricUnlockResult> {
   await migrateLegacyBiometricPasswords();
   if (biometricPromptInProgress) {
     logBiometric("prompt_suppressed_duplicate", { source: "login" });
-    return false;
+    return { ok: false, outcome: "prompt_busy" };
   }
   const enabled = await SecureStore.getItemAsync(ENABLED_KEY);
   if (enabled !== "1") {
-    return false;
+    return { ok: false, outcome: "not_enabled" };
+  }
+
+  const [hardwareAvailable, enrolled] = await Promise.all([
+    LocalAuthentication.hasHardwareAsync().catch(() => false),
+    LocalAuthentication.isEnrolledAsync().catch(() => false)
+  ]);
+  if (!hardwareAvailable) {
+    logBiometric("prompt_result", { outcome: "hardware_unavailable" });
+    return { ok: false, outcome: "hardware_unavailable" };
+  }
+  if (!enrolled) {
+    // Enrollment removed after enable — clear biometric material only, keep tokens.
+    await clearBiometricCredentialMaterial("not_enrolled_after_enable");
+    logBiometric("prompt_result", { outcome: "key_invalidated" });
+    return { ok: false, outcome: "key_invalidated" };
   }
 
   const refresh = await getRefreshToken();
   if (!refresh) {
-    await clearBiometricLogin();
-    return false;
+    // Incomplete credentials — do not disable biometric preference; password login can re-bind.
+    logBiometric("prompt_result", { outcome: "no_refresh_token" });
+    return { ok: false, outcome: "no_refresh_token" };
   }
 
   biometricPromptInProgress = true;
-  // Any real prompt counts as this launch's auto attempt so it cannot re-open
-  // itself on the next LoginScreen remount.
   unlockAttemptedThisLaunch = true;
+  logBiometric("prompt_started");
   logBiometric("login_prompt_started");
   try {
     const auth = await withTimeout(
@@ -273,17 +382,60 @@ export async function unlockSessionWithBiometrics(): Promise<boolean> {
       "biometric_login_prompt"
     );
     if (!auth.success) {
-      logBiometric("login_cancelled", { error: auth.error ?? "not_successful" });
-      return false;
+      const outcome = mapLocalAuthError(auth.error);
+      if (outcome === "user_cancel" || outcome === "timeout") {
+        logBiometric("login_cancelled", { error: auth.error ?? outcome });
+      } else {
+        logBiometric("login_failed", { error: auth.error ?? outcome });
+      }
+      logBiometric("prompt_result", { outcome });
+      if (outcome === "key_invalidated") {
+        await clearBiometricCredentialMaterial("platform_key_invalidated");
+      }
+      return { ok: false, outcome };
     }
 
     const access = await refreshAccessTokenOnce();
     if (access) {
       logBiometric("login_success");
-      return true;
+      logBiometric("prompt_result", { outcome: "success" });
+      return { ok: true, outcome: "success" };
     }
     logBiometric("login_failed", { reason: "token_refresh_failed" });
-    return false;
+    logBiometric("prompt_result", { outcome: "token_refresh_failed" });
+    return { ok: false, outcome: "token_refresh_failed" };
+  } catch (err) {
+    if (isNetworkError(err)) {
+      logBiometric("login_failed", { reason: "network_error" });
+      logBiometric("prompt_result", { outcome: "network_error" });
+      return { ok: false, outcome: "network_error" };
+    }
+    if (isServerError(err)) {
+      logBiometric("login_failed", { reason: "server_error" });
+      logBiometric("prompt_result", { outcome: "server_error" });
+      return { ok: false, outcome: "server_error" };
+    }
+    const code =
+      err instanceof ApiRequestError
+        ? err.code
+        : err && typeof err === "object" && "code" in err
+          ? String((err as { code?: unknown }).code ?? "")
+          : "";
+    if (code === "SESSION_EXPIRED" || code === "ACCOUNT_DISABLED" || code === "SESSION_REPLACED") {
+      logBiometric("login_failed", { reason: code });
+      logBiometric("prompt_result", { outcome: "token_refresh_failed" });
+      return { ok: false, outcome: "token_refresh_failed" };
+    }
+    if (code === "AUTH_UNCERTAIN") {
+      logBiometric("login_failed", { reason: "auth_uncertain" });
+      logBiometric("prompt_result", { outcome: "network_error" });
+      return { ok: false, outcome: "network_error" };
+    }
+    logBiometric("login_failed", {
+      reason: err instanceof Error ? err.message : "refresh_error"
+    });
+    logBiometric("prompt_result", { outcome: "network_error" });
+    return { ok: false, outcome: "network_error" };
   } finally {
     biometricPromptInProgress = false;
   }
@@ -295,13 +447,12 @@ export async function readBiometricCredentials(): Promise<null> {
   return null;
 }
 
+/**
+ * Explicit disable (Settings) or confirmed permanent invalidation.
+ * Do not call on cancel / failed fingerprint / Expo Go quirks.
+ */
 export async function clearBiometricLogin(): Promise<void> {
-  await Promise.all([
-    SecureStore.deleteItemAsync(ENABLED_KEY).catch(() => undefined),
-    SecureStore.deleteItemAsync(PROMPT_DISMISSED_KEY).catch(() => undefined),
-    SecureStore.deleteItemAsync(LEGACY_PASS_KEY).catch(() => undefined),
-    SecureStore.deleteItemAsync(LEGACY_USER_KEY).catch(() => undefined)
-  ]);
+  await clearBiometricCredentialMaterial("explicit_clear");
   logBiometric("enabled_flag_cleared");
 }
 

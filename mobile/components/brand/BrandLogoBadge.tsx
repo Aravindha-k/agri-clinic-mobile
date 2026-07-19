@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Image, Platform, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -9,11 +9,10 @@ import Animated, {
   withTiming
 } from "react-native-reanimated";
 import { usePremiumMotion } from "../../../src/hooks/usePremiumMotion";
-import { LOGO_IMAGE } from "../../../src/config/brand";
+import { CompanyLogo } from "../../../src/components/brand/CompanyLogo";
 import { PremiumShadow } from "../../lib/designSystem";
 import { Shadow } from "../../lib/theme";
 import {
-  AgriNatureMark,
   AgriNatureOrbit,
   computeOrbitGap,
   computeOrbitStageSize
@@ -137,40 +136,19 @@ export function BrandLogoBadge({
         heroShadow
       ]}
     >
-      {LOGO_IMAGE ? (
-        <View
-          style={[
-            styles.logoClip,
-            {
-              width: outer,
-              height: outer,
-              borderRadius: outer / 2
-            }
-          ]}
-        >
-          <Image
-            source={LOGO_IMAGE}
-            style={{ width: outer, height: outer }}
-            resizeMode="contain"
-            accessibilityLabel="Kavya Agri Clinic"
-            accessibilityIgnoresInvertColors
-          />
-        </View>
-      ) : (
-        <View
-          style={[
-            styles.badge,
-            isPremium && styles.badgeHero,
-            {
-              width: size,
-              height: size,
-              borderRadius: size / 2
-            }
-          ]}
-        >
-          <AgriNatureMark size={logoSize} variant="hero" />
-        </View>
-      )}
+      <View
+        style={[
+          styles.logoClip,
+          {
+            width: outer,
+            height: outer,
+            borderRadius: outer / 2,
+            backgroundColor: "transparent"
+          }
+        ]}
+      >
+        <CompanyLogo size={outer} accessibilityLabel="Kavya Agri Clinic" />
+      </View>
     </View>
   );
 

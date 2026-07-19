@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { Grid, IconSize, PremiumShadow, Typography } from "../../lib/designSystem";
-import { TODAY_CARD_RADIUS, TODAY_PAGE_PAD, TODAY_SECTION_GAP } from "../../lib/todayLayout";
+import { TODAY_CARD_RADIUS, TODAY_PAGE_PAD } from "../../lib/todayLayout";
 import { Colors, FontWeight } from "../../lib/theme";
 import { IconPopOnce } from "../ui/IconPopOnce";
 import { PressableCard } from "../ui/PressableCard";
@@ -16,9 +16,10 @@ import {
 
 const TILE_GRADIENTS: Record<string, readonly [string, string]> = {
   farmers: ["#2E9B64", "#0F6B43"],
+  newVisit: ["#0EA5E9", "#0284C7"],
   visits: ["#14B8A6", "#0D9488"],
-  problems: ["#8B5CF6", "#6D28D9"],
-  routes: ["#F59E0B", "#D97706"]
+  routes: ["#F59E0B", "#D97706"],
+  problems: ["#8B5CF6", "#6D28D9"]
 };
 
 export type TodayQuickAction = {
@@ -99,7 +100,7 @@ export function TodayQuickActions({ title, viewAllLabel, onViewAll, actions, ent
 const styles = StyleSheet.create({
   section: {
     gap: Grid.sm,
-    marginTop: TODAY_SECTION_GAP
+    marginTop: Grid.md
   },
   headerPad: {
     paddingHorizontal: TODAY_PAGE_PAD

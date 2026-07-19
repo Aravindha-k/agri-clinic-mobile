@@ -8,8 +8,6 @@ import {
   submitVisitFromStore
 } from "../visitSubmitApi";
 import { getVisitDutyFields } from "../visitDutyContext";
-import { getForegroundLocation } from "../../../src/utils/location";
-import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal";
 import { hasValidGps } from "../../../src/visit/visitValidation";
 import { buildSubmittedVisitSummary, type SubmittedVisitSummary } from "../../../src/types/submittedVisitSummary";
 import {
@@ -18,6 +16,7 @@ import {
   type PendingVisitAttachment
 } from "../../../src/visit/pendingAttachments";
 import type { WorkdayStatus } from "../../../src/api/tracking";
+import { ensureLocationReadyForVisit } from "../../../src/features/fieldTrackingSetup";
 
 export type VisitSubmitProgress =
   | "idle"
@@ -77,9 +76,9 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
         }
       }
 
-      const allowed = await requestGpsForFieldWork();
-      if (!allowed) {
-        return { ok: false, message: t("visitFlow.gpsNotCaptured"), cancelled: true };
+      const allowed = await ensureLocationReadyForVisit();
+      if (!allowed.ok) {
+        return { ok: false, message: allowed.message, cancelled: true };
       }
 
       const draft = useVisitFormStore.getState();
@@ -89,16 +88,19 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
       }
 
       onProgress?.("capturing_location");
-      const locationResult = await getForegroundLocation();
-      if (!locationResult.granted) {
+      // Hard timeout — OEM GPS can hang indefinitely and freeze the submit spinner.
+      // Never requests OS permission — Field Tracking Setup owns requests.
+      const { captureVisitGps, visitGpsIsUsable } = await import("./visitGpsCapture");
+      const gpsCapture = await captureVisitGps({ requestPermission: false });
+      if (!gpsCapture.ok) {
         return {
           ok: false,
-          message: locationResult.message || t("visitFlow.gpsNotCaptured")
+          message: gpsCapture.message || t("visitFlow.gpsNotCaptured")
         };
       }
 
-      const { latitude, longitude, accuracy } = locationResult.location.coords;
-      const capturedAt = new Date(locationResult.location.timestamp);
+      const { latitude, longitude, accuracy, capturedAt: capturedIso } = gpsCapture.coords;
+      const capturedAt = new Date(capturedIso);
       const duty = await getVisitDutyFields();
       const capturedExtras = {
         latitude,
@@ -119,9 +121,12 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
       const snapshot = useVisitFormStore.getState();
       const values = buildVisitFormValuesFromStore(snapshot, localSyncId, capturedExtras);
 
-      if (!hasValidGps(values)) {
+      if (!hasValidGps(values) || !visitGpsIsUsable({ latitude, longitude, accuracy })) {
         return { ok: false, message: t("visitFlow.gpsNotCaptured") };
       }
+
+      // eslint-disable-next-line no-console
+      console.log("[VisitGPS] submit_location_validated", { accuracy });
 
       const gpsConfirmed = accuracy != null && Number.isFinite(accuracy) && accuracy <= 100;
 
@@ -147,8 +152,7 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
           farmerName: values.farmer_name,
           cropName: snapshot.cropName,
           problemText: values.problem_seen,
-          observationText: values.observation,
-          recommendationText: values.recommendation || values.action_taken,
+          fieldNotesText: values.observation || values.field_notes,
           gpsConfirmed: hasValidGps(values),
           submittedAt: values.captured_at ?? new Date().toISOString()
         });
@@ -212,8 +216,7 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
           farmerName: values.farmer_name,
           cropName: snapshot.cropName,
           problemText: values.problem_seen,
-          observationText: values.observation,
-          recommendationText: values.recommendation || values.action_taken,
+          fieldNotesText: values.observation || values.field_notes,
           gpsConfirmed,
           submittedAt: capturedAt.toISOString(),
           evidenceWarning
@@ -260,8 +263,7 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
           farmerName: offlineValues.farmer_name,
           cropName: latest.cropName,
           problemText: offlineValues.problem_seen,
-          observationText: offlineValues.observation,
-          recommendationText: offlineValues.recommendation || offlineValues.action_taken,
+          fieldNotesText: offlineValues.observation || offlineValues.field_notes,
           gpsConfirmed: hasValidGps(offlineValues),
           submittedAt: offlineValues.captured_at ?? new Date().toISOString()
         });

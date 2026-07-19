@@ -14,7 +14,6 @@ type Props = {
   expectedEndAt?: string | null;
   visitsToday: number;
   farmersToday?: number;
-  distanceKm?: number | null;
   pendingSync: number;
   offline?: boolean;
   gpsEnabled?: boolean;
@@ -29,7 +28,6 @@ export function ActiveWorkDayCard({
   expectedEndAt,
   visitsToday,
   farmersToday = 0,
-  distanceKm,
   pendingSync,
   offline,
   gpsEnabled,
@@ -37,8 +35,6 @@ export function ActiveWorkDayCard({
   onOpenDay
 }: Props) {
   const { t } = useI18n();
-  const distanceLabel =
-    distanceKm != null && Number.isFinite(distanceKm) ? `${distanceKm.toFixed(1)} km` : "—";
 
   return (
     <View style={styles.card}>
@@ -73,10 +69,6 @@ export function ActiveWorkDayCard({
         <View style={styles.metaCell}>
           <Text style={styles.metaLabel}>{t("home.farmers")}</Text>
           <Text style={styles.metaValue}>{farmersToday}</Text>
-        </View>
-        <View style={styles.metaCell}>
-          <Text style={styles.metaLabel}>{t("workdayUx.distance")}</Text>
-          <Text style={styles.metaValue}>{distanceLabel}</Text>
         </View>
       </View>
 

@@ -2,16 +2,15 @@ import { StyleSheet, Text, View } from "react-native";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 import { formatShortTime } from "../../lib/format";
-import { DutyTimer } from "./DutyTimer";
 
 type Props = {
-  elapsed: string;
   startedAt?: string | null;
   endedAt?: string | null;
   autoCompleted?: boolean;
 };
 
-export function CompletedWorkDayCard({ elapsed, startedAt, endedAt, autoCompleted }: Props) {
+/** Completed workday — times only, no running timer. */
+export function CompletedWorkDayCard({ startedAt, endedAt, autoCompleted }: Props) {
   const { t } = useI18n();
 
   return (
@@ -21,7 +20,6 @@ export function CompletedWorkDayCard({ elapsed, startedAt, endedAt, autoComplete
           {autoCompleted ? "Auto Completed" : t("workdayUx.statusCompleted")}
         </Text>
       </View>
-      <DutyTimer elapsed={elapsed} compact />
       <View style={styles.metaRow}>
         <Text style={styles.meta}>Started {formatShortTime(startedAt)}</Text>
         <Text style={styles.meta}>Ended {formatShortTime(endedAt)}</Text>

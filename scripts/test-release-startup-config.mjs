@@ -45,3 +45,22 @@ test("babel config includes Reanimated plugin last", () => {
   const babel = read("babel.config.js");
   assert.match(babel, /react-native-reanimated\/plugin/);
 });
+
+test("release profiles never enable Expo development client / Metro loader", () => {
+  const pkg = JSON.parse(read("package.json"));
+  assert.ok(!pkg.dependencies?.["expo-dev-client"], "expo-dev-client must not be a runtime dependency");
+  assert.ok(!pkg.devDependencies?.["expo-dev-client"], "expo-dev-client must not be installed");
+
+  const eas = JSON.parse(read("eas.json"));
+  for (const profile of ["preview", "production", "production-apk", "production-aab"]) {
+    const cfg = eas.build?.[profile];
+    assert.ok(cfg, `eas build profile ${profile} must exist`);
+    assert.notEqual(cfg.developmentClient, true, `${profile} must not set developmentClient: true`);
+  }
+
+  const styles = read("android/app/src/main/res/values/styles.xml");
+  assert.doesNotMatch(styles, /icon_preferred/, "splash must not fall back to launcher icon plate");
+
+  const ensure = read("scripts/ensure-android-release-config.mjs");
+  assert.doesNotMatch(ensure, /icon_preferred/, "CI release config must not inject icon_preferred");
+});

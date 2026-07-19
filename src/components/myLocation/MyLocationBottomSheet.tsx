@@ -9,14 +9,12 @@ import type { MyLocationVisitRow } from "../../hooks/useMyLocationScreen";
 
 type Props = {
   visits: MyLocationVisitRow[];
-  distanceKm: string;
   visitCount: number;
   onSelectVisit: (visit: MyLocationVisitRow) => void;
 };
 
 export const MyLocationBottomSheet = memo(function MyLocationBottomSheet({
   visits,
-  distanceKm,
   visitCount,
   onSelectVisit
 }: Props) {
@@ -59,7 +57,7 @@ export const MyLocationBottomSheet = memo(function MyLocationBottomSheet({
           <View style={styles.summaryCopy}>
             <Text style={styles.summaryTitle}>{t("myLocation.todaysSummary")}</Text>
             <Text style={styles.summaryBody}>
-              {t("myLocation.summaryCompleted", { visits: visitCount, distance: distanceKm })}
+              {t("myLocation.summaryVisitsOnly", { visits: visitCount })}
             </Text>
           </View>
           {visits.length > 0 ? (
@@ -70,7 +68,7 @@ export const MyLocationBottomSheet = memo(function MyLocationBottomSheet({
         </View>
       </View>
     ),
-    [distanceKm, t, visitCount, visits.length]
+    [t, visitCount, visits.length]
   );
 
   return (

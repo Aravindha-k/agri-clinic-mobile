@@ -1,9 +1,8 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef } from "react";
 import { Animated, Easing, StyleSheet, View, type ViewStyle } from "react-native";
 import { LOGO_SIZES } from "../../brand/logoSizing";
-import { BRAND_COLORS, LOGO_IMAGE } from "../../config/brand";
 import { usePremiumMotion } from "../../hooks/usePremiumMotion";
+import { CompanyLogo } from "./CompanyLogo";
 
 type Props = {
   size?: number;
@@ -13,7 +12,7 @@ type Props = {
 };
 
 /**
- * Logo pulse loader — reliable on all devices (PNG), used for page data loading.
+ * Logo pulse loader — canonical CompanyLogo with optional breathe animation.
  */
 export function AppLoadingLogo({
   size = LOGO_SIZES.appLogo.xl,
@@ -24,7 +23,7 @@ export function AppLoadingLogo({
   const ring = useRef(new Animated.Value(0.92)).current;
   const ringOpacity = useRef(new Animated.Value(0.45)).current;
   const { reduced } = usePremiumMotion();
-  const shouldAnimate = !reduced && (Boolean(LOGO_IMAGE) || loading);
+  const shouldAnimate = !reduced;
 
   useEffect(() => {
     if (!shouldAnimate) {
@@ -94,24 +93,16 @@ export function AppLoadingLogo({
           ]}
         />
       ) : null}
-      <View style={[styles.plate, loading && styles.plateLoading, { width: plate - 8, height: plate - 8, borderRadius: (plate - 8) / 2 }]}>
-        {LOGO_IMAGE ? (
-          <Animated.Image
-            source={LOGO_IMAGE}
-            style={[
-              styles.logo,
-              { width: size, height: size },
-              shouldAnimate ? { transform: [{ scale: breathe }] } : null
-            ]}
-            resizeMode="contain"
-            accessibilityLabel="Loading"
-          />
-        ) : (
-          <Animated.View style={shouldAnimate ? { transform: [{ scale: breathe }] } : undefined}>
-            <Ionicons name="leaf" size={size * 0.55} color={BRAND_COLORS.primary} />
-          </Animated.View>
-        )}
-      </View>
+      <Animated.View
+        style={[
+          styles.plate,
+          loading && styles.plateLoading,
+          { width: plate - 8, height: plate - 8 },
+          shouldAnimate ? { transform: [{ scale: breathe }] } : null
+        ]}
+      >
+        <CompanyLogo size={size} accessibilityLabel="Loading" />
+      </Animated.View>
     </View>
   );
 }
@@ -132,14 +123,6 @@ const styles = StyleSheet.create({
   },
   plateLoading: {
     borderColor: "rgba(15, 107, 67, 0.12)",
-    borderWidth: 1,
-    elevation: 4,
-    shadowColor: "#0F6B43",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.14,
-    shadowRadius: 12
-  },
-  logo: {
-    aspectRatio: 1
+    borderWidth: 1
   }
 });

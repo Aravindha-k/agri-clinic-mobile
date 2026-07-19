@@ -85,12 +85,14 @@ function shouldRethrowWithoutLogout(error: unknown): boolean {
   );
 }
 
+import { getAuthPhase } from "../storage/authPhase";
+
 function devLogApi(
   path: string,
   meta: {
-    auth: boolean;
-    hasToken: boolean;
-    hasDeviceSession: boolean;
+    authRequired: boolean;
+    tokenPresent: boolean;
+    deviceSessionPresent: boolean;
     status?: number;
     source?: string;
     duplicate?: boolean;
@@ -99,7 +101,7 @@ function devLogApi(
   trackApiCall(path, meta.source, meta.duplicate);
   if (!__DEV__) return;
   console.log(
-    `[API] ${path} | auth=${meta.auth ? "yes" : "no"} token=${meta.hasToken ? "yes" : "no"} deviceSession=${meta.hasDeviceSession ? "yes" : "no"}${meta.status != null ? ` status=${meta.status}` : ""}${meta.source ? ` source=${meta.source}` : ""}${meta.duplicate ? " duplicate" : ""}`
+    `[API] ${path} | authState=${getAuthPhase()} tokenPresent=${meta.tokenPresent ? "yes" : "no"} deviceSessionPresent=${meta.deviceSessionPresent ? "yes" : "no"} authRequired=${meta.authRequired ? "yes" : "no"}${meta.status != null ? ` status=${meta.status}` : ""}${meta.source ? ` source=${meta.source}` : ""}${meta.duplicate ? " duplicate" : ""}`
   );
 }
 
@@ -183,7 +185,7 @@ function throwConfigError(): never {
   const configError = getApiConfigError();
   throw new ApiRequestError(
     configError?.message ??
-      "App configuration error. Reinstall the latest APK from your administrator.",
+    "App configuration error. Reinstall the latest APK from your administrator.",
     { code: "CONFIG_ERROR" }
   );
 }
@@ -228,7 +230,13 @@ async function executeApiClient<T>(path: string, options: ApiOptions = {}, attem
 
   try {
     let response = await request();
-    devLogApi(path, { auth, hasToken, hasDeviceSession, status: response.status, source });
+    devLogApi(path, {
+      authRequired: auth,
+      tokenPresent: hasToken,
+      deviceSessionPresent: hasDeviceSession,
+      status: response.status,
+      source
+    });
 
     if (!response.ok) {
       console.warn(`[API] HTTP ${response.status} ${fullUrl}`);
@@ -246,7 +254,13 @@ async function executeApiClient<T>(path: string, options: ApiOptions = {}, attem
         requestHeaders.set("Authorization", `Bearer ${newAccess}`);
         hasDeviceSession = await applyDeviceSessionHeader(requestHeaders);
         response = await request();
-        devLogApi(`${path} (retry)`, { auth, hasToken, hasDeviceSession, status: response.status, source });
+        devLogApi(`${path} (retry)`, {
+          authRequired: auth,
+          tokenPresent: hasToken,
+          deviceSessionPresent: hasDeviceSession,
+          status: response.status,
+          source
+        });
       } catch (error) {
         if (shouldRethrowWithoutLogout(error) || isAuthExpiredError(error)) {
           throw error;

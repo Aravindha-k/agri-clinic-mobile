@@ -27,7 +27,7 @@ function mapScreenCopy(routeName: string, t: (key: string) => string) {
   if (routeName === "TravelHistory") {
     return {
       title: t("myLocation.title"),
-      subtitle: t("myLocation.todaysDistance")
+      subtitle: t("myLocation.liveTracking")
     };
   }
   return {
@@ -48,7 +48,6 @@ export function MyLocationScreen({ navigation, route }: Props) {
     isActive,
     startedAt,
     lastSyncTime,
-    distanceKm,
     accuracyMeters,
     isSyncing,
     refreshing,
@@ -84,7 +83,6 @@ export function MyLocationScreen({ navigation, route }: Props) {
 
       <MyLocationMetricsRow
         startedAt={startedAt}
-        distanceKm={distanceKm}
         lastSyncTime={lastSyncTime}
         accuracyMeters={accuracyMeters}
         syncing={isSyncing || refreshing}
@@ -125,7 +123,6 @@ export function MyLocationScreen({ navigation, route }: Props) {
 
       <MyLocationBottomSheet
         visits={visitsToday}
-        distanceKm={distanceKm}
         visitCount={visitsToday.length}
         onSelectVisit={centerOnVisit}
       />

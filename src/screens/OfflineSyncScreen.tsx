@@ -14,11 +14,13 @@ import { refreshControlProps } from "../theme/refresh";
 import { formatDisplayDateTime } from "../utils/format";
 import { FlatCard, ScreenCanvas, StackScreenHeader } from "../../mobile/components/layout";
 import { Colors, Enterprise, FontSize, FontWeight, Layout, Radius, Spacing } from "../../mobile/lib/theme";
+import { useStackBottomInset } from "../hooks/useStackBottomInset";
 
 type Props = NativeStackScreenProps<RootStackParamList, "OfflineSync">;
 
 export function OfflineSyncScreen({ navigation }: Props) {
   const { t, language } = useI18n();
+  const stackBottom = useStackBottomInset();
   const { queue, syncing, refreshQueue, lastSyncAt } = useOfflineSync();
   const pendingGps = useSyncStore((s) => s.pendingGPSCount);
   const pendingPhotos = useSyncStore((s) => s.pendingPhotosCount);
@@ -89,7 +91,7 @@ export function OfflineSyncScreen({ navigation }: Props) {
         data={queue}
         keyExtractor={(item) => item.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlProps} />}
-        contentContainerStyle={[styles.list, !count && styles.listEmpty]}
+        contentContainerStyle={[styles.list, !count && styles.listEmpty, { paddingBottom: stackBottom }]}
         ListEmptyComponent={
           <EmptyState
             icon="cloud-upload-outline"
@@ -162,8 +164,7 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: Spacing.sm,
-    padding: Spacing.screen,
-    paddingBottom: Layout.stackScrollBottom
+    padding: Spacing.screen
   },
   listEmpty: {
     flexGrow: 1

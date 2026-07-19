@@ -67,7 +67,7 @@ export function VisitCreateStep3({ onBack }: Props) {
 
   return (
     <View style={styles.screen}>
-      <VisitFlowHeader title={t("visitFlow.observationsEvidence")} subtitle={t("visitFlow.step3of4")} onBack={onBack} />
+      <VisitFlowHeader title={t("visitFlow.fieldNotesEvidence")} subtitle={t("visitFlow.step3of4")} onBack={onBack} />
 
       <View style={styles.stepWrap}>
         <StepIndicator step={3} />
@@ -81,7 +81,7 @@ export function VisitCreateStep3({ onBack }: Props) {
       >
         <EntranceBlocks replayKey={replayKey} startStep={0} variant="card">
         <View>
-        <Text style={styles.notesHint}>{t("visitFlow.optionalObservationHint")}</Text>
+        <Text style={styles.notesHint}>{t("visitFlow.fieldNotesHint")}</Text>
 
         <Text style={styles.sectionLabel}>{t("visitFlow.fieldNotes")}</Text>
         <View style={styles.notesWrap}>

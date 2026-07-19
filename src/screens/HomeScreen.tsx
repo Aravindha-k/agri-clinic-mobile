@@ -25,7 +25,7 @@ import { useTracking } from "../storage/TrackingContext";
 import { useDesignSystem } from "../hooks/useDesignSystem";
 import { useLiveClock } from "../hooks/useLiveClock";
 import { useRefreshControlProps } from "../hooks/useRefreshControlProps";
-import { getForegroundLocation } from "../utils/location";
+import { readForegroundLocationIfGranted } from "../utils/location";
 import { isSameVisitLocalDay, visitDisplayIso } from "../utils/format";
 import { extractPhotoUrl, photoCacheVersion } from "../utils/profilePhotoUrl";
 import { getHomeVisits, invalidateHomeVisitsCache } from "../utils/visitsCache";
@@ -111,7 +111,7 @@ export function HomeScreen() {
       setWeatherLng(currentLocation.longitude);
       return;
     }
-    void getForegroundLocation()
+    void readForegroundLocationIfGranted()
       .then((result) => {
         if (result.granted) {
           setWeatherLat(result.location.coords.latitude);

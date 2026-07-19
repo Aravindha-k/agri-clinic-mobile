@@ -104,13 +104,10 @@ export type WorkdayHeroProps = {
   active: boolean;
   timerDisplay: string;
   startedAtLabel?: string | null;
-  distanceKm?: number;
   lastSyncLabel?: string | null;
   busy?: boolean;
   onStart: () => void;
-  onEnd?: () => void;
   startLabel?: string;
-  endLabel?: string;
   idleTitle?: string;
   idleSubtitle?: string;
   statItems?: { label: string; value: string }[];
@@ -120,20 +117,16 @@ export function WorkdayHero({
   active,
   timerDisplay,
   startedAtLabel,
-  distanceKm = 0,
   lastSyncLabel,
   busy = false,
   onStart,
-  onEnd,
   startLabel,
-  endLabel,
   idleTitle,
   idleSubtitle,
   statItems
 }: WorkdayHeroProps) {
   const { t } = useI18n();
   const resolvedStartLabel = startLabel ?? t("workdayUx.startWorkday");
-  const resolvedEndLabel = endLabel ?? t("workdayUx.endWorkday");
   const resolvedIdleTitle = idleTitle ?? t("workdayUx.startYourWorkday");
   const resolvedIdleSubtitle = idleSubtitle ?? t("workdayUx.startHelper");
 
@@ -182,11 +175,12 @@ export function WorkdayHero({
     );
   }
 
-  const distanceLabel = `${distanceKm.toFixed(1)} km`;
   const metrics =
     statItems && statItems.length > 0
       ? statItems
-      : [{ label: t("workdayUx.distance"), value: distanceLabel }];
+      : lastSyncLabel
+        ? [{ label: t("myLocation.lastSync"), value: lastSyncLabel }]
+        : [];
 
   return (
     <View style={[heroCardShellStyle, styles.activeShell, PremiumShadow.hero]}>
@@ -229,22 +223,6 @@ export function WorkdayHero({
         </View>
 
         {lastSyncLabel ? <Text style={styles.syncMeta}>{lastSyncLabel}</Text> : null}
-
-        {onEnd ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={resolvedEndLabel}
-            disabled={busy}
-            onPress={onEnd}
-            style={({ pressed }) => [
-              styles.endBtn,
-              pressed && { opacity: 0.9 },
-              busy && { opacity: 0.55 }
-            ]}
-          >
-            <Text style={styles.endBtnText}>{resolvedEndLabel}</Text>
-          </Pressable>
-        ) : null}
       </View>
     </View>
   );

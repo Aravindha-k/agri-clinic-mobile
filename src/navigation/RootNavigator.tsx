@@ -14,7 +14,9 @@ import { useTheme } from "../theme";
 import { Colors } from "../../mobile/lib/theme";
 import { useSyncStore } from "../../mobile/lib/store/syncStore";
 import { AuthStartScreen } from "../screens/AuthStartScreen";
+import { BiometricUnlockScreen } from "../screens/BiometricUnlockScreen";
 import { LoadingState } from "../components/LoadingState";
+import { isBiometricLockPhase, isAuthBootstrapping } from "../storage/authPhase";
 import HomeTabScreen from "../../mobile/app/(tabs)/index";
 import WorkTabScreen from "../../mobile/app/(tabs)/work";
 import FarmerProfileScreen from "../../mobile/app/farmer/[id]";
@@ -28,6 +30,7 @@ import DiagnosticsScreen from "../../mobile/app/me/diagnostics";
 import NotificationsScreen from "../../mobile/app/notifications";
 import { SettingsScreen } from "../screens/SettingsScreen";
 import { HelpScreen } from "../screens/HelpScreen";
+import { FieldTrackingSetupScreen } from "../screens/FieldTrackingSetupScreen";
 import TrackingWorkspaceScreen from "../../mobile/app/tracking";
 import VisitDetailScreen from "../../mobile/app/visit/[id]";
 import { VisitFlowNavigator } from "./VisitFlowNavigator";
@@ -172,7 +175,7 @@ function MainTabs() {
 }
 
 function AppRoutes() {
-  const { isReady, isAuthenticated } = useAuth();
+  const { isReady, isAuthenticated, authPhase } = useAuth();
   const { hydrationStatus } = useDuty();
   const [forceLogin, setForceLogin] = useState(false);
   const navLoggedRef = useRef<string | null>(null);
@@ -182,6 +185,8 @@ function AppRoutes() {
     if (navLoggedRef.current === key) return;
     navLoggedRef.current = key;
     logStartup(phase, detail);
+    // eslint-disable-next-line no-console
+    console.log(`[Navigation] target=${phase === "nav_home" ? "home" : "login"}`);
     markStartupComplete(phase);
   }, []);
 
@@ -198,8 +203,16 @@ function AppRoutes() {
     }
   }, [forceLogin, isAuthenticated]);
 
-  if (!isReady) {
-    return <LoadingState message="Loading session..." />;
+  if (!isReady || isAuthBootstrapping(authPhase)) {
+    return (
+      <LoadingState
+        message={authPhase === "validating_session" ? "Unlocking session..." : "Loading session..."}
+      />
+    );
+  }
+
+  if (isBiometricLockPhase(authPhase)) {
+    return <BiometricUnlockScreen />;
   }
 
   if (forceLogin) {
@@ -216,7 +229,7 @@ function AppRoutes() {
     );
   }
 
-  if (isAuthenticated) {
+  if (isAuthenticated && authPhase === "authenticated") {
     const allowWithoutDuty =
       isStartupContinueOffline() || hydrationStatus === "ready" || hydrationStatus === "error";
     if (!allowWithoutDuty && (hydrationStatus === "idle" || hydrationStatus === "loading")) {
@@ -228,32 +241,37 @@ function AppRoutes() {
         <>
           <DeferredFieldReminderController />
           <RootStack.Navigator screenOptions={{ headerShown: false, ...stackScreenOptions }}>
-        <RootStack.Screen name="Main" component={MainTabs} />
-        <RootStack.Screen
-          name="VisitFlow"
-          component={SafeVisitFlowNavigator}
-          options={stackScreenOptionsModal}
-        />
-        <RootStack.Screen name="MyLocation" component={SafeMyLocationScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
-        <RootStack.Screen name="LiveMap" component={SafeMyLocationScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
-        <RootStack.Screen name="TravelHistory" component={SafeMyLocationScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
-        <RootStack.Screen name="FarmerMap" component={SafeFarmerMapScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
-        <RootStack.Screen
-          name="SyncStatus"
-          component={SafeSyncStatusScreen}
-          options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }}
-        />
-        <RootStack.Screen
-          name="OfflineSync"
-          component={SafeOfflineSyncScreen}
-          options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }}
-        />
-        <RootStack.Screen
-          name="Notifications"
-          component={SafeNotificationsScreen}
-          options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }}
-        />
-      </RootStack.Navigator>
+            <RootStack.Screen name="Main" component={MainTabs} />
+            <RootStack.Screen
+              name="VisitFlow"
+              component={SafeVisitFlowNavigator}
+              options={stackScreenOptionsModal}
+            />
+            <RootStack.Screen name="MyLocation" component={SafeMyLocationScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
+            <RootStack.Screen name="LiveMap" component={SafeMyLocationScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
+            <RootStack.Screen name="TravelHistory" component={SafeMyLocationScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
+            <RootStack.Screen name="FarmerMap" component={SafeFarmerMapScreen} options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }} />
+            <RootStack.Screen
+              name="SyncStatus"
+              component={SafeSyncStatusScreen}
+              options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }}
+            />
+            <RootStack.Screen
+              name="OfflineSync"
+              component={SafeOfflineSyncScreen}
+              options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }}
+            />
+            <RootStack.Screen
+              name="Notifications"
+              component={SafeNotificationsScreen}
+              options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }}
+            />
+            <RootStack.Screen
+              name="FieldTrackingSetup"
+              component={FieldTrackingSetupScreen}
+              options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }}
+            />
+          </RootStack.Navigator>
         </>
       </NavigationErrorBoundary>
     );

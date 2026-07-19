@@ -7,7 +7,7 @@ import { FieldMapView } from "./map/FieldMapView";
 import { MapErrorBoundary } from "./map/MapErrorBoundary";
 import { colors } from "../theme/colors";
 import { space } from "../theme/layout";
-import { getForegroundLocation } from "../utils/location";
+import { readForegroundLocationIfGranted } from "../utils/location";
 import { hasValidMapCoords, parseMapCoord } from "../utils/mapCoords";
 import { DEFAULT_MAP_REGION, sanitizeRegion } from "../utils/mapRegion";
 
@@ -46,7 +46,7 @@ export function TrackingLocationMap({ isActive, serverLatitude, serverLongitude,
 
       void (async () => {
         try {
-          const r = await getForegroundLocation();
+          const r = await readForegroundLocationIfGranted();
           if (cancelled || !mountedRef.current) return;
 
           permissionLoadedRef.current = true;
@@ -168,7 +168,9 @@ export function TrackingLocationMap({ isActive, serverLatitude, serverLongitude,
           ) : (
             <>
               <Ionicons name="location-outline" size={28} color={colors.muted} />
-              <Text style={styles.inlineFallbackText}>Map could not load. Please enable GPS and try again.</Text>
+              <Text style={styles.inlineFallbackText}>
+                Location is off. Enable it once in Field Tracking Setup (Settings), then return here.
+              </Text>
             </>
           )}
         </View>

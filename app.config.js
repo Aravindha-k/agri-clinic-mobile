@@ -1,42 +1,37 @@
 /** @type {import('expo/config').ExpoConfig} */
 const brand = require("./src/config/brand.config.js");
-const PRODUCTION_API_HOST = "13.207.17.117";
-const PRODUCTION_API_ORIGIN = `https://${PRODUCTION_API_HOST}`;
-const PRODUCTION_API_BASE_URL = `${PRODUCTION_API_ORIGIN}/api/v1/`;
-
-function normalizeApiUrl(raw) {
-  const trimmed = String(raw || "").trim();
-  if (!trimmed) return PRODUCTION_API_BASE_URL;
-  let url = trimmed.replace(/\/+$/, "");
-  url = url.replace(/(\/api\/v1)+$/i, "/api/v1");
-  if (!/\/api\/v1$/i.test(url)) {
-    url = /\/api$/i.test(url) ? `${url}/v1` : `${url}/api/v1`;
-  }
-  return `${url}/`;
-}
+const {
+  PRODUCTION_API_HOST,
+  resolveAppConfigApiBase
+} = require("./src/api/apiBaseUrl.js");
 
 const rawApiEnv =
   process.env.EXPO_PUBLIC_API_BASE_URL?.trim() || process.env.EXPO_PUBLIC_API_URL?.trim() || "";
+const profile = String(process.env.EAS_BUILD_PROFILE || "").trim();
 const isProductionEnv =
   process.env.EXPO_PUBLIC_ENV === "production" ||
-  process.env.EAS_BUILD_PROFILE === "production-apk" ||
-  process.env.EAS_BUILD_PROFILE === "production-aab";
+  process.env.EXPO_PUBLIC_ENV === "preview" ||
+  profile === "preview" ||
+  profile === "production" ||
+  profile === "production-apk" ||
+  profile === "production-aab";
 const isCiBuild = process.env.GITHUB_ACTIONS === "true" || process.env.EAS_BUILD === "true";
 
 if (isCiBuild && !rawApiEnv) {
   throw new Error(
-    "EXPO_PUBLIC_API_BASE_URL (or EXPO_PUBLIC_API_URL) is required for CI Android builds. " +
+    "EXPO_PUBLIC_API_URL (or EXPO_PUBLIC_API_BASE_URL) is required for CI Android builds. " +
       "Add repository secret EXPO_PUBLIC_API_BASE_URL or set it in the workflow env block."
   );
 }
 
-const resolvedApiUrl = normalizeApiUrl(rawApiEnv || PRODUCTION_API_ORIGIN);
+const resolvedApiUrl = resolveAppConfigApiBase(process.env);
 const isProductionApi = resolvedApiUrl.includes(PRODUCTION_API_HOST);
 const allowInsecureHttp = process.env.EXPO_PUBLIC_ALLOW_INSECURE_HTTP === "1";
+/** Cleartext only when the resolved API is http:// (LAN / QA HTTP) — not for HTTPS production. */
 const allowCleartext =
   allowInsecureHttp ||
   process.env.EXPO_PUBLIC_ALLOW_CLEARTEXT === "1" ||
-  !isProductionEnv;
+  resolvedApiUrl.startsWith("http://");
 
 const googleMapsAndroidApiKey = process.env.GOOGLE_MAPS_ANDROID_API_KEY?.trim() || "";
 
@@ -59,6 +54,14 @@ if (!googleMapsAndroidApiKey && process.env.NODE_ENV !== "test") {
   );
 }
 
+const buildEnv =
+  process.env.EXPO_PUBLIC_ENV ||
+  (isProductionEnv ? (profile === "preview" ? "preview" : "production") : "development");
+
+if (process.env.NODE_ENV !== "test") {
+  console.log(`[app.config] API base=${resolvedApiUrl} buildEnv=${buildEnv}`);
+}
+
 module.exports = () => ({
   name: brand.launcherAppName,
   slug: "agri-clinic-field-app",
@@ -68,6 +71,7 @@ module.exports = () => ({
   scheme: "agriclinicfield",
   icon: brand.iconAsset,
   splash: {
+    image: brand.logoAsset,
     resizeMode: "contain",
     backgroundColor: brand.nativeSplashBackgroundColor
   },
@@ -81,11 +85,30 @@ module.exports = () => ({
       NSLocationAlwaysAndWhenInUseUsageDescription:
         "Allow location all the time for route tracking during your workday.",
       NSUserNotificationsUsageDescription:
-        "Send hourly hydration reminders during your field workday."
+        "Send hourly hydration reminders during your field workday.",
+      ...(allowCleartext
+        ? {
+            NSAppTransportSecurity: {
+              NSAllowsLocalNetworking: true,
+              NSExceptionDomains: {
+                "192.168.29.18": {
+                  NSExceptionAllowsInsecureHTTPLoads: true,
+                  NSIncludesSubdomains: false
+                },
+                "13.207.17.117": {
+                  NSExceptionAllowsInsecureHTTPLoads: true,
+                  NSIncludesSubdomains: false
+                }
+              }
+            }
+          }
+        : {})
     }
   },
   android: {
     package: "com.kavya.agriclinic",
+    /** Resize window with IME so visit/login forms stay reachable above the keyboard. */
+    softwareKeyboardLayoutMode: "resize",
     minSdkVersion: 26,
     versionCode: 6,
     usesCleartextTraffic: allowCleartext,
@@ -100,12 +123,13 @@ module.exports = () => ({
       "RECORD_AUDIO",
       "READ_EXTERNAL_STORAGE",
       "READ_MEDIA_IMAGES",
-      "POST_NOTIFICATIONS"
+      "POST_NOTIFICATIONS",
+      "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
     ],
     /**
      * Adaptive icons crop OEMs' masks over a 108dp canvas.
-     * `adaptiveIconAsset` is logo_icons.png inset (~70%) with transparent padding
-     * so the full white rounded-square remains visible. Background stays white.
+     * Foreground is the circular company logo only (transparent PNG, ~70% inset).
+     * Background is official Kavya green — never a white square plate.
      */
     adaptiveIcon: {
       foregroundImage: brand.adaptiveIconAsset,
@@ -149,7 +173,10 @@ module.exports = () => ({
     [
       "expo-splash-screen",
       {
-        backgroundColor: brand.nativeSplashBackgroundColor
+        backgroundColor: brand.nativeSplashBackgroundColor,
+        image: brand.logoAsset,
+        imageWidth: 200,
+        resizeMode: "contain"
       }
     ],
     "expo-font",
@@ -183,7 +210,7 @@ module.exports = () => ({
     apiUrl: resolvedApiUrl,
     apiBaseUrl: resolvedApiUrl,
     production: isProductionApi,
-    buildEnv: process.env.EXPO_PUBLIC_ENV || (isProductionEnv ? "production" : "development"),
+    buildEnv,
     gitCommit: process.env.GITHUB_SHA || process.env.EAS_BUILD_GIT_COMMIT_HASH || "",
     appVersion: "1.0.1",
     mapsNativeConfigured: Boolean(googleMapsAndroidApiKey)

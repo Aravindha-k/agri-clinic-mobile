@@ -1,11 +1,9 @@
-import { endDutySession } from "../../../src/api/tracking";
 import { getDeviceSessionId } from "../../../src/storage/deviceSessionStorage";
 import { getActiveDutySessionId, getActiveWorkdayId } from "../../../src/storage/workdaySessionStorage";
 import { flushPendingVisitEvidence } from "./pendingEvidenceQueue";
 import { flushGPSQueue, flushVisitQueue } from "./offlineSyncManager";
 import {
   countPendingWorkdayOps,
-  markWorkdayOpFailed,
   markWorkdayOpSynced,
   readActiveUserWorkdayOps
 } from "./workdayOperationQueue";
@@ -39,25 +37,11 @@ async function flushPendingWorkdayEnds(): Promise<{ synced: number; failed: numb
   const ops = readActiveUserWorkdayOps().filter((r) => r.operation === "end");
   if (!ops.length) return { synced: 0, failed: 0 };
 
-  let synced = 0;
-  let failed = 0;
+  // Employee manual end is forbidden — clear stale queued ends without calling the API.
   for (const op of ops) {
-    try {
-      await endDutySession(op.server_duty_session_id ?? (await getActiveDutySessionId()));
-      markWorkdayOpSynced(op.local_operation_id);
-      synced += 1;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "workday end failed";
-      if (/already ended|no active duty|inactive/i.test(message)) {
-        markWorkdayOpSynced(op.local_operation_id);
-        synced += 1;
-        continue;
-      }
-      markWorkdayOpFailed(op.local_operation_id, message);
-      failed += 1;
-    }
+    markWorkdayOpSynced(op.local_operation_id);
   }
-  return { synced, failed };
+  return { synced: ops.length, failed: 0 };
 }
 
 export async function runOrderedFieldSync(options?: {

@@ -1,15 +1,13 @@
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useCallback, useState } from "react";
-import { Alert, Linking, RefreshControl, ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppErrorBoundary } from "../../src/components/AppErrorBoundary";
 import { getExpoBuildUrl, shouldShowExpoGoDevWarning } from "../../src/utils/expoRuntime";
 import { logDayTabApi, logDayTabError, logDayTabOpen } from "../../src/utils/dayTabDiagnostics";
-import { useRefreshControlProps } from "../../src/hooks/useRefreshControlProps";
+import { useResponsiveLayout } from "../../src/hooks/useResponsiveLayout";
 import { useTabBarBottomInset } from "../../src/hooks/useTabBarBottomInset";
 import { useI18n } from "../../src/i18n/I18nContext";
-import { announceA11y } from "../../src/utils/a11yAnnounce";
-import { useOfflineSync } from "../../src/storage/OfflineSyncContext";
 import { useTracking } from "../../src/storage/TrackingContext";
 import { useDuty } from "../../src/features/duty/store/DutyContext";
 import { useDutyTimer } from "../../src/features/duty/hooks/useDutyTimer";
@@ -18,21 +16,13 @@ import { autoFlushPendingGps } from "../lib/sync/offlineSyncManager";
 import { readPendingVisits, type PendingVisitRecord } from "../lib/pendingVisitsQueue";
 import { isSameVisitLocalDay } from "../../src/utils/format";
 import { getHomeVisits } from "../../src/utils/visitsCache";
-import { ScreenCanvas, ScreenEntranceBloom, ScreenPageHeader } from "../components/layout";
-import { FadeInSection, entranceStagger } from "../components/ui/FadeInSection";
-import {
-  DutyMapCard,
-  DutyStatusCard,
-  DutySummary,
-  DutyTimeline,
-  WorkdayActionFooter
-} from "../components/duty";
+import { ScreenCanvas, ScreenPageHeader } from "../components/layout";
+import { DutyMapCard } from "../components/duty";
+import { DayCompactSummary } from "../components/duty/DayCompactSummary";
 import { DutyNoWorkDayState } from "../components/duty/empty/DutyEmptyStates";
 import { PendingVisitDetail } from "../components/visits/PendingVisitDetail";
-import { ScreenLoader } from "../components/layout/ScreenLoader";
-import { useScreenEntrance } from "../hooks/useScreenEntrance";
 import { fetchDashboard } from "../lib/homeApi";
-import { Colors, FontSize, FontWeight, Layout, Spacing } from "../lib/theme";
+import { Colors, FontSize, FontWeight, Spacing } from "../lib/theme";
 
 function ExpoGoDevBanner({ onBuildApk }: { onBuildApk: () => void }) {
   return (
@@ -57,29 +47,16 @@ export default function TrackingWorkspaceScreen() {
 function TrackingWorkspaceScreenInner() {
   const { t } = useI18n();
   const navigation = useNavigation<any>();
-  const { pendingCount, syncing } = useOfflineSync();
   const tabInset = useTabBarBottomInset();
-  const refreshControlProps = useRefreshControlProps();
-  const {
-    busy,
-    pendingGpsCount,
-    gpsEnabled,
-    permissionDenied,
-    refreshTrackingState
-  } = useTracking();
-  const { currentDuty, dutyMap, isOffline, refreshBootstrap, refreshDutyMap, endDuty } = useDuty();
+  const { compactHeight, dayMapMinHeight } = useResponsiveLayout();
+  const { gpsEnabled, permissionDenied, refreshTrackingState } = useTracking();
+  const { currentDuty, dutyMap, refreshBootstrap, refreshDutyMap } = useDuty();
   const dutyTimer = useDutyTimer();
   const dutyPresentation = useDutyPresentation(currentDuty);
 
-  const [refreshing, setRefreshing] = useState(false);
-  const [ending, setEnding] = useState(false);
-  const [summaryLoading, setSummaryLoading] = useState(true);
-  const [visitsToday, setVisitsToday] = useState(0);
-  const [completedVisits, setCompletedVisits] = useState(0);
-  const [queuedVisits, setQueuedVisits] = useState(0);
-  const [failedVisits, setFailedVisits] = useState(0);
+  const [visitsCompleted, setVisitsCompleted] = useState(0);
+  const [farmersCovered, setFarmersCovered] = useState(0);
   const [pendingDetail, setPendingDetail] = useState<PendingVisitRecord | null>(null);
-  const entranceTick = useScreenEntrance();
 
   const loadSummary = useCallback(async () => {
     try {
@@ -111,20 +88,15 @@ function TrackingWorkspaceScreenInner() {
       );
 
       const mapCompleted = mapSummary?.completedVisits ?? todayVisits.length;
-      const mapQueued = mapSummary?.visitMarkers?.filter((m) => m.pending).length ?? 0;
+      const visitsCount =
+        Number(dashboard?.visits_today) || todayVisits.length + pendingToday.length || mapCompleted;
 
-      setVisitsToday(Number(dashboard?.visits_today) || todayVisits.length + pendingToday.length);
-      setCompletedVisits(mapCompleted);
-      setQueuedVisits(pendingToday.length + mapQueued);
-      setFailedVisits(0);
+      setVisitsCompleted(Math.max(0, visitsCount));
+      setFarmersCovered(Math.max(0, Number(dashboard?.farmers_covered) || 0));
     } catch (err) {
       logDayTabError("loadSummary", err);
-      setVisitsToday(0);
-      setCompletedVisits(0);
-      setQueuedVisits(0);
-      setFailedVisits(0);
-    } finally {
-      setSummaryLoading(false);
+      setVisitsCompleted(0);
+      setFarmersCovered(0);
     }
   }, [dutyMap, refreshDutyMap]);
 
@@ -134,42 +106,9 @@ function TrackingWorkspaceScreenInner() {
       void autoFlushPendingGps();
       void loadSummary();
       void refreshTrackingState().catch(() => undefined);
-    }, [loadSummary, refreshTrackingState])
+      void refreshBootstrap({ force: false }).catch(() => undefined);
+    }, [loadSummary, refreshBootstrap, refreshTrackingState])
   );
-
-  async function onRefresh() {
-    setRefreshing(true);
-    await Promise.all([
-      loadSummary(),
-      refreshTrackingState().catch(() => undefined),
-      refreshBootstrap({ force: true }).catch(() => undefined)
-    ]);
-    setRefreshing(false);
-  }
-
-  async function handleEndWorkday() {
-    if (busy || ending) return;
-    Alert.alert(t("daySummary.endWorkdayTitle"), t("daySummary.endWorkdayBody"), [
-      { text: t("common.cancel"), style: "cancel" },
-      {
-        text: t("daySummary.endWorkday"),
-        style: "destructive",
-        onPress: () => {
-          void (async () => {
-            setEnding(true);
-            try {
-              await endDuty();
-              announceA11y(t("a11y.workdayEnded"));
-              await refreshTrackingState().catch(() => undefined);
-              await loadSummary();
-            } finally {
-              setEnding(false);
-            }
-          })();
-        }
-      }
-    ]);
-  }
 
   function openBuildApkPage() {
     void Linking.openURL(getExpoBuildUrl()).catch(() => undefined);
@@ -187,84 +126,51 @@ function TrackingWorkspaceScreenInner() {
     setPendingDetail(match);
   }
 
-  const pendingSync = pendingGpsCount + pendingCount;
   const hasDuty = dutyPresentation.hasDuty;
+  const statusLabel = dutyPresentation.isActive
+    ? t("workdayUx.workdayActive")
+    : dutyPresentation.isCompleted
+      ? dutyPresentation.sessionStatus === "auto_completed"
+        ? "Auto Completed"
+        : t("workdayUx.statusCompleted")
+      : t("workdayUx.statusNotStarted");
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
       <ScreenCanvas />
-      <ScreenEntranceBloom replayKey={entranceTick} />
       <ScreenPageHeader title={t("daySummary.title")} subtitle={t("daySummary.reflectSubtitle")} />
 
-      <ScrollView
-        style={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.content, { paddingBottom: tabInset + Layout.scrollBottomExtra }]}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} {...refreshControlProps} />
-        }
-      >
-        {shouldShowExpoGoDevWarning() ? <ExpoGoDevBanner onBuildApk={openBuildApkPage} /> : null}
+      {shouldShowExpoGoDevWarning() ? <ExpoGoDevBanner onBuildApk={openBuildApkPage} /> : null}
 
-        {!hasDuty ? (
-          <FadeInSection replayKey={entranceTick} delay={entranceStagger(0)}>
-            <DutyNoWorkDayState />
-          </FadeInSection>
-        ) : (
-          <>
-            <FadeInSection replayKey={entranceTick} delay={entranceStagger(0)}>
-              <DutyStatusCard
-                sticky
-                status={dutyPresentation.sessionStatus}
-                startedAt={dutyPresentation.startedAt}
-                expectedEndAt={dutyTimer.expectedEndAt}
-                elapsed={dutyTimer.elapsedDisplay}
-                remaining={dutyTimer.remainingDisplay}
-                offline={isOffline}
-                pendingSync={pendingSync}
-                syncing={syncing}
-                gpsEnabled={gpsEnabled}
-                permissionDenied={permissionDenied}
-              />
-            </FadeInSection>
+      {!hasDuty ? (
+        <View style={styles.emptyWrap}>
+          <DutyNoWorkDayState />
+        </View>
+      ) : (
+        <View style={styles.body}>
+          <DayCompactSummary
+            statusLabel={statusLabel}
+            startedAt={dutyPresentation.startedAt}
+            expectedEndAt={dutyTimer.expectedEndAt}
+            visitsCompleted={visitsCompleted}
+            farmersCovered={farmersCovered}
+            dutyActive={dutyPresentation.isActive}
+            gpsEnabled={gpsEnabled}
+            permissionDenied={permissionDenied}
+            compact={compactHeight}
+          />
 
-            <FadeInSection replayKey={entranceTick} delay={entranceStagger(1)}>
-              <DutyMapCard onMarkerPress={openVisit} onPendingMarkerPress={(id) => void openPending(id)} />
-            </FadeInSection>
+          <View style={[styles.mapArea, { marginBottom: tabInset, minHeight: dayMapMinHeight }]}>
+            <DutyMapCard
+              fill
+              hideTitle
+              onMarkerPress={openVisit}
+              onPendingMarkerPress={(id) => void openPending(id)}
+            />
+          </View>
+        </View>
+      )}
 
-            {summaryLoading ? (
-              <ScreenLoader message={t("common.loading")} />
-            ) : (
-              <>
-                <FadeInSection replayKey={entranceTick} delay={entranceStagger(2)}>
-                  <DutySummary
-                    visitsToday={visitsToday}
-                    completed={completedVisits}
-                    pendingSync={pendingSync}
-                    queued={queuedVisits}
-                    failed={failedVisits}
-                  />
-                </FadeInSection>
-
-                <FadeInSection replayKey={entranceTick} delay={entranceStagger(3)}>
-                  <DutyTimeline
-                    startedAt={dutyPresentation.startedAt}
-                    endedAt={dutyPresentation.endedAt}
-                    visits={dutyMap?.visitMarkers ?? []}
-                  />
-                </FadeInSection>
-              </>
-            )}
-          </>
-        )}
-      </ScrollView>
-
-      <WorkdayActionFooter
-        visible={dutyPresentation.isActive}
-        loading={ending}
-        disabled={busy}
-        onEnd={() => void handleEndWorkday()}
-      />
       <PendingVisitDetail
         visit={pendingDetail}
         onClose={() => setPendingDetail(null)}
@@ -279,12 +185,17 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bg,
     flex: 1
   },
-  scroll: {
+  body: {
     flex: 1
   },
-  content: {
-    gap: 0,
-    paddingTop: Spacing.sm
+  emptyWrap: {
+    flex: 1,
+    justifyContent: "center",
+    paddingTop: Spacing.lg
+  },
+  mapArea: {
+    flex: 1,
+    minHeight: 220
   },
   expoDevBanner: {
     backgroundColor: Colors.amberBg,
@@ -292,7 +203,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     gap: 4,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
     marginHorizontal: Spacing.lg,
     padding: 12
   },

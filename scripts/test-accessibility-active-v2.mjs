@@ -8,7 +8,6 @@ const read = (file) => readFileSync(resolve(root, file), "utf8");
 
 const mustMatch = [
   ["mobile/components/duty/StartWorkDayCard.tsx", [/accessibilityLabel=\{t\("a11y\.startWorkday"\)\}/, /accessibilityHint=\{t\("a11y\.startWorkdayHint"\)\}/]],
-  ["mobile/components/duty/WorkdayActionFooter.tsx", [/accessibilityLabel=\{t\("a11y\.endWorkday"\)\}/, /accessibilityHint=\{t\("a11y\.endWorkdayHint"\)\}/]],
   ["src/components/ui/VisitFabTabButton.tsx", [/accessibilityRole="button"/, /accessibilityHint=\{t\("a11y\.openNewVisitHint"\)\}/, /usePremiumMotion/]],
   ["mobile/components/duty/SyncStatusBadge.tsx", [/accessibilityLiveRegion="polite"/, /a11y\.syncPending_/]],
   ["mobile/components/duty/GpsStatusBadge.tsx", [/accessibilityRole="text"/, /workdayUx\.gpsOff/, /a11y\.gpsActive/]],
@@ -19,7 +18,7 @@ const mustMatch = [
   ["mobile/app/(tabs)/profile.tsx", [/accessibilityRole="button"/, /accessibilityState=\{\{\s*selected/]],
   ["src/utils/a11yAnnounce.ts", [/announceForAccessibility/]],
   ["mobile/app/(tabs)/index.tsx", [/announceA11y\(t\("a11y\.workdayStarted"\)\)/]],
-  ["mobile/app/tracking.tsx", [/announceA11y\(t\("a11y\.workdayEnded"\)\)/]]
+  ["mobile/app/tracking.tsx", [/DayCompactSummary/, /DutyMapCard/]]
 ];
 
 for (const [file, patterns] of mustMatch) {

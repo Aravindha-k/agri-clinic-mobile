@@ -1,31 +1,27 @@
 import { Image, StyleSheet, Text, View } from "react-native";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { ProfilePhotoFallback } from "../../../src/components/ProfilePhotoFallback";
-import { cacheBustPhotoUrl, extractPhotoUrl } from "../../../src/utils/profilePhotoUrl";
+import { cacheBustPhotoUrl } from "../../../src/utils/profilePhotoUrl";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 import { GpsStatusBadge } from "../duty/GpsStatusBadge";
-import { SyncStatusBadge } from "../duty/SyncStatusBadge";
 
 type Props = {
   photoUrl: string | null;
   photoVersion: string | number;
-  offline?: boolean;
-  pendingSync?: number;
   gpsEnabled?: boolean;
   permissionDenied?: boolean;
 };
 
+/** Avatar + GPS only — pending sync lives on the workday status card. */
 export function HomeDashboardStatusRow({
   photoUrl,
   photoVersion,
-  offline,
-  pendingSync,
   gpsEnabled,
   permissionDenied
 }: Props) {
   const { t } = useI18n();
   const uri = photoUrl ? cacheBustPhotoUrl(photoUrl, photoVersion) : null;
-  const size = 48;
+  const size = 44;
 
   return (
     <View style={styles.row}>
@@ -38,10 +34,7 @@ export function HomeDashboardStatusRow({
       </View>
       <View style={styles.copy}>
         <Text style={styles.label}>{t("home.fieldOperations")}</Text>
-        <View style={styles.badges}>
-          <GpsStatusBadge gpsEnabled={gpsEnabled} permissionDenied={permissionDenied} />
-          <SyncStatusBadge offline={offline} pendingCount={pendingSync} />
-        </View>
+        <GpsStatusBadge gpsEnabled={gpsEnabled} permissionDenied={permissionDenied} />
       </View>
     </View>
   );
@@ -52,8 +45,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     gap: Spacing.md,
+    marginBottom: Spacing.sm,
     marginHorizontal: Spacing.screen,
-    marginTop: Spacing.md
+    marginTop: Spacing.sm
   },
   avatarShell: {
     backgroundColor: Colors.bg,
@@ -70,10 +64,5 @@ const styles = StyleSheet.create({
     color: Colors.text2,
     fontSize: FontSize.sm,
     fontWeight: FontWeight.semibold
-  },
-  badges: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.xs
   }
 });

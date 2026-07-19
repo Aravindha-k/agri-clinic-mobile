@@ -1,31 +1,36 @@
 import "react-native-reanimated";
-import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import AppProviders from "./AppProviders";
 import { KavyaCinematicSplash } from "./src/components/brand/KavyaCinematicSplash";
+import { CompanyLogo } from "./src/components/brand/CompanyLogo";
 import { SPLASH_ASSETS } from "./src/components/brand/splashAssets";
 import { NATIVE_LAUNCH_BG } from "./src/components/brand/splashColors";
 import { hideNativeSplashSafe, holdNativeSplash } from "./src/bootstrap/nativeSplash";
 import { onSplashReplayRequested } from "./src/bootstrap/splashReplay";
+import { markSplashUiReady, resetSplashUiReady } from "./src/bootstrap/splashUiGate";
 import {
   STARTUP_TIMEOUTS,
+  hasStartupCompleted,
   markAssetsLoaded,
   markStartupBegin,
   markStartupFailed
 } from "./src/bootstrap/startupCoordinator";
+import {
+  classifyStartupError,
+  getStartupErrorCopy,
+  type StartupErrorCategory
+} from "./src/bootstrap/startupErrors";
 import { getApiBuildDiagnostics, getApiConfigError } from "./src/api/config";
 import { logStartup, logStartupError } from "./src/utils/startupDiagnostics";
 import { installGlobalErrorHandlers } from "./src/utils/globalErrorHandlers";
-
-type ProvidersComponent = ComponentType<{ onCriticalReady?: () => void }>;
 
 /** App shell background after splash (matches login / theme). */
 const APP_BG = "#F8F7F2";
 
 type StartupPhase = "cinematic" | "revealing" | "app";
-/** Must fire before the cinematic's 6.5s hard ceiling so recovery is already painted. */
-const PROVIDERS_WATCHDOG_MS = STARTUP_TIMEOUTS.providersModuleMs;
 /** Last-resort native splash hide if cinematic onReady never fires (OEM layout hangs). */
 const NATIVE_SPLASH_FAILSAFE_MS = STARTUP_TIMEOUTS.nativeSplashFailsafeMs;
 
@@ -47,14 +52,15 @@ function preloadSplashAssets() {
 function StartupConfigRecovery() {
   const diag = getApiBuildDiagnostics();
   const configError = getApiConfigError();
+  const copy = getStartupErrorCopy("configuration_error");
   return (
     <View style={styles.recovery}>
-      <Image source={SPLASH_ASSETS.logo} style={styles.recoveryLogo} resizeMode="contain" />
-      <Text style={styles.recoveryTitle}>The app could not start</Text>
+      <CompanyLogo size={88} />
+      <Text style={styles.recoveryTitle}>{copy.title}</Text>
       <Text style={styles.recoveryMessage}>
-        App configuration error. Reinstall the latest APK from your administrator.
+        {copy.message}
         {"\n\n"}
-        செயலி கட்டமைப்பு பிழை. நிர்வாகியிடமிருந்து சமீபத்திய APK ஐ மீண்டும் நிறுவவும்.
+        {copy.messageTa}
       </Text>
       <Text style={styles.recoveryMeta}>
         Build {diag.appVersion} · {diag.gitCommit}
@@ -64,15 +70,49 @@ function StartupConfigRecovery() {
   );
 }
 
+function StartupFailureRecovery({
+  category,
+  onRetry
+}: {
+  category: StartupErrorCategory;
+  onRetry: () => void;
+}) {
+  const copy = getStartupErrorCopy(category);
+  return (
+    <View style={styles.recovery}>
+      <CompanyLogo size={88} />
+      <Text style={styles.recoveryTitle}>{copy.title}</Text>
+      <Text style={styles.recoveryMessage}>
+        {copy.message}
+        {"\n\n"}
+        {copy.messageTa}
+      </Text>
+      <Pressable accessibilityRole="button" onPress={onRetry} style={styles.retryButton}>
+        <Text style={styles.retryText}>Retry / மீண்டும் முயற்சி</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export default function App() {
   const startupConfigError = getApiConfigError();
   const [phase, setPhase] = useState<StartupPhase>("cinematic");
   const [splashKey, setSplashKey] = useState(0);
-  const [Providers, setProviders] = useState<ProvidersComponent | null>(null);
-  const [bootError, setBootError] = useState<string | null>(null);
-  const [providerAttempt, setProviderAttempt] = useState(0);
+  const [bootError, setBootError] = useState<StartupErrorCategory | null>(null);
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
   const [criticalReady, setCriticalReady] = useState(false);
+  const [providersMounted, setProvidersMounted] = useState(false);
   const layoutAtRef = useRef<number | null>(null);
+  const criticalReadyRef = useRef(false);
+  const bootstrapGenerationRef = useRef(0);
+  const bootstrapWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearBootstrapWatchdog = useCallback(() => {
+    if (bootstrapWatchdogRef.current != null) {
+      clearTimeout(bootstrapWatchdogRef.current);
+      bootstrapWatchdogRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     installGlobalErrorHandlers();
@@ -83,6 +123,8 @@ export default function App() {
     }
     markStartupBegin("App root");
     logStartup("first_render");
+    // Static import: Metro must finish AppProviders before this module evaluates.
+    logStartup("providers_module_ready", "static_import");
     void holdNativeSplash();
     void preloadSplashAssets();
     const failsafe = setTimeout(() => {
@@ -91,49 +133,59 @@ export default function App() {
     return () => clearTimeout(failsafe);
   }, [startupConfigError]);
 
+  /**
+   * Bootstrap watchdog starts only after providers have mounted.
+   * Never races Metro dynamic-import bundling (AppProviders is statically imported).
+   */
   useEffect(() => {
-    if (startupConfigError) return;
-    let active = true;
-    let watchdogFired = false;
-    const watchdog = setTimeout(() => {
-      if (!active) return;
-      watchdogFired = true;
-      logStartupError("App providers did not load before the startup watchdog");
-      markStartupFailed("providers_module", "providers watchdog timeout");
-      setBootError("timeout");
-      setCriticalReady(true);
-    }, PROVIDERS_WATCHDOG_MS);
+    if (startupConfigError || !providersMounted || criticalReadyRef.current) return;
+    if (hasStartupCompleted()) return;
 
-    void import("./AppProviders")
-      .then((mod) => {
-        if (!active) return;
-        clearTimeout(watchdog);
-        setProviders(() => mod.default);
-        if (!watchdogFired) setBootError(null);
-        logStartup("providers_module_ready");
-      })
-      .catch((err) => {
-        if (!active) return;
-        clearTimeout(watchdog);
-        const message = err instanceof Error ? err.message : String(err);
-        logStartupError(message);
-        markStartupFailed("providers_module", message);
-        setBootError(message);
-        setCriticalReady(true);
-      });
-    return () => {
-      active = false;
-      clearTimeout(watchdog);
-    };
-  }, [providerAttempt, startupConfigError]);
+    const generation = ++bootstrapGenerationRef.current;
+    clearBootstrapWatchdog();
+
+    if (__DEV__) {
+      logStartup("providers_mounted", "dev_bootstrap_watch_soft");
+      bootstrapWatchdogRef.current = setTimeout(() => {
+        if (generation !== bootstrapGenerationRef.current) return;
+        if (criticalReadyRef.current || hasStartupCompleted()) return;
+        console.warn("[Startup] waiting_for_metro_bundle — critical bootstrap still pending (dev; not fatal)");
+        logStartup("waiting_for_metro_bundle", "dev_soft_warn");
+      }, STARTUP_TIMEOUTS.devSlowBootstrapWarnMs);
+      return () => clearBootstrapWatchdog();
+    }
+
+    logStartup("bootstrapping", "release_watchdog_armed");
+    bootstrapWatchdogRef.current = setTimeout(() => {
+      if (generation !== bootstrapGenerationRef.current) return;
+      if (criticalReadyRef.current || hasStartupCompleted() || bootError != null) return;
+      logStartupError("Critical bootstrap did not complete before the release watchdog");
+      markStartupFailed("critical_bootstrap", "release critical bootstrap timeout");
+      setBootError("auth_bootstrap_error");
+      // Allow splash to exit so the recovery UI is reachable.
+      setCriticalReady(true);
+    }, STARTUP_TIMEOUTS.criticalBootstrapMs);
+
+    return () => clearBootstrapWatchdog();
+  }, [bootstrapAttempt, bootError, clearBootstrapWatchdog, providersMounted, startupConfigError]);
 
   useEffect(() => {
     return onSplashReplayRequested((reason) => {
       logStartup("splash_replay", reason ?? "sign_out");
+      resetSplashUiReady(reason ?? "sign_out");
       setSplashKey((key) => key + 1);
       setPhase("cinematic");
       setCriticalReady(false);
+      criticalReadyRef.current = false;
       layoutAtRef.current = null;
+      setBootError(null);
+      // AppProviders already reported ready — re-arm canExit so splash is not stuck
+      // waiting on a one-shot firedRef that will not fire again.
+      setTimeout(() => {
+        criticalReadyRef.current = true;
+        setCriticalReady(true);
+        logStartup("providers_ready", "splash_replay_rearmed");
+      }, 50);
     });
   }, []);
 
@@ -148,10 +200,30 @@ export default function App() {
     void hideNativeSplashSafe("cinematic_first_layout");
   }, []);
 
+  const handleProvidersMounted = useCallback(() => {
+    setProvidersMounted(true);
+    logStartup("providers_mounted");
+  }, []);
+
   const handleCriticalReady = useCallback(() => {
+    if (criticalReadyRef.current) return;
+    criticalReadyRef.current = true;
+    clearBootstrapWatchdog();
+    setBootError(null);
     setCriticalReady(true);
     logStartup("providers_ready", `${elapsed()} ms`);
-  }, [elapsed]);
+  }, [clearBootstrapWatchdog, elapsed]);
+
+  const handleProvidersFatal = useCallback((error: unknown) => {
+    if (criticalReadyRef.current || hasStartupCompleted()) return;
+    const message = error instanceof Error ? error.message : String(error);
+    const category = classifyStartupError(message);
+    logStartupError(message);
+    markStartupFailed("providers_runtime", message);
+    clearBootstrapWatchdog();
+    setBootError(category);
+    setCriticalReady(true);
+  }, [clearBootstrapWatchdog]);
 
   const handleCinematicExitStart = useCallback(() => {
     logStartup("app_ready", `exit_started ${elapsed()} ms`);
@@ -161,24 +233,32 @@ export default function App() {
   const handleCinematicFinish = useCallback(() => {
     logStartup("app_revealed", `${elapsed()} ms`);
     logStartup("splash_end", `${elapsed()} ms`);
+    markSplashUiReady("cinematic_finish");
     setPhase("app");
   }, [elapsed]);
 
-  const retryProviderLoad = useCallback(() => {
+  const retryBootstrap = useCallback(() => {
+    clearBootstrapWatchdog();
+    bootstrapGenerationRef.current += 1;
+    resetSplashUiReady("bootstrap_retry");
     setBootError(null);
-    setProviders(null);
     setCriticalReady(false);
+    criticalReadyRef.current = false;
+    setProvidersMounted(false);
     setPhase("cinematic");
     layoutAtRef.current = null;
     setSplashKey((key) => key + 1);
-    setProviderAttempt((attempt) => attempt + 1);
-    logStartup("providers_module_ready", "retry_requested");
-  }, []);
+    setBootstrapAttempt((attempt) => attempt + 1);
+    logStartup("bootstrapping", "retry_requested");
+  }, [clearBootstrapWatchdog]);
 
   const showSplash = phase === "cinematic" || phase === "revealing";
-  const showShell = Providers != null || bootError != null;
-  /** Keep providers mounted for auth/fonts, but hide until exit fade so login cannot flash under splash. */
-  const shellVisible = phase === "revealing" || phase === "app";
+  /**
+   * Keep auth/home shell fully hidden until splash finishes.
+   * Revealing must not show Login/Biometric under the fade — fingerprint
+   * system dialogs ignore React opacity and would steal the splash.
+   */
+  const shellVisible = phase === "app";
   const rootBg = showSplash ? NATIVE_LAUNCH_BG : APP_BG;
 
   if (startupConfigError) {
@@ -194,35 +274,23 @@ export default function App() {
   return (
     <GestureHandlerRootView style={[styles.root, { backgroundColor: rootBg }]}>
       <SafeAreaProvider>
-        {showShell ? (
-          <View
-            style={[styles.shell, !shellVisible && styles.shellHidden]}
-            pointerEvents={shellVisible ? "auto" : "none"}
-            accessibilityElementsHidden={!shellVisible}
-            importantForAccessibility={shellVisible ? "auto" : "no-hide-descendants"}
-          >
-            {bootError ? (
-              <View style={styles.recovery}>
-                <Image source={SPLASH_ASSETS.logo} style={styles.recoveryLogo} resizeMode="contain" />
-                <Text style={styles.recoveryTitle}>Unable to finish startup</Text>
-                <Text style={styles.recoveryMessage}>
-                  The app could not load its startup services. Check the connection and try again.
-                  {"\n\n"}
-                  செயலியின் தொடக்க சேவைகளை ஏற்ற முடியவில்லை. இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={retryProviderLoad}
-                  style={styles.retryButton}
-                >
-                  <Text style={styles.retryText}>Retry / மீண்டும் முயற்சி</Text>
-                </Pressable>
-              </View>
-            ) : Providers ? (
-              <Providers onCriticalReady={handleCriticalReady} />
-            ) : null}
-          </View>
-        ) : null}
+        <View
+          style={[styles.shell, !shellVisible && styles.shellHidden]}
+          pointerEvents={shellVisible ? "auto" : "none"}
+          accessibilityElementsHidden={!shellVisible}
+          importantForAccessibility={shellVisible ? "auto" : "no-hide-descendants"}
+        >
+          {bootError ? (
+            <StartupFailureRecovery category={bootError} onRetry={retryBootstrap} />
+          ) : (
+            <AppProviders
+              key={bootstrapAttempt}
+              onShellReady={handleProvidersMounted}
+              onCriticalReady={handleCriticalReady}
+              onFatalError={handleProvidersFatal}
+            />
+          )}
+        </View>
 
         {showSplash ? (
           <View style={styles.splashOverlay} pointerEvents="auto" collapsable={false}>
@@ -262,10 +330,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     paddingHorizontal: 28
-  },
-  recoveryLogo: {
-    height: 88,
-    width: 88
   },
   recoveryTitle: {
     color: "#0B3D2E",

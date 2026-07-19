@@ -8,7 +8,6 @@ import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from "../../../
 
 type Props = {
   startedAt: string | null;
-  distanceKm: string;
   lastSyncTime: string | null;
   accuracyMeters: number | null;
   syncing: boolean;
@@ -38,7 +37,6 @@ function MetricCard({
 
 export const MyLocationMetricsRow = memo(function MyLocationMetricsRow({
   startedAt,
-  distanceKm,
   lastSyncTime,
   accuracyMeters,
   syncing
@@ -62,11 +60,6 @@ export const MyLocationMetricsRow = memo(function MyLocationMetricsRow({
         icon="time-outline"
         label={t("myLocation.workingSince")}
         value={startedAt ? formatShortTime(startedAt) : "—"}
-      />
-      <MetricCard
-        icon="git-branch-outline"
-        label={t("myLocation.todaysDistance")}
-        value={`${distanceKm} km`}
       />
       <MetricCard
         icon="sync-outline"

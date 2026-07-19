@@ -45,7 +45,9 @@ export function LoginBiometricSection({ status, ready, canLogin, busy, onSignIn 
           </View>
           <View style={styles.copy}>
             <Text style={styles.title}>{busy ? "Checking…" : "Login with fingerprint"}</Text>
-            <Text style={styles.hint}>Use saved device login</Text>
+            <Text style={styles.hint}>
+              {status.enabled ? "Fingerprint login is enabled on this device" : "Use saved device login"}
+            </Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color={TEXT_MUTED} />
         </TouchableOpacity>
@@ -55,11 +57,15 @@ export function LoginBiometricSection({ status, ready, canLogin, busy, onSignIn 
             <Ionicons name="finger-print-outline" size={22} color={GREEN} />
           </View>
           <View style={styles.copy}>
-            <Text style={styles.title}>Login with fingerprint</Text>
+            <Text style={styles.title}>
+              {status.enabled ? "Fingerprint ready" : "Login with fingerprint"}
+            </Text>
             <Text style={styles.hint}>
-              {status.enrolled
-                ? "Sign in once with password to save device login."
-                : "Set up fingerprint on your phone first."}
+              {!status.enrolled
+                ? "Set up fingerprint on your phone first."
+                : status.enabled
+                  ? "Sign in with password once — fingerprint stays enabled on this phone."
+                  : "Sign in once with password to save fingerprint login."}
             </Text>
           </View>
         </View>

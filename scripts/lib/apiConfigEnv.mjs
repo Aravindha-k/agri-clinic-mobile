@@ -1,27 +1,23 @@
 /**
  * Shared production API URL resolution and validation for CI scripts and audits.
+ * Canonical host/normalize live in src/api/apiBaseUrl.js — keep behavior aligned.
  */
+import { createRequire } from "node:module";
 
-export const PRODUCTION_API_HOST = "13.207.17.117";
+const require = createRequire(import.meta.url);
+const {
+  PRODUCTION_API_HOST,
+  BLOCKED_RELEASE_HOSTS,
+  normalizeApiBaseUrl,
+  readExplicitApiEnv
+} = require("../../src/api/apiBaseUrl.js");
 
-export const BLOCKED_HOSTS = new Set(["localhost", "127.0.0.1", "10.0.2.2"]);
+export { PRODUCTION_API_HOST, normalizeApiBaseUrl };
 
-export function normalizeApiBaseUrl(raw) {
-  const trimmed = String(raw || "").trim();
-  if (!trimmed) {
-    return "";
-  }
-
-  let url = trimmed.replace(/\/+$/, "");
-  url = url.replace(/(\/api\/v1)+$/i, "/api/v1");
-  if (!/\/api\/v1$/i.test(url)) {
-    url = /\/api$/i.test(url) ? `${url}/v1` : `${url}/api/v1`;
-  }
-  return `${url}/`;
-}
+export const BLOCKED_HOSTS = BLOCKED_RELEASE_HOSTS;
 
 export function resolveApiBaseFromEnv(env = process.env) {
-  const raw = env.EXPO_PUBLIC_API_BASE_URL?.trim() || env.EXPO_PUBLIC_API_URL?.trim();
+  const raw = readExplicitApiEnv(env);
   if (!raw) {
     return null;
   }
@@ -41,7 +37,7 @@ export function validateProductionApiEnv(env = process.env) {
   const base = resolveApiBaseFromEnv(env);
   if (!base) {
     throw new Error(
-      "EXPO_PUBLIC_API_BASE_URL (or EXPO_PUBLIC_API_URL) is required for production APK builds."
+      "EXPO_PUBLIC_API_URL (or EXPO_PUBLIC_API_BASE_URL) is required for production APK builds."
     );
   }
 
@@ -49,7 +45,7 @@ export function validateProductionApiEnv(env = process.env) {
   try {
     parsed = new URL(base);
   } catch {
-    throw new Error(`Invalid EXPO_PUBLIC_API_BASE_URL: could not parse URL.`);
+    throw new Error(`Invalid EXPO_PUBLIC_API_URL: could not parse URL.`);
   }
 
   if (BLOCKED_HOSTS.has(parsed.hostname)) {

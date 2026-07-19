@@ -46,7 +46,8 @@ export function buildVisitFormValuesFromStore(
     : problem?.tamil_name || problem?.name || "";
 
   const visitNotes = state.fieldNotes.trim() || state.observation.trim();
-  const advice = state.recommendation.trim() || state.actionTaken.trim();
+  // Temporary compatibility adapter: employee enters Field Notes only.
+  // Backend columns still use observation + field_notes. Do NOT duplicate into recommendation.
   const lat = extras?.latitude ?? state.gpsCoords?.latitude;
   const lng = extras?.longitude ?? state.gpsCoords?.longitude;
   const accuracy = extras?.accuracy ?? state.gpsCoords?.accuracy ?? null;
@@ -80,12 +81,13 @@ export function buildVisitFormValuesFromStore(
     pest_issue: state.pestIssue,
     disease_issue: state.diseaseIssue,
     // Follow-up capture deferred to v1.1 — do not send a silent false that implies UI support.
-    recommendation: advice || undefined,
-    action_taken: advice || undefined,
-    fertilizer_advice: state.fertilizerAdvice.trim() || undefined,
-    pesticide_advice: state.pesticideAdvice.trim() || undefined,
-    irrigation_advice: state.irrigationAdvice.trim() || undefined,
-    general_advice: state.generalAdvice.trim() || undefined
+    // Legacy typed advice channels omitted for new V2 Field-Notes-only creates.
+    recommendation: undefined,
+    action_taken: undefined,
+    fertilizer_advice: undefined,
+    pesticide_advice: undefined,
+    irrigation_advice: undefined,
+    general_advice: undefined
   };
 }
 
@@ -109,6 +111,7 @@ async function postVisitMultipart(fields: Record<string, string>): Promise<{ vis
           xhr.setRequestHeader(name, value);
         }
       }
+      xhr.timeout = 120_000;
       xhr.onload = async () => {
         try {
           if (xhr.status === 401 && accessToken) {
@@ -148,6 +151,7 @@ async function postVisitMultipart(fields: Record<string, string>): Promise<{ vis
         }
       };
       xhr.onerror = () => reject(new Error("Network error"));
+      xhr.ontimeout = () => reject(new Error("Submit timed out. Check signal and try again."));
       xhr.send(formData);
     };
     void attempt(token);

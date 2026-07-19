@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { StyleSheet, useWindowDimensions, View, type StyleProp, type ViewStyle } from "react-native";
 import Animated, {
   Extrapolation,
   interpolate,
@@ -69,11 +69,14 @@ export function BrandHeader({
   scrollY,
   logo
 }: Props) {
+  const { width: windowWidth } = useWindowDimensions();
   const compact = size !== "hero";
   const logoSize = logoSizeFor(size);
   const baseStep = entrance?.step ?? 0;
   const isFull = variant === "full" && size === "hero";
   const isSplit = layout === "split" && !compact;
+  const homeLogoColumnW = homeLogoHeroColumnWidth(windowWidth);
+  const homeLogoStageH = homeLogoHeroStageHeight(windowWidth);
 
   const logoScrollStyle = useAnimatedStyle(() => {
     if (!scrollY || size !== "hero") return {};
@@ -115,7 +118,9 @@ export function BrandHeader({
     <View style={styles.splitRow}>
       <Animated.View
         style={[
-          usesHomeLogo ? styles.logoColumnHome : styles.logoColumn,
+          usesHomeLogo
+            ? [styles.logoColumnHome, { width: homeLogoColumnW, minHeight: homeLogoStageH }]
+            : styles.logoColumn,
           logoScrollStyle
         ]}
       >
@@ -211,15 +216,13 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     flexShrink: 0,
     justifyContent: "center",
-    minHeight: homeLogoHeroStageHeight(),
     overflow: "visible",
-    width: homeLogoHeroColumnWidth(),
     zIndex: 2
   },
   splitCopy: {
     flex: 1,
     justifyContent: "center",
-    minWidth: 0,
+    minWidth: 96,
     paddingLeft: 4,
     paddingRight: 44
   },

@@ -8,7 +8,7 @@ import Reanimated, {
   withSequence,
   withTiming
 } from "react-native-reanimated";
-import { CompanyLogoMark } from "../brand/CompanyLogoMark";
+import { CompanyLogo } from "../brand/CompanyLogo";
 import { FONTS } from "../../theme/fonts";
 import { Colors, Spacing } from "../../../mobile/lib/theme";
 
@@ -46,7 +46,7 @@ export function LoginHeroHeader({ topInset }: Props) {
     <View style={[styles.shell, { height: headerHeight, paddingTop: topInset + Spacing.lg }]}>
       <View style={styles.content}>
         <Reanimated.View style={[styles.logoWrap, logoAnimStyle]}>
-          <CompanyLogoMark size={LOGO_SIZE} />
+          <CompanyLogo size={LOGO_SIZE} />
         </Reanimated.View>
 
         <Text style={styles.greeting}>Welcome back</Text>

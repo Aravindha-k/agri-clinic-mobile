@@ -8,7 +8,7 @@ const outDir = path.join(root, "tmp");
 const output = path.join(outDir, "launcher-icon-preview.png");
 const foreground = path.join(root, "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.webp");
 const legacy = path.join(root, "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp");
-const iconBackground = "#FFFFFF";
+const iconBackground = "#0F6B43";
 
 function svgMask(kind, size) {
   if (kind === "circle") {

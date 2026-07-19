@@ -1,8 +1,8 @@
-import { Ionicons } from "@expo/vector-icons";
-import { Image, StyleSheet, Text, View, ViewStyle } from "react-native";
-import { BRAND, BRAND_COLORS, LOGO_IMAGE } from "../../config/brand";
+import { StyleSheet, Text, View, ViewStyle } from "react-native";
+import { BRAND } from "../../config/brand";
 import { LOGO_SIZES } from "../../brand/logoSizing";
 import { useTheme } from "../../theme";
+import { CompanyLogo } from "./CompanyLogo";
 
 const SIZES = LOGO_SIZES.appLogo;
 export type AppLogoSize = keyof typeof SIZES;
@@ -33,8 +33,6 @@ export function AppLogo({
   const dim = SIZES[size];
   const horizontal = layout === "horizontal";
   const onPrimary = variant === "onPrimary" || variant === "light";
-  const ringBg = onPrimary ? "rgba(255,255,255,0.18)" : c.primarySoft;
-  const iconColor = onPrimary ? "#FFFFFF" : c.primaryDark;
   const titleColor = onPrimary ? "#FFFFFF" : c.primaryDark;
   const subColor = onPrimary ? "rgba(255,255,255,0.82)" : c.muted;
   const titleSize = compactWordmark && horizontal
@@ -64,51 +62,17 @@ export function AppLogo({
       : horizontal && size === "xs"
         ? 10
         : 11;
-  const ringPad =
-    size === "xs" ? 8 : size === "sm" ? 12 : size === "lg" ? 14 : size === "xl" ? 12 : 16;
 
   const subline = BRAND.name === BRAND.appName ? BRAND.tagline : BRAND.name;
-  const roundBareMark = bare && Boolean(LOGO_IMAGE);
-
-  const mark = LOGO_IMAGE ? (
-    <Image
-      source={LOGO_IMAGE}
-      style={{ width: dim, height: dim, aspectRatio: 1 }}
-      resizeMode="contain"
-      accessibilityLabel="Clinic logo"
-    />
-  ) : (
-    <Ionicons name="leaf" size={dim * 0.52} color={iconColor} />
-  );
+  const mark = <CompanyLogo size={dim} accessibilityLabel="Clinic logo" />;
 
   return (
     <View style={[styles.wrap, horizontal && styles.wrapHorizontal, bare && styles.wrapBare, style]}>
-      {bare ? (
-        <View
-          style={[
-            styles.bareMark,
-            roundBareMark && {
-              width: dim,
-              height: dim,
-              borderRadius: dim / 2,
-              backgroundColor: onPrimary ? "#FFFFFF" : c.primarySoft,
-              borderColor: onPrimary ? "rgba(255,255,255,0.45)" : BRAND_COLORS.primarySoftBorder,
-              borderWidth: onPrimary ? 2 : StyleSheet.hairlineWidth,
-              overflow: "hidden"
-            }
-          ]}
-        >
-          {mark}
-        </View>
-      ) : (
-        <View style={[styles.ring, { width: dim + ringPad, height: dim + ringPad, backgroundColor: ringBg }]}>
-          {mark}
-        </View>
-      )}
+      <View style={styles.bareMark}>{mark}</View>
       {showWordmark ? (
         <View style={[styles.wordmark, horizontal && styles.wordmarkHorizontal, bare && styles.wordmarkBare]}>
           <Text
-            style={[styles.name, { color: titleColor, fontSize: titleSize, textAlign: horizontal ? "left" : "left" }]}
+            style={[styles.name, { color: titleColor, fontSize: titleSize, textAlign: "left" }]}
             numberOfLines={2}
           >
             {BRAND.appName}
@@ -121,7 +85,7 @@ export function AppLogo({
                 fontSize: tagSize,
                 lineHeight: compactWordmark && horizontal ? 12 : 14,
                 marginTop: compactWordmark && horizontal ? 1 : 3,
-                textAlign: horizontal ? "left" : "left"
+                textAlign: "left"
               }
             ]}
             numberOfLines={2}
@@ -142,6 +106,7 @@ const styles = StyleSheet.create({
   },
   bareMark: {
     alignItems: "center",
+    backgroundColor: "transparent",
     flexShrink: 0,
     justifyContent: "center"
   },
@@ -150,12 +115,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     width: "100%"
-  },
-  ring: {
-    alignItems: "center",
-    borderRadius: 999,
-    flexShrink: 0,
-    justifyContent: "center"
   },
   wordmark: { alignItems: "center", marginTop: 12, maxWidth: 280 },
   wordmarkBare: {

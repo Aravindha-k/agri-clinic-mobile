@@ -1,6 +1,6 @@
 import { useIsFocused } from "@react-navigation/native";
 import { useEffect, useMemo, useState } from "react";
-import { AppState, Image, Platform, StyleSheet, View } from "react-native";
+import { AppState, Platform, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
 import Animated, {
@@ -13,23 +13,28 @@ import Animated, {
   withTiming
 } from "react-native-reanimated";
 import { usePremiumMotion } from "../../../src/hooks/usePremiumMotion";
-import { LOGO_IMAGE } from "../../../src/config/brand";
-import { AgriNatureMark, AgriNatureOrbit, computeOrbitGap, computeOrbitStageSize } from "../brand/AgriNatureMark";
+import { CompanyLogo } from "../../../src/components/brand/CompanyLogo";
+import { AgriNatureOrbit, computeOrbitGap, computeOrbitStageSize } from "../brand/AgriNatureMark";
 import {
   BRAND_LOGO_FILL,
   BRAND_LOGO_ZOOM_MAX,
   BRAND_LOGO_ZOOM_MIN,
-  BRAND_LOGO_ZOOM_MS,
-  BRAND_ORBIT_GAP_RATIO
+  BRAND_LOGO_ZOOM_MS
 } from "../brand/brandHeaderSpacing";
+import {
+  TODAY_ORBIT_DURATION_MS,
+  measureTodayHeroStage,
+  todayHeroLogoSize,
+  todayHeroOrbitGapRatio,
+  todayOrbitIconSize
+} from "./todayHeroLogoSizing";
 
 /** Home-only hero tuning — does not affect other screens. */
-const HOME_LOGO_SIZE = 120;
-const HOME_STAGE_PAD = 4;
+const HOME_STAGE_PAD = 6;
 const GLOW_MIN = 0.18;
 const GLOW_MAX = 0.32;
 const GLOW_HALF_MS = 2800;
-const GLOW_SIZE_RATIO = 1.8;
+const GLOW_SIZE_RATIO = 1.75;
 const BRAND_GREEN = "#0F6B43";
 
 type ParticleSpec = {
@@ -53,11 +58,13 @@ type Props = {
 function HomeLogoParticle({
   spec,
   trackRadius,
-  enabled
+  enabled,
+  glyphSize
 }: {
   spec: ParticleSpec;
   trackRadius: number;
   enabled: boolean;
+  glyphSize: number;
 }) {
   const drift = useSharedValue(0);
   const radius = trackRadius * spec.orbitFactor;
@@ -82,7 +89,7 @@ function HomeLogoParticle({
   }, [drift, enabled, spec.driftMs]);
 
   const motion = useAnimatedStyle(() => ({
-    opacity: 0.16,
+    opacity: 0.22,
     transform: [
       { translateX: baseX + drift.value * 2.5 },
       { translateY: baseY - drift.value * 3.5 }
@@ -93,11 +100,11 @@ function HomeLogoParticle({
 
   const glyph =
     spec.kind === "seed" ? (
-      <MaterialCommunityIcons name="seed-outline" size={7} color={BRAND_GREEN} />
+      <MaterialCommunityIcons name="seed-outline" size={glyphSize} color={BRAND_GREEN} />
     ) : spec.kind === "pollen" ? (
-      <View style={styles.pollen} />
+      <View style={[styles.pollen, { width: glyphSize - 2, height: glyphSize - 2, borderRadius: (glyphSize - 2) / 2 }]} />
     ) : (
-      <Ionicons name="leaf" size={7} color="#2E9B64" />
+      <Ionicons name="leaf" size={glyphSize} color="#2E9B64" />
     );
 
   return (
@@ -107,23 +114,30 @@ function HomeLogoParticle({
   );
 }
 
-/** Today hero — logo zooms in/out inside a fixed orbit band (classic BrandLogoBadge motion). */
+/** Today hero — larger responsive logo + continuously rotating orbit icons. */
 export function HomeLogoHero({ replayKey = 0 }: Props) {
-  const { coreMotion, ready: motionReady } = usePremiumMotion();
+  const { width } = useWindowDimensions();
+  const { coreMotion, ready: motionReady, reduced } = usePremiumMotion();
   const isFocused = useIsFocused();
   const [appActive, setAppActive] = useState(AppState.currentState === "active");
   const zoom = useSharedValue(BRAND_LOGO_ZOOM_MIN);
   const glow = useSharedValue(coreMotion ? GLOW_MIN : (GLOW_MIN + GLOW_MAX) / 2);
 
-  const logoVisual = Math.round(HOME_LOGO_SIZE * BRAND_LOGO_FILL);
+  const homeLogoSize = todayHeroLogoSize(width);
+  const logoVisual = Math.round(homeLogoSize * BRAND_LOGO_FILL);
   const outer = logoVisual;
-  const orbitGap = computeOrbitGap(outer, BRAND_ORBIT_GAP_RATIO);
+  const orbitIconSize = todayOrbitIconSize(outer);
+  const orbitGapRatio = todayHeroOrbitGapRatio(width);
+  const orbitGap = computeOrbitGap(outer, orbitGapRatio);
   const trackRadius = outer / 2 + orbitGap;
-  const orbitStageSize = computeOrbitStageSize(outer, { gapRatio: BRAND_ORBIT_GAP_RATIO, compact: true });
+  const orbitStageSize = computeOrbitStageSize(outer, { gapRatio: orbitGapRatio, compact: true });
   const stageSize = orbitStageSize + HOME_STAGE_PAD * 2;
   const glowSize = Math.round(outer * GLOW_SIZE_RATIO);
-  const shouldZoom = motionReady && coreMotion && isFocused && appActive;
-  const showDecorParticles = shouldZoom;
+
+  // Orbit + logo zoom run whenever reduce-motion is off and the screen is active.
+  // Do not require heavyEffects (battery saver) — orbit is core branding motion.
+  const shouldAnimate = motionReady && coreMotion && isFocused && appActive && !reduced;
+  const showDecorParticles = shouldAnimate;
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
@@ -135,7 +149,7 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
   useEffect(() => {
     cancelAnimation(zoom);
     cancelAnimation(glow);
-    if (!shouldZoom) {
+    if (!shouldAnimate) {
       zoom.value = 1;
       glow.value = (GLOW_MIN + GLOW_MAX) / 2;
       return;
@@ -180,7 +194,7 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
       cancelAnimation(zoom);
       cancelAnimation(glow);
     };
-  }, [glow, replayKey, shouldZoom, zoom]);
+  }, [glow, replayKey, shouldAnimate, zoom]);
 
   const logoZoomStyle = useAnimatedStyle(() => ({
     transform: [{ scale: zoom.value }]
@@ -199,39 +213,33 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
           styles.logoShadow
         ]}
       >
-        {LOGO_IMAGE ? (
-          <View
-            style={[
-              styles.logoClip,
-              { width: outer, height: outer, borderRadius: outer / 2 }
-            ]}
-          >
-            <Image
-              source={LOGO_IMAGE}
-              style={{ width: outer, height: outer }}
-              resizeMode="contain"
-              accessibilityLabel="Kavya Agri Clinic"
-              accessibilityIgnoresInvertColors
-            />
-          </View>
-        ) : (
-          <AgriNatureMark size={logoVisual} variant="hero" />
-        )}
+        <View
+          style={[
+            styles.logoClip,
+            { width: outer, height: outer, borderRadius: outer / 2, backgroundColor: "transparent" }
+          ]}
+        >
+          <CompanyLogo size={outer} accessibilityLabel="Kavya Agri Clinic" />
+        </View>
       </View>
     ),
-    [logoVisual, outer]
+    [outer]
   );
+
+  const particleGlyph = Math.max(8, Math.round(orbitIconSize * 0.35));
 
   return (
     <View style={[styles.stage, { width: stageSize, height: stageSize }]}>
       <View pointerEvents="none" style={styles.orbitSlot}>
         <AgriNatureOrbit
           diameter={outer}
-          animate={shouldZoom}
+          animate={shouldAnimate}
           showTrack
           minimalTrack
-          gapRatio={BRAND_ORBIT_GAP_RATIO}
+          gapRatio={orbitGapRatio}
           compact
+          durationMs={TODAY_ORBIT_DURATION_MS}
+          iconSizeOverride={orbitIconSize}
         />
       </View>
 
@@ -242,6 +250,7 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
             spec={spec}
             trackRadius={trackRadius}
             enabled={showDecorParticles}
+            glyphSize={particleGlyph}
           />
         ))}
       </View>
@@ -273,7 +282,7 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
       </Animated.View>
 
       <View style={styles.logoSlot}>
-        {shouldZoom ? (
+        {shouldAnimate ? (
           <Animated.View style={[styles.logoZoomWrap, logoZoomStyle]}>{logoBadge}</Animated.View>
         ) : (
           logoBadge
@@ -283,17 +292,13 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
   );
 }
 
-/** Column width for split Today header — keeps layout stable. */
-export function homeLogoHeroColumnWidth() {
-  const logoVisual = Math.round(HOME_LOGO_SIZE * BRAND_LOGO_FILL);
-  const orbitStage = computeOrbitStageSize(logoVisual, { gapRatio: BRAND_ORBIT_GAP_RATIO, compact: true });
-  return orbitStage + HOME_STAGE_PAD;
+/** Column width for split Today header — keeps layout stable across phone widths. */
+export function homeLogoHeroColumnWidth(width?: number) {
+  return measureTodayHeroStage(width).column;
 }
 
-export function homeLogoHeroStageHeight() {
-  const logoVisual = Math.round(HOME_LOGO_SIZE * BRAND_LOGO_FILL);
-  const orbitStage = computeOrbitStageSize(logoVisual, { gapRatio: BRAND_ORBIT_GAP_RATIO, compact: true });
-  return orbitStage + HOME_STAGE_PAD * 2;
+export function homeLogoHeroStageHeight(width?: number) {
+  return measureTodayHeroStage(width).stage + HOME_STAGE_PAD * 2;
 }
 
 const styles = StyleSheet.create({
@@ -367,9 +372,6 @@ const styles = StyleSheet.create({
   },
   pollen: {
     backgroundColor: "#B8D9C8",
-    borderRadius: 3,
-    height: 5,
-    opacity: 0.85,
-    width: 5
+    opacity: 0.85
   }
 });

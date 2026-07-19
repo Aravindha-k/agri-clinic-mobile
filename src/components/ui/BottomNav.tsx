@@ -60,10 +60,23 @@ export function BottomNav({ state, descriptors, navigation }: BottomTabBarProps)
   }, [canRunWorkAction, isActive, navigateToNewVisit]);
 
   const handleStartWorkdayFromSheet = useCallback(async () => {
-    const started = await startDuty();
-    if (!started) return;
-    workdaySheetRef.current?.close();
-    navigateToNewVisit();
+    try {
+      const {
+        ensureLocationReadyForWorkday,
+        promptFixLocationAccess
+      } = await import("../../features/fieldTrackingSetup");
+      const ready = await ensureLocationReadyForWorkday();
+      if (!ready.ok) {
+        promptFixLocationAccess(ready);
+        return;
+      }
+      const started = await startDuty();
+      if (!started) return;
+      workdaySheetRef.current?.close();
+      navigateToNewVisit();
+    } catch {
+      // Keep sheet open for retry — never crash the tab bar.
+    }
   }, [navigateToNewVisit, startDuty]);
 
   return (

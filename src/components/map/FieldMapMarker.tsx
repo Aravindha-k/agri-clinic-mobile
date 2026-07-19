@@ -20,53 +20,34 @@ type MarkerStyle = {
   backgroundColor: string;
   borderColor: string;
   size: number;
-  showIcon: boolean;
+  text?: string;
 };
 
 function resolveMarkerStyle(
   kind: MapPinKind | undefined,
   compact: boolean,
-  pending?: boolean
+  pending?: boolean,
+  label?: number | string
 ): MarkerStyle {
   const queuedBorder = pending ? "#F59E0B" : "#FFFFFF";
 
   if (compact) {
     switch (kind) {
       case "route_start":
-        return {
-          backgroundColor: "#16A34A",
-          borderColor: queuedBorder,
-          size: 10,
-          showIcon: false
-        };
+        return { backgroundColor: "#16A34A", borderColor: "#FFFFFF", size: 12, text: "S" };
       case "visit":
         return {
-          backgroundColor: "#16A34A",
+          backgroundColor: pending ? "#D97706" : "#0B6B3A",
           borderColor: queuedBorder,
-          size: 10,
-          showIcon: false
+          size: 12,
+          text: label != null ? String(label) : undefined
         };
       case "route_end":
-        return {
-          backgroundColor: "#DC2626",
-          borderColor: "#FFFFFF",
-          size: 10,
-          showIcon: false
-        };
+        return { backgroundColor: "#DC2626", borderColor: "#FFFFFF", size: 12, text: "E" };
       case "current":
-        return {
-          backgroundColor: "#2563EB",
-          borderColor: "#FFFFFF",
-          size: 10,
-          showIcon: false
-        };
+        return { backgroundColor: "#2563EB", borderColor: "#FFFFFF", size: 10 };
       default:
-        return {
-          backgroundColor: "#0B5A38",
-          borderColor: "#FFFFFF",
-          size: 10,
-          showIcon: false
-        };
+        return { backgroundColor: "#0B5A38", borderColor: "#FFFFFF", size: 10 };
     }
   }
 
@@ -75,49 +56,43 @@ function resolveMarkerStyle(
       return {
         backgroundColor: "#16A34A",
         borderColor: "#FFFFFF",
-        size: 18,
-        showIcon: false
+        size: 30,
+        text: "S"
       };
     case "visit":
       return {
-        backgroundColor: "#16A34A",
+        backgroundColor: pending ? "#D97706" : "#0B6B3A",
         borderColor: queuedBorder,
-        size: labelSize(kind),
-        showIcon: false
+        size: 28,
+        text: label != null ? String(label) : "✓"
       };
     case "route_end":
       return {
         backgroundColor: "#DC2626",
         borderColor: "#FFFFFF",
-        size: 18,
-        showIcon: false
+        size: 30,
+        text: "E"
       };
     case "current":
       return {
         backgroundColor: "#2563EB",
         borderColor: "#FFFFFF",
-        size: 18,
-        showIcon: false
+        size: 18
       };
     case "farmer":
       return {
         backgroundColor: "#15803D",
         borderColor: "#FFFFFF",
-        size: 18,
-        showIcon: false
+        size: 20
       };
     default:
       return {
         backgroundColor: "#0B5A38",
         borderColor: "#FFFFFF",
         size: 16,
-        showIcon: false
+        text: label != null ? String(label) : undefined
       };
   }
-}
-
-function labelSize(kind: MapPinKind | undefined) {
-  return kind === "visit" ? 22 : 16;
 }
 
 function FieldMapMarkerInner({
@@ -132,7 +107,7 @@ function FieldMapMarkerInner({
   compact = false,
   onPress
 }: Props) {
-  const style = resolveMarkerStyle(kind, compact, pending);
+  const style = resolveMarkerStyle(kind, compact, pending, label);
   const [tracksViewChanges, setTracksViewChanges] = useState(Platform.OS === "android");
 
   useEffect(() => {
@@ -149,7 +124,8 @@ function FieldMapMarkerInner({
       description={description}
       anchor={{ x: 0.5, y: 0.5 }}
       tracksViewChanges={tracksViewChanges}
-      zIndex={5}
+      zIndex={kind === "route_start" || kind === "route_end" ? 8 : 5}
+      draggable={false}
       onPress={onPress}
     >
       <View
@@ -162,12 +138,13 @@ function FieldMapMarkerInner({
             borderRadius: style.size / 2,
             backgroundColor: style.backgroundColor,
             borderColor: style.borderColor
-          },
-          label != null && styles.shellLabeled
+          }
         ]}
       >
-        {label != null ? (
-          <Text style={[styles.label, compact && styles.labelCompact]}>{String(label)}</Text>
+        {style.text ? (
+          <Text style={[styles.label, compact && styles.labelCompact]} numberOfLines={1}>
+            {style.text}
+          </Text>
         ) : null}
       </View>
     </Marker>
@@ -178,29 +155,27 @@ export const FieldMapMarker = memo(FieldMapMarkerInner);
 
 const styles = StyleSheet.create({
   shell: {
-    borderWidth: 2,
+    alignItems: "center",
+    borderWidth: 2.5,
+    justifyContent: "center",
     ...Platform.select({
       ios: {
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.18,
-        shadowRadius: 2
+        shadowOpacity: 0.22,
+        shadowRadius: 2.5
       },
       android: {
-        elevation: 3
+        elevation: 4
       }
     })
   },
   shellCompact: {
     borderWidth: 1.5
   },
-  shellLabeled: {
-    alignItems: "center",
-    justifyContent: "center"
-  },
   label: {
     color: "#FFFFFF",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "800",
     textAlign: "center"
   },

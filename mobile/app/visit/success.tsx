@@ -115,9 +115,10 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
   const farmerLabel = summary.farmerName?.trim() || "—";
   const cropLabel = summary.cropName?.trim() || "—";
   const problemLabel = summary.problemText?.trim() || "—";
-  const adviceLabel =
-    summary.recommendationText?.trim() ||
+  const fieldNotesLabel =
+    summary.fieldNotesText?.trim() ||
     summary.observationText?.trim() ||
+    summary.recommendationText?.trim() ||
     "";
   const gpsLabel = gpsLabelFromSummary(summary, t);
 
@@ -167,10 +168,10 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
                     <SummaryRow label={t("visitFlow.cropSummary")} value={cropLabel} />
                     <View style={styles.summaryDivider} />
                     <SummaryRow label={t("visitFlow.problemSummary")} value={problemLabel} />
-                    {adviceLabel ? (
+                    {fieldNotesLabel ? (
                       <>
                         <View style={styles.summaryDivider} />
-                        <SummaryRow label={t("visitFlow.adviceSummary")} value={adviceLabel} />
+                        <SummaryRow label={t("visitFlow.fieldNotes")} value={fieldNotesLabel} />
                       </>
                     ) : null}
                     <View style={styles.summaryDivider} />

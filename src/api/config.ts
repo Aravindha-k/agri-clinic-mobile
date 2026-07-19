@@ -1,26 +1,25 @@
 import Constants from "expo-constants";
+import {
+  BLOCKED_RELEASE_HOSTS,
+  LOCAL_DEV_API_BASE_URL,
+  PRODUCTION_API_BASE_URL,
+  PRODUCTION_API_HOST,
+  normalizeApiBaseUrl,
+  readExplicitApiEnv
+} from "./apiBaseUrl.js";
 
-/** AWS production host (no scheme/path) — prefer a real domain once TLS is ready. */
-export const PRODUCTION_API_HOST = "13.207.17.117";
+export {
+  LOCAL_DEV_API_BASE_URL,
+  PRODUCTION_API_BASE_URL,
+  PRODUCTION_API_HOST,
+  normalizeApiBaseUrl
+};
 
-/**
- * HTTPS origin for documentation and media URLs when TLS is available.
- * Runtime login uses EXPO_PUBLIC_API_BASE_URL / expo.extra.apiBaseUrl (HTTP QA today).
- */
+/** HTTPS origin for documentation and media URLs when TLS is available. */
 export const PRODUCTION_API_ORIGIN = `https://${PRODUCTION_API_HOST}`;
 
 /** Media/static files live on the server root — not under /api/v1/. */
 export const PRODUCTION_MEDIA_ORIGIN = PRODUCTION_API_ORIGIN;
-
-/**
- * Documented HTTPS REST base — not used as a silent release network fallback.
- */
-export const PRODUCTION_API_BASE_URL = `${PRODUCTION_API_ORIGIN}/api/v1/`;
-
-/** Local backend for `npx expo start` only (__DEV__). */
-const LOCAL_DEV_API_BASE_URL = "http://10.0.2.2:8000/api/v1/";
-
-const BLOCKED_RELEASE_HOSTS = new Set(["localhost", "127.0.0.1", "10.0.2.2"]);
 
 export type ApiConfigErrorCode =
   | "MISSING_URL"
@@ -44,8 +43,8 @@ type AppExtra = {
 };
 
 type ApiConfigResolution =
-  | { ok: true; baseUrl: string }
-  | { ok: false; error: ApiConfigError };
+  | { ok: true; baseUrl: string; source: string; environment: string }
+  | { ok: false; error: ApiConfigError; environment: string };
 
 function configError(code: ApiConfigErrorCode, message: string): ApiConfigError {
   return { code, message, category: "configuration" };
@@ -55,14 +54,22 @@ function readExpoExtra(): AppExtra {
   return (Constants.expoConfig?.extra ?? {}) as AppExtra;
 }
 
-/** Prebuild embeds extra.apiBaseUrl from app.config.js — reliable when Metro env inlining is absent. */
 function readExpoExtraApiBase(): string | undefined {
   const extra = readExpoExtra();
   const raw = extra.apiBaseUrl?.trim() || extra.apiUrl?.trim();
   return raw || undefined;
 }
 
-/** Client QA APK uses HTTP to the AWS host — Android cleartext is configured in release manifest. */
+function resolveEnvironmentLabel(): string {
+  const extra = readExpoExtra();
+  const fromExtra = extra.buildEnv?.trim();
+  if (fromExtra) return fromExtra;
+  const fromEnv = process.env.EXPO_PUBLIC_ENV?.trim();
+  if (fromEnv) return fromEnv;
+  return __DEV__ ? "development" : "production";
+}
+
+/** Client QA may allow HTTP to the AWS IP when explicitly opted in at build time. */
 function isAllowedInsecureProductionUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -70,7 +77,7 @@ function isAllowedInsecureProductionUrl(url: string): boolean {
       return false;
     }
     if (parsed.hostname === PRODUCTION_API_HOST) {
-      return true;
+      return process.env.EXPO_PUBLIC_ALLOW_INSECURE_HTTP === "1";
     }
   } catch {
     return false;
@@ -83,7 +90,7 @@ function validateProductionUrl(url: string): ApiConfigError | null {
   if (!trimmed) {
     return configError(
       "MISSING_URL",
-      "Production APK missing API base URL. Set EXPO_PUBLIC_API_BASE_URL before building the release bundle."
+      "Production APK missing API base URL. Set EXPO_PUBLIC_API_URL before building the release bundle."
     );
   }
 
@@ -97,7 +104,7 @@ function validateProductionUrl(url: string): ApiConfigError | null {
   if (BLOCKED_RELEASE_HOSTS.has(parsed.hostname)) {
     return configError(
       "BLOCKED_HOST",
-      `Production APK cannot use ${parsed.hostname}. Configure the deployed backend hostname via EXPO_PUBLIC_API_BASE_URL.`
+      `Production APK cannot use ${parsed.hostname}. Configure the deployed backend via EXPO_PUBLIC_API_URL.`
     );
   }
 
@@ -111,94 +118,87 @@ function validateProductionUrl(url: string): ApiConfigError | null {
   return null;
 }
 
-/** Normalize build env input — accepts host origin or full /api/v1/ base; never duplicates. */
-export function normalizeApiBaseUrl(raw: string): string {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return "";
-  }
-
-  let url = trimmed.replace(/\/+$/, "");
-  url = url.replace(/(\/api\/v1)+$/i, "/api/v1");
-
-  if (!/\/api\/v1$/i.test(url)) {
-    if (/\/api$/i.test(url)) {
-      url = `${url}/v1`;
-    } else {
-      url = `${url}/api/v1`;
-    }
-  }
-
-  return `${url}/`;
-}
-
 /** Build absolute API URL from a relative path segment. */
 export function buildApiUrl(path: string, baseUrl: string = API_BASE_URL): string {
   const base = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
   return `${base}${path.replace(/^\/+/, "")}`;
 }
 
+/**
+ * Canonical runtime resolver.
+ *
+ * Priority:
+ * 1. EXPO_PUBLIC_API_BASE_URL / EXPO_PUBLIC_API_URL (active .env or EAS profile)
+ * 2. expo.extra.apiBaseUrl (embedded at prebuild from the same env — release/preview)
+ * 3. Development Metro only: LOCAL_DEV_API_BASE_URL
+ *
+ * Never uses __DEV__ alone to pick AWS vs LAN for preview APKs (__DEV__ is false there).
+ * Never silently replaces an explicit env URL.
+ */
 function resolveApiConfig(): ApiConfigResolution {
-  const fromEnv = readBuildApiEnv();
+  const environment = resolveEnvironmentLabel();
+  const explicit = readExplicitApiEnv(process.env);
+  const fromExtra = readExpoExtraApiBase();
 
-  if (!__DEV__) {
-    if (!fromEnv) {
+  if (explicit) {
+    const normalized = normalizeApiBaseUrl(explicit);
+    if (!normalized) {
       return {
         ok: false,
+        environment,
+        error: configError("EMPTY_URL", "API base URL cannot be empty.")
+      };
+    }
+    if (!__DEV__) {
+      const validationError = validateProductionUrl(normalized);
+      if (validationError) {
+        return { ok: false, environment, error: validationError };
+      }
+    }
+    return {
+      ok: true,
+      baseUrl: normalized,
+      source: process.env.EXPO_PUBLIC_API_BASE_URL?.trim()
+        ? "EXPO_PUBLIC_API_BASE_URL"
+        : "EXPO_PUBLIC_API_URL",
+      environment
+    };
+  }
+
+  if (!__DEV__) {
+    if (!fromExtra) {
+      return {
+        ok: false,
+        environment,
         error: configError(
           "MISSING_URL",
-          "Production APK missing API configuration. Set EXPO_PUBLIC_API_BASE_URL (or EXPO_PUBLIC_API_URL) " +
+          "Production APK missing API configuration. Set EXPO_PUBLIC_API_URL in the EAS profile " +
             "before npm install, expo prebuild, and Gradle assembleRelease."
         )
       };
     }
-
-    const normalized = normalizeApiBaseUrl(fromEnv);
+    const normalized = normalizeApiBaseUrl(fromExtra);
     if (!normalized) {
       return {
         ok: false,
+        environment,
         error: configError("EMPTY_URL", "API base URL cannot be empty in production builds.")
       };
     }
-
     const validationError = validateProductionUrl(normalized);
     if (validationError) {
-      return { ok: false, error: validationError };
+      return { ok: false, environment, error: validationError };
     }
-
-    return { ok: true, baseUrl: normalized };
+    return { ok: true, baseUrl: normalized, source: "expo.extra.apiBaseUrl", environment };
   }
 
-  if (fromEnv) {
-    return { ok: true, baseUrl: normalizeApiBaseUrl(fromEnv) || PRODUCTION_API_BASE_URL };
-  }
-
-  const useCloud =
-    process.env.EXPO_PUBLIC_USE_PRODUCTION_API === "1" ||
-    process.env.EXPO_PUBLIC_USE_PRODUCTION_API === "true";
-  if (useCloud) {
-    return {
-      ok: true,
-      baseUrl: normalizeApiBaseUrl(readExpoExtraApiBase() || PRODUCTION_API_ORIGIN) || PRODUCTION_API_BASE_URL
-    };
-  }
-
-  const devOverride = process.env.EXPO_PUBLIC_DEV_API_URL?.trim();
-  return { ok: true, baseUrl: normalizeApiBaseUrl(devOverride || LOCAL_DEV_API_BASE_URL) };
-}
-
-/**
- * Canonical build-time sources (in order):
- * 1. EXPO_PUBLIC_API_BASE_URL (Metro-inlined in release bundle)
- * 2. EXPO_PUBLIC_API_URL
- * 3. expo.extra.apiBaseUrl (embedded at prebuild)
- */
-function readBuildApiEnv(): string | undefined {
-  const base = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
-  if (base) return base;
-  const origin = process.env.EXPO_PUBLIC_API_URL?.trim();
-  if (origin) return origin;
-  return readExpoExtraApiBase();
+  // Local Expo / Metro: never inherit a stale AWS URL from expo.extra when env is unset.
+  return {
+    ok: true,
+    baseUrl: LOCAL_DEV_API_BASE_URL,
+    source: "LOCAL_DEV_API_BASE_URL",
+    environment
+  };
 }
 
 const _resolvedConfig = resolveApiConfig();
@@ -207,6 +207,10 @@ const _resolvedConfig = resolveApiConfig();
 export const API_BASE_URL = _resolvedConfig.ok ? _resolvedConfig.baseUrl : "";
 
 export const API_CONFIG_ERROR: ApiConfigError | null = _resolvedConfig.ok ? null : _resolvedConfig.error;
+
+export const API_CONFIG_SOURCE = _resolvedConfig.ok ? _resolvedConfig.source : "error";
+
+export const API_CONFIG_ENVIRONMENT = _resolvedConfig.environment;
 
 export function getApiConfigError(): ApiConfigError | null {
   return API_CONFIG_ERROR;
@@ -268,7 +272,7 @@ export function getApiBuildDiagnostics() {
   const configError = getApiConfigError();
   return {
     releaseMode: !__DEV__,
-    buildEnv: extra.buildEnv ?? process.env.EXPO_PUBLIC_ENV ?? (__DEV__ ? "development" : "unknown"),
+    buildEnv: API_CONFIG_ENVIRONMENT,
     apiHostname: getApiHostname(),
     apiOrigin: getApiOrigin(),
     apiBasePath: (() => {
@@ -281,13 +285,16 @@ export function getApiBuildDiagnostics() {
     })(),
     appVersion: extra.appVersion ?? Constants.expoConfig?.version ?? "unknown",
     gitCommit: extra.gitCommit?.slice(0, 12) || "unknown",
-    configSource: process.env.EXPO_PUBLIC_API_BASE_URL?.trim()
-      ? "EXPO_PUBLIC_API_BASE_URL"
-      : process.env.EXPO_PUBLIC_API_URL?.trim()
-        ? "EXPO_PUBLIC_API_URL"
-        : readExpoExtraApiBase()
-          ? "expo.extra.apiBaseUrl"
-          : "unset",
+    configSource: API_CONFIG_SOURCE,
     configErrorCode: configError?.code ?? null
   };
 }
+
+/** Safe one-line startup log — never tokens or request bodies. */
+export function logApiConfigStartup(): void {
+  console.log(`[API Config] environment=${API_CONFIG_ENVIRONMENT}`);
+  console.log(`[API Config] base=${API_BASE_URL || "(missing)"}`);
+  console.log(`[API Config] source=${API_CONFIG_SOURCE}`);
+}
+
+logApiConfigStartup();

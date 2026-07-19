@@ -50,7 +50,7 @@ export function FarmerMapScreen({ navigation, route }: Props) {
       if (!mountedRef.current) return;
       setFarmer(farmerData);
 
-      const perm = await Location.requestForegroundPermissionsAsync();
+      const perm = await Location.getForegroundPermissionsAsync();
       if (perm.status === "granted") {
         try {
           const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
@@ -73,7 +73,7 @@ export function FarmerMapScreen({ navigation, route }: Props) {
       } else {
         setYou(null);
         setLocationGranted(false);
-        setLocLabel("Allow location to see route to farmer");
+        setLocLabel("Location is off. Enable once in Field Tracking Setup (Settings).");
       }
 
       const visitList = asArray<Record<string, unknown>>(visits);

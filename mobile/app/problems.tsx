@@ -10,12 +10,14 @@ import { EmptyState, SearchBar } from "../components/ui";
 import { FlatCard, ScreenCanvas, ScreenLoader, StackScreenHeader } from "../components/layout";
 import { useScreenTopEdges } from "../hooks/useScreenTopEdges";
 import { Colors, FontSize, FontWeight, Layout, Radius, Spacing } from "../lib/theme";
+import { useStackBottomInset } from "../../src/hooks/useStackBottomInset";
 
 export default function ProblemsCatalogScreen() {
   useSecureScreen();
   const navigation = useNavigation<any>();
   const { t } = useI18n();
   const topEdges = useScreenTopEdges();
+  const stackBottom = useStackBottomInset();
   const refreshControlProps = useRefreshControlProps();
   const [categories, setCategories] = useState<ProblemCategory[]>([]);
   const [query, setQuery] = useState("");
@@ -65,7 +67,7 @@ export default function ProblemsCatalogScreen() {
       ) : (
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[styles.scroll, { paddingBottom: stackBottom }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={
@@ -117,8 +119,7 @@ const styles = StyleSheet.create({
   },
   scroll: {
     gap: Spacing.sm,
-    padding: Spacing.screen,
-    paddingBottom: Layout.stackScrollBottom
+    padding: Spacing.screen
   },
   row: {
     alignItems: "center",

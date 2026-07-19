@@ -2,7 +2,6 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import NetInfo from "@react-native-community/netinfo";
 import { AppState } from "react-native";
 import {
-  endDutySession,
   fetchCurrentDuty,
   fetchCurrentWorkday,
   startDutySession,
@@ -10,7 +9,7 @@ import {
 } from "../../../api/tracking";
 import { ApiRequestError, isNetworkError } from "../../../utils/apiError";
 import { setConnectivityOnline } from "../../../utils/connectivityBus";
-import { getForegroundLocation } from "../../../utils/location";
+import { readForegroundLocationIfGranted } from "../../../utils/location";
 import { isWorkdayAlreadyActiveMessage } from "../../../utils/workdayStatus";
 import { registerSessionTeardown } from "../../../storage/sessionConflict";
 import {
@@ -18,8 +17,9 @@ import {
   clearObsoleteWorkdayAuthorityKeys,
   saveDutySessionFromWorkday
 } from "../../../storage/workdaySessionStorage";
-import { useAuthSessionReady } from "../../../storage/AuthContext";
+import { useAuth, useAuthSessionReady } from "../../../storage/AuthContext";
 import { flushTrackingGpsQueue, startTrackingBridge, stopTrackingBridge } from "../../../storage/TrackingContext";
+import { subscribeAuthPhase, canSendAuthenticatedRequests } from "../../../storage/authPhase";
 import { fetchCurrentDutyMap, fetchDutyMap } from "../api/dutyMapApi";
 import { fetchMobileBootstrap } from "../api/mobileBootstrapApi";
 import {
@@ -32,6 +32,7 @@ import type { DutyMapSummary, DutyStateSnapshot, MobileBootstrap } from "../type
 import { subscribeVisitDataRefresh } from "../../../../mobile/lib/visit/visitDataRefresh";
 import { STARTUP_TIMEOUTS, markDutyReady } from "../../../bootstrap/startupCoordinator";
 import { logStartup } from "../../../utils/startupDiagnostics";
+import { trackingDevLog } from "../../../tracking/trackingDevLog";
 
 type BootstrapHydrationInput = {
   bootstrap: MobileBootstrap | null;
@@ -80,7 +81,7 @@ function initialState(): DutyStateSnapshot {
 }
 
 async function captureDutyActionLocation(timeoutMs = 12_000) {
-  const timeout = new Promise<Awaited<ReturnType<typeof getForegroundLocation>>>((resolve) => {
+  const timeout = new Promise<Awaited<ReturnType<typeof readForegroundLocationIfGranted>>>((resolve) => {
     setTimeout(() => {
       resolve({
         granted: false,
@@ -88,11 +89,21 @@ async function captureDutyActionLocation(timeoutMs = 12_000) {
       });
     }, timeoutMs);
   });
-  return Promise.race([getForegroundLocation(), timeout]);
+  // Check-only — never prompts. Start Workday must have passed Field Tracking readiness first.
+  try {
+    return await Promise.race([readForegroundLocationIfGranted(), timeout]);
+  } catch {
+    return {
+      granted: false as const,
+      message: "Unable to get location. Check GPS and try again."
+    };
+  }
 }
 
 export function DutyProvider({ children }: { children: React.ReactNode }) {
   const sessionReady = useAuthSessionReady();
+  const { authPhase } = useAuth();
+  const holdDutyCache = authPhase === "authenticated" || authPhase === "validating_session";
   const [state, setState] = useState<DutyStateSnapshot>(() => initialState());
   const bootstrapPromiseRef = useRef<Promise<void> | null>(null);
   const actionPromiseRef = useRef<Promise<WorkdayStatus | null> | null>(null);
@@ -203,6 +214,9 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
   );
 
   const refreshBootstrap = useCallback(async () => {
+    if (!canSendAuthenticatedRequests()) {
+      return;
+    }
     if (bootstrapPromiseRef.current) {
       await bootstrapPromiseRef.current;
       return;
@@ -314,50 +328,96 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
   const startDuty = useCallback(async () => {
     return runSingleFlightAction(async () => {
       setState((prev) => ({ ...prev, syncStatus: "syncing", bootstrapError: null }));
-      const locationResult = await captureDutyActionLocation();
-      if (!locationResult.granted) {
-        throw new Error(locationResult.message);
-      }
-      const coords = locationResult.location.coords;
       try {
-        const started = await startDutySession({
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          accuracy: coords.accuracy ?? null
-        });
-        if (started) {
-          await applyDutyState(started, { hydrationStatus: "ready", syncStatus: "confirmed" });
-          await startTrackingBridge().catch(() => undefined);
-          await refreshDutyMap().catch(() => undefined);
-          return started;
+        const { ensureLocationReadyForWorkday, promptFixLocationAccess } = await import(
+          "../../fieldTrackingSetup"
+        );
+        const ready = await ensureLocationReadyForWorkday();
+        if (!ready.ok) {
+          setState((prev) => ({ ...prev, syncStatus: "idle" }));
+          promptFixLocationAccess(ready);
+          return null;
         }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (!(error instanceof ApiRequestError) && !isWorkdayAlreadyActiveMessage(message)) {
-          throw error;
+
+        const locationResult = await captureDutyActionLocation();
+        if (!locationResult.granted) {
+          setState((prev) => ({
+            ...prev,
+            syncStatus: "idle",
+            bootstrapError: locationResult.message
+          }));
+          // Do not throw — callers must handle null without crashing.
+          promptFixLocationAccess({
+            ok: false,
+            state: "temporarily_unavailable",
+            reason: "temporarily_unavailable",
+            missing: [],
+            message: locationResult.message,
+            readiness: ready.readiness
+          });
+          return null;
         }
+        const coords = locationResult.location.coords;
+        try {
+          const started = await startDutySession({
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+            accuracy: coords.accuracy ?? null
+          });
+          if (started) {
+            await applyDutyState(started, { hydrationStatus: "ready", syncStatus: "confirmed" });
+            await startTrackingBridge().catch(() => undefined);
+            await refreshDutyMap().catch(() => undefined);
+            return started;
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (!(error instanceof ApiRequestError) && !isWorkdayAlreadyActiveMessage(message)) {
+            setState((prev) => ({
+              ...prev,
+              syncStatus: "idle",
+              bootstrapError: message
+            }));
+            return null;
+          }
+        }
+        return refreshCurrentDuty();
+      } catch {
+        setState((prev) => ({ ...prev, syncStatus: "idle" }));
+        return null;
       }
-      return refreshCurrentDuty();
     });
   }, [applyDutyState, refreshCurrentDuty, refreshDutyMap, runSingleFlightAction]);
 
   const endDuty = useCallback(async () => {
-    return runSingleFlightAction(async () => {
-      setState((prev) => ({ ...prev, syncStatus: "syncing", bootstrapError: null }));
-      await endDutySession(dutyRef.current?.duty_session_id ?? null);
-      const duty = await refreshCurrentDuty();
-      await stopTrackingBridge().catch(() => undefined);
-      await flushTrackingGpsQueue().catch(() => undefined);
-      await refreshDutyMap().catch(() => undefined);
-      return duty;
-    });
-  }, [refreshCurrentDuty, refreshDutyMap, runSingleFlightAction]);
+    throw new ApiRequestError(
+      "Employees cannot end the workday manually. It ends automatically after 9 hours or by an administrator.",
+      { status: 403, code: "EMPLOYEE_END_FORBIDDEN" }
+    );
+  }, []);
 
   useEffect(() => {
-    if (!sessionReady) {
+    // Do not clear while validating — hydrateDutyFromBootstrap is in flight.
+    if (!holdDutyCache) {
       void clearDutyState({ preserveCache: true });
     }
-  }, [clearDutyState, sessionReady]);
+  }, [clearDutyState, holdDutyCache]);
+
+  useEffect(() => {
+    return subscribeAuthPhase((phase, previous) => {
+      if (phase === "locked" || phase === "unauthenticated" || phase === "session_replaced") {
+        void stopTrackingBridge().catch(() => undefined);
+        return;
+      }
+      if (phase === "authenticated" && previous !== "authenticated") {
+        trackingDevLog("resumed_after_auth");
+        if (canSendAuthenticatedRequests() && dutyRef.current?.is_active) {
+          void startTrackingBridge().catch(() => undefined);
+          void flushTrackingGpsQueue().catch(() => undefined);
+        }
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (!sessionReady) return;

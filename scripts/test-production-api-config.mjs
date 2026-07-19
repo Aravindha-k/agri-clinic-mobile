@@ -31,7 +31,7 @@ test("normalizeApiBaseUrl accepts host origin and full /api/v1/ base", () => {
 });
 
 test("validateProductionApiEnv rejects localhost and missing URL", () => {
-  assert.throws(() => validateProductionApiEnv({}), /EXPO_PUBLIC_API_BASE_URL/);
+  assert.throws(() => validateProductionApiEnv({}), /EXPO_PUBLIC_API_URL|EXPO_PUBLIC_API_BASE_URL/);
   for (const host of BLOCKED_HOSTS) {
     assert.throws(
       () =>
@@ -78,11 +78,22 @@ test("resolveApiBaseFromEnv prefers EXPO_PUBLIC_API_BASE_URL", () => {
 
 test("src/api/config.ts uses canonical env + expo extra fallback", () => {
   const configTs = read("src/api/config.ts");
-  assert.match(configTs, /EXPO_PUBLIC_API_BASE_URL/);
+  const apiBase = read("src/api/apiBaseUrl.js");
+  assert.match(configTs, /EXPO_PUBLIC_API_BASE_URL|EXPO_PUBLIC_API_URL/);
   assert.match(configTs, /expo-constants/);
   assert.match(configTs, /readExpoExtraApiBase/);
   assert.match(configTs, /if \(!__DEV__\)/);
   assert.match(configTs, /Production APK missing API configuration/);
+  assert.match(apiBase, /192\.168\.29\.18/);
+  assert.match(apiBase, /13\.207\.17\.117/);
+});
+
+test("eas.json release profiles use AWS; development uses LAN", () => {
+  const eas = JSON.parse(read("eas.json"));
+  assert.match(eas.build.development.env.EXPO_PUBLIC_API_URL, /192\.168\.29\.18/);
+  assert.match(eas.build.preview.env.EXPO_PUBLIC_API_URL, /13\.207\.17\.117/);
+  assert.match(eas.build.production.env.EXPO_PUBLIC_API_URL, /13\.207\.17\.117/);
+  assert.match(eas.build["production-apk"].env.EXPO_PUBLIC_API_URL, /13\.207\.17\.117/);
 });
 
 test("GitHub workflow injects EXPO_PUBLIC_API_BASE_URL before assembleRelease", () => {

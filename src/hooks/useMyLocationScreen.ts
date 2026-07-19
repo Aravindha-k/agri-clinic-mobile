@@ -3,6 +3,7 @@ import type MapViewType from "react-native-maps";
 import type { MapCoordinate, MapPin } from "../components/map/FieldMapView.types";
 import { useConnectivityOnline } from "./useConnectivityOnline";
 import { useGpsCompliance } from "../storage/GpsComplianceContext";
+import { useMapForegroundPermission } from "./useMapForegroundPermission";
 import { useTracking } from "../storage/TrackingContext";
 import { useDuty } from "../features/duty/store/DutyContext";
 import { DEFAULT_MAP_REGION, fitMapRegion } from "../utils/mapRegion";
@@ -23,6 +24,7 @@ export type MyLocationStatusTone = "green" | "amber" | "red";
 export function useMyLocationScreen() {
   const online = useConnectivityOnline();
   const { availability, permissionDenied, status: gpsComplianceStatus } = useGpsCompliance();
+  const mapPermission = useMapForegroundPermission(true);
   const { currentLocation, pendingGpsCount, foregroundTrackingActive, backgroundTrackingActive, refreshTrackingState } =
     useTracking();
   const { currentDuty, dutyMap, refreshDutyMap } = useDuty();
@@ -133,7 +135,7 @@ export function useMyLocationScreen() {
     fitCoordinates,
     visitsToday,
     emptyStateKey,
-    locationGranted: gpsComplianceStatus !== "blocked",
+    locationGranted: mapPermission.granted,
     liveCoordinate,
     accuracyCircle:
       liveCoordinate && currentLocation?.accuracy

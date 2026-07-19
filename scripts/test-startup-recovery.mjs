@@ -7,23 +7,31 @@ const root = resolve(import.meta.dirname, "..");
 const read = (file) => readFileSync(resolve(root, file), "utf8");
 
 const app = read("App.tsx");
-assert.match(app, /PROVIDERS_WATCHDOG_MS\s*=\s*STARTUP_TIMEOUTS\.providersModuleMs/);
+assert.match(app, /import AppProviders from "\.\/AppProviders"/);
+assert.doesNotMatch(app, /import\("\.\/AppProviders"\)/);
+assert.doesNotMatch(app, /PROVIDERS_WATCHDOG_MS/);
 assert.match(app, /NATIVE_SPLASH_FAILSAFE_MS\s*=\s*STARTUP_TIMEOUTS\.nativeSplashFailsafeMs/);
+assert.match(app, /criticalBootstrapMs/);
+assert.match(app, /devSlowBootstrapWarnMs/);
 assert.match(app, /markStartupBegin/);
 assert.match(app, /markAssetsLoaded/);
-assert.match(app, /retryProviderLoad/);
+assert.match(app, /retryBootstrap/);
 assert.match(app, /Retry \/ மீண்டும் முயற்சி/);
 assert.match(app, /KavyaCinematicSplash/);
+assert.match(app, /getStartupErrorCopy/);
+assert.match(app, /providers_module_ready/);
+assert.match(app, /waiting_for_metro_bundle/);
 
 const coordinator = read("src/bootstrap/startupCoordinator.ts");
 assert.match(coordinator, /export const STARTUP_TIMEOUTS/);
 assert.match(coordinator, /fontsMs:\s*4000/);
 assert.match(coordinator, /secureStoreReadMs:\s*2500/);
-assert.match(coordinator, /providersModuleMs:\s*5500/);
+assert.match(coordinator, /criticalBootstrapMs:\s*12000/);
 assert.match(coordinator, /authLocalMs:\s*6000/);
 assert.match(coordinator, /bootstrapNetworkMs:\s*12000/);
 assert.match(coordinator, /dutyHydrationMs:\s*8000/);
 assert.match(coordinator, /motionPreferenceMs:\s*2000/);
+assert.match(coordinator, /hasStartupCompleted/);
 assert.match(coordinator, /markStartupBegin/);
 assert.match(coordinator, /markFontsLoaded/);
 assert.match(coordinator, /markAssetsLoaded/);
@@ -38,14 +46,29 @@ assert.match(coordinator, /markStartupFailed/);
 assert.match(coordinator, /markContinueOffline/);
 assert.match(coordinator, /isStartupContinueOffline/);
 
+const errors = read("src/bootstrap/startupErrors.ts");
+assert.match(errors, /network_unreachable/);
+assert.match(errors, /providers_import_error/);
+assert.match(errors, /auth_bootstrap_error/);
+assert.match(errors, /This is not a network problem/);
+assert.match(errors, /providers_import_error:[\s\S]*This is not a network problem/);
+assert.doesNotMatch(
+  errors,
+  /providers_import_error:[\s\S]*Check the connection/
+);
+
 const providers = read("AppProviders.tsx");
 assert.match(providers, /auth_bootstrap_timeout/);
 assert.match(providers, /<StartupScreen startupTimedOut/);
 assert.match(providers, /fontsLoaded \|\| fontError != null \|\| fontsForced/);
 assert.match(providers, /STARTUP_TIMEOUTS\.fontsMs/);
+assert.match(providers, /STARTUP_TIMEOUTS\.criticalBootstrapMs/);
 assert.match(providers, /markFontsLoaded/);
 assert.match(providers, /onContinueOffline/);
 assert.match(providers, /markStartupFailed/);
+assert.match(providers, /__DEV__/);
+assert.match(providers, /waiting_for_metro_bundle/);
+assert.match(providers, /onFatalError/);
 
 const auth = read("src/storage/AuthContext.tsx");
 assert.match(auth, /if \(!isReady\) \{\s*await runFastLocalBootstrap\(\)/);

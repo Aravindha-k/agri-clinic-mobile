@@ -24,6 +24,10 @@ export type StartupPhase =
   | "ring_animation_started"
   | "ring_animation_stopped"
   | "providers_module_ready"
+  | "providers_module_loading"
+  | "providers_mounted"
+  | "waiting_for_metro_bundle"
+  | "bootstrapping"
   | "providers_ready"
   | "minimum_duration_complete"
   | "native_handoff"
@@ -46,6 +50,9 @@ export type StartupPhase =
   | "nav_stuck_fallback"
   | "session_restored"
   | "session_cleared"
+  | "session_locked"
+  | "biometric_reconnected"
+  | "password_login_chosen"
   | "splash_replay"
   | "splash_start"
   | "splash_end"
@@ -124,6 +131,10 @@ function touch() {
 
 export function logStartupError(message: string) {
   touch();
+  if (snapshot.lastPhase === "startup_complete") {
+    console.warn(`[Startup] ignored_stale_error_after_complete ${message}`);
+    return;
+  }
   snapshot.lastPhase = "startup_error";
   snapshot.lastDetail = message;
   snapshot.phases.push({ phase: "startup_error", detail: message, at: new Date().toISOString() });
@@ -173,18 +184,14 @@ export function getStartupSnapshot(): Readonly<StartupSnapshot> {
 /** Release-safe API constants — hostname only, never tokens. */
 export function logReleaseStartupConstants() {
   const diag = getApiBuildDiagnostics();
+  console.log(`[API Config] environment=${diag.buildEnv}`);
+  console.log(`[API Config] base=${API_BASE_URL || "(missing)"}`);
   console.warn("[Startup] release mode:", !__DEV__);
-  console.warn("[Startup] build env:", diag.buildEnv);
   console.warn("[Startup] API hostname:", diag.apiHostname);
   console.warn("[Startup] app version:", diag.appVersion);
   console.warn("[Startup] build commit:", diag.gitCommit);
   if (__DEV__) {
-    console.log("[Startup] API base URL:", API_BASE_URL);
     console.log("[Startup] Login URL:", getProductionApiEndpoints().login);
-    console.log(
-      "[Startup] Build env EXPO_PUBLIC_API_BASE_URL:",
-      process.env.EXPO_PUBLIC_API_BASE_URL ?? "(unset)"
-    );
-    console.log("[Startup] Build env EXPO_PUBLIC_API_URL:", process.env.EXPO_PUBLIC_API_URL ?? "(unset)");
+    console.log("[Startup] Config source:", diag.configSource);
   }
 }

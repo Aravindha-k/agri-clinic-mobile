@@ -32,8 +32,6 @@ type Props = {
   pendingSync?: number;
   trackingActiveLabel?: string | null;
   onStart: () => void;
-  onEnd?: () => void;
-  ending?: boolean;
   onRetryStart?: () => void;
   onNewVisit?: () => void;
   onFarmers?: () => void;
@@ -124,8 +122,6 @@ export function WorkdayStartPanel({
   pendingSync = 0,
   trackingActiveLabel,
   onStart,
-  onEnd,
-  ending = false,
   onRetryStart,
   onNewVisit,
   onFarmers,
@@ -136,7 +132,6 @@ export function WorkdayStartPanel({
   const { t } = useI18n();
   const [readiness, setReadiness] = useState<LocationReadiness>("checking");
   const startBusy = busy || starting;
-  const endBusy = busy || ending;
   const startButtonLabel = startBusy
     ? startingLabel || t("workdayUx.startingWorkday")
     : t("workdayUx.startWorkday");
@@ -350,10 +345,6 @@ export function WorkdayStartPanel({
 
         <View style={styles.statRow}>
           <View style={styles.stat}>
-            <Text style={styles.statValue}>{distanceKm.toFixed(1)} km</Text>
-            <Text style={styles.statLabel}>{t("home.distanceToday")}</Text>
-          </View>
-          <View style={styles.stat}>
             <Text style={styles.statValue}>{visitsToday}</Text>
             <Text style={styles.statLabel}>{t("home.visitsToday")}</Text>
           </View>
@@ -440,10 +431,6 @@ export function WorkdayStartPanel({
 
       <View style={styles.statRow}>
         <View style={styles.stat}>
-          <Text style={styles.statValue}>{distanceKm.toFixed(1)} km</Text>
-          <Text style={styles.statLabel}>{t("home.distanceToday")}</Text>
-        </View>
-        <View style={styles.stat}>
           <Text style={styles.statValue}>{visitsToday}</Text>
           <Text style={styles.statLabel}>{t("home.visitsToday")}</Text>
         </View>
@@ -459,13 +446,11 @@ export function WorkdayStartPanel({
         <View style={styles.errorBanner} accessibilityLiveRegion="polite">
           <View style={styles.errorCopy}>
             <Text style={styles.errorTitle}>
-              {errorSource === "end_workday"
-                ? t("workdayUx.couldNotEnd")
-                : errorSource === "tracking"
-                  ? t("workdayUx.locationSignalTitle")
-                  : errorSource === "sync"
-                    ? t("workdayUx.syncIssueTitle")
-                    : t("workdayUx.couldNotStart")}
+              {errorSource === "tracking"
+                ? t("workdayUx.locationSignalTitle")
+                : errorSource === "sync"
+                  ? t("workdayUx.syncIssueTitle")
+                  : t("workdayUx.couldNotStart")}
             </Text>
             <Text style={styles.errorBody}>{error}</Text>
           </View>
@@ -475,17 +460,6 @@ export function WorkdayStartPanel({
             </Pressable>
           ) : null}
         </View>
-      ) : null}
-
-      {onEnd ? (
-        <GhostButton
-          label={ending ? t("workdayUx.endingWorkday") : t("workdayUx.endWorkday")}
-          onPress={onEnd}
-          loading={endBusy}
-          disabled={endBusy}
-          style={styles.endBtn}
-          accessibilityLabel={t("workdayUx.endWorkday")}
-        />
       ) : null}
 
       {showVisitActions && onNewVisit ? (

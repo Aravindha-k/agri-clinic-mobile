@@ -14,7 +14,10 @@ import { getOptionLabel } from "../../../src/api/masters";
 import { useConnectivityOnline } from "../../../src/hooks/useConnectivityOnline";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useMasterData } from "../../../src/storage/MasterDataContext";
-import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal";
+import {
+  ensureLocationReadyForVisit,
+  promptFixLocationAccess
+} from "../../../src/features/fieldTrackingSetup";
 import { FlatCard } from "../../components/layout/FlatCard";
 import { PrimaryButton, SearchBar, StatusChip } from "../../components/ui";
 import { FarmerPickCard } from "../../components/visit/FarmerPickCard";
@@ -136,18 +139,16 @@ export default function VisitCreateStep1({ onClose }: Props) {
 
   const captureGps = useCallback(async () => {
     try {
-      const permission = await Location.getForegroundPermissionsAsync();
-      if (permission.status !== "granted") return;
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High
+      const { captureVisitGps } = await import("../../lib/visit/visitGpsCapture");
+      const result = await captureVisitGps({ requestPermission: false });
+      if (!result.ok) return;
+      setGpsCoords({
+        latitude: result.coords.latitude,
+        longitude: result.coords.longitude,
+        accuracy: result.coords.accuracy
       });
-      const coords = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        accuracy: location.coords.accuracy ?? null
-      };
-      setGpsCoords(coords);
-      setGpsAccuracy(coords.accuracy);
+      useVisitFormStore.getState().setVisitedAt(result.coords.capturedAt);
+      setGpsAccuracy(result.coords.accuracy);
     } catch {
       // silent background capture
     }
@@ -241,8 +242,11 @@ export default function VisitCreateStep1({ onClose }: Props) {
 
   async function selectFarmer(farmer: MobileFarmer) {
     if (selectingFarmer) return;
-    const allowed = await requestGpsForFieldWork();
-    if (!allowed) return;
+    const ready = await ensureLocationReadyForVisit();
+    if (!ready.ok) {
+      promptFixLocationAccess(ready);
+      return;
+    }
     setSelectingFarmer(true);
     clearNewFarmer();
 
@@ -252,6 +256,7 @@ export default function VisitCreateStep1({ onClose }: Props) {
 
       setFarmer(farmer);
       setVisitKind(farmer.id != null && farmerVisitCount(farmer) > 0 ? "revisit" : "first");
+      await captureGps();
       setStep(2);
     } catch {
       setFarmer(farmer);
@@ -277,13 +282,17 @@ export default function VisitCreateStep1({ onClose }: Props) {
       return;
     }
 
-    const allowed = await requestGpsForFieldWork();
-    if (!allowed) return;
+    const ready = await ensureLocationReadyForVisit();
+    if (!ready.ok) {
+      promptFixLocationAccess(ready);
+      return;
+    }
 
     setNewFarmerErrors({});
     setNewFarmer({ name, phone, district_id: draft.district_id, village_id: draft.village_id });
     setFarmer(null);
     setVisitKind("first");
+    await captureGps();
     setStep(2);
   }
 

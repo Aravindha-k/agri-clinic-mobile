@@ -29,7 +29,7 @@ function read(rel) {
 
 const brandConfig = read("src/config/brand.config.js") ?? "";
 const assetPaths = [
-  ["logoAsset", "./logo.png"],
+  ["logoAsset", "./assets/brand/logo_circle_transparent.png"],
   ["iconAsset", "./assets/brand/app_icon.png"],
   ["adaptiveIconAsset", "./assets/brand/adaptive_icon_foreground.png"]
 ];
@@ -41,11 +41,17 @@ for (const [name, fallback] of assetPaths) {
   else fail(`Missing bundled asset: ${rel} (${name})`);
 }
 
-if (exists("logo.png")) pass("In-app / splash company logo: logo.png");
-else fail("Missing project-root logo.png");
+if (exists("assets/brand/logo_circle_transparent.png")) {
+  pass("Canonical in-app / splash logo: assets/brand/logo_circle_transparent.png");
+} else {
+  fail("Missing assets/brand/logo_circle_transparent.png");
+}
 
-if (exists("assets/brand/logo_icons.png")) pass("Launcher source: assets/brand/logo_icons.png");
-else fail("Missing assets/brand/logo_icons.png");
+if (exists("assets/brand/adaptive_icon_foreground.png")) pass("Adaptive foreground: assets/brand/adaptive_icon_foreground.png");
+else fail("Missing assets/brand/adaptive_icon_foreground.png");
+
+if (exists("assets/brand/app_icon.png")) pass("Legacy launcher: assets/brand/app_icon.png");
+else fail("Missing assets/brand/app_icon.png");
 
   if (exists("assets/splash/sky_background.jpg")) pass("Splash sky: assets/splash/sky_background.jpg");
   else if (exists("assets/splash/rice_field.png")) pass("React splash poster: assets/splash/rice_field.png");

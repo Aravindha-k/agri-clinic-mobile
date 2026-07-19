@@ -26,6 +26,7 @@ import { registerSessionExpiredTeardown } from "./sessionExpired";
 import { registerSessionTeardown } from "./sessionConflict";
 import { useAppPreferences } from "./AppPreferencesContext";
 import { readLocationServicesEnabled } from "../utils/locationServicesProbe";
+import { trackingDevLog } from "../tracking/trackingDevLog";
 
 type GpsState = "unknown" | "granted" | "denied";
 
@@ -108,7 +109,11 @@ async function readCurrentFix() {
       mayShowUserSettingsDialog: false
     });
   } catch {
-    return Location.getLastKnownPositionAsync();
+    try {
+      return await Location.getLastKnownPositionAsync();
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -168,6 +173,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     setBackgroundTrackingActive(false);
     stopGpsTrackingService();
     syncPendingGpsCount();
+    trackingDevLog("tracking_stopped", "stopTracking");
   }, [clearPollTimer, syncPendingGpsCount]);
 
   const pollOnce = useCallback(async () => {
@@ -177,18 +183,47 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const location = await readCurrentFix();
-    if (location) {
-      setCurrentLocation(normalizeLocation(location));
-      const moving = isLocationMoving(location.coords.speed ?? null);
-      setTrackingMotionState(moving);
-      await handleLocationUpdate(location).catch(() => undefined);
-      syncPendingGpsCount();
-      const nextDelay = getForegroundPollIntervalMs(moving);
+    try {
+      const permission = await Location.getForegroundPermissionsAsync().catch(() => null);
+      if (permission?.status !== "granted") {
+        trackingDevLog("tracking_stopped_permission_revoked", "foreground_poll");
+        setGpsState("denied");
+        setPermissionDenied(true);
+        await stopBackgroundLocationTracking().catch(() => undefined);
+        setBackgroundTrackingActive(false);
+        // Keep unsynced queue; do not crash; reschedule a slow recheck.
+        markForegroundPollActive(true);
+        pollTimerRef.current = setTimeout(() => {
+          void pollOnce();
+        }, 30_000);
+        return;
+      }
+
+      const location = await readCurrentFix();
+      if (location) {
+        setCurrentLocation(normalizeLocation(location));
+        const moving = isLocationMoving(location.coords.speed ?? null);
+        setTrackingMotionState(moving);
+        await handleLocationUpdate(location).catch(() => undefined);
+        syncPendingGpsCount();
+        const nextDelay = getForegroundPollIntervalMs(moving);
+        markForegroundPollActive(true);
+        pollTimerRef.current = setTimeout(() => {
+          void pollOnce();
+        }, nextDelay);
+        return;
+      }
+
+      // Temporary GPS miss — keep polling, do not freeze tracking.
       markForegroundPollActive(true);
       pollTimerRef.current = setTimeout(() => {
         void pollOnce();
-      }, nextDelay);
+      }, 15_000);
+    } catch {
+      markForegroundPollActive(true);
+      pollTimerRef.current = setTimeout(() => {
+        void pollOnce();
+      }, 20_000);
     }
   }, [stopTracking, syncPendingGpsCount]);
 
@@ -201,12 +236,26 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     setBusy(true);
     setError("");
     try {
-      const permission = await Location.getForegroundPermissionsAsync();
+      const permission = await Location.getForegroundPermissionsAsync().catch(() => null);
       const servicesEnabled = await readLocationServicesEnabled().catch(() => false);
-      const granted = permission.status === "granted";
-      setGpsState(granted ? "granted" : permission.status === "denied" ? "denied" : "unknown");
-      setPermissionDenied(permission.status === "denied");
+      const granted = permission?.status === "granted";
+      setGpsState(granted ? "granted" : permission?.status === "denied" ? "denied" : "unknown");
+      setPermissionDenied(permission?.status === "denied");
       setGpsEnabled(Boolean(servicesEnabled));
+
+      if (!granted || !servicesEnabled) {
+        trackingDevLog(
+          "tracking_deferred_permission_missing",
+          !servicesEnabled ? "services_disabled" : "foreground_missing"
+        );
+        setError(
+          !servicesEnabled
+            ? "Phone location is turned off."
+            : "Location access is needed for workday tracking."
+        );
+        // Do not start native tracking or pretend the session is active.
+        return;
+      }
 
       markDutyTrackingSessionActive(true);
       startGpsTrackingService({ isGpsEnabled: () => servicesEnabled && granted });
@@ -220,12 +269,25 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
         await handleForcedLocationUpdate(firstFix).catch(() => undefined);
       }
 
-      const backgroundResult = await startBackgroundLocationTracking();
+      const backgroundResult = await startBackgroundLocationTracking().catch(() => ({
+        ok: false,
+        alreadyRunning: false,
+        expoGoLimited: false
+      }));
       setBackgroundTrackingActive(Boolean(backgroundResult.ok || backgroundResult.alreadyRunning));
       syncPendingGpsCount();
+      trackingDevLog(
+        "tracking_started",
+        backgroundResult.expoGoLimited
+          ? "foreground_only_expo_go"
+          : backgroundResult.alreadyRunning
+            ? "already_running"
+            : "native_background"
+      );
       await pollOnce();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to start GPS tracking.");
+      trackingDevLog("tracking_deferred_permission_missing", "start_error");
     } finally {
       setBusy(false);
       startingRef.current = false;
@@ -270,14 +332,60 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (nextState === "active") {
-        void refreshTrackingState();
-        if (activeDutyRef.current?.is_active) {
-          void flushGpsQueue();
-        }
+        trackingDevLog("tracking_resume", "app_active");
+        void (async () => {
+          try {
+            if (activeDutyRef.current?.is_active) {
+              const permission = await Location.getForegroundPermissionsAsync().catch(() => null);
+              if (permission?.status !== "granted") {
+                trackingDevLog("tracking_stopped_permission_revoked", "app_resume");
+                setGpsState("denied");
+                setPermissionDenied(true);
+                await stopBackgroundLocationTracking().catch(() => undefined);
+                setBackgroundTrackingActive(false);
+                syncPendingGpsCount();
+                await refreshTrackingState();
+                return;
+              }
+
+              // Fresh fix for UI + route continuity after lock/minimize.
+              const fix = await readCurrentFix();
+              if (fix) {
+                setCurrentLocation(normalizeLocation(fix));
+                await handleLocationUpdate(fix).catch(() => undefined);
+              }
+              const result = await startBackgroundLocationTracking().catch(() => ({
+                ok: false,
+                alreadyRunning: false,
+                expoGoLimited: false
+              }));
+              setBackgroundTrackingActive(Boolean(result.ok || result.alreadyRunning));
+              // Single-flight queue flush (shared mutex with locationSyncService).
+              await flushGpsQueue();
+            }
+            await refreshTrackingState();
+          } catch {
+            // Never crash on resume permission/GPS errors.
+          }
+        })();
+        return;
+      }
+
+      // Screen lock / minimize: keep native background GPS running.
+      if (
+        (nextState === "background" || nextState === "inactive") &&
+        activeDutyRef.current?.is_active
+      ) {
+        trackingDevLog("tracking_background", nextState);
+        void startBackgroundLocationTracking()
+          .then((result) => {
+            setBackgroundTrackingActive(Boolean(result.ok || result.alreadyRunning));
+          })
+          .catch(() => undefined);
       }
     });
     return () => subscription.remove();
-  }, [flushGpsQueue, refreshTrackingState]);
+  }, [flushGpsQueue, refreshTrackingState, syncPendingGpsCount]);
 
   useEffect(() => {
     const shutdown = async () => {
@@ -286,6 +394,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       cancelForegroundSyncRetries();
     };
     const unregisters = [
+      // Register early so SESSION_REPLACED / logout stop native GPS before queue clear.
       registerPreSignOut(shutdown),
       registerSessionTeardown(shutdown),
       registerSessionExpiredTeardown(shutdown)

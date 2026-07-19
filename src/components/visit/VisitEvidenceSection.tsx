@@ -25,7 +25,7 @@ import {
   inferAttachmentType,
   prepareImageForUpload
 } from "../../utils/visitAttachmentFiles";
-import { getForegroundLocation } from "../../utils/location";
+import { readForegroundLocationIfGranted } from "../../utils/location";
 import { ClinicCard } from "../brand/ClinicCard";
 import { AttachmentCard } from "./AttachmentCard";
 import { TextNoteModal } from "./TextNoteModal";
@@ -116,7 +116,7 @@ export function VisitEvidenceSection({ visitId, watermarkContext, autoLoad = tru
       let lng = watermarkContext?.longitude ?? null;
       if (lat == null || lng == null) {
         try {
-          const loc = await getForegroundLocation();
+          const loc = await readForegroundLocationIfGranted();
           if (loc.granted) {
             lat = loc.location.coords.latitude;
             lng = loc.location.coords.longitude;

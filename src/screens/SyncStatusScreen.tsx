@@ -15,6 +15,7 @@ import { getFieldPendingCounts } from "../../mobile/lib/sync/pendingCounts";
 import { useSyncStore, type SyncHealthState } from "../../mobile/lib/store/syncStore";
 import { refreshControlProps } from "../theme/refresh";
 import { Colors, FontSize, FontWeight, Layout, Spacing } from "../../mobile/lib/theme";
+import { useStackBottomInset } from "../hooks/useStackBottomInset";
 
 type Props = NativeStackScreenProps<RootStackParamList, "SyncStatus">;
 
@@ -65,6 +66,7 @@ function DetailRow({ label, value, warn }: { label: string; value: string; warn?
 
 export function SyncStatusScreen({ navigation }: Props) {
   const { t, language } = useI18n();
+  const stackBottom = useStackBottomInset();
   const online = useConnectivityOnline();
   const [refreshing, setRefreshing] = useState(false);
   const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
@@ -113,7 +115,7 @@ export function SyncStatusScreen({ navigation }: Props) {
         includeSafeTop={false}
       />
       <ScrollView
-        contentContainerStyle={styles.body}
+        contentContainerStyle={[styles.body, { paddingBottom: stackBottom }]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} {...refreshControlProps} />
         }
@@ -201,8 +203,7 @@ const styles = StyleSheet.create({
   screen: { backgroundColor: Colors.bg, flex: 1 },
   body: {
     gap: Spacing.sm,
-    padding: Spacing.screen,
-    paddingBottom: Layout.stackScrollBottom
+    padding: Spacing.screen
   },
   heroCard: {
     gap: Spacing.sm,

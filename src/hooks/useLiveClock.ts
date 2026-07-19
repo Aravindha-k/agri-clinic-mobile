@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AppState } from "react-native";
 import { workdayRestoreLog } from "../utils/workdayRestoreLog";
 
 export function useLiveClock(tickMs = 1000) {
@@ -29,7 +30,7 @@ export function useLiveClock(tickMs = 1000) {
   }, [now]);
 }
 
-/** Live HH:MM:SS elapsed since workday start (local clock; never waits on API). */
+/** Live HH:MM:SS elapsed since workday start (wall clock; continues correctly when locked/minimized). */
 export function useWorkdayTimer(startedAt: string | null, active: boolean) {
   const [now, setNow] = useState(() => Date.now());
   const loggedStartRef = useRef<string | null>(null);
@@ -38,7 +39,15 @@ export function useWorkdayTimer(startedAt: string | null, active: boolean) {
     if (!active) return;
     setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active") {
+        setNow(Date.now());
+      }
+    });
+    return () => {
+      clearInterval(id);
+      sub.remove();
+    };
   }, [active, startedAt]);
 
   useEffect(() => {

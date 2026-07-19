@@ -31,7 +31,7 @@ test("navigation guard covers stack removal without duplicate dialogs", () => {
   assert.match(shell, /discardMedia:\s*true/);
 });
 
-test("optional observation and evidence are accepted", () => {
+test("optional field notes and evidence are accepted", () => {
   const validation = read("src/visit/visitValidation.ts");
   const review = read("mobile/app/visit/create-step4-review.tsx");
   const step3 = read("mobile/app/visit/create-step3.tsx");
@@ -39,9 +39,11 @@ test("optional observation and evidence are accepted", () => {
     validation.slice(validation.indexOf("export function getSubmitIssues")),
     /hasObservation\(/
   );
-  assert.match(review, /observationOptional/);
+  assert.match(review, /fieldNotes/);
+  assert.match(review, /noFieldNotes/);
   assert.match(review, /evidenceOptional/);
-  assert.match(step3, /optionalObservationHint/);
+  assert.doesNotMatch(review, /observationOptional/);
+  assert.match(step3, /fieldNotesHint/);
 });
 
 test("flush keeps visit success and queues only failed media", () => {

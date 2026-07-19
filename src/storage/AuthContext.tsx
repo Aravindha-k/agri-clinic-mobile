@@ -13,8 +13,23 @@ import { clearDeviceSessionId, DEVICE_SESSION_STORAGE_ERROR, ensureDeviceSession
 import { registerSessionExpiredTeardown } from "./sessionExpired";
 import { registerSessionTeardown } from "./sessionConflict";
 import { runPreSignOutHandlers } from "./preSignOut";
-import { getAccessToken, saveTokens, clearTokens, type StoredTokens } from "./tokenStorage";
-import { canUseBiometricLogin } from "./biometricLoginStorage";
+import { getAccessToken, saveTokens, clearTokens } from "./tokenStorage";
+import {
+  canUseBiometricLogin,
+  clearBiometricLogin,
+  getBiometricLoginStatus,
+  resetBiometricUnlockAttemptThisLaunch,
+  setPreferPasswordLoginThisSession,
+  unlockSessionWithBiometrics,
+  type BiometricUnlockResult
+} from "./biometricLoginStorage";
+import {
+  getAuthPhase,
+  setAuthPhase,
+  type AuthPhase,
+  canEnterAppShell
+} from "./authPhase";
+import { requestSplashReplay } from "../bootstrap/splashReplay";
 import { ApiRequestError, isAuthExpiredError, isNetworkError, isServerError } from "../utils/apiError";
 import { fetchMobileBootstrap } from "../features/duty/api/mobileBootstrapApi";
 import { clearLocalFieldQueuesOnSessionReplace } from "./clearLocalFieldQueues";
@@ -28,7 +43,9 @@ import {
   markBootstrapBegin,
   markBootstrapFailed,
   markBootstrapSuccess,
-  markBootstrapTimeout
+  markBootstrapTimeout,
+  markStartupBegin,
+  resetStartupCoordinator
 } from "../bootstrap/startupCoordinator";
 
 const FIELD_EMPLOYEE_ONLY_MESSAGE = "This app is only for field employees.";
@@ -39,6 +56,7 @@ export type BootstrapIssue = "none" | "network" | "server";
 type AuthContextValue = {
   isReady: boolean;
   isAuthenticated: boolean;
+  authPhase: AuthPhase;
   authLoading: boolean;
   sessionValidating: boolean;
   bootstrapIssue: BootstrapIssue;
@@ -50,10 +68,19 @@ type AuthContextValue = {
   refreshUser: () => Promise<Employee | null>;
   signIn: (username: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Prompt biometrics while locked; does not clear tokens on cancel. */
+  attemptBiometricUnlock: () => Promise<BiometricUnlockResult>;
+  /** After successful biometric, validate session and enter app. */
   completeBiometricUnlock: () => Promise<void>;
+  /** Intentionally leave lock screen for password login — tokens kept. */
+  choosePasswordLogin: () => void;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+/** Module-level single-flight for cold-start local bootstrap. */
+let foregroundBootstrapPromise: Promise<void> | null = null;
+let foregroundBootstrapGeneration = 0;
 
 function isRetriableAuthError(err: unknown): boolean {
   if (isNetworkError(err) || isServerError(err)) return true;
@@ -91,6 +118,7 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: s
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [authPhaseState, setAuthPhaseState] = useState<AuthPhase>(() => getAuthPhase());
   const [isReady, setIsReady] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [sessionValidating, setSessionValidating] = useState(false);
@@ -98,10 +126,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [bootstrapIssue, setBootstrapIssue] = useState<BootstrapIssue>("none");
   const [loginNotice, setLoginNotice] = useState<string | null>(null);
   const [employee, setEmployee] = useState<Employee | null>(null);
-  const bootstrapRunningRef = useRef(false);
   const backgroundValidationPromiseRef = useRef<Promise<void> | null>(null);
   const autoValidateStartedRef = useRef(false);
   const validationGenerationRef = useRef(0);
+  const employeeIdRef = useRef<number | null>(null);
+  const bootstrapAttemptedRef = useRef(false);
+
+  employeeIdRef.current = employee?.id ?? null;
+
+  const applyPhase = useCallback(
+    (phase: AuthPhase, detail?: string) => {
+      setAuthPhase(phase, detail);
+      setAuthPhaseState(phase);
+      setIsAuthenticated(phase === "authenticated");
+      setIsReady(phase !== "initializing");
+      setAuthLoading(phase === "initializing");
+      setSessionValidating(phase === "validating_session");
+    },
+    []
+  );
 
   const invalidateBootstrap = useCallback(() => {
     validationGenerationRef.current += 1;
@@ -111,35 +154,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoginNotice(null);
   }, []);
 
-  const performLocalSignOut = useCallback(async (options?: { notice?: string | null; reason?: string }) => {
-    invalidateBootstrap();
-    await clearTokens();
-    await clearDeviceSessionId();
-    await clearMasterDataCache().catch(() => undefined);
-    await clearDutyBootstrapState({ userId: employee?.id ?? null, preserveCache: false }).catch(() => undefined);
-    clearInflightRequests();
-    resetApiTelemetry();
-    setEmployee(null);
-    setActiveSyncUserId(null);
-    setIsAuthenticated(false);
-    setBootstrapIssue("none");
-    setSessionValidating(false);
-    setAuthLoading(false);
-    setIsReady(true);
+  const performLocalSignOut = useCallback(
+    async (options?: { notice?: string | null; reason?: string; phase?: AuthPhase }) => {
+      invalidateBootstrap();
+      await clearTokens();
+      await clearDeviceSessionId();
+      await clearMasterDataCache().catch(() => undefined);
+      await clearDutyBootstrapState({ userId: employeeIdRef.current, preserveCache: false }).catch(() => undefined);
+      clearInflightRequests();
+      resetApiTelemetry();
+      setEmployee(null);
+      setActiveSyncUserId(null);
+      setBootstrapIssue("none");
+      autoValidateStartedRef.current = false;
+      const nextPhase: AuthPhase =
+        options?.phase ?? (options?.reason === "session_replaced" ? "session_replaced" : "unauthenticated");
+      applyPhase(nextPhase, options?.reason);
+      if (options?.reason) {
+        logStartup("session_cleared", options.reason);
+      }
+      if (options?.notice) {
+        setLoginNotice(options.notice);
+      }
+    },
+    [applyPhase, invalidateBootstrap]
+  );
+
+  const lockSessionForBiometric = useCallback(() => {
+    // Keep tokens / device session / employee metadata — only gate UI + network.
     autoValidateStartedRef.current = false;
-    if (options?.reason) {
-      logStartup("session_cleared", options.reason);
-    }
-    if (options?.notice) {
-      setLoginNotice(options.notice);
-    }
-  }, [employee?.id, invalidateBootstrap]);
+    applyPhase("locked", "biometric unlock required");
+    logStartup("session_locked", "biometric unlock required");
+  }, [applyPhase]);
 
   const refreshUser = useCallback(async () => {
     const token = await getAccessToken();
     if (!token) {
       setEmployee(null);
-    setActiveSyncUserId(null);
+      setActiveSyncUserId(null);
       return null;
     }
     const row = await getCurrentEmployee();
@@ -149,16 +201,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const forceSessionConflictLogout = useCallback(async () => {
+    // Stop native GPS immediately on old device before clearing tokens/queues.
+    const { stopTrackingBridge } = await import("./TrackingContext");
+    await stopTrackingBridge().catch(() => undefined);
     try {
       await logoutRequest().catch(() => undefined);
     } finally {
       clearLocalFieldQueuesOnSessionReplace();
-      await performLocalSignOut({ notice: SESSION_REPLACED_MESSAGE, reason: "session_replaced" });
+      await clearBiometricLogin().catch(() => undefined);
+      await performLocalSignOut({
+        notice: SESSION_REPLACED_MESSAGE,
+        reason: "session_replaced",
+        phase: "session_replaced"
+      });
     }
   }, [performLocalSignOut]);
 
   const forceSessionExpiredLogout = useCallback(async () => {
-    await performLocalSignOut({ notice: SESSION_EXPIRED_MESSAGE });
+    // Keep biometric enabled on this device. Password login restores tokens;
+    // fingerprint works again without asking to set it up a second time.
+    await performLocalSignOut({ notice: SESSION_EXPIRED_MESSAGE, reason: "session_expired" });
   }, [performLocalSignOut]);
 
   useEffect(() => {
@@ -177,14 +239,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const validateSessionInBackground = useCallback(
     async (options?: { isRetry?: boolean }) => {
+      // Never validate while locked / biometric in progress — that races Login/Home.
+      const phase = getAuthPhase();
+      if (phase === "locked" || phase === "authenticating_biometric" || phase === "initializing") {
+        return;
+      }
+      if (phase !== "authenticated" && phase !== "validating_session") {
+        return;
+      }
+
       const generation = ++validationGenerationRef.current;
       const isStale = () => generation !== validationGenerationRef.current;
 
       const previousValidation = backgroundValidationPromiseRef.current;
       if (previousValidation) {
         await previousValidation;
-        // Only the newest request starts after the previous session's request
-        // settles. This prevents a sign-in from being dropped by an old run.
         if (isStale()) return;
       }
 
@@ -215,7 +284,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (!(await getDeviceSessionId())) {
           await performLocalSignOut({
-            notice: "This device needs a fresh sign-in. Please log in again."
+            notice: "This device needs a fresh sign-in. Please log in again.",
+            reason: "missing device session"
           });
           return;
         }
@@ -232,7 +302,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             try {
               await logoutRequest().catch(() => undefined);
             } finally {
-              await performLocalSignOut({ notice: FIELD_EMPLOYEE_ONLY_MESSAGE });
+              await performLocalSignOut({ notice: FIELD_EMPLOYEE_ONLY_MESSAGE, reason: "not_field_employee" });
             }
             return;
           }
@@ -241,6 +311,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await hydrateDutyFromBootstrap({ bootstrap, userId: profile.id });
           setBootstrapIssue("none");
           endedIssue = "none";
+          if (getAuthPhase() !== "authenticated") {
+            applyPhase("authenticated", "background_validate");
+          }
           markBootstrapSuccess(`employee=${profile.id}`);
           logStartup("session_restored", `employee=${profile.id}`);
         } catch (err) {
@@ -248,8 +321,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (isDeviceSessionConflict(err)) {
             return;
           }
-          const timedOut =
-            err instanceof Error && /timed out/i.test(err.message);
+          const timedOut = err instanceof Error && /timed out/i.test(err.message);
           if (timedOut) {
             markBootstrapTimeout(err.message);
           } else {
@@ -266,7 +338,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const issue = timedOut || isNetworkError(err) ? "network" : "server";
             await hydrateDutyFromBootstrap({
               bootstrap: null,
-              userId: employee?.id ?? null,
+              userId: employeeIdRef.current,
               error: err
             }).catch(() => undefined);
             setBootstrapIssue(issue);
@@ -291,137 +363,150 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         settleValidation();
       }
     },
-    [employee?.id, performLocalSignOut]
+    [applyPhase, performLocalSignOut]
   );
 
   const runFastLocalBootstrap = useCallback(async () => {
-    if (bootstrapRunningRef.current) return;
-    bootstrapRunningRef.current = true;
-
-    setAuthLoading(true);
-    setBootstrapIssue("none");
-    logStartup("auth_bootstrap_start");
-
-    let endedAuthenticated = false;
-
-    try {
-      const token = await getAccessToken();
-      if (!token) {
-        setIsAuthenticated(false);
-        endedAuthenticated = false;
-        logStartup("session_cleared", "no saved token");
-        return;
-      }
-
-      await ensureDeviceSessionLoaded().catch(() => undefined);
-
-      if (!(await getDeviceSessionId().catch(() => null))) {
-        await performLocalSignOut({
-          notice: "This device needs a fresh sign-in. Please log in again."
-        }).catch(() => undefined);
-        endedAuthenticated = false;
-        return;
-      }
-
-      let biometricLocked = false;
-      try {
-        biometricLocked = await canUseBiometricLogin();
-      } catch {
-        biometricLocked = false;
-        logStartup("session_restored", "biometric check failed — continue without lock");
-      }
-      if (biometricLocked) {
-        setIsAuthenticated(false);
-        endedAuthenticated = false;
-        logStartup("session_cleared", "biometric unlock required");
-        return;
-      }
-
-      endedAuthenticated = true;
-      setIsAuthenticated(true);
-      logStartup("session_restored", "token present — validating bootstrap");
-    } catch (err) {
-      setIsAuthenticated(false);
-      endedAuthenticated = false;
-      logStartup(
-        "session_cleared",
-        err instanceof Error ? `bootstrap_error:${err.message}` : "bootstrap_error"
-      );
-    } finally {
-      setAuthLoading(false);
-      setIsReady(true);
-      bootstrapRunningRef.current = false;
-      markAuthRestored(`authenticated=${endedAuthenticated}`);
-      patchStartupSnapshot({
-        authLoading: false,
-        isReady: true,
-        isAuthenticated: endedAuthenticated,
-        bootstrapIssue: "none"
-      });
-      logStartup("auth_bootstrap_end", `authenticated=${endedAuthenticated} local=true`);
+    if (foregroundBootstrapPromise) {
+      return foregroundBootstrapPromise;
     }
-  }, [performLocalSignOut]);
+
+    const generation = ++foregroundBootstrapGeneration;
+    const isStale = () => generation !== foregroundBootstrapGeneration;
+
+    foregroundBootstrapPromise = (async () => {
+      applyPhase("initializing", "auth_bootstrap_start");
+      setBootstrapIssue("none");
+      logStartup("auth_bootstrap_start");
+
+      let endedPhase: AuthPhase = "unauthenticated";
+
+      try {
+        const token = await getAccessToken();
+        if (isStale()) return;
+        if (!token) {
+          endedPhase = "unauthenticated";
+          applyPhase("unauthenticated", "no saved token");
+          logStartup("session_cleared", "no saved token");
+          return;
+        }
+
+        await ensureDeviceSessionLoaded().catch(() => undefined);
+        if (isStale()) return;
+
+        if (!(await getDeviceSessionId().catch(() => null))) {
+          await performLocalSignOut({
+            notice: "This device needs a fresh sign-in. Please log in again.",
+            reason: "missing device session"
+          }).catch(() => undefined);
+          endedPhase = "unauthenticated";
+          return;
+        }
+
+        let biometricLocked = false;
+        try {
+          biometricLocked = await canUseBiometricLogin();
+        } catch {
+          biometricLocked = false;
+          logStartup("session_restored", "biometric check failed — continue without lock");
+        }
+        if (isStale()) return;
+
+        if (biometricLocked) {
+          lockSessionForBiometric();
+          endedPhase = "locked";
+          return;
+        }
+
+        // Saved session, biometric off — enter app then validate in background.
+        endedPhase = "authenticated";
+        applyPhase("authenticated", "token present — validating bootstrap");
+        logStartup("session_restored", "token present — validating bootstrap");
+      } catch (err) {
+        if (isStale()) return;
+        endedPhase = "unauthenticated";
+        applyPhase("unauthenticated", "bootstrap_error");
+        logStartup(
+          "session_cleared",
+          err instanceof Error ? `bootstrap_error:${err.message}` : "bootstrap_error"
+        );
+      } finally {
+        if (!isStale()) {
+          markAuthRestored(`phase=${endedPhase} authenticated=${endedPhase === "authenticated"}`);
+          patchStartupSnapshot({
+            authLoading: false,
+            isReady: true,
+            isAuthenticated: endedPhase === "authenticated",
+            bootstrapIssue: "none"
+          });
+          logStartup("auth_bootstrap_end", `phase=${endedPhase} local=true`);
+        }
+      }
+    })().finally(() => {
+      if (foregroundBootstrapGeneration === generation) {
+        foregroundBootstrapPromise = null;
+      }
+    });
+
+    return foregroundBootstrapPromise;
+  }, [applyPhase, lockSessionForBiometric, performLocalSignOut]);
 
   useEffect(() => {
-    if (!isReady || !isAuthenticated) {
-      autoValidateStartedRef.current = false;
+    if (bootstrapAttemptedRef.current) return;
+    bootstrapAttemptedRef.current = true;
+    void runFastLocalBootstrap();
+  }, [runFastLocalBootstrap]);
+
+  useEffect(() => {
+    if (!canEnterAppShell() || getAuthPhase() !== "authenticated") {
       return;
     }
     if (autoValidateStartedRef.current) return;
     autoValidateStartedRef.current = true;
     void validateSessionInBackground();
-  }, [isAuthenticated, isReady, validateSessionInBackground]);
-
-  useEffect(() => {
-    void runFastLocalBootstrap();
-  }, [runFastLocalBootstrap]);
+  }, [authPhaseState, isAuthenticated, validateSessionInBackground]);
 
   /** Hard ceiling: never leave RootNavigator on a blank View because a hung storage promise never settles. */
   useEffect(() => {
     const timer = setTimeout(() => {
-      setIsReady((prev) => {
-        if (prev) return prev;
-        logStartup("auth_bootstrap_timeout", "AuthProvider hard ceiling — forcing isReady");
-        markAuthRestored("forced_after_timeout");
-        setAuthLoading(false);
-        return true;
-      });
+      if (getAuthPhase() !== "initializing") return;
+      logStartup("auth_bootstrap_timeout", "AuthProvider hard ceiling — forcing unauthenticated ready");
+      markAuthRestored("forced_after_timeout");
+      applyPhase("unauthenticated", "forced_after_timeout");
     }, STARTUP_TIMEOUTS.authLocalMs);
     return () => clearTimeout(timer);
-  }, []);
+  }, [applyPhase]);
 
-  /** Foreground: re-validate session / bootstrap if stale — do not recreate timers. */
   useEffect(() => {
-    if (!isReady || !isAuthenticated) return;
+    if (getAuthPhase() !== "authenticated") return;
     const onAppState = (next: AppStateStatus) => {
-      if (next === "active") {
+      if (next === "active" && getAuthPhase() === "authenticated") {
         void validateSessionInBackground();
       }
     };
     const sub = AppState.addEventListener("change", onAppState);
     return () => sub.remove();
-  }, [isAuthenticated, isReady, validateSessionInBackground]);
+  }, [authPhaseState, validateSessionInBackground]);
 
-  /** Reconnect: validate auth → bootstrap (server wins). Duty/map/queues refresh elsewhere. */
   useEffect(() => {
-    if (!isReady || !isAuthenticated) return;
+    if (getAuthPhase() !== "authenticated") return;
     let wasOffline = false;
     return NetInfo.addEventListener((state) => {
       const online = Boolean(state.isConnected && state.isInternetReachable !== false);
-      if (wasOffline && online) {
+      if (wasOffline && online && getAuthPhase() === "authenticated") {
         void validateSessionInBackground();
       }
       wasOffline = !online;
     });
-  }, [isAuthenticated, isReady, validateSessionInBackground]);
+  }, [authPhaseState, validateSessionInBackground]);
 
   const retryBootstrap = useCallback(async () => {
-    if (!isReady) {
+    if (getAuthPhase() === "initializing" || getAuthPhase() === "locked") {
       await runFastLocalBootstrap();
       return;
     }
     await validateSessionInBackground({ isRetry: true });
-  }, [isReady, runFastLocalBootstrap, validateSessionInBackground]);
+  }, [runFastLocalBootstrap, validateSessionInBackground]);
 
   const resetLocalSession = useCallback(
     async (reason = "manual reset") => {
@@ -432,6 +517,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const establishAuthenticatedSession = useCallback(async () => {
+    applyPhase("validating_session", "establish_session");
     await ensureDeviceSessionLoaded();
 
     if (!(await getDeviceSessionId())) {
@@ -439,6 +525,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
+      markBootstrapBegin("establish_session");
       const bootstrap = await withTimeout(
         fetchMobileBootstrap(),
         BOOTSTRAP_TIMEOUT_MS,
@@ -449,7 +536,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           await logoutRequest();
         } finally {
-          await performLocalSignOut({ notice: FIELD_EMPLOYEE_ONLY_MESSAGE });
+          await performLocalSignOut({ notice: FIELD_EMPLOYEE_ONLY_MESSAGE, reason: "not_field_employee" });
         }
         throw new Error(FIELD_EMPLOYEE_ONLY_MESSAGE);
       }
@@ -457,44 +544,120 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setActiveSyncUserId(profile.id);
       await hydrateDutyFromBootstrap({ bootstrap, userId: profile.id });
       setBootstrapIssue("none");
-      setIsAuthenticated(true);
-      setIsReady(true);
+      autoValidateStartedRef.current = true;
+      applyPhase("authenticated", `employee=${profile.id}`);
+      markBootstrapSuccess(`employee=${profile.id}`);
     } catch (err) {
       if (isRetriableAuthError(err)) {
         await hydrateDutyFromBootstrap({
           bootstrap: null,
-          userId: employee?.id ?? null,
+          userId: employeeIdRef.current,
           error: err
         }).catch(() => undefined);
-        setIsAuthenticated(true);
+        autoValidateStartedRef.current = true;
+        applyPhase("authenticated", "offline_retriable");
         setBootstrapIssue(isNetworkError(err) ? "network" : "server");
-        setIsReady(true);
         return;
       }
       throw err;
     }
-  }, [employee?.id, performLocalSignOut]);
+  }, [applyPhase, performLocalSignOut]);
 
   const signIn = useCallback(
     async (username: string, password: string) => {
       setLoginNotice(null);
+      setPreferPasswordLoginThisSession(false);
       const tokens = await loginRequest(username, password);
       await saveTokens(tokens);
       await establishAuthenticatedSession();
+      // Fingerprint preference is kept across session expiry — log reconnect.
+      try {
+        const status = await getBiometricLoginStatus();
+        if (status.enabled) {
+          logStartup("biometric_reconnected", "password login restored tokens");
+        }
+      } catch {
+        // ignore
+      }
     },
     [establishAuthenticatedSession]
   );
+
+  const attemptBiometricUnlock = useCallback(async (): Promise<BiometricUnlockResult> => {
+    const startedPhase = getAuthPhase();
+    if (
+      startedPhase !== "locked" &&
+      startedPhase !== "authenticating_biometric" &&
+      startedPhase !== "unauthenticated"
+    ) {
+      return { ok: false, outcome: "not_enabled" };
+    }
+    if (startedPhase === "locked" || startedPhase === "authenticating_biometric") {
+      applyPhase("authenticating_biometric", "prompt");
+    }
+    const result = await unlockSessionWithBiometrics();
+    if (!result.ok) {
+      if (
+        result.outcome === "user_cancel" ||
+        result.outcome === "authentication_failed" ||
+        result.outcome === "lockout" ||
+        result.outcome === "timeout" ||
+        result.outcome === "prompt_busy"
+      ) {
+        // Cancel/fail from unlock gate → remain locked. From Login → stay on Login.
+        applyPhase(startedPhase === "unauthenticated" ? "unauthenticated" : "locked", result.outcome);
+      } else if (
+        result.outcome === "not_enrolled" ||
+        result.outcome === "hardware_unavailable" ||
+        result.outcome === "key_invalidated"
+      ) {
+        setPreferPasswordLoginThisSession(true);
+        applyPhase("unauthenticated", result.outcome);
+      } else if (result.outcome === "network_error" || result.outcome === "server_error") {
+        // Keep tokens + biometric preference — stay locked for retry.
+        applyPhase(startedPhase === "unauthenticated" ? "unauthenticated" : "locked", result.outcome);
+      } else if (result.outcome === "no_refresh_token" || result.outcome === "token_refresh_failed") {
+        // Confirmed dead session — password once. Keep biometric preference for reconnect.
+        setPreferPasswordLoginThisSession(true);
+        await performLocalSignOut({
+          notice: SESSION_EXPIRED_MESSAGE,
+          reason:
+            result.outcome === "token_refresh_failed"
+              ? "refresh_rejected_after_biometric"
+              : "no_refresh_after_biometric"
+        });
+      } else {
+        applyPhase(startedPhase === "unauthenticated" ? "unauthenticated" : "locked", result.outcome);
+      }
+    }
+    return result;
+  }, [applyPhase, performLocalSignOut]);
 
   const completeBiometricUnlock = useCallback(async () => {
     await establishAuthenticatedSession();
   }, [establishAuthenticatedSession]);
 
+  const choosePasswordLogin = useCallback(() => {
+    setPreferPasswordLoginThisSession(true);
+    applyPhase("unauthenticated", "password_fallback");
+    logStartup("password_login_chosen", "tokens retained");
+  }, [applyPhase]);
+
   const signOut = useCallback(async () => {
     await runPreSignOutHandlers();
+
+    // Explicit logout always clears the authenticated session. Biometric preference
+    // may remain enabled so the next password login rebinds fingerprint unlock —
+    // never unlock a logged-out account without a fresh password session.
+    setPreferPasswordLoginThisSession(true);
+    resetBiometricUnlockAttemptThisLaunch();
     try {
       await logoutRequest();
     } finally {
-      await performLocalSignOut();
+      await performLocalSignOut({ reason: "explicit_logout" });
+      resetStartupCoordinator();
+      markStartupBegin("splash_replay");
+      requestSplashReplay("sign_out");
     }
   }, [performLocalSignOut]);
 
@@ -502,6 +665,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       isReady,
       isAuthenticated,
+      authPhase: authPhaseState,
       authLoading,
       sessionValidating,
       bootstrapIssue,
@@ -513,11 +677,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshUser,
       signIn,
       signOut,
-      completeBiometricUnlock
+      attemptBiometricUnlock,
+      completeBiometricUnlock,
+      choosePasswordLogin
     }),
     [
       isReady,
       isAuthenticated,
+      authPhaseState,
       authLoading,
       sessionValidating,
       bootstrapIssue,
@@ -529,7 +696,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshUser,
       signIn,
       signOut,
-      completeBiometricUnlock
+      attemptBiometricUnlock,
+      completeBiometricUnlock,
+      choosePasswordLogin
     ]
   );
 
@@ -539,13 +708,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth() {
   const value = useContext(AuthContext);
   if (!value) {
-    throw new Error("useAuth must be used inside AuthProvider");
+    throw new Error("useAuth must be inside AuthProvider");
   }
   return value;
 }
 
 /** True when local token check passed — home may render; server validation may still run. */
 export function useAuthSessionReady() {
-  const { isReady, isAuthenticated } = useAuth();
-  return isReady && isAuthenticated;
+  const { isReady, isAuthenticated, authPhase } = useAuth();
+  return isReady && isAuthenticated && authPhase === "authenticated";
 }

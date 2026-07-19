@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, Text, View, type ViewStyle } from "react-native";
-import { CompanyLogoMark } from "../../../src/components/brand/CompanyLogoMark";
+import { CompanyLogo } from "../../../src/components/brand/CompanyLogo";
 import { Colors, Enterprise, Shadow, Spacing, TextStyles } from "../../lib/theme";
 import { PrimaryButton } from "./PrimaryButton";
 
@@ -30,7 +30,7 @@ export function EmptyState({
     <View style={[styles.wrap, compact && styles.wrapCompact, style]}>
       {showBrandLogo ? (
         <View style={styles.logoWrap}>
-          <CompanyLogoMark size={compact ? 56 : 72} />
+          <CompanyLogo size={compact ? 56 : 72} />
         </View>
       ) : (
         <View style={[styles.iconWrap, compact && styles.iconWrapCompact]}>

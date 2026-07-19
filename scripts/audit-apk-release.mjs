@@ -7,7 +7,8 @@ import path from "node:path";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const AWS_HOST = "13.207.17.117";
-const API_BASE = `http://${AWS_HOST}/api/v1/`;
+const API_BASE_HTTPS = `https://${AWS_HOST}/api/v1/`;
+const API_BASE_HTTP = `http://${AWS_HOST}/api/v1/`;
 
 const issues = [];
 const ok = [];
@@ -40,23 +41,28 @@ function normalizeApiBase(raw) {
 
 // 1. API config
 const configTs = read("src/api/config.ts") ?? "";
-if (!configTs.includes(AWS_HOST)) fail("src/api/config.ts missing AWS host");
-else pass("src/api/config.ts has AWS host");
+const apiBaseJs = read("src/api/apiBaseUrl.js") ?? "";
+if (!apiBaseJs.includes(AWS_HOST) && !configTs.includes(AWS_HOST)) fail("API config missing AWS host");
+else pass("API config has AWS host");
 if (!configTs.includes("if (!__DEV__)")) fail("src/api/config.ts missing release guard");
-else if (!configTs.includes("EXPO_PUBLIC_API_BASE_URL")) fail("src/api/config.ts missing EXPO_PUBLIC_API_BASE_URL");
-else if (!configTs.includes("readExpoExtraApiBase")) fail("src/api/config.ts missing expo.extra.apiBaseUrl fallback");
-else pass("Release builds use EXPO_PUBLIC_API_BASE_URL + expo.extra fallback");
+else if (!configTs.includes("EXPO_PUBLIC_API_URL") && !configTs.includes("EXPO_PUBLIC_API_BASE_URL")) {
+  fail("src/api/config.ts missing EXPO_PUBLIC_API_URL");
+} else if (!configTs.includes("readExpoExtraApiBase") && !configTs.includes("expo.extra")) {
+  fail("src/api/config.ts missing expo.extra.apiBaseUrl fallback");
+} else pass("Release builds use EXPO_PUBLIC_API_URL + expo.extra fallback");
 
 const envProd = read(".env.production") ?? "";
-if (!envProd.includes(`http://${AWS_HOST}`)) fail(".env.production missing AWS origin");
+if (!envProd.includes(AWS_HOST)) fail(".env.production missing AWS origin");
 else if (!envProd.includes("EXPO_PUBLIC_API_BASE_URL=") && !envProd.includes("EXPO_PUBLIC_API_URL=")) {
   fail(".env.production missing EXPO_PUBLIC_API_BASE_URL or EXPO_PUBLIC_API_URL");
 } else {
   const baseMatch = envProd.match(/EXPO_PUBLIC_API_BASE_URL=(.+)/);
   const urlMatch = envProd.match(/EXPO_PUBLIC_API_URL=(.+)/);
   const raw = (baseMatch?.[1] ?? urlMatch?.[1] ?? "").trim();
-  if (normalizeApiBase(raw) !== API_BASE) fail(`.env.production API does not normalize to ${API_BASE}`);
-  else pass(`.env.production AWS API → ${normalizeApiBase(raw)}`);
+  const normalized = normalizeApiBase(raw);
+  if (normalized !== API_BASE_HTTPS && normalized !== API_BASE_HTTP) {
+    fail(`.env.production API must be AWS HTTPS or HTTP QA — got ${normalized}`);
+  } else pass(`.env.production AWS API → ${normalized}`);
 }
 
 const workflow = read(".github/workflows/android-apk.yml") ?? "";
@@ -91,13 +97,13 @@ if (appConfig.includes("GOOGLE_MAPS_ANDROID_API_KEY") && appConfig.includes("goo
 }
 
 const endpoints = {
-  login: `${API_BASE}mobile/auth/login/`,
-  farmers: `${API_BASE}farmers/`,
-  visits: `${API_BASE}mobile/visits/`,
-  dutyStart: `${API_BASE}tracking/duty/start/`,
-  locationUpdate: `${API_BASE}tracking/location/update/`,
-  locationBulk: `${API_BASE}tracking/location/bulk/`,
-  heartbeat: `${API_BASE}tracking/heartbeat/`
+  login: `${API_BASE_HTTPS}mobile/auth/login/`,
+  farmers: `${API_BASE_HTTPS}farmers/`,
+  visits: `${API_BASE_HTTPS}mobile/visits/`,
+  dutyStart: `${API_BASE_HTTPS}tracking/duty/start/`,
+  locationUpdate: `${API_BASE_HTTPS}tracking/location/update/`,
+  locationBulk: `${API_BASE_HTTPS}tracking/location/bulk/`,
+  heartbeat: `${API_BASE_HTTPS}tracking/heartbeat/`
 };
 
 for (const [name, url] of Object.entries(endpoints)) {
@@ -129,8 +135,7 @@ else pass("network_security_config allows AWS host");
 
 // 3. Bundled assets
 const requiredAssets = [
-  "logo.png",
-  "assets/brand/logo_icons.png",
+  "assets/brand/logo_circle_transparent.png",
   "assets/brand/app_icon.png",
   "assets/brand/adaptive_icon_foreground.png",
   "mobile/assets/backgrounds/login_backdrop.webp",
@@ -139,7 +144,7 @@ const requiredAssets = [
   "mobile/assets/headers/work.jpg",
   "mobile/assets/headers/visit.jpg",
   "mobile/assets/headers/summary.jpg",
-  "assets/splash/rice_field.png"
+  "assets/splash/premium_background.png"
 ];
 
 for (const asset of requiredAssets) {

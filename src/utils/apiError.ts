@@ -19,7 +19,7 @@ export function getNetworkMessage(): string {
       `Cannot reach your development server (${host}). ` +
       "Your phone must use the same Wi‑Fi as this PC — mobile data cannot open a 192.168 address. " +
       "Keep Django running: python manage.py runserver 0.0.0.0:8000. " +
-      "If it still fails, allow port 8000 in Windows Firewall or set EXPO_PUBLIC_USE_PRODUCTION_API=1 in .env.local to use the cloud API."
+      "If it still fails, allow port 8000 in Windows Firewall, or run `npm run start:aws` / `npm run start:aws:http` for the cloud API."
     );
   }
   return NETWORK_MESSAGE;

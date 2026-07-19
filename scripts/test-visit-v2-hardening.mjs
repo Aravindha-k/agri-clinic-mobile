@@ -45,8 +45,12 @@ assert.match(shell, /beginNewVisit\(\{\s*discardMedia:\s*true\s*\}\)/, "discard 
 
 assert.match(review, /submitVisitCoordinator/);
 assert.match(review, /resolveVisitReviewFarmer/);
-assert.match(review, /observationOptional/);
+assert.match(review, /fieldNotes/);
 assert.match(review, /evidenceOptional/);
+assert.match(review, /captureVisitGps/);
+assert.match(review, /gpsGettingLocation/);
+assert.doesNotMatch(review, /observationOptional/);
+assert.doesNotMatch(review, /recommendationOptional/);
 assert.doesNotMatch(review, /submitInFlightRef/, "screen must not own submit single-flight");
 
 assert.match(submitCoordinator, /if \(submitInFlight\) return submitInFlight/);

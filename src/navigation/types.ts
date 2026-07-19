@@ -89,4 +89,5 @@ export type RootStackParamList = {
   OfflineSync: undefined;
   SyncStatus: undefined;
   Notifications: undefined;
+  FieldTrackingSetup: { focusMissing?: import("../features/fieldTrackingSetup").SetupStepId[] } | undefined;
 };

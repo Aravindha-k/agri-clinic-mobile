@@ -1,7 +1,7 @@
 /**
- * Prefreshes transparent Android native splash drawables.
- * In-app / cinematic splash uses assets/brand/company_logo.png as-is (no redesign).
- * Android native launch remains background-only emerald (#0B3D2E).
+ * Writes circular company logo into Android native splash drawables.
+ * Corners are transparent — no white square plate.
+ * Native launch: Kavya emerald background + centered circular logo.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -11,9 +11,10 @@ import sharp from "sharp";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const ANDROID_RES = path.join(root, "android/app/src/main/res");
-const COMPANY_LOGO = path.join(root, "assets/brand/company_logo.png");
+const LOGO_SRC = path.join(root, "assets/brand/logo_circle_transparent.png");
+const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 };
 
-/** Required by Expo/Android when styles reference @drawable/splashscreen_logo — keep fully transparent. */
+/** Android 12 splash animated-icon slot sizes (approx density buckets). */
 const SPLASH_LOGO_SIZES = {
   "drawable-mdpi": 288,
   "drawable-hdpi": 432,
@@ -22,45 +23,64 @@ const SPLASH_LOGO_SIZES = {
   "drawable-xxxhdpi": 1152
 };
 
-/** 1x1 transparent PNG for invisible native splash artwork. */
-const TRANSPARENT_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-  "base64"
-);
+function circleMaskSvg(size) {
+  const c = size / 2;
+  return Buffer.from(
+    `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><circle cx="${c}" cy="${c}" r="${c}" fill="#fff"/></svg>`
+  );
+}
 
-async function writeTransparentAndroidSplashLogos() {
+async function circularLogo(size) {
+  const fitted = await sharp(LOGO_SRC)
+    .resize(size, size, {
+      fit: "contain",
+      kernel: sharp.kernel.lanczos3,
+      background: TRANSPARENT
+    })
+    .ensureAlpha()
+    .png()
+    .toBuffer();
+
+  return sharp(fitted)
+    .composite([{ input: circleMaskSvg(size), blend: "dest-in" }])
+    .png({ compressionLevel: 9 })
+    .toBuffer();
+}
+
+async function writeAndroidSplashLogos() {
   for (const [folder, px] of Object.entries(SPLASH_LOGO_SIZES)) {
     const dir = path.join(ANDROID_RES, folder);
     await fs.mkdir(dir, { recursive: true });
     const outPath = path.join(dir, "splashscreen_logo.png");
-    await sharp(TRANSPARENT_PNG)
-      .resize(px, px, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .png()
-      .toFile(outPath);
-    console.log(`Wrote ${path.relative(root, outPath)} (transparent ${px}px)`);
+    const buf = await circularLogo(px);
+    await fs.writeFile(outPath, buf);
+    console.log(`Wrote ${path.relative(root, outPath)} (circular logo ${px}px)`);
   }
 }
 
 async function writeSplashscreenIconXml() {
   const drawableDir = path.join(ANDROID_RES, "drawable");
   await fs.mkdir(drawableDir, { recursive: true });
+  /**
+   * Layer-list centers the circular logo inside the Android 12 splash icon slot.
+   * Do NOT use the adaptive launcher (white-plate era) — logo only on emerald.
+   */
   const iconXml = `<?xml version="1.0" encoding="utf-8"?>
-<!-- Invisible splash icon — native launch is background-only emerald. -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-  <solid android:color="@android:color/transparent" />
-  <size android:width="1dp" android:height="1dp" />
-</shape>
+<!-- Circular company logo for Android 12+ splash — no white plate. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+  <item>
+    <bitmap
+      android:gravity="center"
+      android:src="@drawable/splashscreen_logo" />
+  </item>
+</layer-list>
 `;
   await fs.writeFile(path.join(drawableDir, "splashscreen_icon.xml"), iconXml, "utf8");
   console.log("Wrote android/app/src/main/res/drawable/splashscreen_icon.xml");
 }
 
-async function assertCompanyLogo() {
-  await fs.access(COMPANY_LOGO);
-  const meta = await sharp(COMPANY_LOGO).metadata();
-  console.log(`company_logo.png present (${meta.width}x${meta.height}) — used as-is for splash/in-app`);
-}
-
-await assertCompanyLogo();
-await writeTransparentAndroidSplashLogos();
+await fs.access(LOGO_SRC);
+const meta = await sharp(LOGO_SRC).metadata();
+console.log(`logo_circle_transparent.png present (${meta.width}x${meta.height}) — circular splash artwork`);
+await writeAndroidSplashLogos();
 await writeSplashscreenIconXml();

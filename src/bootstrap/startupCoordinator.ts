@@ -8,14 +8,23 @@ import { logStartup, logStartupError, patchStartupSnapshot } from "../utils/star
 export const STARTUP_TIMEOUTS = {
   fontsMs: 4000,
   secureStoreReadMs: 2500,
-  providersModuleMs: 5500,
+  /**
+   * @deprecated Do not use for dynamic-import / Metro bundling.
+   * Kept as an alias of criticalBootstrapMs for older call sites.
+   * Module bundling delay must never be treated as a fatal startup failure.
+   */
+  providersModuleMs: 12000,
+  /** Post-module bootstrap (fonts + local auth). Starts only after providers are mounted. */
+  criticalBootstrapMs: 12000,
   authLocalMs: 6000,
   bootstrapNetworkMs: 12000,
   dutyHydrationMs: 8000,
   motionPreferenceMs: 2000,
   nativeSplashFailsafeMs: 8000,
   splashAbsoluteMs: 8000,
-  biometricLookupMs: 2500
+  biometricLookupMs: 2500,
+  /** Dev-only soft warning while critical bootstrap is slow (never fatal). */
+  devSlowBootstrapWarnMs: 20000
 } as const;
 
 export type StartupCoordinatorPhase =
@@ -46,9 +55,15 @@ let state: StartupCoordinatorState = {
   startedAt: Date.now()
 };
 
+/** Terminal success — stale timers must not overwrite with startup_error. */
+let startupSucceeded = false;
+
 const listeners = new Set<(next: StartupCoordinatorState) => void>();
 
 function emit(next: Partial<StartupCoordinatorState>, logPhase?: StartupCoordinatorPhase, detail?: string) {
+  if (startupSucceeded && (logPhase === "startup_failed" || logPhase === "bootstrap_failed")) {
+    return;
+  }
   state = { ...state, ...next };
   if (logPhase) {
     state.phase = logPhase;
@@ -79,6 +94,7 @@ export function subscribeStartupCoordinator(listener: (next: StartupCoordinatorS
 }
 
 export function markStartupBegin(detail?: string) {
+  startupSucceeded = false;
   state = {
     phase: "startup_begin",
     continueOffline: false,
@@ -130,11 +146,19 @@ export function markDutyReady(detail?: string) {
 }
 
 export function markStartupComplete(detail?: string) {
+  startupSucceeded = true;
   emit({ failedStep: null }, "startup_complete", detail);
 }
 
 export function markStartupFailed(step: string, detail?: string) {
+  if (startupSucceeded) {
+    return;
+  }
   emit({ failedStep: step }, "startup_failed", detail ?? step);
+}
+
+export function hasStartupCompleted(): boolean {
+  return startupSucceeded;
 }
 
 export function markContinueOffline(detail?: string) {
@@ -150,6 +174,7 @@ export function isStartupContinueOffline(): boolean {
 }
 
 export function resetStartupCoordinator() {
+  startupSucceeded = false;
   state = {
     phase: "startup_begin",
     continueOffline: false,

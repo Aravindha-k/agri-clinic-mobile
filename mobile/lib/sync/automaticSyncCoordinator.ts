@@ -1,6 +1,7 @@
 import NetInfo from "@react-native-community/netinfo";
 import { getAccessToken } from "../../../src/storage/tokenStorage";
 import { getDeviceSessionId } from "../../../src/storage/deviceSessionStorage";
+import { canSendAuthenticatedRequests } from "../../../src/storage/authPhase";
 import { getFieldPendingCounts } from "./pendingCounts";
 import { getActiveSyncUserId } from "./queueOwnership";
 import { refreshSyncStoreCounts } from "./offlineSyncManager";
@@ -96,7 +97,7 @@ export async function runAutomaticSync(
 
     const userId = getActiveSyncUserId();
     const token = await getAccessToken();
-    if (!token || userId == null) {
+    if (!canSendAuthenticatedRequests() || !token || userId == null) {
       recordSyncDiagnostic({
         event: "automatic_sync_skipped_no_auth",
         trigger,

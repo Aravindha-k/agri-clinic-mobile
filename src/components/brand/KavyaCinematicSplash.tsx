@@ -15,7 +15,7 @@ import Animated, {
   withSequence,
   withTiming
 } from "react-native-reanimated";
-import { BRAND } from "../../config/brand";
+import { BRAND, LOGO_IMAGE } from "../../config/brand";
 import { usePremiumMotion } from "../../hooks/usePremiumMotion";
 import { logStartup } from "../../utils/startupDiagnostics";
 import { SPLASH_ASSETS } from "./splashAssets";
@@ -507,8 +507,8 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
               ]}
             >
               <Image
-                source={SPLASH_ASSETS.logo}
-                style={[styles.logoImage, { width: logoSize, height: logoSize }]}
+                source={LOGO_IMAGE}
+                style={[styles.logoImage, { width: logoSize, height: logoSize, borderRadius: logoSize / 2 }]}
                 resizeMode="contain"
                 onLoadEnd={() => setLogoSettled(true)}
                 onError={() => setLogoSettled(true)}

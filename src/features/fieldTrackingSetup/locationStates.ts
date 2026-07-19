@@ -52,18 +52,19 @@ export function recoveryCopyForState(state: LocationIssueState): LocationRecover
       return {
         state,
         title: "Location access is blocked",
-        message: "Open app settings and allow location access.",
-        primary: { label: "Open App Settings", action: "open_app_settings" },
+        message:
+          "Location permission is disabled. Enable it from app settings to use field tracking.",
+        primary: { label: "Open Settings", action: "open_app_settings" },
         secondary: { label: "Cancel", action: "cancel" }
       };
     case "background_permission_missing":
+      // Legacy state — foreground-only product; guide to Enable Location.
       return {
         state,
-        title: "Allow background tracking",
-        message:
-          "Select “Allow all the time” so workday tracking continues while the phone is locked.",
-        primary: { label: "Open Settings", action: "open_settings" },
-        secondary: { label: "Cancel", action: "cancel" }
+        title: "Location access needed",
+        message: "Enable location to continue field tracking.",
+        primary: { label: "Enable Location", action: "allow_location" },
+        secondary: { label: "Not Now", action: "not_now" }
       };
     case "precise_location_disabled":
       return {

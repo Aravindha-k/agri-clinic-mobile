@@ -64,12 +64,12 @@ must(
 );
 
 must(
-  "src/features/fieldTrackingSetup/actions.ts",
-  ["requestForegroundPermissionsAsync"],
-  "setup still requests once"
+  "src/features/fieldTrackingSetup/ensureForegroundLocation.ts",
+  ["requestForegroundPermissionsAsync", "ensureForegroundLocationPermission"],
+  "setup still requests once via single-flight helper"
 );
 
-// Only Field Tracking Setup actions may request OS location dialogs
+// Only the canonical foreground helper may request OS location dialogs
 function collectTsFiles(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (
@@ -90,7 +90,7 @@ function collectTsFiles(dir, out = []) {
 const offenders = [];
 for (const file of collectTsFiles(root)) {
   const rel = path.relative(root, file).replace(/\\/g, "/");
-  if (rel === "src/features/fieldTrackingSetup/actions.ts") continue;
+  if (rel === "src/features/fieldTrackingSetup/ensureForegroundLocation.ts") continue;
   const src = fs.readFileSync(file, "utf8");
   if (
     src.includes("requestForegroundPermissionsAsync") ||
@@ -102,7 +102,7 @@ for (const file of collectTsFiles(root)) {
 assert.deepEqual(
   offenders,
   [],
-  `OS location request must only live in fieldTrackingSetup/actions.ts; found: ${offenders.join(", ")}`
+  `OS location request must only live in ensureForegroundLocation.ts; found: ${offenders.join(", ")}`
 );
 
 console.log("PASS map-permission-no-reprompt");

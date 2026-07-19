@@ -27,7 +27,7 @@ module.exports = {
   /** Expo / iOS / legacy launcher — circular logo on Kavya green. */
   iconAsset: "./assets/brand/app_icon.png",
   /**
-   * Android adaptive foreground — circular logo only (transparent, ~70% safe-zone inset).
+   * Android adaptive foreground — circular logo only (transparent, ~68% safe-zone inset).
    */
   adaptiveIconAsset: "./assets/brand/adaptive_icon_foreground.png",
   /** Launcher / in-app source: canonical circular transparent logo. */

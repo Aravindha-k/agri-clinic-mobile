@@ -80,10 +80,7 @@ module.exports = () => ({
     supportsTablet: true,
     bundleIdentifier: "com.kavya.agriclinic",
     infoPlist: {
-      UIBackgroundModes: ["location"],
       NSLocationWhenInUseUsageDescription: `Allow ${brand.appName} to use your location while you are working in the field.`,
-      NSLocationAlwaysAndWhenInUseUsageDescription:
-        "Allow location all the time for route tracking during your workday.",
       NSUserNotificationsUsageDescription:
         "Send hourly hydration reminders during your field workday.",
       ...(allowCleartext
@@ -115,16 +112,12 @@ module.exports = () => ({
     permissions: [
       "ACCESS_COARSE_LOCATION",
       "ACCESS_FINE_LOCATION",
-      "ACCESS_BACKGROUND_LOCATION",
       "ACCESS_NETWORK_STATE",
-      "FOREGROUND_SERVICE",
-      "FOREGROUND_SERVICE_LOCATION",
       "CAMERA",
       "RECORD_AUDIO",
       "READ_EXTERNAL_STORAGE",
       "READ_MEDIA_IMAGES",
-      "POST_NOTIFICATIONS",
-      "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+      "POST_NOTIFICATIONS"
     ],
     /**
      * Adaptive icons crop OEMs' masks over a 108dp canvas.
@@ -164,10 +157,8 @@ module.exports = () => ({
       "expo-location",
       {
         locationWhenInUsePermission: `Allow ${brand.appName} to use your location while you are working in the field.`,
-        locationAlwaysAndWhenInUsePermission:
-          "Allow location all the time for route tracking during your workday.",
-        isAndroidBackgroundLocationEnabled: true,
-        isAndroidForegroundServiceEnabled: true
+        isAndroidBackgroundLocationEnabled: false,
+        isAndroidForegroundServiceEnabled: false
       }
     ],
     [

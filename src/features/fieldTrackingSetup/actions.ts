@@ -1,6 +1,4 @@
 import * as Location from "expo-location";
-import * as Notifications from "expo-notifications";
-import { androidAtLeast } from "../../utils/androidCapabilities";
 import { trackingDevLog } from "../../tracking/trackingDevLog";
 import {
   markBatteryGuidedCompleted,
@@ -8,6 +6,11 @@ import {
   markOemGuidedCompleted
 } from "./persistence";
 import { probeFieldTrackingPermissions, isCriticalSetupReady } from "./probe";
+import {
+  enableLocationForFieldWork,
+  ensureForegroundLocationPermission,
+  PERMANENTLY_DENIED_MESSAGE
+} from "./ensureForegroundLocation";
 import {
   openAppSettingsPage,
   openBatteryOptimizationSettings,
@@ -21,144 +24,75 @@ export type StepActionResult = {
   message?: string;
   /** Opened system settings — caller should re-check on AppState active */
   openedSettings?: boolean;
+  permanentlyDenied?: boolean;
 };
 
-/** Step 1 — foreground + precise guidance. */
+/** Step 1 — Enable Location: foreground permission + device GPS (single-flight). */
 export async function runForegroundLocationStep(): Promise<StepActionResult> {
   try {
-    const current = await Location.getForegroundPermissionsAsync();
-    if (current.status !== "granted") {
-      const requested = await Location.requestForegroundPermissionsAsync();
-      trackingDevLog("foreground_permission", requested.status);
-      if (requested.status !== "granted") {
-        const blocked = requested.status === "denied" && !requested.canAskAgain;
-        return {
-          ok: false,
-          message: blocked
-            ? "Location was turned off. Tap Open Settings, then allow location."
-            : "Choose “While using the app” and keep Precise Location ON.",
-          openedSettings: false
-        };
-      }
-    }
-
-    const probe = await probeFieldTrackingPermissions();
-    if (!probe.preciseOk && androidAtLeast(31)) {
+    const result = await enableLocationForFieldWork();
+    trackingDevLog(
+      "foreground_permission",
+      result.permission.granted ? "granted" : result.permission.status
+    );
+    if (!result.ok) {
       return {
         ok: false,
-        message: "Turn Precise Location ON for Kavya Field, then return here.",
-        openedSettings: false
+        permanentlyDenied: result.permanentlyDenied,
+        openedSettings: false,
+        message: result.message ?? PERMANENTLY_DENIED_MESSAGE
       };
     }
-
-    return { ok: true };
+    return { ok: true, openedSettings: false };
   } catch {
-    return { ok: false, message: "Could not request location. Try Open Settings." };
+    return { ok: false, message: "Could not enable location. Try again.", openedSettings: false };
   }
 }
 
-/** Step 2 — background location (Android 10 request, 11+ settings). */
+/**
+ * Background location is not part of the product flow.
+ * Kept as a no-op so older callers do not request ACCESS_BACKGROUND_LOCATION
+ * or open App Info (Android 11+ settings trap).
+ */
 export async function runBackgroundLocationStep(): Promise<StepActionResult> {
-  const probe = await probeFieldTrackingPermissions();
-  if (probe.expoGoLimited) {
-    return {
-      ok: true,
-      message: "Full background tracking needs a development build or field APK."
-    };
-  }
-  if (probe.backgroundGranted) {
-    return { ok: true };
-  }
-  if (!probe.foregroundGranted) {
-    return { ok: false, message: "Allow location access first." };
-  }
-
-  // Android 10 (API 29): system can show background dialog after FG grant.
-  // Android 11+ (API 30+): usually need app settings → Allow all the time.
-  if (androidAtLeast(30)) {
-    const opened = await openLocationPermissionSettings();
-    return {
-      ok: false,
-      openedSettings: opened,
-      message:
-        "In Location, select “Allow all the time”, then return to Kavya Field."
-    };
-  }
-
-  try {
-    const bg = await Location.requestBackgroundPermissionsAsync();
-    trackingDevLog("background_permission", bg.status);
-    if (bg.status === "granted") {
-      return { ok: true };
-    }
-    const opened = await openLocationPermissionSettings();
-    return {
-      ok: false,
-      openedSettings: opened,
-      message: "Select “Allow all the time” for location, then return here."
-    };
-  } catch {
-    const opened = await openLocationPermissionSettings();
-    return {
-      ok: false,
-      openedSettings: opened,
-      message: "Open Location settings and choose “Allow all the time”."
-    };
-  }
+  trackingDevLog("background_permission", "skipped_foreground_only");
+  return { ok: true, message: "Foreground location is enough for field tracking." };
 }
 
-/** Open app location settings (precise / allow all the time). */
+/** Precise guidance — never auto-opens Settings; employee must tap Open Settings. */
 export async function openPreciseLocationSettings(): Promise<StepActionResult> {
-  const opened = await openLocationPermissionSettings();
   return {
     ok: false,
-    openedSettings: opened,
-    message: "Keep Precise Location ON, then return to Kavya Field."
+    openedSettings: false,
+    message: "Keep Precise Location ON for Kavya Field, then tap Try Again."
   };
 }
 
-/** Step 3 — battery optimization guidance. */
+/** Optional guided battery step — only after an explicit employee tap. */
 export async function runBatteryStep(): Promise<StepActionResult> {
   const opened = await openBatteryOptimizationSettings();
   await markBatteryGuidedCompleted();
   return {
     ok: true,
     openedSettings: opened,
-    message: "Allow Kavya Field to run in the background, then return here."
+    message: "Return here after adjusting battery settings."
   };
 }
 
-/** Step 4 — OEM guidance. */
+/** Optional OEM guidance — only after an explicit employee tap. */
 export async function runOemStep(): Promise<StepActionResult> {
   const opened = await openOemOrAppSettings();
   await markOemGuidedCompleted();
   return {
     ok: true,
     openedSettings: opened,
-    message: "Apply the battery tips for your phone, then return here."
+    message: "Return here after applying phone battery tips."
   };
 }
 
-/** Step 5 — notifications (API 33+). */
+/** Notifications are optional and never auto-open Settings on deny. */
 export async function runNotificationStep(): Promise<StepActionResult> {
-  try {
-    const current = await Notifications.getPermissionsAsync();
-    if (current.granted || current.status === "granted") {
-      return { ok: true };
-    }
-    const requested = await Notifications.requestPermissionsAsync();
-    if (requested.granted || requested.status === "granted") {
-      return { ok: true };
-    }
-    const opened = await openAppSettingsPage();
-    return {
-      ok: false,
-      openedSettings: opened,
-      message: "Allow notifications so the tracking notice can appear."
-    };
-  } catch {
-    return { ok: true, message: "Notifications could not be checked on this device." };
-  }
+  return { ok: true, message: "Notifications are optional for field tracking." };
 }
 
 export async function finalizeSetupIfReady(): Promise<boolean> {
@@ -166,17 +100,17 @@ export async function finalizeSetupIfReady(): Promise<boolean> {
   if (!isCriticalSetupReady(probe)) {
     return false;
   }
-  // Never mark complete on temporary FG-only grants (Android "Only this time") —
-  // critical readiness already requires lasting background except Expo Go.
-  if (!probe.expoGoLimited && !probe.backgroundGranted) {
-    return false;
-  }
   await markFieldTrackingSetupCompleted();
   return true;
 }
 
-export async function openSettingsForMissing(step: "foreground" | "background" | "precise" | "notifications" | "battery") {
+/** Open Settings only from an explicit tap (permanently denied / optional help). */
+export async function openSettingsForMissing(
+  step: "foreground" | "background" | "precise" | "notifications" | "battery"
+) {
   if (step === "battery") return openBatteryOptimizationSettings();
   if (step === "notifications") return openAppSettingsPage();
   return openLocationPermissionSettings();
 }
+
+export { ensureForegroundLocationPermission, enableLocationForFieldWork };

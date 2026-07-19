@@ -1,10 +1,10 @@
 /**
  * Promotes the official circular company logo to LAUNCHER slots only.
  *
- * - Source: project-root logo.png (circular mark; white corners keyed out)
- * - Adaptive foreground: logo only, transparent padding, ~70% safe-zone inset
+ * - Source: assets/brand/logo_circle_transparent.png (canonical Today/Login mark)
+ * - Adaptive foreground: logo only, transparent padding, ~68% safe-zone inset
  * - Adaptive / legacy background: official Kavya green (#0F6B43)
- * - Does NOT overwrite in-app branding (logo.png content is read, not rewritten)
+ * - Never overwrites the canonical in-app logo file
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -13,7 +13,7 @@ import sharp from "sharp";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
-/** Official circular company logo — already transparent; used for launcher + splash. */
+/** Official circular company logo — read-only source for launcher generation. */
 const SRC = path.join(root, "assets/brand/logo_circle_transparent.png");
 const SIZE = 1024;
 /** Enterprise primary green — adaptive plate behind the circular mark. */
@@ -22,18 +22,17 @@ const KAVYA_GREEN_RGB = { r: 15, g: 107, b: 67, alpha: 1 };
 const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 };
 
 /**
- * Full circular artwork fits OEM masks when side ≤ canvas * 0.70.
- * Keeps ~15% padding so Pixel/Samsung/MIUI never clip the ring.
+ * Full circular artwork fits OEM masks when side ≈ canvas * 0.66–0.70.
+ * Keep ~68% so Pixel/Samsung/MIUI never clip the ring.
  */
-export const ADAPTIVE_CONTENT_RATIO = 0.7;
+export const ADAPTIVE_CONTENT_RATIO = 0.68;
 
 const OUT = {
   appIcon: path.join(root, "assets/brand/app_icon.png"),
   adaptiveFg: path.join(root, "assets/brand/adaptive_icon_foreground.png"),
   master: path.join(root, "assets/brand/kac/app_icon_1024.png"),
   solid: path.join(root, "assets/brand/kac/app_icon_1024_solid.png"),
-  source: path.join(root, "assets/brand/launcher_icon_source.png"),
-  circleTransparent: path.join(root, "assets/brand/logo_circle_transparent.png")
+  source: path.join(root, "assets/brand/launcher_icon_source.png")
 };
 
 const LEGACY = {
@@ -158,7 +157,7 @@ async function promoteLogoIcons() {
   const adaptive = await buildAdaptiveForeground(circle);
 
   await fs.mkdir(path.join(root, "assets/brand/kac"), { recursive: true });
-  await fs.writeFile(OUT.circleTransparent, circle);
+  // Never write back to the canonical Today/Login logo asset.
   await fs.writeFile(OUT.appIcon, plate);
   await fs.writeFile(OUT.adaptiveFg, adaptive);
   await fs.writeFile(OUT.master, plate);

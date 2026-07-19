@@ -1,6 +1,5 @@
 /**
- * Static verification of one-time Field Tracking permission onboarding.
- * Device/OEM runtime matrix still needs a physical phone (not Expo Go for BG).
+ * Field Tracking setup — foreground location only (no background / App Info redirects).
  */
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -27,172 +26,148 @@ function mustNot(file, needles, label) {
   }
 }
 
-// Module surface
 must(
-  "src/features/fieldTrackingSetup/types.ts",
-  ["FIELD_TRACKING_SETUP_VERSION = 1", "foreground", "background", "precise", "battery", "notifications"],
-  "setup version + steps"
+  "src/features/fieldTrackingSetup/ensureForegroundLocation.ts",
+  [
+    "ensureForegroundLocationPermission",
+    "enableLocationForFieldWork",
+    "permissionInFlight",
+    "getForegroundPermissionsAsync",
+    "requestForegroundPermissionsAsync",
+    "ensureAndroidLocationServicesEnabled",
+    "permanentlyDenied",
+    "Location permission is disabled. Enable it from app settings to use field tracking."
+  ],
+  "single-flight foreground permission service"
+);
+
+mustNot(
+  "src/features/fieldTrackingSetup/ensureForegroundLocation.ts",
+  ["requestBackgroundPermissionsAsync", "openSettings", "Linking.openSettings"],
+  "no background request / auto settings in ensureForeground"
 );
 
 must(
-  "src/features/fieldTrackingSetup/persistence.ts",
-  ["field_tracking_setup_v", "lastCompletedVersion", "markFieldTrackingSetupCompleted"],
-  "versioned persistence"
+  "src/features/fieldTrackingSetup/actions.ts",
+  ["enableLocationForFieldWork", "skipped_foreground_only", "openedSettings: false"],
+  "actions use enable flow; background is no-op"
+);
+
+mustNot(
+  "src/features/fieldTrackingSetup/actions.ts",
+  ["requestBackgroundPermissionsAsync", "Allow all the time"],
+  "no runtime background permission request"
 );
 
 must(
   "src/features/fieldTrackingSetup/probe.ts",
-  [
-    "requiresBackgroundLocationSeparate",
-    "requiresNotificationPermission",
-    "listMissingCriticalSteps",
-    "shouldOfferFieldTrackingSetup",
-    "expoGoLimited"
-  ],
-  "probe + offer rules"
+  ["listMissingCriticalSteps", "foregroundGranted", "preciseOk"],
+  "probe critical steps"
 );
 
-// Android version behaviour
-must(
-  "src/features/fieldTrackingSetup/actions.ts",
-  [
-    "requestForegroundPermissionsAsync",
-    "requestBackgroundPermissionsAsync",
-    "androidAtLeast(30)",
-    "Allow all the time",
-    "Precise Location",
-    "runNotificationStep",
-    "openBatteryOptimizationSettings"
-  ],
-  "version-specific actions"
+mustNot(
+  "src/features/fieldTrackingSetup/probe.ts",
+  ['missing.push("background")', 'missing.push("notifications")'],
+  "background/notifications not critical"
 );
 
-// Settings intents + safe fallback
-must(
-  "src/features/fieldTrackingSetup/settingsIntents.ts",
-  [
-    "APPLICATION_DETAILS_SETTINGS",
-    "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
-    "IGNORE_BATTERY_OPTIMIZATION_SETTINGS",
-    "Linking.openSettings",
-    "openOemOrAppSettings"
-  ],
-  "settings deep links + fallback"
-);
-
-must(
-  "src/features/fieldTrackingSetup/manufacturer.ts",
-  ["xiaomi", "oppo", "realme", "vivo", "samsung", "oneplus", "motorola", "Autostart", "Unrestricted"],
-  "OEM guidance"
-);
-
-// UI screen
 must(
   "src/screens/FieldTrackingSetupScreen.tsx",
   [
-    "Enable Field Tracking",
-    "Continue",
+    "Enable Location",
+    "runForegroundLocationStep",
+    "permanentlyDenied",
+    "Open Settings",
     "Try Again",
-    "Open Location Settings",
-    "Open Battery Settings",
-    "development build or field APK",
-    "AppState",
-    "Kavya Field uses your location"
+    "PERMANENTLY_DENIED_MESSAGE"
   ],
-  "setup screen"
+  "simple setup screen"
 );
 
-// Navigation + login offer (password login only path)
-must(
-  "src/navigation/types.ts",
-  ["FieldTrackingSetup"],
-  "nav types"
-);
-
-must(
-  "src/navigation/RootNavigator.tsx",
-  ["FieldTrackingSetup", "FieldTrackingSetupScreen"],
-  "nav registration"
-);
-
-must(
-  "src/screens/LoginScreen.tsx",
-  ["maybeOfferFieldTrackingSetupAfterLogin"],
-  "post-password-login offer"
-);
-
-// Start Workday guard
-must(
-  "mobile/app/(tabs)/index.tsx",
-  [
-    "ensureFieldTrackingReadyForWorkday",
-    "showFieldTrackingNeedsAttentionAlert",
-    "focusMissing"
-  ],
-  "Start Workday guard"
-);
-
-must(
-  "src/features/fieldTrackingSetup/workdayGuard.ts",
-  ["Tracking setup needs attention", "Fix Now", "offeredThisSession"],
-  "workday guard wording + one-shot session"
-);
-
-// Settings entry
-must(
-  "src/screens/SettingsScreen.tsx",
-  ["settings.fieldTrackingSetup", "FieldTrackingSetup", "getFieldTrackingHealth"],
-  "Settings Field Tracking row"
-);
-
-must(
-  "src/i18n/en.ts",
-  ["fieldTrackingSetup", "fieldTrackingReady", "fieldTrackingNeedsAttention"],
-  "en strings"
-);
-
-must(
-  "src/i18n/ta.ts",
-  ["fieldTrackingSetup", "fieldTrackingReady", "fieldTrackingNeedsAttention"],
-  "ta strings"
-);
-
-// Manifest permission for battery exemption request
-must(
-  "app.config.js",
-  ["REQUEST_IGNORE_BATTERY_OPTIMIZATIONS", "ACCESS_BACKGROUND_LOCATION", "POST_NOTIFICATIONS"],
-  "android permissions"
-);
-
-// Do not request all permissions on splash / App bootstrap
 mustNot(
-  "App.tsx",
-  ["requestBackgroundPermissionsAsync", "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS", "FieldTrackingSetup"],
-  "no splash permission spam"
+  "src/screens/FieldTrackingSetupScreen.tsx",
+  [
+    "Allow Background Location",
+    "Open Battery Settings",
+    "Open Location Settings",
+    "runBackgroundLocationStep",
+    "Allow all the time"
+  ],
+  "no multi-step background/battery flow"
 );
 
-// Canonical permission service
 must(
   "src/features/fieldTrackingSetup/locationPermissionService.ts",
   [
     "probeLocationReadiness",
     "ensureLocationReadyForWorkday",
     "ensureLocationReadyForVisit",
-    "openLocationSettings",
     "requestForegroundLocation",
-    "requestBackgroundLocation",
-    "temporaryForegroundLikely"
+    "readyForWorkday = servicesEnabled && probe.foregroundGranted && probe.preciseOk"
   ],
-  "canonical location permission service"
+  "workday readiness is foreground-only"
 );
 
 must(
-  "src/features/fieldTrackingSetup/persistence.ts",
-  ["syncFieldTrackingPermissionSnapshot", "preciseLocationConfirmed", "temporaryForegroundLikely"],
-  "permission snapshot persistence"
+  "src/features/fieldTrackingSetup/locationStates.ts",
+  [
+    "Location permission is disabled. Enable it from app settings to use field tracking.",
+    'action: "open_app_settings"'
+  ],
+  "permanently denied copy + explicit settings action"
 );
 
-// Visit / Review / submit must never request OS permission dialogs
+// Expo / Android config — no background location
+mustNot(
+  "app.config.js",
+  ["ACCESS_BACKGROUND_LOCATION", "isAndroidBackgroundLocationEnabled: true", "FOREGROUND_SERVICE_LOCATION"],
+  "release config drops background location"
+);
+
+must(
+  "app.config.js",
+  ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "isAndroidBackgroundLocationEnabled: false"],
+  "foreground location declared"
+);
+
+mustNot(
+  "android/app/src/main/AndroidManifest.xml",
+  ["ACCESS_BACKGROUND_LOCATION", "FOREGROUND_SERVICE_LOCATION"],
+  "manifest drops background location"
+);
+
+must(
+  "android/app/src/main/AndroidManifest.xml",
+  ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"],
+  "manifest keeps fine/coarse"
+);
+
+// Repo-wide: no runtime background permission request
+const repoTs = [];
+function walk(dir) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === "node_modules" || entry.name === ".git" || entry.name === "android") continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) walk(full);
+    else if (/\.(ts|tsx|js|mjs)$/.test(entry.name)) repoTs.push(full);
+  }
+}
+walk(path.join(root, "src"));
+walk(path.join(root, "mobile"));
+walk(path.join(root, "scripts"));
+
+for (const file of repoTs) {
+  const src = fs.readFileSync(file, "utf8");
+  if (src.includes("requestBackgroundPermissionsAsync")) {
+    // Allow only documentation / mustNot strings in tests that assert absence.
+    if (file.includes("test-field-tracking-setup") || file.includes("test-map-permission") || file.includes("test-foreground-location")) {
+      continue;
+    }
+    assert.fail(`unexpected requestBackgroundPermissionsAsync in ${path.relative(root, file)}`);
+  }
+}
+
+// Surfaces must not request OS permission dialogs directly
 const noRequestSurfaces = [
   "mobile/app/visit/create-step4-review.tsx",
   "mobile/app/visit/create-step1.tsx",
@@ -201,8 +176,7 @@ const noRequestSurfaces = [
   "src/utils/locationRequiredModal.ts",
   "src/utils/location.ts",
   "src/utils/workdayLocationGate.ts",
-  "src/features/duty/store/DutyContext.tsx",
-  "src/components/ui/VisitFabTabButton.tsx"
+  "src/features/duty/store/DutyContext.tsx"
 ];
 
 for (const file of noRequestSurfaces) {
@@ -214,15 +188,16 @@ for (const file of noRequestSurfaces) {
 }
 
 must(
-  "mobile/lib/visit/visitGpsCapture.ts",
-  ["checkForegroundPermission", "Never requests"],
-  "visit GPS check-only"
+  "src/navigation/RootNavigator.tsx",
+  ["FieldTrackingSetup", "FieldTrackingSetupScreen"],
+  "nav registration"
 );
 
-must(
-  "src/utils/location.ts",
-  ["return checkForegroundPermission()", "return ensureWorkdayStartPermissions()"],
-  "legacy helpers are check-only"
+mustNot(
+  "App.tsx",
+  ["requestForegroundPermissionsAsync", "requestBackgroundPermissionsAsync", "FieldTrackingSetup"],
+  "no splash permission spam"
 );
 
-console.log("PASS field-tracking-setup static checks");
+console.log("Field tracking foreground-only setup checks passed.");
+process.exit(0);

@@ -16,6 +16,7 @@ import {
   runForegroundLocationStep,
   openPreciseLocationSettings
 } from "./actions";
+import { ensureForegroundLocationPermission } from "./ensureForegroundLocation";
 import {
   getFieldTrackingHealth,
   listMissingCriticalSteps,
@@ -98,15 +99,7 @@ function classifyIssue(input: {
     return "foreground_permission_missing";
   }
   if (!input.preciseOk) return "precise_location_disabled";
-  if (input.forWorkday) {
-    if (!input.backgroundGranted) {
-      if (input.expoGoLimited) return "unsupported_in_expo_go";
-      return "background_permission_missing";
-    }
-    if (input.notificationsRequired && !input.notificationsGranted) {
-      return "notification_permission_missing";
-    }
-  }
+  // Background / notification are not required for current foreground field tracking.
   return "ready";
 }
 
@@ -144,8 +137,7 @@ export async function probeLocationReadiness(): Promise<LocationReadinessProbe> 
     const missing = listMissingCriticalSteps(probe);
     const fgMeta = await readForegroundAskAgain();
 
-    const temporaryForegroundLikely =
-      probe.foregroundGranted && !probe.backgroundGranted && !probe.expoGoLimited;
+    const temporaryForegroundLikely = false;
 
     await syncFieldTrackingPermissionSnapshot({
       foregroundGranted: probe.foregroundGranted,
@@ -156,12 +148,7 @@ export async function probeLocationReadiness(): Promise<LocationReadinessProbe> 
     }).catch(() => undefined);
 
     const readyForVisit = servicesEnabled && probe.foregroundGranted && probe.preciseOk;
-    const readyForWorkday =
-      servicesEnabled &&
-      probe.foregroundGranted &&
-      probe.preciseOk &&
-      (probe.expoGoLimited || probe.backgroundGranted) &&
-      (!probe.notificationsRequired || probe.notificationsGranted);
+    const readyForWorkday = servicesEnabled && probe.foregroundGranted && probe.preciseOk;
 
     let state: LocationIssueState = "ready";
     if (!readyForWorkday) {
@@ -311,12 +298,13 @@ export async function requestForegroundLocation() {
   return result;
 }
 
+/** No-op — background location is not requested in the current product. */
 export async function requestBackgroundLocation() {
-  logLocationPermission("request_started", { kind: "background" });
-  const result = await runBackgroundLocationStep();
-  if (!result.ok) logLocationPermission("request_denied", { kind: "background" });
-  return result;
+  logLocationPermission("request_started", { kind: "background_skipped" });
+  return runBackgroundLocationStep();
 }
+
+export { ensureForegroundLocationPermission };
 
 export async function requestPreciseLocationFix() {
   logLocationPermission("settings_opened", { target: "precise" });

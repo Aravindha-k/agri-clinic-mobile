@@ -34,7 +34,7 @@ must(
     "unsupported_in_expo_go",
     "capture_timeout",
     "Location access needed",
-    "Allow background tracking",
+    "Location permission is disabled. Enable it from app settings to use field tracking.",
     "Phone location is turned off",
     "logLocationPermission"
   ],

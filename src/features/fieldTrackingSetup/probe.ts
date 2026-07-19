@@ -95,13 +95,11 @@ export async function probeFieldTrackingPermissions(): Promise<FieldTrackingProb
   };
 }
 
-/** Critical requirements that must pass before claiming tracking is ready. */
+/** Critical requirements for field work — foreground location only. */
 export function listMissingCriticalSteps(probe: FieldTrackingProbe): SetupStepId[] {
   const missing: SetupStepId[] = [];
   if (!probe.foregroundGranted) missing.push("foreground");
   if (!probe.preciseOk) missing.push("precise");
-  if (!probe.expoGoLimited && !probe.backgroundGranted) missing.push("background");
-  if (probe.notificationsRequired && !probe.notificationsGranted) missing.push("notifications");
   return missing;
 }
 
@@ -136,43 +134,10 @@ export function buildChecklist(probe: FieldTrackingProbe): SetupStepState[] {
       status: probe.foregroundGranted ? "done" : missing.has("foreground") ? "needs_attention" : "pending"
     },
     {
-      id: "background",
-      label: "Background location",
-      required: !probe.expoGoLimited,
-      status: probe.expoGoLimited
-        ? "skipped"
-        : probe.backgroundGranted
-          ? "done"
-          : missing.has("background")
-            ? "needs_attention"
-            : "pending"
-    },
-    {
       id: "precise",
       label: "Precise location",
       required: true,
       status: probe.preciseOk ? "done" : missing.has("precise") ? "needs_attention" : "pending"
-    },
-    {
-      id: "battery",
-      label: "Battery / background access",
-      required: false,
-      status:
-        probe.batteryUnrestricted === true || probe.batteryGuidedDone
-          ? "done"
-          : "pending"
-    },
-    {
-      id: "notifications",
-      label: "Tracking notification",
-      required: probe.notificationsRequired,
-      status: !probe.notificationsRequired
-        ? "skipped"
-        : probe.notificationsGranted
-          ? "done"
-          : missing.has("notifications")
-            ? "needs_attention"
-            : "pending"
     }
   ];
   return steps;

@@ -30,8 +30,13 @@ export {
   runOemStep,
   runNotificationStep,
   finalizeSetupIfReady,
-  openSettingsForMissing
+  openSettingsForMissing,
+  ensureForegroundLocationPermission,
+  enableLocationForFieldWork
 } from "./actions";
+export {
+  PERMANENTLY_DENIED_MESSAGE
+} from "./ensureForegroundLocation";
 export {
   openAppSettingsPage,
   openLocationPermissionSettings,

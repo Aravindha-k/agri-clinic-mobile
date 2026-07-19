@@ -79,8 +79,9 @@ if (!prodEnv) {
 
 const devEnv = read(".env.development");
 if (!devEnv) {
-  issues.push(".env.development: missing");
-} else if (!devEnv.includes("192.168.29.18")) {
+  // Optional local-only file — intentionally absent in CI / clean checkouts.
+  ok.push(".env.development not present (expected in CI)");
+} else if (!devEnv.includes("192.168.29.18") && !LAN_PATTERN.test(devEnv)) {
   issues.push(".env.development: missing local LAN API URL");
 } else {
   ok.push(`.env.development: local API → ${LOCAL_DEV_API_BASE_URL}`);

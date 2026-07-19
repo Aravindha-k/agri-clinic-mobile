@@ -1,5 +1,5 @@
 /**
- * Foreground location permission behaviour contracts (static + single-flight).
+ * Foreground location permission behaviour contracts.
  */
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -12,41 +12,47 @@ const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
 const ensure = read("src/features/fieldTrackingSetup/ensureForegroundLocation.ts");
 const actions = read("src/features/fieldTrackingSetup/actions.ts");
 const screen = read("src/screens/FieldTrackingSetupScreen.tsx");
-const service = read("src/features/fieldTrackingSetup/locationPermissionService.ts");
 
-// 1) Already granted → no request
-assert.match(ensure, /if \(current\.status === "granted"\)/);
-assert.match(ensure, /didRequest: false/);
-
-// 2) First request when canAskAgain
+// Live OS read — never trust persisted permanentlyDenied / setup flags for the dialog.
+assert.match(ensure, /getForegroundPermissionsAsync/);
 assert.match(ensure, /requestForegroundPermissionsAsync/);
-assert.match(ensure, /didRequest: true/);
+assert.match(ensure, /hasServicesEnabledAsync/);
+assert.doesNotMatch(ensure, /AsyncStorage|field_tracking_setup|syncFieldTrackingPermissionSnapshot/);
 
-// 3) Denied but can ask again → no settings
-assert.match(ensure, /canAskAgain/);
-assert.doesNotMatch(ensure, /Linking\.openSettings|openLocationPermissionSettings|APPLICATION_DETAILS/);
+// Permanently denied ONLY when status denied AND canAskAgain === false
+assert.match(ensure, /status === "denied" && response\.canAskAgain === false/);
+assert.match(ensure, /isPermanentlyDenied/);
 
-// 4) Permanently denied → no automatic settings; optional button on screen
-assert.match(ensure, /permanentlyDenied: true/);
+// Granted uses .granted
+assert.match(ensure, /response\.granted === true/);
+
+// Normal denial must request dialog (not Settings)
+assert.match(ensure, /requestForegroundPermissionsAsync/);
+assert.match(ensure, /RETRY_PERMISSION_MESSAGE/);
+assert.doesNotMatch(ensure, /Linking\.openSettings|APPLICATION_DETAILS|openLocationPermissionSettings/);
+
+// UI: Open Settings only when permanentlyDenied
 assert.match(screen, /permanentlyDenied \? \(/);
 assert.match(screen, /Open Settings/);
-assert.match(screen, /openSettingsForMissing\("foreground"\)/);
+assert.match(screen, /Try Again/);
+assert.match(screen, /Turn On Location/);
+assert.match(screen, /SERVICES_OFF_MESSAGE/);
 
-// 5) Single-flight
+// Never fall back to Settings message for every !ok
+assert.match(actions, /RETRY_PERMISSION_MESSAGE/);
+assert.doesNotMatch(
+  actions,
+  /message: result\.message \?\? PERMANENTLY_DENIED_MESSAGE/
+);
+
+// Single-flight
 assert.match(ensure, /if \(permissionInFlight\)/);
 assert.match(ensure, /if \(enableFlowInFlight\)/);
 
-// 6) Restart / rehydrate uses getForegroundPermissionsAsync first
-assert.match(ensure, /getForegroundPermissionsAsync/);
-assert.match(service, /probeLocationReadiness/);
-
-// 7) No background request anywhere in permission path
+// No background request
 assert.doesNotMatch(ensure, /requestBackgroundPermissionsAsync/);
 assert.doesNotMatch(actions, /requestBackgroundPermissionsAsync/);
 assert.doesNotMatch(screen, /requestBackgroundPermissionsAsync/);
-
-// GPS services after permission — user-gesture only via enable flow
-assert.match(ensure, /ensureAndroidLocationServicesEnabled/);
 
 console.log("Foreground location permission contract checks passed.");
 process.exit(0);

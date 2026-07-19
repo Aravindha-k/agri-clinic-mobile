@@ -10,7 +10,8 @@ export type CompanyLogoProps = {
 /**
  * Single in-app company logo.
  * Asset: assets/brand/logo_circle_transparent.png
- * Never stretch, crop, or place a white square behind the mark.
+ * Never place a white square behind the mark.
+ * Never use launcher-generated assets in UI — only the canonical circular PNG.
  */
 export function CompanyLogo({
   size = 72,
@@ -18,7 +19,7 @@ export function CompanyLogo({
   accessibilityLabel = "Kavya Agri Clinic logo"
 }: CompanyLogoProps) {
   if (!LOGO_IMAGE) {
-    return <View style={[{ width: size, height: size }, style]} />;
+    return <View style={[{ width: size, height: size, backgroundColor: "transparent" }, style]} />;
   }
 
   return (
@@ -33,7 +34,7 @@ export function CompanyLogo({
     >
       <Image
         source={LOGO_IMAGE}
-        style={{ width: size, height: size, borderRadius: size / 2 }}
+        style={[styles.image, { width: size, height: size, borderRadius: size / 2 }]}
         resizeMode="contain"
         accessibilityIgnoresInvertColors
       />
@@ -50,5 +51,8 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
     justifyContent: "center",
     overflow: "hidden"
+  },
+  image: {
+    backgroundColor: "transparent"
   }
 });

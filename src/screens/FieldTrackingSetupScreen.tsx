@@ -25,11 +25,14 @@ import {
   type FieldTrackingProbe,
   type SetupStepState
 } from "../features/fieldTrackingSetup";
-import { PERMANENTLY_DENIED_MESSAGE } from "../features/fieldTrackingSetup/ensureForegroundLocation";
+import {
+  PERMANENTLY_DENIED_MESSAGE,
+  SERVICES_OFF_MESSAGE
+} from "../features/fieldTrackingSetup/ensureForegroundLocation";
 
 /**
- * Simple Enable Location setup — foreground permission + device GPS only.
- * Never auto-opens App Info / Installed App Settings.
+ * Simple Enable Location — live OS permission only.
+ * Open Settings appears only when canAskAgain === false.
  */
 export function FieldTrackingSetupScreen() {
   useSecureScreen();
@@ -39,6 +42,7 @@ export function FieldTrackingSetupScreen() {
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
   const [permanentlyDenied, setPermanentlyDenied] = useState(false);
+  const [servicesDisabled, setServicesDisabled] = useState(false);
   const [probe, setProbe] = useState<FieldTrackingProbe | null>(null);
   const [checklist, setChecklist] = useState<SetupStepState[]>([]);
   const [done, setDone] = useState(false);
@@ -60,7 +64,14 @@ export function FieldTrackingSetupScreen() {
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active") {
-        void refresh();
+        void (async () => {
+          const next = await refresh();
+          if (next.foregroundGranted && next.preciseOk) {
+            setPermanentlyDenied(false);
+            setServicesDisabled(false);
+            setHint(null);
+          }
+        })();
       }
     });
     return () => sub.remove();
@@ -74,11 +85,22 @@ export function FieldTrackingSetupScreen() {
       const result = await runForegroundLocationStep();
       const next = await refresh();
       if (!result.ok) {
-        setPermanentlyDenied(Boolean(result.permanentlyDenied));
-        setHint(result.message ?? null);
+        const blocked = Boolean(result.permanentlyDenied);
+        const gpsOff = Boolean(result.servicesDisabled);
+        setPermanentlyDenied(blocked);
+        setServicesDisabled(gpsOff);
+        // Never show Settings copy for a normal denial (canAskAgain true).
+        if (blocked) {
+          setHint(PERMANENTLY_DENIED_MESSAGE);
+        } else if (gpsOff) {
+          setHint(SERVICES_OFF_MESSAGE);
+        } else {
+          setHint(result.message ?? "Tap Enable Location to allow access.");
+        }
         return;
       }
       setPermanentlyDenied(false);
+      setServicesDisabled(false);
       const finalized = await finalizeSetupIfReady();
       if (finalized || (next.foregroundGranted && next.preciseOk)) {
         setDone(true);
@@ -96,6 +118,7 @@ export function FieldTrackingSetupScreen() {
   }, [navigation]);
 
   const ready = Boolean(probe?.foregroundGranted && probe?.preciseOk) || done;
+  const primaryLabel = servicesDisabled && !permanentlyDenied ? "Turn On Location" : "Enable Location";
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
@@ -137,9 +160,6 @@ export function FieldTrackingSetupScreen() {
         </View>
 
         {hint ? <Text style={styles.hint}>{hint}</Text> : null}
-        {permanentlyDenied && !hint ? (
-          <Text style={styles.hint}>{PERMANENTLY_DENIED_MESSAGE}</Text>
-        ) : null}
 
         {ready ? (
           <Pressable
@@ -159,15 +179,15 @@ export function FieldTrackingSetupScreen() {
             {busy ? (
               <ActivityIndicator color={Colors.onPrimary} />
             ) : (
-              <Text style={styles.primaryText}>Enable Location</Text>
+              <Text style={styles.primaryText}>{primaryLabel}</Text>
             )}
           </Pressable>
         )}
 
-        {!ready ? (
+        {!ready && !permanentlyDenied ? (
           <Pressable
             accessibilityRole="button"
-            onPress={() => void refresh().then(() => setHint("Checked again."))}
+            onPress={() => void onEnableLocation()}
             style={styles.secondary}
           >
             <Text style={styles.secondaryText}>Try Again</Text>

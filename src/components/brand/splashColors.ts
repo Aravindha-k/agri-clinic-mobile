@@ -1,8 +1,8 @@
 /** Shared splash background — must match native Android / Expo splash. */
 export const CINEMATIC_SPLASH_BG = "#D8ECF8";
 
-/** Native Android / Expo launch screen — solid emerald handoff. */
-export const NATIVE_LAUNCH_BG = "#0B3D2E";
+/** Native Android / Expo launch screen — must match cinematic first frame (#D8ECF8). */
+export const NATIVE_LAUNCH_BG = "#D8ECF8";
 
 /** Crossfade target into login / app shell. */
 export const SPLASH_EXIT_WASH = "#F8F7F2";

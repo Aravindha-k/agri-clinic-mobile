@@ -34,8 +34,9 @@ must(
     "permissionInFlight",
     "getForegroundPermissionsAsync",
     "requestForegroundPermissionsAsync",
-    "ensureAndroidLocationServicesEnabled",
-    "permanentlyDenied",
+    "hasServicesEnabledAsync",
+    "isPermanentlyDenied",
+    'status === "denied" && response.canAskAgain === false',
     "Location permission is disabled. Enable it from app settings to use field tracking."
   ],
   "single-flight foreground permission service"
@@ -79,6 +80,7 @@ must(
     "permanentlyDenied",
     "Open Settings",
     "Try Again",
+    "Turn On Location",
     "PERMANENTLY_DENIED_MESSAGE"
   ],
   "simple setup screen"

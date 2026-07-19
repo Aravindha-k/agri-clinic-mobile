@@ -107,7 +107,7 @@ module.exports = () => ({
     /** Resize window with IME so visit/login forms stay reachable above the keyboard. */
     softwareKeyboardLayoutMode: "resize",
     minSdkVersion: 26,
-    versionCode: 6,
+    versionCode: 7,
     usesCleartextTraffic: allowCleartext,
     permissions: [
       "ACCESS_COARSE_LOCATION",

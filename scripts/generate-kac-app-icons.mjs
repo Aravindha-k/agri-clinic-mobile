@@ -1,17 +1,17 @@
 /**
- * CI entry point — promotes circular logo.png and validates Android launcher wiring.
+ * CI entry point — promotes circular logo and validates Android launcher wiring.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
-import { KAVYA_GREEN } from "./promote-logo-icons.mjs";
+import { LAUNCHER_BG } from "./promote-logo-icons.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const ANDROID_RES = path.join(root, "android/app/src/main/res");
-const ADAPTIVE_BACKGROUND = KAVYA_GREEN;
-const ADAPTIVE_BACKGROUND_RGB = { r: 15, g: 107, b: 67 };
+const ADAPTIVE_BACKGROUND = LAUNCHER_BG;
+const ADAPTIVE_BACKGROUND_RGB = { r: 0, g: 77, b: 23 };
 const OUT_ADAPTIVE_BG = path.join(root, "assets/brand/kac/adaptive_icon_background_1024.png");
 const OUT_ADAPTIVE_BG_ALIAS = path.join(root, "assets/brand/kac/adaptive_icon_background.png");
 
@@ -55,6 +55,9 @@ async function assertAdaptiveXml() {
   const colors = await fs.readFile(path.join(ANDROID_RES, "values", "colors.xml"), "utf8");
   if (!colors.includes("iconBackground") || !colors.toUpperCase().includes(ADAPTIVE_BACKGROUND.toUpperCase())) {
     throw new Error(`iconBackground must be ${ADAPTIVE_BACKGROUND}`);
+  }
+  if (colors.toUpperCase().includes("#0F6B43")) {
+    throw new Error("Obsolete bright green #0F6B43 must not remain as iconBackground");
   }
 }
 

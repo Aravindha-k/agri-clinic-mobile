@@ -1,11 +1,11 @@
 /**
- * Asserts Android launcher icons use the canonical circular logo on Kavya green.
+ * Asserts Android launcher icons use the canonical circular logo — no bright green plate.
  */
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
-import { ADAPTIVE_CONTENT_RATIO, KAVYA_GREEN } from "./promote-logo-icons.mjs";
+import { ADAPTIVE_CONTENT_RATIO, LAUNCHER_BG } from "./promote-logo-icons.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const approvedSource = path.join(root, "assets/brand/logo_circle_transparent.png");
@@ -28,7 +28,8 @@ const foregroundSizes = {
   "mipmap-xxxhdpi": 432
 };
 
-const GREEN = { r: 15, g: 107, b: 67 };
+const BG = { r: 0, g: 77, b: 23 };
+const OBSOLETE_BRIGHT_GREEN = { r: 15, g: 107, b: 67 };
 
 async function rgba(file) {
   return sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -57,14 +58,22 @@ function contentBounds({ data, info }, predicate) {
   return { width: maxX - minX + 1, height: maxY - minY + 1, minX, minY, maxX, maxY };
 }
 
-function assertNearGreenCorner(rgbaTuple, name) {
+function assertNearLauncherBg(rgbaTuple, name) {
   const [r, g, b, a] = rgbaTuple;
   assert.ok(a === 255, `${name} corner alpha must be opaque`);
   assert.ok(
-    Math.abs(r - GREEN.r) <= 8 && Math.abs(g - GREEN.g) <= 8 && Math.abs(b - GREEN.b) <= 8,
-    `${name} corner must be Kavya green; rgba=${rgbaTuple.join(",")}`
+    Math.abs(r - BG.r) <= 8 && Math.abs(g - BG.g) <= 8 && Math.abs(b - BG.b) <= 8,
+    `${name} corner must be logo-matched ${LAUNCHER_BG}; rgba=${rgbaTuple.join(",")}`
   );
   assert.ok(!(r >= 248 && g >= 248 && b >= 248), `${name} must not be a white square plate`);
+  assert.ok(
+    !(
+      Math.abs(r - OBSOLETE_BRIGHT_GREEN.r) <= 4 &&
+      Math.abs(g - OBSOLETE_BRIGHT_GREEN.g) <= 4 &&
+      Math.abs(b - OBSOLETE_BRIGHT_GREEN.b) <= 4
+    ),
+    `${name} must not use obsolete bright green plate #0F6B43`
+  );
 }
 
 function assertTransparentCorner(rgbaTuple, name) {
@@ -111,7 +120,7 @@ for (const image of [legacyImage, backgroundImage]) {
     [0, 1023],
     [1023, 1023]
   ]) {
-    assertNearGreenCorner(pixel(image.data, image.info.width, x, y), "legacy/background");
+    assertNearLauncherBg(pixel(image.data, image.info.width, x, y), "legacy/background");
   }
 }
 
@@ -127,7 +136,7 @@ for (const [folder, size] of Object.entries(legacySizes)) {
       [0, size - 1],
       [size - 1, size - 1]
     ]) {
-      assertNearGreenCorner(pixel(image.data, size, x, y), `${folder}/${filename}`);
+      assertNearLauncherBg(pixel(image.data, size, x, y), `${folder}/${filename}`);
     }
   }
 }
@@ -155,11 +164,15 @@ for (const filename of ["ic_launcher.xml", "ic_launcher_round.xml"]) {
 }
 
 const androidColors = await fs.readFile(path.join(androidRes, "values", "colors.xml"), "utf8");
-assert.match(androidColors, new RegExp(`<color name="iconBackground">${KAVYA_GREEN}</color>`, "i"));
+assert.match(androidColors, new RegExp(`<color name="iconBackground">${LAUNCHER_BG}</color>`, "i"));
+assert.doesNotMatch(androidColors, /iconBackground">#0F6B43</i);
+assert.match(androidColors, /splashscreen_background">#D8ECF8</i);
 
 const brandConfig = await fs.readFile(path.join(root, "src/config/brand.config.js"), "utf8");
 assert.match(brandConfig, /logo_circle_transparent\.png/);
-assert.match(brandConfig, /iconBackgroundColor:\s*"#0F6B43"/);
+assert.match(brandConfig, /iconBackgroundColor:\s*"#004D17"/);
+assert.match(brandConfig, /nativeSplashBackgroundColor:\s*"#D8ECF8"/);
+assert.doesNotMatch(brandConfig, /iconBackgroundColor:\s*"#0F6B43"/);
 
 const brandTs = await fs.readFile(path.join(root, "src/config/brand.ts"), "utf8");
 assert.match(brandTs, /logo_circle_transparent\.png/);
@@ -168,9 +181,14 @@ assert.doesNotMatch(brandTs, /logo_icons\.png|logo_icon\.png|app_icon\.png|adapt
 const splashAssets = await fs.readFile(path.join(root, "src/components/brand/splashAssets.ts"), "utf8");
 assert.match(splashAssets, /logo_circle_transparent\.png/);
 
+const companyLogo = await fs.readFile(path.join(root, "src/components/brand/CompanyLogo.tsx"), "utf8");
+assert.match(companyLogo, /LOGO_IMAGE/);
+assert.doesNotMatch(companyLogo, /require\([^)]*app_icon|require\([^)]*adaptive_icon_foreground/);
+
 const styles = await fs.readFile(path.join(androidRes, "values", "styles.xml"), "utf8");
 assert.doesNotMatch(styles, /icon_preferred/);
+assert.match(styles, /windowSplashScreenAnimatedIcon/);
 
 console.log(
-  `Launcher icon audit passed: logo_circle_transparent.png, adaptive ${(ADAPTIVE_CONTENT_RATIO * 100).toFixed(0)}% inset, bg ${KAVYA_GREEN}.`
+  `Launcher icon audit passed: logo_circle_transparent.png, adaptive ${(ADAPTIVE_CONTENT_RATIO * 100).toFixed(0)}% inset, bg ${LAUNCHER_BG}, splash #D8ECF8.`
 );

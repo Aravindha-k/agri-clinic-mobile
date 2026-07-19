@@ -2,9 +2,10 @@
  * Promotes the official circular company logo to LAUNCHER slots only.
  *
  * - Source: assets/brand/logo_circle_transparent.png (canonical Today/Login mark)
- * - Adaptive foreground: logo only, transparent padding, ~68% safe-zone inset
- * - Adaptive / legacy background: official Kavya green (#0F6B43)
+ * - Adaptive foreground: logo only, transparent padding, ~66% safe-zone inset
+ * - Adaptive / legacy background: logo-matched dark green (#004D17)
  * - Never overwrites the canonical in-app logo file
+ * - Never writes a bright square plate icon
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -16,16 +17,18 @@ const root = path.resolve(__dirname, "..");
 /** Official circular company logo — read-only source for launcher generation. */
 const SRC = path.join(root, "assets/brand/logo_circle_transparent.png");
 const SIZE = 1024;
-/** Enterprise primary green — adaptive plate behind the circular mark. */
-export const KAVYA_GREEN = "#0F6B43";
-const KAVYA_GREEN_RGB = { r: 15, g: 107, b: 67, alpha: 1 };
-const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 };
 
 /**
- * Full circular artwork fits OEM masks when side ≈ canvas * 0.66–0.70.
- * Keep ~68% so Pixel/Samsung/MIUI never clip the ring.
+ * Background behind the circular mark — sampled from the logo fill (rim).
  */
-export const ADAPTIVE_CONTENT_RATIO = 0.68;
+export const LAUNCHER_BG = "#004D17";
+export const LAUNCHER_BG_RGB = { r: 0, g: 77, b: 23, alpha: 1 };
+/** Alias kept for older script imports. */
+export const KAVYA_GREEN = LAUNCHER_BG;
+const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 };
+
+/** Adaptive safe-zone: 65–68% content (OEM masks crop the outer ~18%). */
+export const ADAPTIVE_CONTENT_RATIO = 0.66;
 
 const OUT = {
   appIcon: path.join(root, "assets/brand/app_icon.png"),
@@ -68,10 +71,7 @@ function maskSvg(kind, size) {
   );
 }
 
-/**
- * Square logo with opaque white corners → circular mark on transparent canvas.
- * Preserves white interior of the emblem (cross gaps).
- */
+/** Full-bleed circular mark on transparent canvas (for further inset). */
 async function buildCircularTransparent(size = SIZE) {
   const fitted = await sharp(SRC)
     .resize(size, size, {
@@ -89,22 +89,33 @@ async function buildCircularTransparent(size = SIZE) {
     .toBuffer();
 }
 
-/** Circular logo composited on Kavya green — Expo / legacy launcher icon. */
-async function buildGreenPlate(circlePng) {
+/** Legacy / Expo icon: inset circular logo on logo-matched dark green (not bright plate). */
+async function buildLegacyIcon(circlePng) {
+  const contentSize = Math.round(SIZE * ADAPTIVE_CONTENT_RATIO);
+  const inset = await sharp(circlePng)
+    .resize(contentSize, contentSize, {
+      fit: "contain",
+      kernel: sharp.kernel.lanczos3,
+      background: TRANSPARENT
+    })
+    .png()
+    .toBuffer();
+  const left = Math.round((SIZE - contentSize) / 2);
+
   return sharp({
     create: {
       width: SIZE,
       height: SIZE,
       channels: 4,
-      background: KAVYA_GREEN_RGB
+      background: LAUNCHER_BG_RGB
     }
   })
-    .composite([{ input: circlePng }])
+    .composite([{ input: inset, left, top: left }])
     .png({ compressionLevel: 9 })
     .toBuffer();
 }
 
-/** Same circular artwork, inset + transparent padding for adaptive safe zone. */
+/** Adaptive foreground: circular artwork with transparent safe padding. */
 async function buildAdaptiveForeground(circlePng) {
   const contentSize = Math.round(SIZE * ADAPTIVE_CONTENT_RATIO);
   const inset = await sharp(circlePng)
@@ -117,7 +128,6 @@ async function buildAdaptiveForeground(circlePng) {
     .toBuffer();
 
   const left = Math.round((SIZE - contentSize) / 2);
-  const top = left;
 
   return sharp({
     create: {
@@ -127,7 +137,7 @@ async function buildAdaptiveForeground(circlePng) {
       background: TRANSPARENT
     }
   })
-    .composite([{ input: inset, left, top }])
+    .composite([{ input: inset, left, top: left }])
     .png({ compressionLevel: 9 })
     .toBuffer();
 }
@@ -138,7 +148,7 @@ async function buildInstalledPreview(adaptiveFg, kind) {
       width: SIZE,
       height: SIZE,
       channels: 4,
-      background: KAVYA_GREEN_RGB
+      background: LAUNCHER_BG_RGB
     }
   })
     .composite([{ input: adaptiveFg }])
@@ -153,24 +163,24 @@ async function buildInstalledPreview(adaptiveFg, kind) {
 
 async function promoteLogoIcons() {
   const circle = await buildCircularTransparent(SIZE);
-  const plate = await buildGreenPlate(circle);
+  const legacy = await buildLegacyIcon(circle);
   const adaptive = await buildAdaptiveForeground(circle);
 
   await fs.mkdir(path.join(root, "assets/brand/kac"), { recursive: true });
   // Never write back to the canonical Today/Login logo asset.
-  await fs.writeFile(OUT.appIcon, plate);
+  await fs.writeFile(OUT.appIcon, legacy);
   await fs.writeFile(OUT.adaptiveFg, adaptive);
-  await fs.writeFile(OUT.master, plate);
-  await fs.writeFile(OUT.solid, plate);
-  await fs.writeFile(OUT.source, plate);
+  await fs.writeFile(OUT.master, legacy);
+  await fs.writeFile(OUT.solid, legacy);
+  await fs.writeFile(OUT.source, legacy);
 
   const androidRes = path.join(root, "android/app/src/main/res");
   for (const [folder, size] of Object.entries(LEGACY)) {
     const dir = path.join(androidRes, folder);
     await fs.mkdir(dir, { recursive: true });
     for (const name of ["ic_launcher.webp", "ic_launcher_round.webp"]) {
-      await sharp(plate)
-        .resize(size, size, { fit: "contain", background: KAVYA_GREEN_RGB })
+      await sharp(legacy)
+        .resize(size, size, { fit: "contain", background: LAUNCHER_BG_RGB })
         .webp({ quality: 100, lossless: true })
         .toFile(path.join(dir, name));
     }
@@ -193,12 +203,12 @@ async function promoteLogoIcons() {
     await fs.writeFile(path.join(root, "assets/brand/kac", file), preview);
   }
 
-  await sharp(plate).resize(48, 48).png().toFile(path.join(root, "assets/brand/kac/preview_48.png"));
-  await sharp(plate).resize(64, 64).png().toFile(path.join(root, "assets/brand/kac/preview_64.png"));
+  await sharp(legacy).resize(48, 48).png().toFile(path.join(root, "assets/brand/kac/preview_48.png"));
+  await sharp(legacy).resize(64, 64).png().toFile(path.join(root, "assets/brand/kac/preview_64.png"));
 
   const meta = await sharp(SRC).metadata();
   console.log(
-    `Launcher promote from logo_circle_transparent.png (${meta.width}x${meta.height}); adaptive inset ${(ADAPTIVE_CONTENT_RATIO * 100).toFixed(0)}%; bg ${KAVYA_GREEN}`
+    `Launcher promote from logo_circle_transparent.png (${meta.width}x${meta.height}); adaptive inset ${(ADAPTIVE_CONTENT_RATIO * 100).toFixed(0)}%; bg ${LAUNCHER_BG} (no bright green plate)`
   );
 }
 

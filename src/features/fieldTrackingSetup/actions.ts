@@ -1,4 +1,3 @@
-import * as Location from "expo-location";
 import { trackingDevLog } from "../../tracking/trackingDevLog";
 import {
   markBatteryGuidedCompleted,
@@ -9,7 +8,9 @@ import { probeFieldTrackingPermissions, isCriticalSetupReady } from "./probe";
 import {
   enableLocationForFieldWork,
   ensureForegroundLocationPermission,
-  PERMANENTLY_DENIED_MESSAGE
+  PERMANENTLY_DENIED_MESSAGE,
+  RETRY_PERMISSION_MESSAGE,
+  SERVICES_OFF_MESSAGE
 } from "./ensureForegroundLocation";
 import {
   openAppSettingsPage,
@@ -25,9 +26,10 @@ export type StepActionResult = {
   /** Opened system settings — caller should re-check on AppState active */
   openedSettings?: boolean;
   permanentlyDenied?: boolean;
+  servicesDisabled?: boolean;
 };
 
-/** Step 1 — Enable Location: foreground permission + device GPS (single-flight). */
+/** Step 1 — Enable Location: live FG permission + device GPS (single-flight). */
 export async function runForegroundLocationStep(): Promise<StepActionResult> {
   try {
     const result = await enableLocationForFieldWork();
@@ -39,27 +41,38 @@ export async function runForegroundLocationStep(): Promise<StepActionResult> {
       return {
         ok: false,
         permanentlyDenied: result.permanentlyDenied,
+        servicesDisabled: result.servicesDisabled,
         openedSettings: false,
-        message: result.message ?? PERMANENTLY_DENIED_MESSAGE
+        message:
+          result.message ??
+          (result.permanentlyDenied
+            ? PERMANENTLY_DENIED_MESSAGE
+            : result.servicesDisabled
+              ? SERVICES_OFF_MESSAGE
+              : RETRY_PERMISSION_MESSAGE)
       };
     }
     return { ok: true, openedSettings: false };
   } catch {
-    return { ok: false, message: "Could not enable location. Try again.", openedSettings: false };
+    return {
+      ok: false,
+      permanentlyDenied: false,
+      openedSettings: false,
+      message: "Could not enable location. Try again."
+    };
   }
 }
 
 /**
  * Background location is not part of the product flow.
- * Kept as a no-op so older callers do not request ACCESS_BACKGROUND_LOCATION
- * or open App Info (Android 11+ settings trap).
+ * Kept as a no-op so older callers never request ACCESS_BACKGROUND_LOCATION.
  */
 export async function runBackgroundLocationStep(): Promise<StepActionResult> {
   trackingDevLog("background_permission", "skipped_foreground_only");
   return { ok: true, message: "Foreground location is enough for field tracking." };
 }
 
-/** Precise guidance — never auto-opens Settings; employee must tap Open Settings. */
+/** Precise guidance — never auto-opens Settings. */
 export async function openPreciseLocationSettings(): Promise<StepActionResult> {
   return {
     ok: false,
@@ -104,7 +117,7 @@ export async function finalizeSetupIfReady(): Promise<boolean> {
   return true;
 }
 
-/** Open Settings only from an explicit tap (permanently denied / optional help). */
+/** Open Settings only from an explicit tap (permanently denied). */
 export async function openSettingsForMissing(
   step: "foreground" | "background" | "precise" | "notifications" | "battery"
 ) {
@@ -113,4 +126,10 @@ export async function openSettingsForMissing(
   return openLocationPermissionSettings();
 }
 
-export { ensureForegroundLocationPermission, enableLocationForFieldWork };
+export {
+  ensureForegroundLocationPermission,
+  enableLocationForFieldWork,
+  PERMANENTLY_DENIED_MESSAGE,
+  RETRY_PERMISSION_MESSAGE,
+  SERVICES_OFF_MESSAGE
+};

@@ -14,20 +14,23 @@ module.exports = {
   loaderSubtitle: "Diagnostics • Solutions • Growth",
   employeeHint: "For field employees only",
   splashBackgroundColor: "#D8ECF8",
-  /** Android / Expo native launch screen — solid emerald, no logo. */
-  nativeSplashBackgroundColor: "#0B3D2E",
+  /**
+   * Android / Expo native launch screen — must match cinematic first frame
+   * (light sky wash + circular logo). Never the old dark emerald / green-plate flash.
+   */
+  nativeSplashBackgroundColor: "#D8ECF8",
   /** Native + cinematic company logo — canonical circular transparent PNG. */
   splashImageAsset: "./assets/brand/logo_circle_transparent.png",
   /** Premium splash visible duration (ms) incl. crossfade. */
   splashDurationMs: 3820,
-  /** Adaptive icon plate behind circular foreground — official Kavya green. */
-  iconBackgroundColor: "#0F6B43",
+  /** Adaptive icon plate behind circular foreground — logo-matched dark green (not bright #0F6B43). */
+  iconBackgroundColor: "#004D17",
   /** Official company logo for in-app UI (canonical circular transparent). */
   logoAsset: "./assets/brand/logo_circle_transparent.png",
-  /** Expo / iOS / legacy launcher — circular logo on Kavya green. */
+  /** Expo / iOS / legacy launcher — circular logo inset on logo-matched dark green. */
   iconAsset: "./assets/brand/app_icon.png",
   /**
-   * Android adaptive foreground — circular logo only (transparent, ~68% safe-zone inset).
+   * Android adaptive foreground — circular logo only (transparent, ~66% safe-zone inset).
    */
   adaptiveIconAsset: "./assets/brand/adaptive_icon_foreground.png",
   /** Launcher / in-app source: canonical circular transparent logo. */

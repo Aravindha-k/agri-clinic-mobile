@@ -34,7 +34,7 @@ test("brand surfaces use CompanyLogo or LOGO_IMAGE from canonical asset", () => 
     "src/components/auth/LoginHeroHeader.tsx"
   ]) {
     const text = read(rel);
-    assert.match(text, /CompanyLogo/);
+    assert.match(text, /CompanyLogo|LOGO_IMAGE/, `${rel} must use CompanyLogo or LOGO_IMAGE`);
     assert.doesNotMatch(text, /backgroundColor:\s*"#FFFFFF"/, rel);
   }
 });

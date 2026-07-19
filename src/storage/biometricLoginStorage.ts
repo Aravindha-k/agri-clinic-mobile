@@ -8,9 +8,12 @@ import { ApiRequestError, isNetworkError, isServerError } from "../utils/apiErro
 
 const ENABLED_KEY = "biometric_login_enabled";
 const PROMPT_DISMISSED_KEY = "biometric_login_prompt_dismissed";
-/** @deprecated legacy plaintext password — always cleared on migration */
+/** @deprecated legacy plaintext password — deleted on every migration pass */
 const LEGACY_PASS_KEY = "biometric_login_pass";
 const LEGACY_USER_KEY = "biometric_login_user";
+/** @deprecated password reauth keys — never store raw passwords; deleted on migration */
+const LEGACY_REAUTH_USER_KEY = "biometric_reauth_username";
+const LEGACY_REAUTH_PASS_KEY = "biometric_reauth_password";
 /** OEM biometric prompts that never settle must not block login forever. */
 const BIOMETRIC_PROMPT_MS = 45_000;
 
@@ -31,6 +34,7 @@ export type BiometricUnlockOutcome =
   | "key_invalidated"
   | "no_refresh_token"
   | "token_refresh_failed"
+  | "session_replaced"
   | "network_error"
   | "server_error"
   | "prompt_busy"
@@ -56,6 +60,7 @@ type BiometricLogEvent =
   | "login_success"
   | "login_cancelled"
   | "login_failed"
+  | "legacy_password_material_cleared"
   | "prompt_suppressed_duplicate"
   | "enabled_flag_cleared"
   | "biometric_material_cleared";
@@ -115,14 +120,20 @@ export function shouldPreferPasswordLoginThisSession(): boolean {
   return preferPasswordLoginThisSession;
 }
 
-/** Remove any historically stored plaintext passwords. Safe to call often. */
+/**
+ * Remove any historically stored plaintext passwords / username+password reauth
+ * material. Safe to call often. Never re-introduce password storage.
+ */
 export async function migrateLegacyBiometricPasswords(): Promise<void> {
   if (legacyCleared) return;
   await Promise.all([
     SecureStore.deleteItemAsync(LEGACY_PASS_KEY).catch(() => undefined),
-    SecureStore.deleteItemAsync(LEGACY_USER_KEY).catch(() => undefined)
+    SecureStore.deleteItemAsync(LEGACY_USER_KEY).catch(() => undefined),
+    SecureStore.deleteItemAsync(LEGACY_REAUTH_USER_KEY).catch(() => undefined),
+    SecureStore.deleteItemAsync(LEGACY_REAUTH_PASS_KEY).catch(() => undefined)
   ]);
   legacyCleared = true;
+  logBiometric("legacy_password_material_cleared");
 }
 
 export async function getBiometricTypeLabel(): Promise<string> {
@@ -182,6 +193,10 @@ export async function getBiometricLoginStatus(): Promise<BiometricLoginStatus> {
   }
 }
 
+/**
+ * Fingerprint unlock is available only when preference is on AND a refresh token
+ * exists. Never unlocks via stored password.
+ */
 export async function canUseBiometricLogin(): Promise<boolean> {
   try {
     const status = await getBiometricLoginStatus();
@@ -233,8 +248,8 @@ export async function shouldOfferBiometricEnrollment(): Promise<boolean> {
 }
 
 /**
- * Verify biometric once, then persist the enablement flag.
- * Never stores the password.
+ * Verify biometric once, then persist the enablement flag only.
+ * Does not accept or store username/password.
  */
 export async function enableBiometricLoginWithVerification(): Promise<boolean> {
   await migrateLegacyBiometricPasswords();
@@ -324,14 +339,17 @@ export async function clearBiometricCredentialMaterial(reason: string): Promise<
     SecureStore.deleteItemAsync(ENABLED_KEY).catch(() => undefined),
     SecureStore.deleteItemAsync(PROMPT_DISMISSED_KEY).catch(() => undefined),
     SecureStore.deleteItemAsync(LEGACY_PASS_KEY).catch(() => undefined),
-    SecureStore.deleteItemAsync(LEGACY_USER_KEY).catch(() => undefined)
+    SecureStore.deleteItemAsync(LEGACY_USER_KEY).catch(() => undefined),
+    SecureStore.deleteItemAsync(LEGACY_REAUTH_USER_KEY).catch(() => undefined),
+    SecureStore.deleteItemAsync(LEGACY_REAUTH_PASS_KEY).catch(() => undefined)
   ]);
   logBiometric("biometric_material_cleared", { reason });
 }
 
 /**
- * Prompt biometrics, then refresh the access token using the stored refresh token.
+ * Prompt biometrics, then restore session via refresh token only.
  * Cancel / mismatch / lockout never clears tokens or the biometric-enabled flag.
+ * Never calls the password-login endpoint.
  */
 export async function unlockSessionWithBiometrics(): Promise<BiometricUnlockResult> {
   await migrateLegacyBiometricPasswords();
@@ -353,7 +371,6 @@ export async function unlockSessionWithBiometrics(): Promise<BiometricUnlockResu
     return { ok: false, outcome: "hardware_unavailable" };
   }
   if (!enrolled) {
-    // Enrollment removed after enable — clear biometric material only, keep tokens.
     await clearBiometricCredentialMaterial("not_enrolled_after_enable");
     logBiometric("prompt_result", { outcome: "key_invalidated" });
     return { ok: false, outcome: "key_invalidated" };
@@ -361,7 +378,6 @@ export async function unlockSessionWithBiometrics(): Promise<BiometricUnlockResu
 
   const refresh = await getRefreshToken();
   if (!refresh) {
-    // Incomplete credentials — do not disable biometric preference; password login can re-bind.
     logBiometric("prompt_result", { outcome: "no_refresh_token" });
     return { ok: false, outcome: "no_refresh_token" };
   }
@@ -395,53 +411,64 @@ export async function unlockSessionWithBiometrics(): Promise<BiometricUnlockResu
       return { ok: false, outcome };
     }
 
-    const access = await refreshAccessTokenOnce();
-    if (access) {
-      logBiometric("login_success");
-      logBiometric("prompt_result", { outcome: "success" });
-      return { ok: true, outcome: "success" };
-    }
-    logBiometric("login_failed", { reason: "token_refresh_failed" });
-    logBiometric("prompt_result", { outcome: "token_refresh_failed" });
-    return { ok: false, outcome: "token_refresh_failed" };
-  } catch (err) {
-    if (isNetworkError(err)) {
-      logBiometric("login_failed", { reason: "network_error" });
-      logBiometric("prompt_result", { outcome: "network_error" });
-      return { ok: false, outcome: "network_error" };
-    }
-    if (isServerError(err)) {
-      logBiometric("login_failed", { reason: "server_error" });
-      logBiometric("prompt_result", { outcome: "server_error" });
-      return { ok: false, outcome: "server_error" };
-    }
-    const code =
-      err instanceof ApiRequestError
-        ? err.code
-        : err && typeof err === "object" && "code" in err
-          ? String((err as { code?: unknown }).code ?? "")
-          : "";
-    if (code === "SESSION_EXPIRED" || code === "ACCOUNT_DISABLED" || code === "SESSION_REPLACED") {
-      logBiometric("login_failed", { reason: code });
+    try {
+      const access = await refreshAccessTokenOnce();
+      if (access) {
+        logBiometric("login_success", { via: "refresh" });
+        logBiometric("prompt_result", { outcome: "success" });
+        return { ok: true, outcome: "success" };
+      }
+      logBiometric("login_failed", { reason: "empty_access_after_refresh" });
+      logBiometric("prompt_result", { outcome: "token_refresh_failed" });
+      return { ok: false, outcome: "token_refresh_failed" };
+    } catch (err) {
+      if (isNetworkError(err)) {
+        logBiometric("login_failed", { reason: "network_error" });
+        logBiometric("prompt_result", { outcome: "network_error" });
+        return { ok: false, outcome: "network_error" };
+      }
+      if (isServerError(err)) {
+        logBiometric("login_failed", { reason: "server_error" });
+        logBiometric("prompt_result", { outcome: "server_error" });
+        return { ok: false, outcome: "server_error" };
+      }
+      const code =
+        err instanceof ApiRequestError
+          ? err.code
+          : err && typeof err === "object" && "code" in err
+            ? String((err as { code?: unknown }).code ?? "")
+            : "";
+      if (code === "AUTH_UNCERTAIN") {
+        logBiometric("login_failed", { reason: "auth_uncertain" });
+        logBiometric("prompt_result", { outcome: "network_error" });
+        return { ok: false, outcome: "network_error" };
+      }
+      if (code === "SESSION_REPLACED" || code === "DEVICE_SESSION_REQUIRED") {
+        await clearBiometricCredentialMaterial(code);
+        logBiometric("login_failed", { reason: code });
+        logBiometric("prompt_result", { outcome: "session_replaced" });
+        return { ok: false, outcome: "session_replaced" };
+      }
+      if (code === "ACCOUNT_DISABLED") {
+        await clearBiometricCredentialMaterial(code);
+        logBiometric("login_failed", { reason: code });
+        logBiometric("prompt_result", { outcome: "token_refresh_failed" });
+        return { ok: false, outcome: "token_refresh_failed" };
+      }
+      // SESSION_EXPIRED / refresh rejected — password required. Preference kept.
+      logBiometric("login_failed", { reason: code || "token_refresh_failed" });
       logBiometric("prompt_result", { outcome: "token_refresh_failed" });
       return { ok: false, outcome: "token_refresh_failed" };
     }
-    if (code === "AUTH_UNCERTAIN") {
-      logBiometric("login_failed", { reason: "auth_uncertain" });
-      logBiometric("prompt_result", { outcome: "network_error" });
-      return { ok: false, outcome: "network_error" };
-    }
-    logBiometric("login_failed", {
-      reason: err instanceof Error ? err.message : "refresh_error"
-    });
-    logBiometric("prompt_result", { outcome: "network_error" });
-    return { ok: false, outcome: "network_error" };
   } finally {
     biometricPromptInProgress = false;
   }
 }
 
-/** @deprecated Passwords are never returned. Prefer unlockSessionWithBiometrics. */
+/**
+ * @deprecated Never returns credentials — password storage is forbidden.
+ * Kept as a no-op null for any legacy callers; always migrates deletions.
+ */
 export async function readBiometricCredentials(): Promise<null> {
   await migrateLegacyBiometricPasswords();
   return null;
@@ -457,11 +484,11 @@ export async function clearBiometricLogin(): Promise<void> {
 }
 
 /** @deprecated Use enableBiometricLoginWithVerification */
-export async function saveBiometricLogin(_username?: string, _password?: string): Promise<boolean> {
+export async function saveBiometricLogin(): Promise<boolean> {
   return enableBiometricLoginWithVerification();
 }
 
 /** @deprecated Use enableBiometricLoginWithVerification */
-export async function enableBiometricLogin(username: string, password: string): Promise<boolean> {
+export async function enableBiometricLogin(_username?: string, _password?: string): Promise<boolean> {
   return enableBiometricLoginWithVerification();
 }

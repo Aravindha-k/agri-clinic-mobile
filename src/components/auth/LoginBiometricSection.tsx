@@ -46,7 +46,7 @@ export function LoginBiometricSection({ status, ready, canLogin, busy, onSignIn 
           <View style={styles.copy}>
             <Text style={styles.title}>{busy ? "Checking…" : "Login with fingerprint"}</Text>
             <Text style={styles.hint}>
-              {status.enabled ? "Fingerprint login is enabled on this device" : "Use saved device login"}
+              {status.enabled ? "Unlock with fingerprint on this device" : "Use saved device login"}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color={TEXT_MUTED} />

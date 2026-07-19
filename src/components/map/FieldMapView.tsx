@@ -75,6 +75,8 @@ export function FieldMapView({
   route = [],
   fitCoordinates,
   fitEdgePadding = { top: 80, right: 60, bottom: 140, left: 60 },
+  cameraFitKey,
+  cameraMode = "fitCoordinates",
   showsUserLocation = false,
   followsUserLocation = false,
   loading = false,
@@ -102,6 +104,7 @@ export function FieldMapView({
   const [mapReady, setMapReady] = useState(false);
   const mountedRef = useRef(true);
   const cameraAppliedRef = useRef(false);
+  const lastCameraFitKeyRef = useRef<string | undefined>(cameraFitKey);
 
   const safeRegion = useMemo(() => sanitizeRegion(region), [region]);
 
@@ -223,9 +226,17 @@ export function FieldMapView({
   }, [safeMarkers.length, safeRoute.length, screenName]);
 
   useEffect(() => {
+    if (cameraFitKey != null) {
+      if (lastCameraFitKeyRef.current !== cameraFitKey) {
+        lastCameraFitKeyRef.current = cameraFitKey;
+        cameraAppliedRef.current = false;
+      }
+      return;
+    }
     setMapReady(false);
     cameraAppliedRef.current = false;
   }, [
+    cameraFitKey,
     permissionResolved,
     locationDenied,
     locationGranted,
@@ -277,6 +288,12 @@ export function FieldMapView({
     }
 
     try {
+      if (cameraMode === "cappedRegion") {
+        map.animateToRegion(safeRegion, 420);
+        cameraAppliedRef.current = true;
+        return;
+      }
+
       if (safeFit && safeFit.length >= 2) {
         map.fitToCoordinates(safeFit, {
           edgePadding: fitEdgePadding,
@@ -302,13 +319,22 @@ export function FieldMapView({
     } catch (err) {
       console.warn(`[Map:${screenName}] camera error`, err instanceof Error ? err.message : err);
     }
-  }, [canRenderMap, fitEdgePadding, mapReady, mapRef, safeFit, screenName]);
+  }, [
+    cameraMode,
+    canRenderMap,
+    fitEdgePadding,
+    mapReady,
+    mapRef,
+    safeFit,
+    safeRegion,
+    screenName
+  ]);
 
   useEffect(() => {
     if (!mapReady || !canRenderMap) return;
     const timer = setTimeout(() => applyCamera(), 350);
     return () => clearTimeout(timer);
-  }, [applyCamera, canRenderMap, mapReady]);
+  }, [applyCamera, cameraFitKey, canRenderMap, mapReady]);
 
   const lastLiveFocusAtRef = useRef(0);
   useEffect(() => {

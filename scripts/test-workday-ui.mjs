@@ -44,21 +44,40 @@ test("Profile shows compact duty chip without timer display", () => {
   assert.doesNotMatch(profile, /WorkdayStartPanel/);
 });
 
-test("Duty map card uses DutyContext map with pending overlay, visit framing, and clear start/visit/end markers", () => {
+test("Duty map card uses DutyContext map with pending overlay, visit framing, and clear start/visit/live/end markers", () => {
   const mapCard = read("mobile/components/duty/DutyMapCard.tsx");
-  assert.match(mapCard, /const \{ dutyMap \} = useDuty\(\);/);
+  assert.match(mapCard, /const \{ currentDuty, dutyMap, refreshDutyMap \} = useDuty\(\);/);
   assert.match(mapCard, /onMarkerPress/);
   assert.match(mapCard, /readPendingVisits/);
   assert.match(mapCard, /pending-\$\{visit\.local_sync_id\}/);
   assert.match(mapCard, /kind: "route_start"/);
   assert.match(mapCard, /kind: "route_end"/);
   assert.match(mapCard, /kind: "visit"/);
+  assert.match(mapCard, /kind: "current"/);
+  assert.match(mapCard, /id: "current-live"/);
   assert.match(mapCard, /fitFieldMapRegion/);
+  assert.match(mapCard, /cameraMode="cappedRegion"/);
+  assert.match(mapCard, /cameraFitKey/);
   assert.match(mapCard, /followsUserLocation=\{false\}/);
-  assert.match(mapCard, /showsUserLocation=\{false\}/);
+  assert.match(mapCard, /showNativeLive/);
   assert.match(mapCard, /legendRouteEnd/);
-  assert.doesNotMatch(mapCard, /id: "current-live"/);
+  assert.match(mapCard, /spreadDuplicateMapCoordinates/);
+  assert.match(mapCard, /handleRecenter|locate-outline/);
+  assert.match(mapCard, /handleFitAll|scan-outline/);
   assert.doesNotMatch(mapCard, /fetchVisitsForMapMarkers/);
+  assert.doesNotMatch(mapCard, /sampleRouteForFit/);
+  assert.doesNotMatch(mapCard, /route=\{dutyMap/);
+  assert.match(mapCard, /route=\{\[\]\}/);
+});
+
+test("Day Expo Go banner is compact, dismissible, and Expo-Go-only", () => {
+  const day = read("mobile/app/tracking.tsx");
+  const runtime = read("src/utils/expoRuntime.ts");
+  assert.match(day, /shouldShowExpoGoDevWarning/);
+  assert.match(day, /expoGoBannerDismissedThisSession/);
+  assert.match(day, /Expo Go limits background tracking/);
+  assert.doesNotMatch(day, /Open builds/);
+  assert.match(runtime, /__DEV__\s*&&\s*isExpoGo\(\)/);
 });
 
 test("Employee end-duty API client is hard-blocked", () => {

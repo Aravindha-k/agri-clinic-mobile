@@ -1,9 +1,10 @@
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useCallback, useState } from "react";
-import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { AppErrorBoundary } from "../../src/components/AppErrorBoundary";
-import { getExpoBuildUrl, shouldShowExpoGoDevWarning } from "../../src/utils/expoRuntime";
+import { shouldShowExpoGoDevWarning } from "../../src/utils/expoRuntime";
 import { logDayTabApi, logDayTabError, logDayTabOpen } from "../../src/utils/dayTabDiagnostics";
 import { useResponsiveLayout } from "../../src/hooks/useResponsiveLayout";
 import { useTabBarBottomInset } from "../../src/hooks/useTabBarBottomInset";
@@ -22,15 +23,25 @@ import { DayCompactSummary } from "../components/duty/DayCompactSummary";
 import { DutyNoWorkDayState } from "../components/duty/empty/DutyEmptyStates";
 import { PendingVisitDetail } from "../components/visits/PendingVisitDetail";
 import { fetchDashboard } from "../lib/homeApi";
-import { Colors, FontSize, FontWeight, Spacing } from "../lib/theme";
+import { Colors, FontWeight, Spacing } from "../lib/theme";
 
-function ExpoGoDevBanner({ onBuildApk }: { onBuildApk: () => void }) {
+/** Dev-session only — forgets on cold JS reload. */
+let expoGoBannerDismissedThisSession = false;
+
+function ExpoGoDevBanner({ onDismiss }: { onDismiss: () => void }) {
   return (
-    <View style={styles.expoDevBanner}>
-      <Text style={styles.expoDevTitle}>Expo Go — limited background GPS</Text>
-      <Text style={styles.expoDevBody}>Use a dev build for full route recording.</Text>
-      <Pressable onPress={onBuildApk} style={styles.expoDevLink}>
-        <Text style={styles.expoDevLinkText}>Open builds</Text>
+    <View style={styles.expoDevBanner} accessibilityRole="summary">
+      <Text style={styles.expoDevBody} numberOfLines={2}>
+        Expo Go limits background tracking. Use a development build for lock-screen GPS.
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss"
+        hitSlop={8}
+        onPress={onDismiss}
+        style={styles.expoDevDismiss}
+      >
+        <Ionicons name="close" size={16} color={Colors.amberText} />
       </Pressable>
     </View>
   );
@@ -57,6 +68,9 @@ function TrackingWorkspaceScreenInner() {
   const [visitsCompleted, setVisitsCompleted] = useState(0);
   const [farmersCovered, setFarmersCovered] = useState(0);
   const [pendingDetail, setPendingDetail] = useState<PendingVisitRecord | null>(null);
+  const [showExpoGoBanner, setShowExpoGoBanner] = useState(
+    () => shouldShowExpoGoDevWarning() && !expoGoBannerDismissedThisSession
+  );
 
   const loadSummary = useCallback(async () => {
     try {
@@ -110,8 +124,9 @@ function TrackingWorkspaceScreenInner() {
     }, [loadSummary, refreshBootstrap, refreshTrackingState])
   );
 
-  function openBuildApkPage() {
-    void Linking.openURL(getExpoBuildUrl()).catch(() => undefined);
+  function dismissExpoGoBanner() {
+    expoGoBannerDismissedThisSession = true;
+    setShowExpoGoBanner(false);
   }
 
   function openVisit(visitId: number | string) {
@@ -138,9 +153,13 @@ function TrackingWorkspaceScreenInner() {
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
       <ScreenCanvas />
-      <ScreenPageHeader title={t("daySummary.title")} subtitle={t("daySummary.reflectSubtitle")} />
+      <ScreenPageHeader
+        title={t("daySummary.title")}
+        subtitle={t("daySummary.reflectSubtitle")}
+        style={styles.dayHeader}
+      />
 
-      {shouldShowExpoGoDevWarning() ? <ExpoGoDevBanner onBuildApk={openBuildApkPage} /> : null}
+      {showExpoGoBanner ? <ExpoGoDevBanner onDismiss={dismissExpoGoBanner} /> : null}
 
       {!hasDuty ? (
         <View style={styles.emptyWrap}>
@@ -185,6 +204,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bg,
     flex: 1
   },
+  dayHeader: {
+    paddingBottom: Spacing.xs
+  },
   body: {
     flex: 1
   },
@@ -198,31 +220,27 @@ const styles = StyleSheet.create({
     minHeight: 220
   },
   expoDevBanner: {
+    alignItems: "flex-start",
     backgroundColor: Colors.amberBg,
     borderColor: Colors.amber,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 4,
-    marginBottom: Spacing.sm,
-    marginHorizontal: Spacing.lg,
-    padding: 12
-  },
-  expoDevTitle: {
-    color: Colors.amberText,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: Spacing.xs,
+    marginHorizontal: Spacing.md,
+    paddingHorizontal: 10,
+    paddingVertical: 6
   },
   expoDevBody: {
     color: Colors.amberText,
-    fontSize: FontSize.xs
+    flex: 1,
+    fontSize: 11,
+    fontWeight: FontWeight.medium,
+    lineHeight: 15
   },
-  expoDevLink: {
-    alignSelf: "flex-start",
-    marginTop: 4
-  },
-  expoDevLinkText: {
-    color: Colors.brand700,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold
+  expoDevDismiss: {
+    marginTop: 1,
+    padding: 2
   }
 });

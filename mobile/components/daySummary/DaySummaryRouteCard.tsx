@@ -39,11 +39,6 @@ export function DaySummaryRouteCard({
   const [previewWidth, setPreviewWidth] = useState(0);
   const loading = false;
 
-  const fitCoordinates = useMemo(
-    () => (dutyMap?.bounds?.length ? dutyMap.bounds : []),
-    [dutyMap?.bounds]
-  );
-
   const markers = useMemo(
     () =>
       [
@@ -66,18 +61,15 @@ export function DaySummaryRouteCard({
               title: "Work end",
               kind: "route_end" as const
             }
-          : null,
-        dutyMap?.currentLiveLocation
-          ? {
-              id: "current-live",
-              lat: dutyMap.currentLiveLocation.latitude,
-              lng: dutyMap.currentLiveLocation.longitude,
-              title: "Current location",
-              kind: "current" as const
-            }
           : null
       ].filter((marker): marker is MapPin => marker != null),
     [dutyMap, t]
+  );
+
+  const fitCoordinates = useMemo(
+    () =>
+      markers.map((m) => ({ latitude: m.lat, longitude: m.lng })),
+    [markers]
   );
 
   const mapRegion = useMemo(() => {
@@ -116,7 +108,7 @@ export function DaySummaryRouteCard({
                 width={previewWidth}
                 region={mapRegion}
                 markers={markers}
-                route={dutyMap?.routePoints}
+                route={[]}
                 fitCoordinates={fitCoordinates.length ? fitCoordinates : undefined}
                 fitEdgePadding={{ top: 28, right: 28, bottom: 28, left: 28 }}
                 showsUserLocation={false}

@@ -1,7 +1,6 @@
 import { useIsFocused } from "@react-navigation/native";
 import { useEffect, useMemo, useState } from "react";
-import { AppState, Platform, StyleSheet, useWindowDimensions, View } from "react-native";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { AppState, Image, Platform, StyleSheet, useWindowDimensions, View } from "react-native";
 import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
 import Animated, {
   Easing,
@@ -13,131 +12,48 @@ import Animated, {
   withTiming
 } from "react-native-reanimated";
 import { usePremiumMotion } from "../../../src/hooks/usePremiumMotion";
-import { CompanyLogo } from "../../../src/components/brand/CompanyLogo";
-import { AgriNatureOrbit, computeOrbitGap, computeOrbitStageSize } from "../brand/AgriNatureMark";
+import { LOGO_IMAGE } from "../../../src/config/brand";
+import { AgriNatureOrbit } from "../brand/AgriNatureMark";
 import {
-  BRAND_LOGO_FILL,
-  BRAND_LOGO_ZOOM_MAX,
-  BRAND_LOGO_ZOOM_MIN,
-  BRAND_LOGO_ZOOM_MS
-} from "../brand/brandHeaderSpacing";
-import {
+  TODAY_LOGO_BREATH_HALF_MS,
+  TODAY_LOGO_BREATH_MAX,
+  TODAY_LOGO_BREATH_MIN,
   TODAY_ORBIT_DURATION_MS,
   measureTodayHeroStage,
-  todayHeroLogoSize,
-  todayHeroOrbitGapRatio,
   todayOrbitIconSize
 } from "./todayHeroLogoSizing";
 
-/** Home-only hero tuning — does not affect other screens. */
-const HOME_STAGE_PAD = 6;
-const GLOW_MIN = 0.18;
-const GLOW_MAX = 0.32;
+/** Soft radial glow — capped to canvas, never widens layout. */
+const GLOW_MIN = 0.1;
+const GLOW_MAX = 0.18;
 const GLOW_HALF_MS = 2800;
-const GLOW_SIZE_RATIO = 1.75;
 const BRAND_GREEN = "#0F6B43";
-
-type ParticleSpec = {
-  angle: number;
-  orbitFactor: number;
-  driftMs: number;
-  kind: "leaf" | "seed" | "pollen";
-};
-
-const ORBIT_PARTICLES: ParticleSpec[] = [
-  { angle: 0.55, orbitFactor: 1.08, driftMs: 0, kind: "leaf" },
-  { angle: 2.1, orbitFactor: 1.12, driftMs: 900, kind: "seed" },
-  { angle: 3.65, orbitFactor: 1.06, driftMs: 1800, kind: "pollen" },
-  { angle: 5.2, orbitFactor: 1.14, driftMs: 400, kind: "leaf" }
-];
 
 type Props = {
   replayKey?: number | string;
 };
 
-function HomeLogoParticle({
-  spec,
-  trackRadius,
-  enabled,
-  glyphSize
-}: {
-  spec: ParticleSpec;
-  trackRadius: number;
-  enabled: boolean;
-  glyphSize: number;
-}) {
-  const drift = useSharedValue(0);
-  const radius = trackRadius * spec.orbitFactor;
-  const baseX = Math.cos(spec.angle) * radius;
-  const baseY = Math.sin(spec.angle) * radius;
-
-  useEffect(() => {
-    cancelAnimation(drift);
-    if (!enabled) {
-      drift.value = 0;
-      return;
-    }
-    drift.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 5200 + spec.driftMs, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: 5200 + spec.driftMs, easing: Easing.inOut(Easing.ease) })
-      ),
-      -1,
-      false
-    );
-    return () => cancelAnimation(drift);
-  }, [drift, enabled, spec.driftMs]);
-
-  const motion = useAnimatedStyle(() => ({
-    opacity: 0.22,
-    transform: [
-      { translateX: baseX + drift.value * 2.5 },
-      { translateY: baseY - drift.value * 3.5 }
-    ]
-  }));
-
-  if (!enabled) return null;
-
-  const glyph =
-    spec.kind === "seed" ? (
-      <MaterialCommunityIcons name="seed-outline" size={glyphSize} color={BRAND_GREEN} />
-    ) : spec.kind === "pollen" ? (
-      <View style={[styles.pollen, { width: glyphSize - 2, height: glyphSize - 2, borderRadius: (glyphSize - 2) / 2 }]} />
-    ) : (
-      <Ionicons name="leaf" size={glyphSize} color="#2E9B64" />
-    );
-
-  return (
-    <Animated.View style={[styles.particle, motion]} pointerEvents="none">
-      {glyph}
-    </Animated.View>
-  );
-}
-
-/** Today hero — larger responsive logo + continuously rotating orbit icons. */
+/**
+ * Today hero orbit canvas — ring + chips + logo share one centre.
+ * No negative margins; full canvas fits the left column.
+ */
 export function HomeLogoHero({ replayKey = 0 }: Props) {
   const { width } = useWindowDimensions();
   const { coreMotion, ready: motionReady, reduced } = usePremiumMotion();
   const isFocused = useIsFocused();
   const [appActive, setAppActive] = useState(AppState.currentState === "active");
-  const zoom = useSharedValue(BRAND_LOGO_ZOOM_MIN);
+  const breath = useSharedValue(1);
   const glow = useSharedValue(coreMotion ? GLOW_MIN : (GLOW_MIN + GLOW_MAX) / 2);
 
-  const homeLogoSize = todayHeroLogoSize(width);
-  const logoVisual = Math.round(homeLogoSize * BRAND_LOGO_FILL);
-  const outer = logoVisual;
-  const orbitIconSize = todayOrbitIconSize(outer);
-  const orbitGapRatio = todayHeroOrbitGapRatio(width);
-  const orbitGap = computeOrbitGap(outer, orbitGapRatio);
-  const trackRadius = outer / 2 + orbitGap;
-  const orbitStageSize = computeOrbitStageSize(outer, { gapRatio: orbitGapRatio, compact: true });
-  const stageSize = orbitStageSize + HOME_STAGE_PAD * 2;
-  const glowSize = Math.round(outer * GLOW_SIZE_RATIO);
+  const measured = useMemo(() => measureTodayHeroStage(width), [width]);
+  const orbitDiameter = measured.orbit;
+  const logoSize = measured.logo;
+  const canvas = measured.canvas;
+  const orbitIconSize = todayOrbitIconSize(orbitDiameter, measured.compactChips);
+  const logoCanvas = Math.ceil(logoSize * TODAY_LOGO_BREATH_MAX);
+  const glowSize = Math.min(canvas, Math.round(orbitDiameter * 1.15));
 
-  // Orbit + logo zoom run whenever reduce-motion is off and the screen is active.
-  // Do not require heavyEffects (battery saver) — orbit is core branding motion.
   const shouldAnimate = motionReady && coreMotion && isFocused && appActive && !reduced;
-  const showDecorParticles = shouldAnimate;
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
@@ -147,38 +63,28 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
   }, []);
 
   useEffect(() => {
-    cancelAnimation(zoom);
+    cancelAnimation(breath);
     cancelAnimation(glow);
     if (!shouldAnimate) {
-      zoom.value = 1;
+      breath.value = 1;
       glow.value = (GLOW_MIN + GLOW_MAX) / 2;
       return;
     }
 
-    zoom.value = 0.88;
-    zoom.value = withSequence(
-      withTiming(1.04, {
-        duration: 620,
-        easing: Easing.out(Easing.cubic)
-      }),
-      withTiming(1, {
-        duration: 380,
-        easing: Easing.inOut(Easing.ease)
-      }),
-      withRepeat(
-        withSequence(
-          withTiming(BRAND_LOGO_ZOOM_MAX, {
-            duration: BRAND_LOGO_ZOOM_MS,
-            easing: Easing.inOut(Easing.ease)
-          }),
-          withTiming(BRAND_LOGO_ZOOM_MIN, {
-            duration: BRAND_LOGO_ZOOM_MS,
-            easing: Easing.inOut(Easing.ease)
-          })
-        ),
-        -1,
-        false
-      )
+    breath.value = TODAY_LOGO_BREATH_MIN;
+    breath.value = withRepeat(
+      withSequence(
+        withTiming(TODAY_LOGO_BREATH_MAX, {
+          duration: TODAY_LOGO_BREATH_HALF_MS,
+          easing: Easing.inOut(Easing.ease)
+        }),
+        withTiming(TODAY_LOGO_BREATH_MIN, {
+          duration: TODAY_LOGO_BREATH_HALF_MS,
+          easing: Easing.inOut(Easing.ease)
+        })
+      ),
+      -1,
+      false
     );
 
     glow.value = GLOW_MIN;
@@ -191,13 +97,15 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
       false
     );
     return () => {
-      cancelAnimation(zoom);
+      cancelAnimation(breath);
       cancelAnimation(glow);
     };
-  }, [glow, replayKey, shouldAnimate, zoom]);
+  }, [breath, glow, shouldAnimate]);
 
-  const logoZoomStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: zoom.value }]
+  void replayKey;
+
+  const logoBreathStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: breath.value }]
   }));
 
   const glowStyle = useAnimatedStyle(() => ({
@@ -207,73 +115,42 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
   const logoBadge = useMemo(
     () => (
       <View
-        style={[
-          styles.logoShell,
-          { width: outer, height: outer, borderRadius: outer / 2 },
-          styles.logoShadow
-        ]}
+        style={[styles.logoShell, { width: logoSize, height: logoSize }, styles.logoShadow]}
+        accessibilityRole="image"
+        accessibilityLabel="Kavya Agri Clinic"
       >
-        <View
-          style={[
-            styles.logoClip,
-            { width: outer, height: outer, borderRadius: outer / 2, backgroundColor: "transparent" }
-          ]}
-        >
-          <CompanyLogo size={outer} accessibilityLabel="Kavya Agri Clinic" />
-        </View>
+        {LOGO_IMAGE ? (
+          <Image
+            source={LOGO_IMAGE}
+            style={{ width: logoSize, height: logoSize }}
+            resizeMode="contain"
+            accessibilityIgnoresInvertColors
+          />
+        ) : null}
       </View>
     ),
-    [outer]
+    [logoSize]
   );
 
-  const particleGlyph = Math.max(8, Math.round(orbitIconSize * 0.35));
+  const centerLayer = (size: number) => ({
+    position: "absolute" as const,
+    left: "50%" as const,
+    top: "50%" as const,
+    width: size,
+    height: size,
+    marginLeft: -size / 2,
+    marginTop: -size / 2
+  });
 
   return (
-    <View style={[styles.stage, { width: stageSize, height: stageSize }]}>
-      <View pointerEvents="none" style={styles.orbitSlot}>
-        <AgriNatureOrbit
-          diameter={outer}
-          animate={shouldAnimate}
-          showTrack
-          minimalTrack
-          gapRatio={orbitGapRatio}
-          compact
-          durationMs={TODAY_ORBIT_DURATION_MS}
-          iconSizeOverride={orbitIconSize}
-        />
-      </View>
-
-      <View pointerEvents="none" style={styles.particleOrigin}>
-        {ORBIT_PARTICLES.map((spec, index) => (
-          <HomeLogoParticle
-            key={`${spec.kind}-${index}`}
-            spec={spec}
-            trackRadius={trackRadius}
-            enabled={showDecorParticles}
-            glyphSize={particleGlyph}
-          />
-        ))}
-      </View>
-
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.glowSlot,
-          glowStyle,
-          {
-            width: glowSize,
-            height: glowSize,
-            borderRadius: glowSize / 2,
-            marginLeft: -glowSize / 2,
-            marginTop: -glowSize / 2
-          }
-        ]}
-      >
+    <View style={[styles.canvas, { width: canvas, height: canvas }]}>
+      {/* Glow — behind, capped to canvas */}
+      <Animated.View pointerEvents="none" style={[centerLayer(glowSize), glowStyle, { zIndex: 0 }]}>
         <Svg width={glowSize} height={glowSize}>
           <Defs>
             <RadialGradient id="homeLogoGlow" cx="50%" cy="50%" rx="50%" ry="50%">
-              <Stop offset="0%" stopColor={BRAND_GREEN} stopOpacity={0.55} />
-              <Stop offset="55%" stopColor={BRAND_GREEN} stopOpacity={0.18} />
+              <Stop offset="0%" stopColor={BRAND_GREEN} stopOpacity={0.2} />
+              <Stop offset="50%" stopColor={BRAND_GREEN} stopOpacity={0.06} />
               <Stop offset="100%" stopColor={BRAND_GREEN} stopOpacity={0} />
             </RadialGradient>
           </Defs>
@@ -281,9 +158,25 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
         </Svg>
       </Animated.View>
 
-      <View style={styles.logoSlot}>
+      {/* Static ring + rotating icons — chips on track, stage = canvas */}
+      <View pointerEvents="none" style={[centerLayer(canvas), { zIndex: 1 }]}>
+        <AgriNatureOrbit
+          diameter={orbitDiameter}
+          animate={shouldAnimate}
+          gapRatio={0}
+          compact
+          chipsOnTrack
+          edgePad={measured.edgePad}
+          durationMs={TODAY_ORBIT_DURATION_MS}
+          iconSizeOverride={orbitIconSize}
+          chipPadOverride={measured.chipPad}
+        />
+      </View>
+
+      {/* Logo — scale-only breathe; shared centre */}
+      <View style={[centerLayer(logoCanvas), styles.logoSlot]}>
         {shouldAnimate ? (
-          <Animated.View style={[styles.logoZoomWrap, logoZoomStyle]}>{logoBadge}</Animated.View>
+          <Animated.View style={[styles.logoBreathWrap, logoBreathStyle]}>{logoBadge}</Animated.View>
         ) : (
           logoBadge
         )}
@@ -292,86 +185,56 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
   );
 }
 
-/** Column width for split Today header — keeps layout stable across phone widths. */
 export function homeLogoHeroColumnWidth(width?: number) {
   return measureTodayHeroStage(width).column;
 }
 
 export function homeLogoHeroStageHeight(width?: number) {
-  return measureTodayHeroStage(width).stage + HOME_STAGE_PAD * 2;
+  return measureTodayHeroStage(width).canvas;
+}
+
+/** Expose gap/inset for BrandHeader Today split. */
+export function homeLogoHeroColumnGap(width?: number) {
+  return measureTodayHeroStage(width).columnGap;
+}
+
+export function homeLogoHeroLeftInset(width?: number) {
+  return measureTodayHeroStage(width).leftInset;
 }
 
 const styles = StyleSheet.create({
-  stage: {
+  canvas: {
     alignItems: "center",
     justifyContent: "center",
     overflow: "visible",
     position: "relative"
   },
-  orbitSlot: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 1
-  },
-  glowSlot: {
-    left: "50%",
-    position: "absolute",
-    top: "50%",
-    zIndex: 2
-  },
   logoSlot: {
     alignItems: "center",
     justifyContent: "center",
+    overflow: "visible",
     zIndex: 4
   },
-  logoZoomWrap: {
+  logoBreathWrap: {
     alignItems: "center",
-    justifyContent: "center"
-  },
-  particleOrigin: {
-    alignItems: "center",
-    height: 0,
     justifyContent: "center",
-    left: "50%",
-    position: "absolute",
-    top: "50%",
-    width: 0,
-    zIndex: 3
+    overflow: "visible"
   },
   logoShell: {
     alignItems: "center",
     backgroundColor: "transparent",
-    borderColor: "rgba(15, 107, 67, 0.18)",
-    borderWidth: 1.5,
     justifyContent: "center",
-    overflow: "hidden"
-  },
-  logoClip: {
-    alignItems: "center",
-    backgroundColor: "transparent",
-    justifyContent: "center",
-    overflow: "hidden"
+    overflow: "visible"
   },
   logoShadow: Platform.select({
     ios: {
-      shadowColor: "#062818",
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.18,
-      shadowRadius: 14
+      shadowColor: "#0F6B43",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8
     },
     default: {
-      elevation: 6
+      elevation: 2
     }
-  }),
-  particle: {
-    alignItems: "center",
-    justifyContent: "center",
-    position: "absolute",
-    zIndex: 3
-  },
-  pollen: {
-    backgroundColor: "#B8D9C8",
-    opacity: 0.85
-  }
+  })
 });

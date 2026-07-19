@@ -77,7 +77,8 @@ function resolveMarkerStyle(
       return {
         backgroundColor: "#2563EB",
         borderColor: "#FFFFFF",
-        size: 18
+        size: 22,
+        text: undefined
       };
     case "farmer":
       return {
@@ -124,7 +125,9 @@ function FieldMapMarkerInner({
       description={description}
       anchor={{ x: 0.5, y: 0.5 }}
       tracksViewChanges={tracksViewChanges}
-      zIndex={kind === "route_start" || kind === "route_end" ? 8 : 5}
+      zIndex={
+        kind === "current" ? 12 : kind === "route_start" || kind === "route_end" ? 8 : 5
+      }
       draggable={false}
       onPress={onPress}
     >
@@ -162,11 +165,11 @@ const styles = StyleSheet.create({
       ios: {
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.22,
+        shadowOpacity: 0.28,
         shadowRadius: 2.5
       },
       android: {
-        elevation: 4
+        elevation: 5
       }
     })
   },

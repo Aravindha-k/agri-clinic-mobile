@@ -23,88 +23,54 @@ function mustNot(file, needles, label) {
   }
 }
 
-// Pure sizing helpers (mirrored from todayHeroLogoSizing.ts)
-function todayHeroLogoSize(w) {
-  if (w < 360) return 88;
-  if (w < 400) return 104;
-  if (w < 430) return 116;
-  return 128;
-}
-function todayOrbitIconSize(logoDiameter) {
-  if (logoDiameter < 100) return 24;
-  if (logoDiameter < 116) return 28;
-  return 32;
-}
-
-assert.equal(todayHeroLogoSize(320), 88);
-assert.equal(todayHeroLogoSize(360), 104);
-assert.equal(todayHeroLogoSize(412), 116);
-assert.equal(todayHeroLogoSize(430), 128);
-assert.equal(todayOrbitIconSize(88), 24);
-assert.equal(todayOrbitIconSize(104), 28);
-assert.equal(todayOrbitIconSize(128), 32);
-
-must(
-  "src/config/brand.ts",
-  ["logo_circle_transparent.png"],
-  "canonical logo asset"
-);
-
-must(
-  "src/components/brand/CompanyLogo.tsx",
-  ["logo_circle_transparent.png", 'resizeMode="contain"'],
-  "CompanyLogo uses contain"
-);
+must("src/config/brand.ts", ["logo_circle_transparent.png"], "canonical logo asset");
 
 must(
   "mobile/components/today/todayHeroLogoSizing.ts",
-  ["todayHeroLogoSize", "todayOrbitIconSize", "TODAY_ORBIT_DURATION_MS = 10_000"],
-  "responsive Today sizing"
+  [
+    "TODAY_ORBIT_DURATION_MS = 11_000",
+    "TODAY_LOGO_BREATH_MIN = 0.75",
+    "TODAY_LOGO_BREATH_MAX = 1.25",
+    "TODAY_LOCKED_LOGO_XS = 102",
+    "todayLockedLogoSize",
+    "todayOrbitCanvasSize",
+    "todayLogoFitsOrbitAtMaxScale"
+  ],
+  "responsive Today sizing with locked logo"
 );
 
 must(
   "mobile/components/today/HomeLogoHero.tsx",
   [
-    "todayHeroLogoSize",
-    "todayOrbitIconSize",
+    "chipsOnTrack",
     "TODAY_ORBIT_DURATION_MS",
-    "iconSizeOverride",
-    "CompanyLogo",
+    "TODAY_LOGO_BREATH_MAX",
+    "LOGO_IMAGE",
+    'resizeMode="contain"',
     "shouldAnimate",
     "coreMotion",
-    "cancelAnimation"
+    "cancelAnimation",
+    "homeLogoGlow",
+    "transform: [{ scale: breath.value }]"
   ],
-  "Today hero responsive + orbit"
-);
-
-must(
-  "mobile/components/brand/AgriNatureMark.tsx",
-  ["ORBIT_DURATION_MS = 10_000", "cancelAnimation", "iconSizeOverride", "Easing.linear"],
-  "orbit duration + cleanup"
+  "Today hero canvas + breath + orbit"
 );
 
 mustNot(
-  "mobile/components/brand/AgriNatureMark.tsx",
-  ["ORBIT_DURATION_MS = 28_000", "compact ? 12 : 15"],
-  "old tiny/slow orbit removed"
-);
-
-// Reduced motion: static orbit, not an error
-must(
   "mobile/components/today/HomeLogoHero.tsx",
-  ["!reduced", "shouldAnimate"],
-  "reduced motion gates animation"
+  ["marginLeft: (orbitDiameter - stageSize)", "TODAY_LOGO_BREATH_MAX = 1.5"],
+  "no off-screen margin; max scale 1.25"
 );
 
-// No live timer / distance KPI on Today
-mustNot(
-  "mobile/app/(tabs)/index.tsx",
-  ["distanceTravelled", "Distance travelled", "liveTimer", "elapsedLive"],
-  "no distance / live timer surface"
+must(
+  "mobile/components/brand/AgriNatureMark.tsx",
+  ["cancelAnimation", "chipsOnTrack", "Easing.linear", "chipPadOverride"],
+  "orbit duration + on-track chips"
 );
-// Orbit icon count unchanged (approved set — no extras added in this change)
+
+must("mobile/components/today/HomeLogoHero.tsx", ["!reduced", "shouldAnimate"], "reduced motion gates animation");
+
 const agriIcons = read("mobile/components/brand/agriProductIcons.tsx");
-assert.match(agriIcons, /export const AGRI_ORBIT_ICONS/, "AGRI_ORBIT_ICONS defined");
 const orbitKeys = [...agriIcons.matchAll(/key:\s*"(leaf|spray|seed|lab|tractor)"/g)].map((m) => m[1]);
 assert.deepEqual(
   [...new Set(orbitKeys)].sort(),

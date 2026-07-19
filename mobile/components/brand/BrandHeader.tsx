@@ -13,7 +13,7 @@ import { BrandLogoBadge } from "./BrandLogoBadge";
 import { BrandTagline } from "./BrandTagline";
 import { BrandTitle } from "./BrandTitle";
 import { computeOrbitStageSize } from "./AgriNatureMark";
-import { homeLogoHeroColumnWidth, homeLogoHeroStageHeight } from "../today/HomeLogoHero";
+import { homeLogoHeroColumnWidth, homeLogoHeroStageHeight, homeLogoHeroColumnGap, homeLogoHeroLeftInset } from "../today/HomeLogoHero";
 import {
   BRAND_LOGO_COMPACT,
   BRAND_LOGO_FILL,
@@ -77,6 +77,8 @@ export function BrandHeader({
   const isSplit = layout === "split" && !compact;
   const homeLogoColumnW = homeLogoHeroColumnWidth(windowWidth);
   const homeLogoStageH = homeLogoHeroStageHeight(windowWidth);
+  const homeLogoGap = homeLogoHeroColumnGap(windowWidth);
+  const homeLogoLeftInset = homeLogoHeroLeftInset(windowWidth);
 
   const logoScrollStyle = useAnimatedStyle(() => {
     if (!scrollY || size !== "hero") return {};
@@ -107,15 +109,35 @@ export function BrandHeader({
   const usesHomeLogo = Boolean(logo);
 
   const wordmark = (
-    <View style={[styles.wordmark, !isSplit && { marginTop: BrandHeaderSpacing.logoToTitle }, align === "center" && !isSplit && styles.wordmarkCenter]}>
-      <BrandTitle align={isSplit ? "left" : align} compact={compact} />
-      {!compact ? <View style={{ height: BrandHeaderSpacing.titleToSubtitle }} /> : null}
-      {!compact ? <BrandTagline align={isSplit ? "left" : align} /> : null}
+    <View
+      style={[
+        styles.wordmark,
+        usesHomeLogo && styles.wordmarkHome,
+        !isSplit && { marginTop: BrandHeaderSpacing.logoToTitle },
+        align === "center" && !isSplit && styles.wordmarkCenter
+      ]}
+    >
+      <BrandTitle
+        align={isSplit ? "left" : align}
+        compact={compact}
+        truncate={!usesHomeLogo}
+        density={usesHomeLogo ? "today" : "default"}
+      />
+      {!compact ? <View style={{ height: usesHomeLogo ? 4 : BrandHeaderSpacing.titleToSubtitle }} /> : null}
+      {!compact ? (
+        <BrandTagline align={isSplit ? "left" : align} density={usesHomeLogo ? "today" : "default"} />
+      ) : null}
     </View>
   );
 
   const brandCore = isSplit ? (
-    <View style={styles.splitRow}>
+    <View
+      style={[
+        styles.splitRow,
+        usesHomeLogo && styles.splitRowHome,
+        usesHomeLogo && { gap: homeLogoGap, paddingLeft: homeLogoLeftInset }
+      ]}
+    >
       <Animated.View
         style={[
           usesHomeLogo
@@ -126,7 +148,7 @@ export function BrandHeader({
       >
         {logoBadge}
       </Animated.View>
-      <Animated.View style={[styles.splitCopy, wordmarkScrollStyle]}>
+      <Animated.View style={[styles.splitCopy, usesHomeLogo && styles.splitCopyHome, wordmarkScrollStyle]}>
         {entrance ? (
           <FadeInSection replayKey={entrance.replayKey} delay={entranceStagger(baseStep + 1)} duration={280}>
             {wordmark}
@@ -197,11 +219,16 @@ const styles = StyleSheet.create({
   splitRow: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 2,
-    minHeight: 196,
+    gap: 8,
+    minHeight: 200,
     overflow: "visible",
-    paddingTop: 6,
+    paddingTop: 4,
     position: "relative"
+  },
+  splitRowHome: {
+    alignItems: "center",
+    minHeight: 0,
+    overflow: "visible"
   },
   logoColumn: {
     alignItems: "flex-start",
@@ -213,9 +240,10 @@ const styles = StyleSheet.create({
     zIndex: 2
   },
   logoColumnHome: {
-    alignItems: "flex-start",
+    alignItems: "center",
     flexShrink: 0,
     justifyContent: "center",
+    marginLeft: 0,
     overflow: "visible",
     zIndex: 2
   },
@@ -223,13 +251,23 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     minWidth: 96,
-    paddingLeft: 4,
+    paddingLeft: 6,
     paddingRight: 44
+  },
+  splitCopyHome: {
+    alignItems: "flex-start",
+    flex: 1,
+    justifyContent: "center",
+    minWidth: 0,
+    paddingLeft: 0,
+    paddingRight: 40,
+    overflow: "visible"
   },
   splitBell: {
     position: "absolute",
     right: 0,
-    top: 0
+    top: 0,
+    zIndex: 5
   },
   logoRow: {
     alignItems: "flex-start",
@@ -273,6 +311,10 @@ const styles = StyleSheet.create({
     alignItems: "center"
   },
   wordmark: {
+    width: "100%"
+  },
+  wordmarkHome: {
+    alignItems: "flex-start",
     width: "100%"
   },
   wordmarkCenter: {

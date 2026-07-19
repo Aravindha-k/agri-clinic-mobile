@@ -1,20 +1,38 @@
-import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View
+} from "react-native";
+import type MapViewType from "react-native-maps";
 import { FieldMapView } from "../../../src/components/map/FieldMapView";
 import type { MapCoordinate, MapPin } from "../../../src/components/map/FieldMapView.types";
 import { useDuty } from "../../../src/features/duty/store/DutyContext";
+import {
+  ensureLocationReadyForVisit,
+  promptFixLocationAccess
+} from "../../../src/features/fieldTrackingSetup";
 import { useI18n } from "../../../src/i18n/I18nContext";
+import { useTracking } from "../../../src/storage/TrackingContext";
 import {
   DEFAULT_MAP_REGION,
   fitFieldMapRegion,
-  sampleRouteForFit
+  SINGLE_POINT_MAP_DELTA
 } from "../../../src/utils/mapRegion";
 import { MAP_FILL_MIN_HEIGHT } from "../../../src/utils/responsiveLayout";
+import { coordsSignature, spreadDuplicateMapCoordinates } from "../../lib/dayMapMarkerLayout";
 import { readPendingVisits, type PendingVisitRecord } from "../../lib/pendingVisitsQueue";
 import { subscribeVisitDataRefresh } from "../../lib/visit/visitDataRefresh";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 
 const MAP_HEIGHT = 240;
+/** Day map framing — avoid city/district zoom-out. */
+const DAY_FIT_OPTIONS = { padding: 1.28, minDelta: 0.008, maxDelta: 0.048 } as const;
+const DAY_SINGLE_DELTA = Math.min(SINGLE_POINT_MAP_DELTA, 0.011);
 
 type Props = {
   /** Use remaining parent height (Day full-page map). */
@@ -31,8 +49,23 @@ function pendingCoord(visit: PendingVisitRecord): { lat: number; lng: number } |
   return { lat, lng };
 }
 
+function resolveLiveCoordinate(
+  dutyMap: ReturnType<typeof useDuty>["dutyMap"],
+  currentLocation: { latitude: string; longitude: string } | null
+): MapCoordinate | null {
+  if (dutyMap?.currentLiveLocation) {
+    return dutyMap.currentLiveLocation;
+  }
+  if (!currentLocation) return null;
+  const lat = Number(currentLocation.latitude);
+  const lng = Number(currentLocation.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat === 0 || lng === 0) return null;
+  return { latitude: lat, longitude: lng };
+}
+
 /**
- * Frame around start, visits, and end — simple employee day overview.
+ * Marker-only camera frame: Start + visits + End.
+ * Never uses GPS breadcrumb / routePoints (admin keeps those server-side).
  */
 function buildDayFitCoordinates(
   dutyMap: ReturnType<typeof useDuty>["dutyMap"],
@@ -63,16 +96,7 @@ function buildDayFitCoordinates(
     });
   }
 
-  if (points.length >= 1) return points;
-
-  if (dutyMap?.routePoints?.length) {
-    return sampleRouteForFit(dutyMap.routePoints).map((p) => ({
-      latitude: p.lat,
-      longitude: p.lng
-    }));
-  }
-
-  return [];
+  return points;
 }
 
 export function DutyMapCard({
@@ -82,12 +106,26 @@ export function DutyMapCard({
   onPendingMarkerPress
 }: Props) {
   const { t } = useI18n();
-  const { dutyMap } = useDuty();
+  const { currentDuty, dutyMap, refreshDutyMap } = useDuty();
+  const { currentLocation, permissionDenied, gpsEnabled, refreshTrackingState } = useTracking();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const estimatedFillHeight = Math.max(MAP_FILL_MIN_HEIGHT, Math.round(windowHeight * 0.42));
   const [previewWidth, setPreviewWidth] = useState(() => Math.max(1, Math.round(windowWidth - Spacing.lg * 2)));
   const [previewHeight, setPreviewHeight] = useState(() => (fill ? estimatedFillHeight : MAP_HEIGHT));
   const [pendingVisits, setPendingVisits] = useState<PendingVisitRecord[]>([]);
+  const [fitNonce, setFitNonce] = useState(0);
+  const [mapRetryKey, setMapRetryKey] = useState(0);
+  const mapRef = useRef<MapViewType | null>(null);
+
+  const dutyActive = Boolean(currentDuty?.is_active);
+  const liveRaw = useMemo(
+    () => resolveLiveCoordinate(dutyMap, currentLocation),
+    [currentLocation, dutyMap]
+  );
+  /** Live blue pin only while workday is active — removed when ended. */
+  const live = dutyActive ? liveRaw : null;
+  const showNativeLive = dutyActive && gpsEnabled && !permissionDenied;
+  const showCustomLive = Boolean(dutyActive && !showNativeLive && live);
 
   useEffect(() => {
     if (!fill) return;
@@ -110,6 +148,12 @@ export function DutyMapCard({
     [dutyMap, pendingVisits]
   );
 
+  /** Stable framing key — markers only (live GPS must not refit). */
+  const stableFitSignature = useMemo(
+    () => coordsSignature(fitCoordinates),
+    [fitCoordinates]
+  );
+
   const markers = useMemo((): MapPin[] => {
     const rows: MapPin[] = [];
     const serverKeys = new Set<string>();
@@ -118,7 +162,6 @@ export function DutyMapCard({
       if (marker.visitId != null) serverKeys.add(String(marker.visitId));
     }
 
-    // 1) Work start
     if (dutyMap?.startMarker) {
       rows.push({
         id: "route-start",
@@ -130,7 +173,6 @@ export function DutyMapCard({
       });
     }
 
-    // 2) Completed (and pending) visits — numbered in order
     for (const marker of dutyMap?.visitMarkers ?? []) {
       rows.push({
         ...marker,
@@ -169,7 +211,6 @@ export function DutyMapCard({
       });
     }
 
-    // 3) Work end (when workday finished)
     if (dutyMap?.endMarker) {
       rows.push({
         id: "route-end",
@@ -180,30 +221,106 @@ export function DutyMapCard({
         kind: "route_end"
       });
     }
-    return rows;
-  }, [dutyMap, pendingVisits, t]);
+
+    // Custom blue "You" only when native user-location dot is unavailable.
+    if (showCustomLive && live) {
+      rows.push({
+        id: "current-live",
+        lat: live.latitude,
+        lng: live.longitude,
+        title: t("myLocation.legendYou"),
+        description: t("myLocation.liveLocationHint"),
+        kind: "current"
+      });
+    }
+
+    return spreadDuplicateMapCoordinates(rows);
+  }, [dutyMap, live, pendingVisits, showCustomLive, t]);
 
   const mapRegion = useMemo(() => {
     if (fitCoordinates.length === 0) return DEFAULT_MAP_REGION;
+    if (fitCoordinates.length === 1) {
+      return {
+        latitude: fitCoordinates[0].latitude,
+        longitude: fitCoordinates[0].longitude,
+        latitudeDelta: DAY_SINGLE_DELTA,
+        longitudeDelta: DAY_SINGLE_DELTA
+      };
+    }
     return fitFieldMapRegion(
       fitCoordinates.map((p) => ({ lat: p.latitude, lng: p.longitude })),
       DEFAULT_MAP_REGION,
-      { padding: 1.5, minDelta: 0.012, maxDelta: 0.08 }
+      DAY_FIT_OPTIONS
     );
   }, [fitCoordinates]);
+
+  const cameraFitKey = useMemo(() => {
+    const dutyKey = String(dutyMap?.dutyId ?? dutyMap?.workdayId ?? "none");
+    return `${dutyKey}|${stableFitSignature}|n${fitNonce}|r${mapRetryKey}`;
+  }, [dutyMap?.dutyId, dutyMap?.workdayId, fitNonce, mapRetryKey, stableFitSignature]);
 
   const mapHeight = fill ? Math.max(MAP_FILL_MIN_HEIGHT, previewHeight) : MAP_HEIGHT;
   const showMap = previewWidth > 0 && mapHeight > 0;
   const hasStart = Boolean(dutyMap?.startMarker);
   const hasEnd = Boolean(dutyMap?.endMarker);
+  const hasVisit = (dutyMap?.visitMarkers?.length ?? 0) > 0 || pendingVisits.some((v) => pendingCoord(v));
+  const hasLive = showNativeLive || showCustomLive;
   const visitCount = dutyMap?.visitMarkers?.length ?? 0;
   const pendingCount = pendingVisits.filter((v) => pendingCoord(v)).length;
-  const isEmpty = markers.length === 0;
+  const isEmpty = markers.length === 0 && !showNativeLive;
   const mapSummary = t("a11y.mapSummary", { visits: visitCount, pending: pendingCount });
+  const needsLocationFix = permissionDenied || (!gpsEnabled && !live);
 
   const emptyMessage = !hasStart
     ? t("myLocation.noVisitsMapHint")
     : t("myLocation.noVisitsYetOnMap");
+
+  const handleFitAll = useCallback(() => {
+    setFitNonce((n) => n + 1);
+  }, []);
+
+  const handleRecenter = useCallback(() => {
+    const map = mapRef.current;
+    if (live && map) {
+      try {
+        map.animateToRegion(
+          {
+            latitude: live.latitude,
+            longitude: live.longitude,
+            latitudeDelta: DAY_SINGLE_DELTA,
+            longitudeDelta: DAY_SINGLE_DELTA
+          },
+          420
+        );
+        return;
+      } catch {
+        // fall through to fit-all
+      }
+    }
+    handleFitAll();
+  }, [handleFitAll, live]);
+
+  const handleRetry = useCallback(() => {
+    setMapRetryKey((n) => n + 1);
+    void refreshDutyMap().catch(() => undefined);
+    void refreshTrackingState().catch(() => undefined);
+  }, [refreshDutyMap, refreshTrackingState]);
+
+  const handleFixLocation = useCallback(() => {
+    void (async () => {
+      const result = await ensureLocationReadyForVisit().catch(() => null);
+      if (!result || result.ok) {
+        void refreshTrackingState().catch(() => undefined);
+        return;
+      }
+      promptFixLocationAccess(result, {
+        onRetry: () => {
+          void refreshTrackingState().catch(() => undefined);
+          void refreshDutyMap().catch(() => undefined);
+        }
+      });
+    })();
+  }, [refreshDutyMap, refreshTrackingState]);
 
   return (
     <View
@@ -234,19 +351,25 @@ export function DutyMapCard({
         ) : (
           <View style={styles.mapStack}>
             <FieldMapView
+              key={`day-map-${mapRetryKey}`}
               screenName="DutyMapCard"
               height={mapHeight}
               width={previewWidth}
               region={mapRegion}
               markers={markers}
+              /* Marker-only employee map — never draw GPS breadcrumbs. */
+              route={[]}
+              cameraMode="cappedRegion"
+              cameraFitKey={cameraFitKey}
               fitCoordinates={fitCoordinates.length ? fitCoordinates : undefined}
               fitEdgePadding={
                 fill
-                  ? { top: 48, right: 40, bottom: 88, left: 40 }
-                  : { top: 36, right: 32, bottom: 56, left: 32 }
+                  ? { top: 56, right: 52, bottom: 52, left: 52 }
+                  : { top: 36, right: 36, bottom: 40, left: 36 }
               }
-              showsUserLocation={false}
-              locationGranted={false}
+              mapRef={mapRef}
+              showsUserLocation={showNativeLive}
+              locationGranted={showNativeLive}
               followsUserLocation={false}
               permissionResolved
               loading={false}
@@ -264,20 +387,38 @@ export function DutyMapCard({
                   : undefined
               }
             />
-            {!isEmpty ? (
-              <View style={styles.legend} pointerEvents="none">
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendBadge, { backgroundColor: "#16A34A" }]}>
-                    <Text style={styles.legendBadgeText}>S</Text>
+
+            {!isEmpty || hasLive ? (
+              <View
+                style={styles.legend}
+                pointerEvents="none"
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+              >
+                {hasStart ? (
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendBadge, { backgroundColor: "#16A34A" }]}>
+                      <Text style={styles.legendBadgeText}>S</Text>
+                    </View>
+                    <Text style={styles.legendText}>{t("myLocation.legendRouteStart")}</Text>
                   </View>
-                  <Text style={styles.legendText}>{t("myLocation.legendRouteStart")}</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendBadge, { backgroundColor: "#0B6B3A" }]}>
-                    <Text style={styles.legendBadgeText}>1</Text>
+                ) : null}
+                {hasVisit ? (
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendBadge, { backgroundColor: "#0B6B3A" }]}>
+                      <Text style={styles.legendBadgeText}>1</Text>
+                    </View>
+                    <Text style={styles.legendText}>{t("myLocation.legendVisit")}</Text>
                   </View>
-                  <Text style={styles.legendText}>{t("myLocation.legendVisit")}</Text>
-                </View>
+                ) : null}
+                {hasLive ? (
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendBadge, styles.legendLive]}>
+                      <View style={styles.legendLiveDot} />
+                    </View>
+                    <Text style={styles.legendText}>{t("myLocation.legendYouShort")}</Text>
+                  </View>
+                ) : null}
                 {hasEnd ? (
                   <View style={styles.legendItem}>
                     <View style={[styles.legendBadge, { backgroundColor: "#DC2626" }]}>
@@ -286,6 +427,53 @@ export function DutyMapCard({
                     <Text style={styles.legendText}>{t("myLocation.legendRouteEnd")}</Text>
                   </View>
                 ) : null}
+              </View>
+            ) : null}
+
+            {!isEmpty || hasLive ? (
+              <View style={styles.controls} pointerEvents="box-none">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("myLocation.locateMe")}
+                  onPress={handleRecenter}
+                  style={styles.controlBtn}
+                >
+                  <Ionicons name="locate-outline" size={18} color={Colors.brand700} />
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("myLocation.fitRoute")}
+                  onPress={handleFitAll}
+                  style={styles.controlBtn}
+                >
+                  <Ionicons name="scan-outline" size={18} color={Colors.brand700} />
+                </Pressable>
+              </View>
+            ) : null}
+
+            {isEmpty ? (
+              <View style={styles.emptyOverlay} pointerEvents="box-none">
+                <Text style={styles.emptyTitle}>{emptyMessage}</Text>
+                <View style={styles.emptyActions}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={handleRetry}
+                    style={styles.emptyBtn}
+                  >
+                    <Ionicons name="refresh-outline" size={16} color={Colors.brand700} />
+                    <Text style={styles.emptyBtnText}>Retry</Text>
+                  </Pressable>
+                  {needsLocationFix ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={handleFixLocation}
+                      style={styles.emptyBtn}
+                    >
+                      <Ionicons name="location-outline" size={16} color={Colors.brand700} />
+                      <Text style={styles.emptyBtnText}>Fix Location</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               </View>
             ) : null}
           </View>
@@ -305,7 +493,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: MAP_FILL_MIN_HEIGHT,
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm
+    paddingTop: Spacing.xs
   },
   title: {
     color: Colors.text1,
@@ -336,21 +524,17 @@ const styles = StyleSheet.create({
     position: "relative"
   },
   legend: {
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.94)",
-    borderColor: Colors.border,
-    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderColor: "rgba(15, 40, 28, 0.08)",
+    borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
-    bottom: 12,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    justifyContent: "center",
-    left: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    gap: 5,
+    left: 10,
+    maxWidth: "52%",
+    paddingHorizontal: 8,
+    paddingVertical: 7,
     position: "absolute",
-    right: 12
+    top: 10
   },
   legendItem: {
     alignItems: "center",
@@ -360,21 +544,84 @@ const styles = StyleSheet.create({
   legendBadge: {
     alignItems: "center",
     borderColor: "#FFFFFF",
-    borderRadius: 9,
+    borderRadius: 8,
     borderWidth: 1.5,
-    height: 18,
+    height: 16,
     justifyContent: "center",
-    width: 18
+    width: 16
   },
   legendBadgeText: {
     color: "#FFFFFF",
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: "800"
+  },
+  legendLive: {
+    backgroundColor: "#2563EB"
+  },
+  legendLiveDot: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 3,
+    height: 6,
+    width: 6
   },
   legendText: {
     color: Colors.text2,
-    fontSize: FontSize.xs,
+    flexShrink: 1,
+    fontSize: 11,
     fontWeight: FontWeight.semibold
+  },
+  controls: {
+    gap: 8,
+    position: "absolute",
+    right: 10,
+    top: 10
+  },
+  controlBtn: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.96)",
+    borderColor: Colors.border,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    elevation: 2,
+    height: 36,
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    width: 36
+  },
+  emptyOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    backgroundColor: "rgba(232, 240, 234, 0.92)",
+    gap: 12,
+    justifyContent: "center",
+    paddingHorizontal: 20
+  },
+  emptyTitle: {
+    color: Colors.text2,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semibold,
+    textAlign: "center"
+  },
+  emptyActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    justifyContent: "center"
+  },
+  emptyBtn: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  emptyBtnText: {
+    color: Colors.brand700,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold
   },
   loading: {
     alignItems: "center",

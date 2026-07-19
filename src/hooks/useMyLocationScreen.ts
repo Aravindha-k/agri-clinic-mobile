@@ -55,35 +55,42 @@ export function useMyLocationScreen() {
     [dutyMap?.visitMarkers]
   );
 
-  const markers = useMemo<MapPin[]>(() => {
-    return [
-      dutyMap?.startMarker
-        ? {
-            id: "route-start",
-            lat: dutyMap.startMarker.latitude,
-            lng: dutyMap.startMarker.longitude,
-            title: "Route start",
-            kind: "route_start" as const
-          }
-        : null,
-      ...(dutyMap?.visitMarkers ?? []),
-      dutyMap?.endMarker
-        ? {
-            id: "route-end",
-            lat: dutyMap.endMarker.latitude,
-            lng: dutyMap.endMarker.longitude,
-            title: "Route end",
-            kind: "route_end" as const
-          }
-        : null
-    ].filter((marker): marker is MapPin => marker != null);
-  }, [dutyMap]);
+  const markers = useMemo((): MapPin[] => {
+    const rows: MapPin[] = [];
+    if (dutyMap?.startMarker) {
+      rows.push({
+        id: "route-start",
+        lat: dutyMap.startMarker.latitude,
+        lng: dutyMap.startMarker.longitude,
+        title: "Start",
+        kind: "route_start"
+      });
+    }
+    for (const marker of dutyMap?.visitMarkers ?? []) {
+      rows.push({
+        ...marker,
+        kind: "visit",
+        label: marker.sequence ?? marker.label
+      });
+    }
+    if (workdayFinished && dutyMap?.endMarker) {
+      rows.push({
+        id: "route-end",
+        lat: dutyMap.endMarker.latitude,
+        lng: dutyMap.endMarker.longitude,
+        title: "End",
+        kind: "route_end"
+      });
+    }
+    return rows;
+  }, [dutyMap, workdayFinished]);
 
   const fitCoordinates = useMemo<MapCoordinate[] | undefined>(() => {
-    if (dutyMap?.bounds?.length) return dutyMap.bounds;
-    if (liveCoordinate) return [liveCoordinate];
-    return undefined;
-  }, [dutyMap?.bounds, liveCoordinate]);
+    if (!markers.length) {
+      return isActive && liveCoordinate ? [liveCoordinate] : undefined;
+    }
+    return markers.map((m) => ({ latitude: m.lat, longitude: m.lng }));
+  }, [isActive, liveCoordinate, markers]);
 
   const mapRegion = useMemo(() => {
     if (!fitCoordinates?.length) return DEFAULT_MAP_REGION;

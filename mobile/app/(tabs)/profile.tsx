@@ -14,7 +14,6 @@ import {
 } from "react-native";
 import { Employee, getCurrentEmployee } from "../../../src/api/employees";
 import { useI18n } from "../../../src/i18n/I18nContext";
-import { formatRelativeTimeLocalized } from "../../../src/i18n";
 import { useRefreshControlProps } from "../../../src/hooks/useRefreshControlProps";
 import { useSafeAreaInsetsCompat } from "../../../src/hooks/useSafeAreaInsetsCompat";
 import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
@@ -34,11 +33,10 @@ import { formatDisplayRole } from "../../../src/utils/formatRole";
 import { cacheBustPhotoUrl, extractPhotoUrl, photoCacheVersion } from "../../../src/utils/profilePhotoUrl";
 import { fetchVisitsPage } from "../../../src/api/visits";
 import { EmptyState, GhostButton } from "../../components/ui";
-import { FlatCard, ScreenCanvas, ScreenEntranceBloom, ScreenLoader } from "../../components/layout";
+import { ScreenCanvas, ScreenEntranceBloom, ScreenLoader } from "../../components/layout";
 import { FadeInSection, entranceListStagger, entranceStagger } from "../../components/ui/FadeInSection";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
 import { getBadgeCount } from "../../lib/notificationsApi";
-import { useSyncStore } from "../../lib/store/syncStore";
 import { DS } from "../../../src/theme/globalStyles";
 import { Colors, FontSize, FontWeight, Layout, Radius, Spacing } from "../../lib/theme";
 import { SECTION_LABEL } from "../../lib/sectionLabel";
@@ -104,26 +102,6 @@ function HeroAvatar({
       ) : (
         <ProfilePhotoFallback size={size} />
       )}
-    </View>
-  );
-}
-
-function SyncStatusChip({
-  syncing,
-  pendingCount,
-  label
-}: {
-  syncing: boolean;
-  pendingCount: number;
-  label: string;
-}) {
-  const online = pendingCount === 0 && !syncing;
-  return (
-    <View style={[styles.syncChip, online ? styles.syncChipOnline : styles.syncChipPending]}>
-      <View style={[styles.syncDot, online ? styles.syncDotOnline : styles.syncDotPending]} />
-      <Text style={[styles.syncChipText, online ? styles.syncChipTextOnline : styles.syncChipTextPending]}>
-        {label}
-      </Text>
     </View>
   );
 }
@@ -198,8 +176,7 @@ export default function ProfileTabScreen() {
   const refreshControlProps = useRefreshControlProps();
   const { signOut } = useAuth();
   const { employee, refreshEmployee } = useEmployee();
-  const { pendingCount, lastSyncAt, refreshQueue, syncAll, syncing } = useOfflineSync();
-  const pendingGpsCount = useSyncStore((state) => state.pendingGPSCount);
+  const { refreshQueue } = useOfflineSync();
   const { t, language, setLanguage } = useI18n();
   const { currentDuty, hydrationStatus } = useDuty();
   const dutyPresentation = useDutyPresentation(currentDuty);
@@ -213,10 +190,8 @@ export default function ProfileTabScreen() {
   const [visitsToday, setVisitsToday] = useState(0);
   const [visitsMonth, setVisitsMonth] = useState(0);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
-  const [syncingAll, setSyncingAll] = useState(false);
   const lastLoadAtRef = useRef(0);
   const PROFILE_FOCUS_TTL_MS = 45_000;
-  const SIGN_OUT_SYNC_TIMEOUT_MS = 8_000;
 
   const load = useCallback(async () => {
     try {
@@ -255,18 +230,6 @@ export default function ProfileTabScreen() {
       void load();
     }, [load, profile, refreshQueue])
   );
-
-  async function handleSyncAll() {
-    setSyncingAll(true);
-    try {
-      await syncAll();
-      await load();
-    } catch (err) {
-      Alert.alert(t("common.syncFailed"), err instanceof Error ? err.message : t("common.tryAgain"));
-    } finally {
-      setSyncingAll(false);
-    }
-  }
 
   function confirmSignOut() {
     const blocked = checkLogoutAllowed();
@@ -332,8 +295,6 @@ export default function ProfileTabScreen() {
   const roleLabel = formatDisplayRole(profile?.role);
   const employeeId = profile?.employee_id?.toString().trim() || "—";
   const phone = profile?.phone?.trim() || "—";
-  const lastSyncedLabel = formatRelativeTimeLocalized(language, lastSyncAt);
-  const neverSynced = !lastSyncAt;
   const workdayStatusLabel =
     hydrationStatus === "loading" || hydrationStatus === "idle"
       ? t("workdayUx.loadingWorkday")
@@ -351,18 +312,6 @@ export default function ProfileTabScreen() {
         title: t("profile.notifications"),
         badge: unreadNotifications,
         onPress: () => rootNav?.navigate("Notifications")
-      },
-      {
-        key: "diagnostics",
-        icon: "pulse-outline",
-        title: t("profile.diagnostics"),
-        onPress: () => navigation.navigate("Diagnostics")
-      },
-      {
-        key: "help",
-        icon: "help-circle-outline",
-        title: t("profile.help"),
-        onPress: () => navigation.navigate("Help")
       },
       {
         key: "settings",
@@ -430,17 +379,6 @@ export default function ProfileTabScreen() {
               <View style={styles.roleBadge}>
                 <Text style={styles.roleText}>{roleLabel}</Text>
               </View>
-              <SyncStatusChip
-                syncing={syncing}
-                pendingCount={pendingCount + pendingGpsCount}
-                label={
-                  syncing
-                    ? t("home.syncing")
-                    : pendingCount + pendingGpsCount > 0
-                      ? t("profile.pendingSync", { count: pendingCount + pendingGpsCount })
-                      : t("profile.synced")
-                }
-              />
               <Text style={styles.userMeta} numberOfLines={2}>
                 {employeeId !== "—" ? `EMP ${employeeId}` : "EMP —"}
                 {phone !== "—" ? ` · ${phone}` : ""}
@@ -495,37 +433,6 @@ export default function ProfileTabScreen() {
           </FadeInSection>
 
           <FadeInSection replayKey={entranceTick} delay={entranceListStagger(2, menuRows.length + 1)} variant="card">
-          <FlatCard style={styles.syncCard} padded>
-            <SectionLabel title={t("profile.syncOffline")} />
-            <View style={styles.syncRow}>
-              <Text style={styles.syncKey}>{t("profile.pendingVisits")}</Text>
-              <Text style={[styles.syncValue, pendingCount > 0 && styles.syncValueWarn]}>
-                {pendingCount}
-              </Text>
-            </View>
-            <View style={styles.syncRow}>
-              <Text style={styles.syncKey}>{t("profile.pendingGps")}</Text>
-              <Text style={[styles.syncValue, pendingGpsCount > 0 && styles.syncValueWarn]}>
-                {pendingGpsCount} {t("common.points")}
-              </Text>
-            </View>
-            <View style={[styles.syncRow, styles.syncRowLast]}>
-              <Text style={styles.syncKey}>{t("profile.lastSynced")}</Text>
-              <Text style={[styles.syncValue, neverSynced && styles.syncValueNever]}>{lastSyncedLabel}</Text>
-            </View>
-          </FlatCard>
-          </FadeInSection>
-
-          <FadeInSection replayKey={entranceTick} delay={entranceListStagger(2, menuRows.length + 2)} variant="card">
-          <GhostButton
-            label={t("syncHealth.viewStatus")}
-            onPress={() => rootNav?.navigate("SyncStatus")}
-            icon={<Ionicons name="information-circle-outline" size={18} color={Colors.brand700} />}
-            style={styles.signOutBtnOuter}
-          />
-          </FadeInSection>
-
-          <FadeInSection replayKey={entranceTick} delay={entranceListStagger(2, menuRows.length + 3)} variant="card">
           <GhostButton
             label={t("profile.signOut")}
             onPress={confirmSignOut}
@@ -589,44 +496,6 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden"
-  },
-  syncChip: {
-    alignItems: "center",
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 5
-  },
-  syncChipOnline: {
-    backgroundColor: Colors.greenBg,
-    borderColor: Colors.green
-  },
-  syncChipPending: {
-    backgroundColor: Colors.amberBg,
-    borderColor: Colors.amber
-  },
-  syncDot: {
-    borderRadius: 4,
-    height: 8,
-    width: 8
-  },
-  syncDotOnline: {
-    backgroundColor: Colors.green
-  },
-  syncDotPending: {
-    backgroundColor: Colors.amber
-  },
-  syncChipText: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold
-  },
-  syncChipTextOnline: {
-    color: Colors.greenText
-  },
-  syncChipTextPending: {
-    color: Colors.amberText
   },
   userName: {
     color: Colors.text1,
@@ -793,45 +662,9 @@ const styles = StyleSheet.create({
   langPillTextActive: {
     color: Colors.onPrimary
   },
-  syncCard: {
-    marginHorizontal: Spacing.lg,
-    marginTop: Spacing.xs
-  },
-  syncBtnOuter: {
-    marginHorizontal: Spacing.lg
-  },
   signOutBtnOuter: {
     borderColor: Colors.red,
     marginHorizontal: Spacing.lg,
     marginTop: Spacing.sm
-  },
-  syncRow: {
-    borderBottomColor: Colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 5
-  },
-  syncRowLast: {
-    borderBottomWidth: 0
-  },
-  syncKey: {
-    color: Colors.text3,
-    fontSize: FontSize.body,
-    fontWeight: FontWeight.medium
-  },
-  syncValue: {
-    color: Colors.text1,
-    fontSize: FontSize.body,
-    fontWeight: FontWeight.bold
-  },
-  syncValueWarn: {
-    color: Colors.amber
-  },
-  syncValueNever: {
-    color: Colors.red
-  },
-  syncBtnDisabled: {
-    opacity: 0.7
-  },
+  }
 });

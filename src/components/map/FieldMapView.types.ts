@@ -37,6 +37,16 @@ export type FieldMapViewProps = {
   route?: MapCoordinate[];
   fitCoordinates?: MapCoordinate[];
   fitEdgePadding?: { top: number; right: number; bottom: number; left: number };
+  /**
+   * When set, camera re-fits only when this key changes (plus first map-ready).
+   * Avoids continuous refit on every render / minor region churn.
+   */
+  cameraFitKey?: string;
+  /**
+   * `cappedRegion` uses the provided `region` (with maxDelta) instead of native
+   * fitToCoordinates, which can zoom out to city/district scale.
+   */
+  cameraMode?: "fitCoordinates" | "cappedRegion";
   showsUserLocation?: boolean;
   followsUserLocation?: boolean;
   loading?: boolean;

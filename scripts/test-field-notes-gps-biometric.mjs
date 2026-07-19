@@ -131,7 +131,7 @@ mustInclude(
     'reason: "explicit_logout"',
     "setPreferPasswordLoginThisSession(true)"
   ],
-  "auth keeps session on network; logout clears"
+  "auth keeps session on network; logout clears tokens"
 );
 mustNotInclude(
   "src/storage/AuthContext.tsx",

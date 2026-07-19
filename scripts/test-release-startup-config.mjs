@@ -23,10 +23,43 @@ test("src/api/config.ts resolves release config without throwing at import", () 
 
 test("App.tsx renders configuration recovery instead of crashing", () => {
   const appTsx = read("App.tsx");
-  assert.match(appTsx, /StartupConfigRecovery/);
-  assert.match(appTsx, /getApiConfigError/);
-  assert.match(appTsx, /The app could not start/);
+  const errors = read("src/bootstrap/startupErrors.ts");
+
+  // Categorized multilingual copy lives in startupErrors — not hardcoded in App.tsx.
+  assert.match(errors, /export type StartupErrorCategory/);
+  assert.match(errors, /configuration_error/);
+  assert.match(errors, /export function getStartupErrorCopy/);
+  assert.match(errors, /messageTa:/);
+  assert.match(errors, /configuration_error:\s*\{[\s\S]*?title:[\s\S]*?message:[\s\S]*?messageTa:/);
+  assert.doesNotMatch(appTsx, /The app could not start/);
+
+  // Config recovery UI: localized copy + build diagnostics + optional error code.
+  assert.match(appTsx, /function StartupConfigRecovery/);
+  assert.match(appTsx, /getStartupErrorCopy\("configuration_error"\)/);
+  assert.match(appTsx, /getApiBuildDiagnostics\(\)/);
+  assert.match(appTsx, /getApiConfigError\(\)/);
+  assert.match(appTsx, /\{copy\.title\}/);
+  assert.match(appTsx, /\{copy\.message\}/);
+  assert.match(appTsx, /\{copy\.messageTa\}/);
+  assert.match(appTsx, /diag\.appVersion/);
+  assert.match(appTsx, /diag\.gitCommit/);
+  assert.match(appTsx, /configError \? `\\n\$\{configError\.code\}`/);
+
+  // Configuration errors never crash — early recovery branch before providers mount.
+  assert.match(appTsx, /const startupConfigError = getApiConfigError\(\)/);
+  assert.match(
+    appTsx,
+    /if \(startupConfigError\) \{\s*return \([\s\S]*?<StartupConfigRecovery \/>/
+  );
+
+  // Categorized failure recovery retains bilingual copy + retry where applicable.
+  assert.match(appTsx, /function StartupFailureRecovery/);
+  assert.match(appTsx, /getStartupErrorCopy\(category\)/);
+  assert.match(appTsx, /onRetry=\{retryBootstrap\}/);
+  assert.match(appTsx, /Retry \/ மீண்டும் முயற்சி/);
+  assert.match(appTsx, /<StartupFailureRecovery category=\{bootError\} onRetry=\{retryBootstrap\} \/>/);
 });
+
 
 test("api client maps missing config to CONFIG_ERROR request error", () => {
   const clientTs = read("src/api/client.ts");

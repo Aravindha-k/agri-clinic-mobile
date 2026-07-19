@@ -83,12 +83,11 @@ export function normalizeDutyMapPayload(raw: unknown): DutyMapSummary {
     .map(visitMarkerFrom)
     .filter((marker): marker is DutyMapVisitMarker => marker != null);
   const bounds = coordList(row.bounds);
+  // Employee map framing — markers only. routePoints stay on the payload for admin/analytics.
   const fallbackBounds = [
     startMarker,
-    ...routePoints,
     ...visitMarkers.map(markerToCoord),
-    endMarker,
-    currentLiveLocation
+    endMarker
   ].filter((point): point is MapCoordinate => point != null);
 
   return {

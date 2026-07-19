@@ -24,6 +24,6 @@ export function ScreenPageHeader({ title, subtitle, right, style }: Props) {
 
 const styles = StyleSheet.create({
   wrap: {
-    paddingBottom: Spacing.md
+    paddingBottom: Spacing.sm
   }
 });

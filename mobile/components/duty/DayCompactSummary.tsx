@@ -106,17 +106,17 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderBottomColor: Colors.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 4,
+    gap: 3,
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md
+    paddingVertical: Spacing.sm
   },
   cardCompact: {
     backgroundColor: Colors.surface,
     borderBottomColor: Colors.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: Spacing.sm,
+    gap: 6,
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm
+    paddingVertical: Spacing.xs
   },
   header: {
     alignItems: "center",

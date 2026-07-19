@@ -218,8 +218,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [performLocalSignOut]);
 
   const forceSessionExpiredLogout = useCallback(async () => {
-    // Keep biometric enabled on this device. Password login restores tokens;
-    // fingerprint works again without asking to set it up a second time.
+    // Clear access/refresh/device-session. Keep biometric preference — next password
+    // login restores a refresh token so fingerprint unlock works again.
     await performLocalSignOut({ notice: SESSION_EXPIRED_MESSAGE, reason: "session_expired" });
   }, [performLocalSignOut]);
 
@@ -570,11 +570,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const tokens = await loginRequest(username, password);
       await saveTokens(tokens);
       await establishAuthenticatedSession();
-      // Fingerprint preference is kept across session expiry — log reconnect.
+      // Password is never persisted. New refresh token enables fingerprint again.
       try {
         const status = await getBiometricLoginStatus();
         if (status.enabled) {
-          logStartup("biometric_reconnected", "password login restored tokens");
+          logStartup("biometric_reconnected", "password login restored refresh token");
         }
       } catch {
         // ignore
@@ -604,7 +604,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         result.outcome === "timeout" ||
         result.outcome === "prompt_busy"
       ) {
-        // Cancel/fail from unlock gate → remain locked. From Login → stay on Login.
+        // Cancel/fail from unlock gate → remain locked. Tokens retained. No password login call.
         applyPhase(startedPhase === "unauthenticated" ? "unauthenticated" : "locked", result.outcome);
       } else if (
         result.outcome === "not_enrolled" ||
@@ -616,8 +616,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else if (result.outcome === "network_error" || result.outcome === "server_error") {
         // Keep tokens + biometric preference — stay locked for retry.
         applyPhase(startedPhase === "unauthenticated" ? "unauthenticated" : "locked", result.outcome);
+      } else if (result.outcome === "session_replaced") {
+        setPreferPasswordLoginThisSession(true);
+        await performLocalSignOut({
+          notice: SESSION_REPLACED_MESSAGE,
+          reason: "session_replaced",
+          phase: "session_replaced"
+        });
       } else if (result.outcome === "no_refresh_token" || result.outcome === "token_refresh_failed") {
-        // Confirmed dead session — password once. Keep biometric preference for reconnect.
+        // Refresh missing/rejected — clear session, keep biometric preference, password once.
         setPreferPasswordLoginThisSession(true);
         await performLocalSignOut({
           notice: SESSION_EXPIRED_MESSAGE,
@@ -646,9 +653,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     await runPreSignOutHandlers();
 
-    // Explicit logout always clears the authenticated session. Biometric preference
-    // may remain enabled so the next password login rebinds fingerprint unlock —
-    // never unlock a logged-out account without a fresh password session.
+    // Explicit logout clears access/refresh/device-session. Biometric preference may
+    // remain, but without a refresh token fingerprint cannot authenticate.
     setPreferPasswordLoginThisSession(true);
     resetBiometricUnlockAttemptThisLaunch();
     try {

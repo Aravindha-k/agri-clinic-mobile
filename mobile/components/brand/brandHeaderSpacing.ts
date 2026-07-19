@@ -1,7 +1,7 @@
 /** Premium brand header spacing — tight brand unit, generous content below. */
 export const BrandHeaderSpacing = {
   logoToTitle: 12,
-  titleToSubtitle: 6,
+  titleToSubtitle: 8,
   subtitleToGreeting: 0,
   greetingToHero: 18,
   brandPanelBottom: 8,

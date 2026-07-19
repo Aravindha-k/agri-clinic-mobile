@@ -6,13 +6,14 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 
 test("Day map renders markers without movement polyline and never follows the camera", () => {
   const screen = read("src/screens/map/MyLocationScreen.tsx");
-  // No movement/breadcrumb polyline on the day map.
-  assert.doesNotMatch(screen, /\broute=\{/);
+  // Explicit empty route — no movement/breadcrumb polyline coordinates.
+  assert.match(screen, /route=\{\[\]\}/);
+  assert.doesNotMatch(screen, /<\s*Polyline\b/);
   // Camera must not chase the user (start + visit dots stay framed).
   assert.match(screen, /followsUserLocation=\{false\}/);
-  // Current location dot is shown only once foreground permission is granted.
-  assert.match(screen, /showsUserLocation=\{locationGranted\}/);
-  assert.match(screen, /locationGranted=\{locationGranted\}/);
+  // Current location / granted gate only when duty is active and permission granted.
+  assert.match(screen, /showsUserLocation=\{isActive && locationGranted\}/);
+  assert.match(screen, /locationGranted=\{isActive && locationGranted\}/);
 });
 
 test("Day card renders only canonical duty-map data and exposes button semantics", () => {

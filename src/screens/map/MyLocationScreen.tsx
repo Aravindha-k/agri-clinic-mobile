@@ -105,11 +105,12 @@ export function MyLocationScreen({ navigation, route }: Props) {
               fitCoordinates={fitCoordinates}
               fitEdgePadding={{ top: 72, right: 56, bottom: 88, left: 40 }}
               markers={markers}
+              route={[]}
               mapRef={mapRef}
-              showsUserLocation={locationGranted}
+              showsUserLocation={isActive && locationGranted}
               followsUserLocation={false}
-              locationGranted={locationGranted}
-              accuracyCircle={liveCoordinate ? accuracyCircle : undefined}
+              locationGranted={isActive && locationGranted}
+              accuracyCircle={isActive && liveCoordinate ? accuracyCircle : undefined}
               permissionResolved
               locationDenied={false}
               loading={false}

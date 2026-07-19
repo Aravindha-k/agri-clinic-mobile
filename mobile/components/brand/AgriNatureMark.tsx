@@ -21,24 +21,41 @@ export function computeOrbitGap(diameter: number, gapRatio = BRAND_ORBIT_GAP_RAT
   return diameter * gapRatio;
 }
 
-export function computeOrbitChipSize(diameter: number, compact = true) {
-  const chipPad = compact ? 6 : ORBIT_CHIP_PADDING;
-  // Readable orbit icons — previously compact capped near 12dp and looked static/tiny.
-  const iconSize = Math.max(
-    compact ? 24 : 28,
-    Math.round(diameter * (compact ? 0.24 : 0.26))
-  );
+export function computeOrbitChipSize(
+  diameter: number,
+  compact = true,
+  options?: { iconSizeOverride?: number; chipPad?: number }
+) {
+  const chipPad = options?.chipPad ?? (compact ? 6 : ORBIT_CHIP_PADDING);
+  const iconSize =
+    options?.iconSizeOverride ??
+    Math.max(compact ? 24 : 28, Math.round(diameter * (compact ? 0.24 : 0.26)));
   return iconSize + chipPad * 2 + 2;
 }
 
 export function computeOrbitStageSize(
   diameter: number,
-  options?: { gapRatio?: number; compact?: boolean }
+  options?: {
+    gapRatio?: number;
+    compact?: boolean;
+    iconSizeOverride?: number;
+    chipPad?: number;
+    /** Chips travel on the ring — canvas = diameter + chip + edge pads (Today). */
+    chipsOnTrack?: boolean;
+    edgePad?: number;
+  }
 ) {
   const gapRatio = options?.gapRatio ?? BRAND_ORBIT_GAP_RATIO;
   const gap = computeOrbitGap(diameter, gapRatio);
   const compact = options?.compact ?? true;
-  const chipSize = computeOrbitChipSize(diameter, compact);
+  const chipSize = computeOrbitChipSize(diameter, compact, {
+    iconSizeOverride: options?.iconSizeOverride,
+    chipPad: options?.chipPad
+  });
+  if (options?.chipsOnTrack) {
+    const edge = options.edgePad ?? 5;
+    return diameter + chipSize + edge * 2;
+  }
   return diameter + chipSize * 2 + gap * 2 + (compact ? 8 : 32);
 }
 
@@ -59,6 +76,7 @@ function RoundIconChip({
   iconSize: number;
   chipSize: number;
 }) {
+  const wellSize = Math.min(chipSize - 4, iconSize + (iconSize <= 16 ? 6 : 10));
   return (
     <View
       accessibilityLabel={icon.service}
@@ -76,9 +94,9 @@ function RoundIconChip({
         style={[
           styles.iconWell,
           {
-            width: iconSize + 10,
-            height: iconSize + 10,
-            borderRadius: (iconSize + 10) / 2
+            width: wellSize,
+            height: wellSize,
+            borderRadius: wellSize / 2
           }
         ]}
       >
@@ -171,7 +189,12 @@ export function AgriNatureOrbit({
   minimalTrack = false,
   durationMs = ORBIT_DURATION_MS,
   /** Optional explicit glyph size (Today hero uses responsive sizing). */
-  iconSizeOverride
+  iconSizeOverride,
+  /** Optional chip padding override (Today uses tighter pads). */
+  chipPadOverride,
+  /** Place chip centres on the ring so the full path fits diameter + chip + pads. */
+  chipsOnTrack = false,
+  edgePad = 5
 }: {
   diameter: number;
   animate?: boolean;
@@ -181,18 +204,28 @@ export function AgriNatureOrbit({
   minimalTrack?: boolean;
   durationMs?: number;
   iconSizeOverride?: number;
+  chipPadOverride?: number;
+  chipsOnTrack?: boolean;
+  edgePad?: number;
 }) {
-  const chipPad = compact ? 6 : ORBIT_CHIP_PADDING;
+  const chipPad = chipPadOverride ?? (compact ? 6 : ORBIT_CHIP_PADDING);
   const iconSize =
     iconSizeOverride ??
     Math.max(compact ? 24 : 28, Math.round(diameter * (compact ? 0.24 : 0.26)));
   const chipSize = iconSize + chipPad * 2 + 2;
   const logoRadius = diameter / 2;
   const gap = computeOrbitGap(diameter, gapRatio);
-  // Orbit track and chips run outside the filled logo edge.
+  // Orbit track on the ring; chips either on-track (Today) or outside (legacy).
   const trackRadius = logoRadius + gap;
-  const chipRadius = logoRadius + gap + chipSize * 0.5;
-  const stage = computeOrbitStageSize(diameter, { gapRatio, compact });
+  const chipRadius = chipsOnTrack ? trackRadius : trackRadius + chipSize * 0.5;
+  const stage = computeOrbitStageSize(diameter, {
+    gapRatio,
+    compact,
+    iconSizeOverride: iconSize,
+    chipPad,
+    chipsOnTrack,
+    edgePad
+  });
   const orbitPhaseOffset = Math.PI / 4;
   const rotation = useSharedValue(0);
   const trackCenter = stage / 2;

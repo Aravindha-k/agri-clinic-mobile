@@ -71,18 +71,67 @@ assert.match(providers, /waiting_for_metro_bundle/);
 assert.match(providers, /onFatalError/);
 
 const auth = read("src/storage/AuthContext.tsx");
-assert.match(auth, /if \(!isReady\) \{\s*await runFastLocalBootstrap\(\)/);
+const authPhase = read("src/storage/authPhase.ts");
+
+// Auth lifecycle is phase-driven (not the legacy isReady gate).
+assert.match(authPhase, /"initializing"/);
+assert.match(authPhase, /"locked"/);
+assert.match(authPhase, /"authenticating_biometric"/);
+assert.match(authPhase, /"validating_session"/);
+assert.match(authPhase, /"authenticated"/);
+assert.match(authPhase, /"unauthenticated"/);
+assert.match(auth, /applyPhase\("initializing"/);
+assert.match(auth, /runFastLocalBootstrap/);
+assert.match(auth, /foregroundBootstrapPromise/);
+assert.match(auth, /if \(foregroundBootstrapPromise\) \{\s*return foregroundBootstrapPromise/);
+assert.match(auth, /bootstrapAttemptedRef/);
+assert.match(auth, /void runFastLocalBootstrap\(\)/);
+
+// Local bootstrap must finish initializing before background validation may run.
+assert.match(
+  auth,
+  /if \(phase === "locked" \|\| phase === "authenticating_biometric" \|\| phase === "initializing"\) \{\s*return;/
+);
+assert.match(
+  auth,
+  /if \(phase !== "authenticated" && phase !== "validating_session"\) \{\s*return;/
+);
+
+// Biometric lock path — tokens retained; no network session validation from lock.
+assert.match(auth, /lockSessionForBiometric/);
+assert.match(auth, /endedPhase = "locked"/);
+assert.match(auth, /getAuthPhase\(\) !== "authenticated"/);
+
+// Foreground / reconnect validation only when authenticated (not while locked).
+assert.match(
+  auth,
+  /if \(next === "active" && getAuthPhase\(\) === "authenticated"\) \{\s*void validateSessionInBackground\(\)/
+);
+assert.match(
+  auth,
+  /if \(wasOffline && online && getAuthPhase\(\) === "authenticated"\) \{\s*void validateSessionInBackground\(\)/
+);
+
+// Hard ceiling: never remain indefinitely in initializing.
+assert.match(auth, /STARTUP_TIMEOUTS\.authLocalMs/);
+assert.match(auth, /forced_after_timeout/);
+assert.match(auth, /applyPhase\("unauthenticated", "forced_after_timeout"\)/);
+
+// Bootstrap failure reaches recoverable unauthenticated (not stuck initializing).
+assert.match(auth, /applyPhase\("unauthenticated", "bootstrap_error"\)/);
+assert.match(auth, /applyPhase\("unauthenticated", "no saved token"\)/);
+
+// Background validation single-flight + generation staleness.
 assert.match(auth, /backgroundValidationPromiseRef/);
 assert.match(auth, /const previousValidation = backgroundValidationPromiseRef\.current/);
 assert.match(auth, /await previousValidation/);
 assert.match(auth, /if \(isStale\(\)\) return/);
 assert.doesNotMatch(auth, /backgroundValidationRunningRef/);
-assert.match(auth, /setIsAuthenticated\(true\)/);
+assert.match(auth, /setIsAuthenticated\(phase === "authenticated"\)/);
 assert.match(auth, /markAuthRestored/);
 assert.match(auth, /markBootstrapBegin/);
 assert.match(auth, /markBootstrapSuccess/);
 assert.match(auth, /markBootstrapTimeout/);
-assert.match(auth, /STARTUP_TIMEOUTS\.authLocalMs/);
 assert.match(auth, /AppState\.addEventListener/);
 assert.match(auth, /NetInfo\.addEventListener/);
 assert.match(auth, /validateSessionInBackground/);
@@ -137,8 +186,11 @@ const homeHero = read("mobile/components/today/HomeLogoHero.tsx");
 assert.match(homeHero, /useIsFocused\(\)/);
 assert.match(homeHero, /AppState\.addEventListener/);
 assert.match(homeHero, /return \(\) => subscription\.remove\(\)/);
-assert.match(homeHero, /cancelAnimation\(zoom\)/);
-assert.match(homeHero, /cancelAnimation\(drift\)/);
+assert.match(homeHero, /cancelAnimation\(breath\)/);
+assert.match(homeHero, /cancelAnimation\(glow\)/);
+assert.match(homeHero, /TODAY_LOGO_BREATH_MIN/);
+assert.match(homeHero, /TODAY_LOGO_BREATH_MAX/);
+assert.match(homeHero, /TODAY_LOGO_BREATH_HALF_MS/);
 
 const sync = read("src/storage/AutomaticSyncProvider.tsx");
 assert.match(sync, /app_foreground/);

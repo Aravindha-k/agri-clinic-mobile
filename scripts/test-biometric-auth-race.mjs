@@ -112,8 +112,13 @@ mustInclude(
 // F/G — refresh rejection / session replaced clear intentionally
 mustInclude(
   "src/storage/AuthContext.tsx",
-  ["refresh_rejected_after_biometric", "session_replaced", 'reason: "session_expired"'],
-  "F/G confirmed rejection paths"
+  [
+    "refresh_rejected_after_biometric",
+    "session_replaced",
+    'reason: "session_expired"',
+    "biometric_reconnected"
+  ],
+  "F/G refresh rejection + session expiry keep preference"
 );
 
 mustInclude(
@@ -121,6 +126,36 @@ mustInclude(
   ["forceSessionExpiredLogout", "biometric_reconnected"],
   "F session expiry keeps biometric; password reconnects"
 );
+
+mustInclude(
+  "src/storage/biometricLoginStorage.ts",
+  ["via: \"refresh\"", "migrateLegacyBiometricPasswords", "legacy_password_material_cleared"],
+  "F biometric unlock uses refresh only"
+);
+
+mustNotInclude(
+  "src/storage/biometricLoginStorage.ts",
+  [
+    "saveBiometricReauthCredentials",
+    "loginWithStoredReauthCredentials",
+    "loginRequest(",
+    "SecureStore.setItemAsync(LEGACY_REAUTH"
+  ],
+  "F never store or replay password for biometric"
+);
+
+// Assert no setItemAsync writes password/credential material
+{
+  const bio = read("src/storage/biometricLoginStorage.ts");
+  assert.ok(
+    !/SecureStore\.setItemAsync\(\s*(?:REAUTH_|LEGACY_REAUTH_|LEGACY_PASS|LEGACY_USER)/.test(bio),
+    "F: must not write legacy password/username keys to SecureStore"
+  );
+  assert.ok(
+    !/setItemAsync\([^)]*password/i.test(bio),
+    "F: must not setItemAsync any password key"
+  );
+}
 
 mustNotInclude(
   "src/storage/AuthContext.tsx",

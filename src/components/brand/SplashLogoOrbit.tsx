@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import Animated, {
   Easing,
@@ -49,6 +49,9 @@ export function SplashLogoOrbit({
 }: Props) {
   const opacity = useSharedValue(1);
   const rotation = useSharedValue(0);
+  /** Lock mode at first activation — later prop changes must not cancel/restart. */
+  const reducedMotionLockedRef = useRef<boolean | null>(null);
+  const animationStartedRef = useRef(false);
 
   const ringStroke = useMemo(() => Math.max(1.75, size * 0.014), [size]);
   const inset = useMemo(() => size * 0.08, [size]);
@@ -56,7 +59,13 @@ export function SplashLogoOrbit({
   const dotSize = useMemo(() => Math.max(8, Math.round(size * 0.06)), [size]);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active || animationStartedRef.current) return;
+    animationStartedRef.current = true;
+
+    if (reducedMotionLockedRef.current === null) {
+      reducedMotionLockedRef.current = reducedMotion;
+    }
+    const useReduced = reducedMotionLockedRef.current;
 
     logStartup("ring_rendered", `size=${Math.round(size)}`);
     logStartup(
@@ -64,15 +73,12 @@ export function SplashLogoOrbit({
       `left=${Math.round(left)} top=${Math.round(top)} d=${Math.round(size)}`
     );
 
-    cancelAnimation(opacity);
-    cancelAnimation(rotation);
     rotation.value = 0;
 
-    if (reducedMotion) {
+    if (useReduced) {
       opacity.value = 1;
       logStartup("ring_animation_started", "static_reduced_motion");
       return () => {
-        cancelAnimation(opacity);
         logStartup("ring_animation_stopped", "reduced_motion_unmount");
       };
     }
@@ -98,7 +104,7 @@ export function SplashLogoOrbit({
       cancelAnimation(rotation);
       logStartup("ring_animation_stopped", "unmount");
     };
-  }, [active, left, opacity, reducedMotion, rotation, size, startDelayMs, top]);
+  }, [active, left, opacity, rotation, size, startDelayMs, top]);
 
   const fadeStyle = useAnimatedStyle(() => ({
     opacity: opacity.value

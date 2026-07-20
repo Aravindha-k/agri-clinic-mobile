@@ -20,8 +20,13 @@ type MapDiagnosticPayload = {
   note?: string;
 };
 
-/** Production-safe map diagnostics (console.warn only). */
+function mapDiagnosticsEnabled(): boolean {
+  return typeof __DEV__ !== "undefined" && __DEV__ === true;
+}
+
+/** Dev-only map diagnostics — never floods release builds. */
 export function logMapDiagnostics(screen: string, payload: MapDiagnosticPayload) {
+  if (!mapDiagnosticsEnabled()) return;
   console.warn(`[Map:${screen}]`, {
     ...payload,
     region: payload.region
@@ -48,10 +53,10 @@ export type MapLogEvent =
   | "render_error";
 
 /**
- * Structured, release-safe map lifecycle logs. Never logs the API key value —
- * only whether native Maps was configured at build time.
+ * Dev-only map lifecycle logs. Never logs API keys or credentials.
  */
 export function logMapEvent(screen: string, event: MapLogEvent, detail?: Record<string, unknown>) {
+  if (!mapDiagnosticsEnabled()) return;
   // eslint-disable-next-line no-console
   console.log(`[Map] ${event}`, { screen, ...(detail ?? {}) });
 }

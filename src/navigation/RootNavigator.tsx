@@ -9,14 +9,12 @@ import MainTabBar from "../../mobile/components/navigation/MainTabBar";
 import { VisitFabTabButton } from "../components/ui/VisitFabTabButton";
 import { useI18n } from "../i18n/I18nContext";
 import { useAuth } from "../storage/AuthContext";
-import { useDuty } from "../features/duty/store/DutyContext";
 import { useTheme } from "../theme";
 import { Colors } from "../../mobile/lib/theme";
 import { useSyncStore } from "../../mobile/lib/store/syncStore";
 import { AuthStartScreen } from "../screens/AuthStartScreen";
 import { BiometricUnlockScreen } from "../screens/BiometricUnlockScreen";
-import { LoadingState } from "../components/LoadingState";
-import { isBiometricLockPhase, isAuthBootstrapping } from "../storage/authPhase";
+import { isBiometricLockPhase } from "../storage/authPhase";
 import HomeTabScreen from "../../mobile/app/(tabs)/index";
 import WorkTabScreen from "../../mobile/app/(tabs)/work";
 import FarmerProfileScreen from "../../mobile/app/farmer/[id]";
@@ -35,7 +33,7 @@ import TrackingWorkspaceScreen from "../../mobile/app/tracking";
 import VisitDetailScreen from "../../mobile/app/visit/[id]";
 import { VisitFlowNavigator } from "./VisitFlowNavigator";
 import { logStartup, patchStartupSnapshot } from "../utils/startupDiagnostics";
-import { isStartupContinueOffline, markStartupComplete } from "../bootstrap/startupCoordinator";
+import { markStartupComplete } from "../bootstrap/startupCoordinator";
 import { registerNavigateHome } from "./navigationRecovery";
 import { rootNavigationRef } from "./rootNavigationRef";
 import { NavigationErrorBoundary } from "../components/NavigationErrorBoundary";
@@ -175,8 +173,7 @@ function MainTabs() {
 }
 
 function AppRoutes() {
-  const { isReady, isAuthenticated, authPhase } = useAuth();
-  const { hydrationStatus } = useDuty();
+  const { isReady, isAuthenticated, authPhase, sessionValidateUi } = useAuth();
   const [forceLogin, setForceLogin] = useState(false);
   const navLoggedRef = useRef<string | null>(null);
 
@@ -203,38 +200,48 @@ function AppRoutes() {
     }
   }, [forceLogin, isAuthenticated]);
 
-  if (!isReady || isAuthBootstrapping(authPhase)) {
-    return (
-      <LoadingState
-        message={authPhase === "validating_session" ? "Unlocking session..." : "Loading session..."}
-      />
-    );
+  const renderAuthShell = () => (
+    <NavigationErrorBoundary>
+      <>
+        <DeferredFieldReminderController />
+        <RootStack.Navigator screenOptions={{ headerShown: false }}>
+          <RootStack.Screen name="Auth" component={AuthNavigator} />
+        </RootStack.Navigator>
+      </>
+    </NavigationErrorBoundary>
+  );
+
+  // Cold start under cinematic splash — blank shell, never a second logo loader.
+  if (!isReady || authPhase === "initializing") {
+    return <View style={{ flex: 1 }} />;
   }
 
-  if (isBiometricLockPhase(authPhase)) {
+  // App-lock: keep unlock screen through bootstrap (no branded full-screen loader).
+  if (isBiometricLockPhase(authPhase) || (authPhase === "validating_session" && sessionValidateUi === "biometric_lock")) {
     return <BiometricUnlockScreen />;
+  }
+
+  // Password / biometric re-login: keep Login "Signing in…" until authenticated → Today.
+  if (
+    authPhase === "authenticating_password" ||
+    (authPhase === "validating_session" && sessionValidateUi === "login")
+  ) {
+    return renderAuthShell();
+  }
+
+  // Any other validating_session: blank — never branded full-screen logo.
+  if (authPhase === "validating_session") {
+    return <View style={{ flex: 1 }} />;
   }
 
   if (forceLogin) {
     logNavOnce("nav_login", "forced");
-    return (
-      <NavigationErrorBoundary>
-        <>
-          <DeferredFieldReminderController />
-          <RootStack.Navigator screenOptions={{ headerShown: false }}>
-            <RootStack.Screen name="Auth" component={AuthNavigator} />
-          </RootStack.Navigator>
-        </>
-      </NavigationErrorBoundary>
-    );
+    return renderAuthShell();
   }
 
   if (isAuthenticated && authPhase === "authenticated") {
-    const allowWithoutDuty =
-      isStartupContinueOffline() || hydrationStatus === "ready" || hydrationStatus === "error";
-    if (!allowWithoutDuty && (hydrationStatus === "idle" || hydrationStatus === "loading")) {
-      return <LoadingState message="Loading workday..." />;
-    }
+    // Duty hydrate already ran inside establishAuthenticatedSession when possible.
+    // Enter Today immediately — page-level skeletons only, no full-screen logo loader.
     logNavOnce("nav_home");
     return (
       <NavigationErrorBoundary>
@@ -278,16 +285,7 @@ function AppRoutes() {
   }
 
   logNavOnce("nav_login");
-  return (
-    <NavigationErrorBoundary>
-      <>
-        <DeferredFieldReminderController />
-        <RootStack.Navigator screenOptions={{ headerShown: false }}>
-          <RootStack.Screen name="Auth" component={AuthNavigator} />
-        </RootStack.Navigator>
-      </>
-    </NavigationErrorBoundary>
-  );
+  return renderAuthShell();
 }
 
 export function RootNavigator() {

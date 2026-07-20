@@ -1,6 +1,4 @@
 import { Alert } from "react-native";
-import * as Location from "expo-location";
-import { ensureAndroidLocationServicesEnabled } from "./ensureAndroidLocationServices";
 import { isGpsAvailable, probeGpsAvailability } from "./gpsStatus";
 
 /** User-facing readiness for Start Workday (no prompts). */
@@ -54,6 +52,7 @@ let gateInFlight = false;
 
 /**
  * Permission → device location services → ready for existing startDay().
+ * Delegates to the canonical location readiness gate.
  * Stays in-app: no Settings redirects — callers show inline errors / retry buttons.
  */
 export async function ensureLocationForWorkdayStart(
@@ -65,47 +64,29 @@ export async function ensureLocationForWorkdayStart(
   gateInFlight = true;
 
   try {
-    const permission = await ensureAppLocationPermission();
-    if (!permission.ok) {
-      return permission;
+    const { ensureLocationReadyForAction } = await import(
+      "../features/fieldTrackingSetup/locationReadinessGate"
+    );
+    const readiness = await ensureLocationReadyForAction();
+    if (readiness.status === "ready") {
+      return { ok: true };
     }
-
-    return ensureDeviceLocationServices();
+    if (readiness.status === "permission_denied_permanent") {
+      return { ok: false, reason: "permission_blocked" };
+    }
+    if (
+      readiness.status === "permission_denied_retryable" ||
+      readiness.status === "error"
+    ) {
+      return { ok: false, reason: "permission_required" };
+    }
+    if (readiness.status === "cancelled") {
+      return { ok: false, reason: "services_cancelled" };
+    }
+    return { ok: false, reason: "services_unavailable" };
   } finally {
     gateInFlight = false;
   }
-}
-
-/** App permission only — check-only, never requests OS dialog. */
-async function ensureAppLocationPermission(): Promise<WorkdayLocationGateResult> {
-  try {
-    const current = await Location.getForegroundPermissionsAsync();
-    if (current.status === "granted") {
-      return { ok: true };
-    }
-
-    if (current.status === "denied" && !current.canAskAgain) {
-      return { ok: false, reason: "permission_blocked" };
-    }
-
-    return { ok: false, reason: "permission_required" };
-  } catch {
-    return { ok: false, reason: "permission_blocked" };
-  }
-}
-
-async function ensureDeviceLocationServices(): Promise<WorkdayLocationGateResult> {
-  const result = await ensureAndroidLocationServicesEnabled();
-
-  if (result.status === "enabled" || result.status === "enabled_by_user") {
-    return { ok: true };
-  }
-
-  if (result.status === "cancelled") {
-    return { ok: false, reason: "services_cancelled" };
-  }
-
-  return { ok: false, reason: "services_unavailable" };
 }
 
 export function locationTimeoutAlert(copy: WorkdayLocationGateCopy, onRetry: () => void) {

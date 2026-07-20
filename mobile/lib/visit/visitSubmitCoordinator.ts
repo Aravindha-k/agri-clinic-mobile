@@ -62,7 +62,6 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
       currentDuty,
       startDuty,
       refreshCurrentDuty,
-      refreshDutyMap,
       bumpAfterVisitChange,
       t,
       onProgress
@@ -207,8 +206,7 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
         }
 
         await Promise.all([
-          refreshCurrentDuty().catch(() => undefined),
-          refreshDutyMap().catch(() => undefined)
+          refreshCurrentDuty().catch(() => undefined)
         ]);
         bumpAfterVisitChange();
 

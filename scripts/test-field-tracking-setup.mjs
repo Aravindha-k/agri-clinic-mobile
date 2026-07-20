@@ -162,7 +162,7 @@ for (const file of repoTs) {
   const src = fs.readFileSync(file, "utf8");
   if (src.includes("requestBackgroundPermissionsAsync")) {
     // Allow only documentation / mustNot strings in tests that assert absence.
-    if (file.includes("test-field-tracking-setup") || file.includes("test-map-permission") || file.includes("test-foreground-location")) {
+    if (file.includes("test-field-tracking-setup") || file.includes("test-map-permission") || file.includes("test-foreground-location") || file.includes("test-location-readiness-gate") || file.includes("test-tracking-health-gate") || file.includes("test-employee-day-map")) {
       continue;
     }
     assert.fail(`unexpected requestBackgroundPermissionsAsync in ${path.relative(root, file)}`);

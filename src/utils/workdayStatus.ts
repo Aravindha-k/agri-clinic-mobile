@@ -97,6 +97,12 @@ export function normalizeWorkdayRow(raw: unknown): WorkdayStatus | null {
         : typeof row.date === "string"
           ? row.date
           : undefined,
+    work_date:
+      typeof row.work_date === "string"
+        ? row.work_date
+        : typeof row.date === "string"
+          ? row.date
+          : undefined,
     start_time: typeof row.start_time === "string" ? row.start_time : startedAt,
     started_at: startedAt,
     end_time: (row.end_time as string | null | undefined) ?? (row.end_work_time as string | null | undefined) ?? null,

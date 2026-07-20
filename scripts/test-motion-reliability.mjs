@@ -48,31 +48,78 @@ must(
     "ReduceMotion.Never",
     "BRANDING_REANIMATED_ACTIVE",
     "shouldRunBrandingMotion",
+    'Platform.OS === "android"',
     "brandingWithTiming",
-    "brandingWithRepeat"
+    "brandingWithRepeat",
+    "BRANDING_REPEAT_NOOP",
+    'typeof callback === "function"',
+    "return withTiming(toValue, finalConfig);",
+    "withRepeat(animation, numberOfReps, reverse, safeCallback, BRANDING_REANIMATED_ACTIVE)"
   ],
   "branding reanimated override"
+);
+
+mustNot(
+  "src/utils/brandingReanimated.ts",
+  [
+    "withRepeat(animation, numberOfReps, reverse, callback, BRANDING_REANIMATED_ACTIVE)",
+    "withTiming(toValue, { ...config, reduceMotion: BRANDING_REANIMATED_ACTIVE }, callback)",
+    "return withRepeat(animation, numberOfReps, reverse);"
+  ],
+  "must not pass undefined callback or omit Never on withRepeat"
 );
 
 must(
   "src/components/brand/KavyaCinematicSplash.tsx",
   [
+    "lockSplashPreferLight",
+    "splashPreferLightRef",
+    "splash_mode_locked",
+    "animationStartedRef",
+    "finishSplashOnce",
+    "exitFinishTimerRef",
+    "SPLASH_EXIT_FINISH_FALLBACK_MS",
+    '"worklet"',
+    "runOnJS(finishSplashOnce)",
     "brandingWithTiming",
     "brandingWithRepeat",
-    "isExplicitReducedMotion",
-    "preferLight",
     "SPLASH_ABSOLUTE_FAILSAFE_MS",
     "animationFloorDoneRef",
     "logoOpacity.value = 1",
-    "minimum_duration_complete"
+    "minimum_duration_complete",
+    "if (exitStartedRef.current) return"
   ],
   "splash reliability"
 );
 
 mustNot(
   "src/components/brand/KavyaCinematicSplash.tsx",
-  ["effectiveMotionReady", "motionFallback", "animationStartedRef"],
-  "splash must not lock animation on stale prefs"
+  [
+    "effectiveMotionReady",
+    "motionFallback",
+    "animationStartedRef.current = false",
+    "preferLight, bgScale",
+    "motion.ready, preferLight"
+  ],
+  "splash must not remount on motion preference changes"
+);
+
+must(
+  "src/components/brand/SplashLogoOrbit.tsx",
+  [
+    "reducedMotionLockedRef",
+    "animationStartedRef",
+    "reducedMotion",
+    "opacity.value = 1",
+    "brandingWithRepeat"
+  ],
+  "splash ring mode lock"
+);
+
+mustNot(
+  "src/components/brand/SplashLogoOrbit.tsx",
+  ["[active, left, opacity, reducedMotion, rotation"],
+  "orbit must not restart when reducedMotion prop changes"
 );
 
 must(
@@ -83,15 +130,17 @@ must(
     "AppState.addEventListener",
     "CompanyLogo",
     "cancelAnimation(logoScale)",
-    "logoScale.value = 1"
+    "logoScale.value = 1",
+    "Reanimated.View",
+    "[logoScale, shouldAnimate]"
   ],
   "login logo reliability"
 );
 
 mustNot(
   "src/components/auth/LoginHeroHeader.tsx",
-  ["opacity: 0", "scale: 0"],
-  "login logo must never hide"
+  ["opacity: 0", "scale: 0", "motion.preference, motion.ready"],
+  "login logo must never hide or remount on preference flips"
 );
 
 must(
@@ -125,9 +174,26 @@ mustNot(
 );
 
 must(
-  "src/components/brand/SplashLogoOrbit.tsx",
-  ["reducedMotion", "opacity.value = 1", "brandingWithRepeat"],
-  "splash ring reduced fallback"
+  "src/notifications/expoNotificationsAccess.ts",
+  [
+    "isExpoGo",
+    "loadExpoNotifications",
+    "warnExpoGoNotificationsOnce",
+    'import("expo-notifications")'
+  ],
+  "expo go notification guard"
+);
+
+mustNot(
+  "src/notifications/fieldReminderNotifications.ts",
+  ['import * as Notifications from "expo-notifications"'],
+  "field reminders must lazy-load notifications"
+);
+
+mustNot(
+  "src/features/fieldTrackingSetup/probe.ts",
+  ['import * as Notifications from "expo-notifications"'],
+  "field tracking probe must lazy-load notifications"
 );
 
 must(

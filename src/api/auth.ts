@@ -11,6 +11,7 @@ import { getRefreshToken, StoredTokens } from "../storage/tokenStorage";
 import { getDeviceInfo } from "../utils/deviceInfo";
 import { categorizeLoginNetworkError, logAuthEvent } from "../utils/loginDiagnostics";
 import { normalizeLoginResponse } from "../utils/parseLoginResponse";
+import { ApiRequestError } from "../utils/apiError";
 
 const MOBILE_AUTH_LOGIN = "mobile/auth/login/";
 
@@ -85,10 +86,34 @@ export async function loginRequest(identifier: string, password: string): Promis
   }
 }
 
-export async function logoutRequest() {
-  const refresh = await getRefreshToken();
-  return apiClient("auth/logout/", {
-    method: "POST",
-    body: JSON.stringify(refresh ? { refresh } : {})
-  });
+/** Single-flight logout — repeated taps / overlapping teardowns share one request. */
+let logoutFlight: Promise<void> | null = null;
+
+export async function logoutRequest(): Promise<void> {
+  if (logoutFlight) {
+    return logoutFlight;
+  }
+
+  logoutFlight = (async () => {
+    try {
+      const refresh = await getRefreshToken();
+      await apiClient("auth/logout/", {
+        method: "POST",
+        body: JSON.stringify(refresh ? { refresh } : {})
+      });
+    } catch (err) {
+      // Rate-limit / already-logged-out: continue local cleanup; do not retry in a loop.
+      if (err instanceof ApiRequestError && (err.status === 429 || err.status === 401 || err.status === 403)) {
+        return;
+      }
+      // Network blips — still allow local sign-out.
+      if (__DEV__) {
+        console.warn("[Auth] logout request failed", err instanceof Error ? err.message : "unknown");
+      }
+    } finally {
+      logoutFlight = null;
+    }
+  })();
+
+  return logoutFlight;
 }

@@ -13,22 +13,25 @@ const myLocScreen = read("src/screens/map/MyLocationScreen.tsx");
 const dutyMapApi = read("src/features/duty/api/dutyMapApi.ts");
 const tracking = read("src/storage/TrackingContext.tsx");
 const gpsService = read("mobile/lib/gps/trackingService.ts");
+const markers = read("src/features/duty/map/employeeDayMapMarkers.ts");
 
-assert.match(dutyMap, /kind: "route_start"/, "Start marker");
-assert.match(dutyMap, /kind: "visit"/, "Visit markers");
-assert.match(dutyMap, /kind: "route_end"/, "End marker");
-assert.match(dutyMap, /dutyActive/, "live gated on active workday");
-assert.match(dutyMap, /showNativeLive|showCustomLive/, "optional live while active");
+assert.match(markers, /kind: "route_start"/, "Start marker builder");
+assert.match(markers, /kind: "visit"/, "Visit markers builder");
+assert.match(markers, /kind: "route_end"/, "End marker builder");
+assert.match(dutyMap, /buildEmployeeDayMapMarkers/, "DutyMapCard uses canonical builder");
 assert.match(dutyMap, /route=\{\[\]\}/, "DutyMapCard never passes GPS trail");
 assert.doesNotMatch(dutyMap, /sampleRouteForFit/, "camera must not fit breadcrumbs");
 assert.doesNotMatch(dutyMap, /route=\{dutyMap/, "no routePoints on employee map");
+assert.doesNotMatch(dutyMap, /readPendingVisits/, "no draft/pending visit markers on Day map");
+assert.doesNotMatch(dutyMap, /current-live/, "no live pin markers on Day map");
 
 assert.match(daySummary, /route=\{\[\]\}/, "DaySummary preview marker-only");
 assert.doesNotMatch(daySummary, /route=\{dutyMap\?\.routePoints\}/, "no breadcrumb preview");
 
 assert.match(myLocScreen, /route=\{\[\]\}/, "My Location marker-only");
 assert.match(myLocScreen, /showsUserLocation=\{isActive && locationGranted\}/, "native live only while active");
-assert.match(myLocHook, /workdayFinished && dutyMap\?\.endMarker/, "End only after finish");
+assert.match(myLocHook, /buildEmployeeDayMapMarkers/, "My Location uses canonical markers");
+assert.match(myLocHook, /workdayEnded: workdayFinished/, "End only after finish");
 assert.doesNotMatch(myLocHook, /dutyMap\?\.bounds/, "do not fit via GPS-inflated bounds");
 
 assert.match(dutyMapApi, /routePoints/, "GPS history still parsed for admin payload");

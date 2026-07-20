@@ -9,6 +9,8 @@ type Props = {
   loading?: boolean;
   starting?: boolean;
   startingLabel?: string | null;
+  /** Idle-state label override (Try Again / Open Settings). */
+  buttonLabel?: string | null;
   error?: string | null;
   onStart: () => void;
   onDismissError?: () => void;
@@ -22,6 +24,7 @@ export function StartWorkDayCard({
   loading,
   starting,
   startingLabel,
+  buttonLabel,
   error,
   onStart,
   offline,
@@ -31,7 +34,9 @@ export function StartWorkDayCard({
 }: Props) {
   const { t } = useI18n();
   const busy = loading || starting;
-  const label = busy ? startingLabel || t("workdayUx.startingWorkday") : t("workdayUx.startWorkday");
+  const label = busy
+    ? startingLabel || t("workdayUx.startingWorkday")
+    : buttonLabel || t("workdayUx.startWorkday");
 
   return (
     <View style={styles.card}>

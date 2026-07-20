@@ -15,6 +15,7 @@ import { useRefreshControlProps } from "../../../src/hooks/useRefreshControlProp
 import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
 import { useTabBarBottomInset } from "../../../src/hooks/useTabBarBottomInset";
 import { useI18n } from "../../../src/i18n/I18nContext";
+import { navigateToVisitFlow } from "../../../src/navigation/navigateVisitFlow";
 import { announceA11y } from "../../../src/utils/a11yAnnounce";
 import { useEmployee } from "../../../src/storage/EmployeeContext";
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
@@ -83,9 +84,12 @@ export default function TodayTabScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [starting, setStarting] = useState(false);
-  const [startPhase, setStartPhase] = useState<"idle" | "location" | "starting">("idle");
+  const [startPhase, setStartPhase] = useState<
+    "idle" | "checking" | "allow_location" | "turn_on_location" | "starting" | "try_again" | "open_settings"
+  >("idle");
   const [gateError, setGateError] = useState<string | null>(null);
   const [dismissedError, setDismissedError] = useState("");
+  const startInFlightRef = useRef(false);
   const dashboardRef = useRef<DashboardData | null>(null);
   dashboardRef.current = dashboard;
   const entranceTick = useScreenEntrance();
@@ -184,50 +188,104 @@ export default function TodayTabScreen() {
     await Promise.all([
       loadAll(true),
       refreshTrackingState().catch(() => undefined),
+      refreshBootstrap({ force: true })
+        .then(() => refreshDutyMap().catch(() => undefined))
+        .catch(() => undefined)
+    ]);
+  }
+
+  async function continueAfterDutyStarted() {
+    announceA11y(t("a11y.workdayStarted"));
+    await Promise.all([
+      refreshTrackingState().catch(() => undefined),
       refreshBootstrap({ force: true }).catch(() => undefined),
-      refreshDutyMap().catch(() => undefined)
+      refreshDutyMap().catch(() => undefined),
+      loadAll(true)
     ]);
   }
 
   async function handleStartWorkday() {
-    if (busy || starting) return;
+    if (busy || starting || startInFlightRef.current) return;
+    startInFlightRef.current = true;
     setStarting(true);
     setGateError(null);
     setDismissedError("");
-    setStartPhase("location");
+
     try {
       const {
-        ensureFieldTrackingReadyForWorkday,
-        showFieldTrackingNeedsAttentionAlert
+        startWorkDayWithLocationGate,
+        openSettingsForPendingStartWorkDay
       } = await import("../../../src/features/fieldTrackingSetup");
-      const { navigateRoot } = await import("../../../src/navigation/rootNavigationRef");
-      const health = await ensureFieldTrackingReadyForWorkday();
-      if (!health.ok) {
-        setStarting(false);
-        setStartPhase("idle");
-        showFieldTrackingNeedsAttentionAlert(health.missing, () => {
-          navigateRoot("FieldTrackingSetup", { focusMissing: health.missing });
+
+      // Permanent denial: Open Settings only after explicit tap; resume on AppState.
+      if (startPhase === "open_settings") {
+        await openSettingsForPendingStartWorkDay(async () => {
+          setStarting(true);
+          setStartPhase("starting");
+          setGateError(null);
+          try {
+            const started = await startDuty();
+            if (!started) {
+              setStartPhase("try_again");
+              setGateError(t("workdayUx.couldNotStart"));
+              return;
+            }
+            setStartPhase("idle");
+            await continueAfterDutyStarted();
+          } finally {
+            setStarting(false);
+          }
         });
+        setStarting(false);
         return;
       }
 
-      setStartPhase("starting");
-      const started = await startDuty();
-      if (!started) return;
-      announceA11y(t("a11y.workdayStarted"));
-      await Promise.all([
-        refreshTrackingState().catch(() => undefined),
-        refreshBootstrap({ force: true }).catch(() => undefined),
-        refreshDutyMap().catch(() => undefined),
-        loadAll(true)
-      ]);
+      const outcome = await startWorkDayWithLocationGate({
+        startDuty,
+        onPhase: (phase) => {
+          setStartPhase(phase);
+        }
+      });
+
+      if (!outcome.ok) {
+        setGateError(outcome.readiness.message || t("workdayUx.permissionBody"));
+        if (outcome.readiness.status === "permission_denied_permanent") {
+          setStartPhase("open_settings");
+        } else {
+          setStartPhase("try_again");
+        }
+        return;
+      }
+
+      setStartPhase("idle");
+      await continueAfterDutyStarted();
     } catch (error) {
       setGateError(error instanceof Error ? error.message : t("workdayUx.permissionBody"));
+      setStartPhase("try_again");
     } finally {
       setStarting(false);
-      setStartPhase("idle");
+      startInFlightRef.current = false;
     }
   }
+
+  const startButtonLabel = (() => {
+    switch (startPhase) {
+      case "checking":
+        return t("workdayUx.checkingLocation");
+      case "allow_location":
+        return t("workdayUx.allowLocation");
+      case "turn_on_location":
+        return t("workdayUx.turnOnDeviceLocation");
+      case "starting":
+        return t("workdayUx.startingWorkday");
+      case "try_again":
+        return t("workdayUx.tryAgain");
+      case "open_settings":
+        return t("workdayUx.openSettings");
+      default:
+        return null;
+    }
+  })();
 
   const visibleTrackingError = (() => {
     if (gateError) return gateError;
@@ -249,7 +307,11 @@ export default function TodayTabScreen() {
         key: "newVisit",
         label: "New Visit",
         icon: PlusCircle,
-        onPress: () => rootNav?.navigate("StartVisit")
+        onPress: () =>
+          navigateToVisitFlow(navigation, {
+            screen: "NewVisitFarmer",
+            params: { fresh: true }
+          })
       },
       {
         key: "visits",
@@ -338,12 +400,11 @@ export default function TodayTabScreen() {
             <StartWorkDayCard
               loading={busy}
               starting={starting}
-              startingLabel={
-                startPhase === "location"
-                  ? t("workdayUx.gettingLocation")
-                  : startPhase === "starting"
-                    ? t("workdayUx.startingWorkday")
-                    : null
+              startingLabel={startButtonLabel}
+              buttonLabel={
+                !starting && (startPhase === "try_again" || startPhase === "open_settings")
+                  ? startButtonLabel
+                  : null
               }
               error={visibleTrackingError}
               onStart={() => void handleStartWorkday()}

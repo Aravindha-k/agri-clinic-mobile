@@ -60,8 +60,7 @@ assert.doesNotMatch(day, /endDuty|onEndWorkday|handleEndWorkday/);
 
 const mapCard = read("mobile/components/duty/DutyMapCard.tsx");
 assert.match(mapCard, /MAP_FILL_MIN_HEIGHT/);
-assert.match(mapCard, /kind: "route_start"/);
-assert.match(mapCard, /kind: "route_end"/);
+assert.match(mapCard, /buildEmployeeDayMapMarkers/);
 assert.match(mapCard, /fitFieldMapRegion/);
 assert.match(mapCard, /estimatedFillHeight/);
 

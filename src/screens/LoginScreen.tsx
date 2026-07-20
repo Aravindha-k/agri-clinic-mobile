@@ -51,14 +51,17 @@ const EMPTY_BIOMETRIC_STATUS: BiometricLoginStatus = {
   hardwareAvailable: false,
   enrolled: false,
   enabled: false,
-  label: "Biometrics"
+  label: "Biometrics",
+  reauthMaterialReady: false
 };
 
 export function LoginScreen() {
   useSecureScreen();
   const insets = useSafeAreaInsets();
   const { t } = useI18n();
-  const { signIn, loginNotice, clearLoginNotice, completeBiometricUnlock, attemptBiometricUnlock } = useAuth();
+  const { signIn, loginNotice, clearLoginNotice, completeBiometricUnlock, attemptBiometricUnlock, authPhase } =
+    useAuth();
+  const sessionExpired = authPhase === "session_expired" || authPhase === "session_replaced";
 
   const scrollRef = useRef<ScrollView>(null);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
@@ -95,7 +98,7 @@ export function LoginScreen() {
     }, [refreshBiometricState])
   );
 
-  async function offerBiometricEnrollmentIfNeeded() {
+  async function offerBiometricEnrollmentIfNeeded(identifier: string, secret: string) {
     if (!(await shouldOfferBiometricEnrollment())) return;
     Alert.alert(t("settings.fingerprintEnableTitle"), t("settings.fingerprintEnableBody"), [
       {
@@ -109,7 +112,13 @@ export function LoginScreen() {
         text: t("settings.fingerprintEnableConfirm"),
         onPress: () => {
           void (async () => {
-            const enabled = await enableBiometricLoginWithVerification();
+            const { getCurrentEmployee } = await import("../api/employees");
+            const profile = await getCurrentEmployee().catch(() => null);
+            const enabled = await enableBiometricLoginWithVerification(
+              profile?.id
+                ? { identifier, secret, userId: profile.id }
+                : undefined
+            );
             if (!enabled) {
               Alert.alert(t("settings.fingerprintEnableTitle"), t("settings.fingerprintEnableFailed"));
             }
@@ -161,7 +170,7 @@ export function LoginScreen() {
 
     try {
       await signIn(user, password);
-      await offerBiometricEnrollmentIfNeeded();
+      await offerBiometricEnrollmentIfNeeded(user, password);
       const { maybeOfferFieldTrackingSetupAfterLogin } = await import("../features/fieldTrackingSetup");
       await maybeOfferFieldTrackingSetupAfterLogin();
     } catch (error) {
@@ -191,27 +200,32 @@ export function LoginScreen() {
     try {
       const unlocked = await attemptBiometricUnlock();
       if (!unlocked.ok) {
-        if (
-          unlocked.outcome === "user_cancel" ||
-          unlocked.outcome === "authentication_failed" ||
-          unlocked.outcome === "timeout" ||
-          unlocked.outcome === "prompt_busy"
-        ) {
-          setLoginError(t("login.biometricCancelled"));
+        if (unlocked.outcome === "user_cancel" || unlocked.outcome === "prompt_busy") {
+          // Cancel is calm — stay on Login with password available.
+          setLoginError("");
+        } else if (unlocked.outcome === "authentication_failed" || unlocked.outcome === "timeout") {
+          setLoginError(t("login.biometricRetry"));
         } else if (
           unlocked.outcome === "token_refresh_failed" ||
-          unlocked.outcome === "no_refresh_token"
+          unlocked.outcome === "no_refresh_token" ||
+          unlocked.outcome === "reauth_material_missing" ||
+          unlocked.outcome === "reauth_material_invalid"
         ) {
           setLoginError(t("login.sessionExpired"));
         } else if (unlocked.outcome === "lockout") {
-          setLoginError(t("login.biometricFailed"));
+          setLoginError(t("login.biometricLockout"));
+        } else if (unlocked.outcome === "network_error" || unlocked.outcome === "server_error") {
+          setLoginError(getNetworkMessage());
         } else {
           setLoginError(t("login.biometricFailed"));
         }
         await refreshBiometricState();
         return;
       }
-      await completeBiometricUnlock();
+      // App-lock needs bootstrap; re-login already established session inside attemptBiometricUnlock.
+      if (unlocked.action !== "reauthenticate_expired_session") {
+        await completeBiometricUnlock();
+      }
     } catch (error) {
       if (
         error instanceof ApiRequestError &&
@@ -269,10 +283,23 @@ export function LoginScreen() {
             <View style={styles.loginTitleRow}>
               <Ionicons name="person-circle-outline" size={24} color={Colors.brand700} />
               <Text style={styles.loginTitle} accessibilityRole="header">
-                {t("login.title")}
+                {sessionExpired ? t("login.sessionExpiredTitle") : t("login.title")}
               </Text>
             </View>
-            <Text style={styles.loginSub}>{t("login.subtitle")}</Text>
+            <Text style={styles.loginSub}>
+              {sessionExpired ? t("login.sessionExpired") : t("login.subtitle")}
+            </Text>
+
+            {biometricReady && biometricStatus.hardwareAvailable && sessionExpired ? (
+              <LoginBiometricSection
+                status={biometricStatus}
+                ready={biometricReady}
+                canLogin={biometricCanLogin}
+                busy={biometricBusy || loading}
+                sessionExpired
+                onSignIn={() => void handleBiometricLogin()}
+              />
+            ) : null}
 
             {loginError ? (
               <View style={styles.errorBox} accessibilityRole="alert" accessibilityLiveRegion="polite">
@@ -329,14 +356,20 @@ export function LoginScreen() {
             <Text style={styles.forgotText}>{t("login.forgotPassword")}</Text>
 
             <PrimaryButton
-              label={loading ? t("login.submitting") : t("login.submit")}
+              label={
+                loading
+                  ? t("login.submitting")
+                  : sessionExpired
+                    ? t("login.signInWithPassword")
+                    : t("login.submit")
+              }
               onPress={() => void handleLogin()}
               loading={loading}
               disabled={loading}
               style={styles.signInBtnWrap}
             />
 
-            {biometricReady && biometricStatus.hardwareAvailable ? (
+            {biometricReady && biometricStatus.hardwareAvailable && !sessionExpired ? (
               <LoginBiometricSection
                 status={biometricStatus}
                 ready={biometricReady}

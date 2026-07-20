@@ -65,6 +65,21 @@ export {
   type LocationIssueState
 } from "./locationPermissionService";
 export {
+  ensureLocationReadyForAction,
+  startWorkDayWithLocationGate,
+  openSettingsForPendingStartWorkDay,
+  clearPendingStartWorkDay,
+  isPendingStartWorkDay,
+  setPendingStartWorkDay,
+  installLocationGateAuthCleanup,
+  locationGatePhaseToLabelKey,
+  LOCATION_GATE_MESSAGES,
+  type LocationReadinessResult,
+  type LocationReadinessStatus,
+  type LocationGatePhase,
+  type StartWorkDayGateOutcome
+} from "./locationReadinessGate";
+export {
   recoveryCopyForState,
   logLocationPermission,
   type LocationRecoveryCopy,

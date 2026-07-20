@@ -2,6 +2,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import type { DutyMapSummary, DutyStateSnapshot, MobileBootstrap } from "../types/duty";
 import type { WorkdayStatus } from "../../../api/tracking";
+import {
+  getCanonicalWorkDateFromServerNow,
+  reconcileDutyForCanonicalDay,
+  resolveDutyWorkDate
+} from "../../../utils/workdayCalendar";
 
 const DUTY_CACHE_PREFIX = "agri_duty_bootstrap_v2_u";
 /** Legacy SecureStore key — often >2048 bytes when dutyMap is included. */
@@ -10,6 +15,8 @@ const LEGACY_SECURE_PREFIX = "agri_duty_bootstrap_v1_u";
 type CachedDutyState = {
   schemaVersion: 2;
   userId: number;
+  /** Asia/Kolkata business date this snapshot belongs to. */
+  canonicalDate: string | null;
   currentDuty: WorkdayStatus | null;
   /** Map is large — stored in AsyncStorage only; never SecureStore. */
   dutyMap: DutyMapSummary | null;
@@ -26,6 +33,71 @@ function legacySecureKey(userId: number) {
   return `${LEGACY_SECURE_PREFIX}${userId}`;
 }
 
+function emptyMapForToday(): DutyMapSummary {
+  return {
+    routePoints: [],
+    visitMarkers: [],
+    bounds: [],
+    startMarker: null,
+    endMarker: null,
+    currentLiveLocation: null
+  };
+}
+
+/**
+ * Drop completed duties / maps that belong to a previous business day.
+ */
+export function sanitizeCachedDutyForToday(
+  cached: CachedDutyState,
+  canonicalDate: string
+): CachedDutyState | null {
+  if (cached.userId <= 0) return null;
+
+  const duty = reconcileDutyForCanonicalDay(cached.currentDuty, canonicalDate);
+  const cachedDate = cached.canonicalDate ?? resolveDutyWorkDate(cached.currentDuty);
+
+  if (cachedDate && cachedDate !== canonicalDate && !duty?.is_active) {
+    return {
+      ...cached,
+      canonicalDate,
+      currentDuty: null,
+      dutyMap: emptyMapForToday()
+    };
+  }
+
+  if (!duty) {
+    return {
+      ...cached,
+      canonicalDate,
+      currentDuty: null,
+      dutyMap: emptyMapForToday()
+    };
+  }
+
+  const mapDutyId = cached.dutyMap?.dutyId;
+  const dutySessionId = duty.duty_session_id;
+  if (
+    mapDutyId != null &&
+    dutySessionId != null &&
+    mapDutyId !== dutySessionId &&
+    !duty.is_active
+  ) {
+    return {
+      ...cached,
+      canonicalDate,
+      currentDuty: duty,
+      dutyMap: emptyMapForToday()
+    };
+  }
+
+  return {
+    ...cached,
+    canonicalDate,
+    currentDuty: duty,
+    dutyMap: duty.is_active || resolveDutyWorkDate(duty) === canonicalDate ? cached.dutyMap : emptyMapForToday()
+  };
+}
+
 function normalizeCachedState(raw: string | null, userId: number): CachedDutyState | null {
   if (!raw) return null;
   try {
@@ -36,6 +108,7 @@ function normalizeCachedState(raw: string | null, userId: number): CachedDutySta
     return {
       schemaVersion: 2,
       userId,
+      canonicalDate: typeof parsed.canonicalDate === "string" ? parsed.canonicalDate : null,
       currentDuty: (parsed.currentDuty as WorkdayStatus | null | undefined) ?? null,
       dutyMap: (parsed.dutyMap as DutyMapSummary | null | undefined) ?? null,
       serverTimeOffsetMs:
@@ -90,20 +163,26 @@ export async function readCachedDutyState(userId: number | null | undefined): Pr
 
 export async function writeCachedDutyBootstrap(
   userId: number,
-  bootstrap: Pick<MobileBootstrap, "currentDuty" | "dutyMap" | "serverTimeOffsetMs">
+  bootstrap: Pick<MobileBootstrap, "currentDuty" | "dutyMap" | "serverTimeOffsetMs" | "serverNow"> & {
+    canonicalDate?: string | null;
+  }
 ): Promise<void> {
+  const canonicalDate =
+    bootstrap.canonicalDate ??
+    getCanonicalWorkDateFromServerNow(bootstrap.serverNow, bootstrap.serverTimeOffsetMs);
+  const duty = reconcileDutyForCanonicalDay(bootstrap.currentDuty, canonicalDate);
   const payload: CachedDutyState = {
     schemaVersion: 2,
     userId,
-    currentDuty: bootstrap.currentDuty,
-    dutyMap: bootstrap.dutyMap,
+    canonicalDate,
+    currentDuty: duty,
+    dutyMap: duty ? bootstrap.dutyMap : emptyMapForToday(),
     serverTimeOffsetMs: bootstrap.serverTimeOffsetMs,
     lastSyncedAt: new Date().toISOString(),
     cachedAt: new Date().toISOString()
   };
   const serialized = JSON.stringify(payload);
   await AsyncStorage.setItem(cacheKeyForUser(userId), serialized);
-  // Ensure legacy SecureStore copy cannot keep growing / warning.
   await SecureStore.deleteItemAsync(legacySecureKey(userId)).catch(() => undefined);
 }
 
@@ -116,14 +195,25 @@ export async function clearCachedDutyState(userId: number | null | undefined): P
 }
 
 export function toOfflineDutySnapshot(cached: CachedDutyState): DutyStateSnapshot {
+  const canonicalDate =
+    cached.canonicalDate ??
+    getCanonicalWorkDateFromServerNow(null, cached.serverTimeOffsetMs);
+  const sanitized = sanitizeCachedDutyForToday(cached, canonicalDate) ?? {
+    ...cached,
+    canonicalDate,
+    currentDuty: null,
+    dutyMap: emptyMapForToday()
+  };
   return {
     hydrationStatus: "ready",
-    currentDuty: cached.currentDuty,
-    dutyMap: cached.dutyMap,
-    serverTimeOffsetMs: cached.serverTimeOffsetMs,
+    currentDuty: sanitized.currentDuty,
+    dutyMap: sanitized.dutyMap,
+    serverTimeOffsetMs: sanitized.serverTimeOffsetMs,
     isOffline: true,
-    lastSyncedAt: cached.lastSyncedAt ?? cached.cachedAt,
+    lastSyncedAt: sanitized.lastSyncedAt ?? sanitized.cachedAt,
     syncStatus: "offline",
     bootstrapError: null
   };
 }
+
+export { emptyMapForToday };

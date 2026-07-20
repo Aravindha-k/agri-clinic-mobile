@@ -95,8 +95,9 @@ assert.match(evidenceQueue, /uploadAllPendingAttachments/);
 assert.match(success, /mediaPendingTitle/);
 assert.match(success, /viewPendingVisits/);
 assert.match(success, /goToday/);
-assert.match(mapCard, /pending-\$\{visit\.local_sync_id\}/);
+assert.match(mapCard, /buildEmployeeDayMapMarkers/);
 assert.match(mapCard, /onPendingMarkerPress/);
+assert.doesNotMatch(mapCard, /pending-\$\{visit\.local_sync_id\}/);
 assert.match(logoutGuard, /unsaved_visit/);
 
 assert.match(notifier, /subscribeFieldQueueChanges/);

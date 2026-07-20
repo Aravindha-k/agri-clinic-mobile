@@ -18,7 +18,7 @@ test("Day map renders markers without movement polyline and never follows the ca
 
 test("Day card renders only canonical duty-map data and exposes button semantics", () => {
   const card = read("mobile/components/daySummary/DaySummaryRouteCard.tsx");
-  assert.match(card, /const \{ dutyMap \} = useDuty\(\);/);
+  assert.match(card, /const \{ currentDuty, dutyMap \} = useDuty\(\);/);
   assert.doesNotMatch(card, /fetchVisitsForMapMarkers/);
   assert.doesNotMatch(card, /readPendingVisits/);
   assert.doesNotMatch(card, /readPendingGpsBuffer/);

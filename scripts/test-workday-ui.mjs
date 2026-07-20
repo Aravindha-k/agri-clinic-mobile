@@ -44,26 +44,20 @@ test("Profile shows compact duty chip without timer display", () => {
   assert.doesNotMatch(profile, /WorkdayStartPanel/);
 });
 
-test("Duty map card uses DutyContext map with pending overlay, visit framing, and clear start/visit/live/end markers", () => {
+test("Duty map card uses DutyContext map with marker-only Start/Visit/End framing", () => {
   const mapCard = read("mobile/components/duty/DutyMapCard.tsx");
   assert.match(mapCard, /const \{ currentDuty, dutyMap, refreshDutyMap \} = useDuty\(\);/);
   assert.match(mapCard, /onMarkerPress/);
-  assert.match(mapCard, /readPendingVisits/);
-  assert.match(mapCard, /pending-\$\{visit\.local_sync_id\}/);
-  assert.match(mapCard, /kind: "route_start"/);
-  assert.match(mapCard, /kind: "route_end"/);
-  assert.match(mapCard, /kind: "visit"/);
-  assert.match(mapCard, /kind: "current"/);
-  assert.match(mapCard, /id: "current-live"/);
+  assert.match(mapCard, /buildEmployeeDayMapMarkers/);
+  assert.doesNotMatch(mapCard, /readPendingVisits/);
+  assert.doesNotMatch(mapCard, /current-live/);
   assert.match(mapCard, /fitFieldMapRegion/);
   assert.match(mapCard, /cameraMode="cappedRegion"/);
   assert.match(mapCard, /cameraFitKey/);
   assert.match(mapCard, /followsUserLocation=\{false\}/);
-  assert.match(mapCard, /showNativeLive/);
   assert.match(mapCard, /legendRouteEnd/);
   assert.match(mapCard, /spreadDuplicateMapCoordinates/);
-  assert.match(mapCard, /handleRecenter|locate-outline/);
-  assert.match(mapCard, /handleFitAll|scan-outline/);
+  assert.match(mapCard, /handleRecenter|handleFitAll|scan-outline/);
   assert.doesNotMatch(mapCard, /fetchVisitsForMapMarkers/);
   assert.doesNotMatch(mapCard, /sampleRouteForFit/);
   assert.doesNotMatch(mapCard, /route=\{dutyMap/);

@@ -14,7 +14,7 @@ import { useActiveWorkday } from "../../hooks/useActiveWorkday";
 import { usePremiumMotion } from "../../hooks/usePremiumMotion";
 import { useTracking } from "../../storage/TrackingContext";
 import { useDuty } from "../../features/duty/store/DutyContext";
-import { requestGpsForFieldWork, requestVisitLocationAccess } from "../../utils/locationRequiredModal";
+import { requestVisitLocationAccess } from "../../utils/locationRequiredModal";
 import { hasValidMapCoords, parseMapCoord } from "../../utils/mapCoords";
 import { FAB_RISE_ABOVE_BAR, FAB_SIZE } from "../../theme/tabBar";
 import { LucideGlyph } from "../../../mobile/components/ui/AppIcon";
@@ -170,16 +170,15 @@ export function VisitFabTabButton({
 
   const handleStartWorkdayFromSheet = useCallback(async () => {
     try {
-      const allowed = await requestGpsForFieldWork(gpsRequestOptions);
-      if (!allowed) return;
-      const started = await startDuty();
-      if (!started) return;
+      const { startWorkDayWithLocationGate } = await import("../../features/fieldTrackingSetup");
+      const outcome = await startWorkDayWithLocationGate({ startDuty });
+      if (!outcome.ok) return;
       workdaySheetRef.current?.close();
       openNewVisit();
     } catch {
       /* keep sheet open for retry */
     }
-  }, [gpsRequestOptions, openNewVisit, startDuty]);
+  }, [openNewVisit, startDuty]);
 
   const label = t("tabs.visitShort");
   const a11yLabel = accessibilityLabel ?? t("tabs.newVisit");

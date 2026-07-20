@@ -62,10 +62,13 @@ test("pending delete is guarded while syncing", () => {
   assert.match(detail, /deletePendingSyncingBlocked/);
 });
 
-test("map pending markers use local_sync_id and dedupe against server", () => {
+test("map shows submitted visits only; pending drafts stay off the Day map", () => {
   const map = read("mobile/components/duty/DutyMapCard.tsx");
-  assert.match(map, /pending-\$\{visit\.local_sync_id\}/);
-  assert.match(map, /serverKeys\.has\(visit\.local_sync_id\)/);
+  const markers = read("src/features/duty/map/employeeDayMapMarkers.ts");
+  assert.match(map, /buildEmployeeDayMapMarkers/);
+  assert.doesNotMatch(map, /readPendingVisits/);
+  assert.match(markers, /seenVisitKeys/);
+  assert.match(markers, /marker\.pending !== true/);
   assert.match(map, /onPendingMarkerPress/);
 });
 

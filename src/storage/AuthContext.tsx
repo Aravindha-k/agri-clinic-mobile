@@ -19,6 +19,7 @@ import {
   clearBiometricLogin,
   getBiometricLoginStatus,
   resetBiometricUnlockAttemptThisLaunch,
+  saveBiometricReauthMaterial,
   setPreferPasswordLoginThisSession,
   unlockSessionWithBiometrics,
   type BiometricUnlockResult
@@ -53,12 +54,17 @@ const BOOTSTRAP_TIMEOUT_MS = STARTUP_TIMEOUTS.bootstrapNetworkMs;
 
 export type BootstrapIssue = "none" | "network" | "server";
 
+/** Which shell to keep visible while `validating_session` (no branded logo loader). */
+export type SessionValidateUi = "login" | "biometric_lock" | "none";
+
 type AuthContextValue = {
   isReady: boolean;
   isAuthenticated: boolean;
   authPhase: AuthPhase;
   authLoading: boolean;
   sessionValidating: boolean;
+  /** UI shell during post-login / unlock bootstrap — never a second splash. */
+  sessionValidateUi: SessionValidateUi;
   bootstrapIssue: BootstrapIssue;
   loginNotice: string | null;
   employee: Employee | null;
@@ -122,6 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isReady, setIsReady] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [sessionValidating, setSessionValidating] = useState(false);
+  const [sessionValidateUi, setSessionValidateUi] = useState<SessionValidateUi>("none");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [bootstrapIssue, setBootstrapIssue] = useState<BootstrapIssue>("none");
   const [loginNotice, setLoginNotice] = useState<string | null>(null);
@@ -131,6 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const validationGenerationRef = useRef(0);
   const employeeIdRef = useRef<number | null>(null);
   const bootstrapAttemptedRef = useRef(false);
+  const sessionValidateUiRef = useRef<SessionValidateUi>("none");
 
   employeeIdRef.current = employee?.id ?? null;
 
@@ -142,6 +150,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsReady(phase !== "initializing");
       setAuthLoading(phase === "initializing");
       setSessionValidating(phase === "validating_session");
+      if (phase !== "validating_session") {
+        sessionValidateUiRef.current = "none";
+        setSessionValidateUi("none");
+      }
     },
     []
   );
@@ -218,9 +230,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [performLocalSignOut]);
 
   const forceSessionExpiredLogout = useCallback(async () => {
-    // Clear access/refresh/device-session. Keep biometric preference — next password
-    // login restores a refresh token so fingerprint unlock works again.
-    await performLocalSignOut({ notice: SESSION_EXPIRED_MESSAGE, reason: "session_expired" });
+    // Clear access/refresh/device-session. Keep biometric preference + Keystore re-auth
+    // so Login can offer fingerprint re-login alongside password.
+    await performLocalSignOut({
+      notice: SESSION_EXPIRED_MESSAGE,
+      reason: "session_expired",
+      phase: "session_expired"
+    });
   }, [performLocalSignOut]);
 
   useEffect(() => {
@@ -292,7 +308,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         try {
           const bootstrap = await withTimeout(
-            fetchMobileBootstrap(),
+            fetchMobileBootstrap({ force: false }),
             BOOTSTRAP_TIMEOUT_MS,
             "Mobile bootstrap timed out."
           );
@@ -385,9 +401,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const token = await getAccessToken();
         if (isStale()) return;
         if (!token) {
-          endedPhase = "unauthenticated";
-          applyPhase("unauthenticated", "no saved token");
-          logStartup("session_cleared", "no saved token");
+          let canBioReauth = false;
+          try {
+            canBioReauth = await canUseBiometricLogin();
+          } catch {
+            canBioReauth = false;
+          }
+          if (canBioReauth) {
+            endedPhase = "session_expired";
+            applyPhase("session_expired", "no access token — biometric re-login available");
+            setLoginNotice(SESSION_EXPIRED_MESSAGE);
+          } else {
+            endedPhase = "unauthenticated";
+            applyPhase("unauthenticated", "no saved token");
+          }
+          logStartup("session_cleared", canBioReauth ? "session_expired_biometric" : "no saved token");
           return;
         }
 
@@ -516,71 +544,86 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [performLocalSignOut]
   );
 
-  const establishAuthenticatedSession = useCallback(async () => {
-    applyPhase("validating_session", "establish_session");
-    await ensureDeviceSessionLoaded();
+  const establishAuthenticatedSession = useCallback(
+    async (options?: { validateUi?: SessionValidateUi }) => {
+      const validateUi = options?.validateUi ?? sessionValidateUiRef.current ?? "none";
+      sessionValidateUiRef.current = validateUi;
+      setSessionValidateUi(validateUi);
+      applyPhase("validating_session", "establish_session");
+      await ensureDeviceSessionLoaded();
 
-    if (!(await getDeviceSessionId())) {
-      throw new Error(DEVICE_SESSION_STORAGE_ERROR);
-    }
+      if (!(await getDeviceSessionId())) {
+        throw new Error(DEVICE_SESSION_STORAGE_ERROR);
+      }
 
-    try {
-      markBootstrapBegin("establish_session");
-      const bootstrap = await withTimeout(
-        fetchMobileBootstrap(),
-        BOOTSTRAP_TIMEOUT_MS,
-        "Mobile bootstrap timed out."
-      );
-      const profile = bootstrap.user ?? (await getCurrentEmployee());
-      if (!isFieldEmployee(profile)) {
-        try {
-          await logoutRequest();
-        } finally {
-          await performLocalSignOut({ notice: FIELD_EMPLOYEE_ONLY_MESSAGE, reason: "not_field_employee" });
+      try {
+        markBootstrapBegin("establish_session");
+        const bootstrap = await withTimeout(
+          fetchMobileBootstrap({ force: true }),
+          BOOTSTRAP_TIMEOUT_MS,
+          "Mobile bootstrap timed out."
+        );
+        const profile = bootstrap.user ?? (await getCurrentEmployee());
+        if (!isFieldEmployee(profile)) {
+          try {
+            await logoutRequest();
+          } finally {
+            await performLocalSignOut({ notice: FIELD_EMPLOYEE_ONLY_MESSAGE, reason: "not_field_employee" });
+          }
+          throw new Error(FIELD_EMPLOYEE_ONLY_MESSAGE);
         }
-        throw new Error(FIELD_EMPLOYEE_ONLY_MESSAGE);
-      }
-      setEmployee(profile);
-      setActiveSyncUserId(profile.id);
-      await hydrateDutyFromBootstrap({ bootstrap, userId: profile.id });
-      setBootstrapIssue("none");
-      autoValidateStartedRef.current = true;
-      applyPhase("authenticated", `employee=${profile.id}`);
-      markBootstrapSuccess(`employee=${profile.id}`);
-    } catch (err) {
-      if (isRetriableAuthError(err)) {
-        await hydrateDutyFromBootstrap({
-          bootstrap: null,
-          userId: employeeIdRef.current,
-          error: err
-        }).catch(() => undefined);
+        setEmployee(profile);
+        setActiveSyncUserId(profile.id);
+        await hydrateDutyFromBootstrap({ bootstrap, userId: profile.id });
+        setBootstrapIssue("none");
         autoValidateStartedRef.current = true;
-        applyPhase("authenticated", "offline_retriable");
-        setBootstrapIssue(isNetworkError(err) ? "network" : "server");
-        return;
+        applyPhase("authenticated", `employee=${profile.id}`);
+        markBootstrapSuccess(`employee=${profile.id}`);
+      } catch (err) {
+        if (isRetriableAuthError(err)) {
+          await hydrateDutyFromBootstrap({
+            bootstrap: null,
+            userId: employeeIdRef.current,
+            error: err
+          }).catch(() => undefined);
+          autoValidateStartedRef.current = true;
+          applyPhase("authenticated", "offline_retriable");
+          setBootstrapIssue(isNetworkError(err) ? "network" : "server");
+          return;
+        }
+        throw err;
       }
-      throw err;
-    }
-  }, [applyPhase, performLocalSignOut]);
+    },
+    [applyPhase, performLocalSignOut]
+  );
 
   const signIn = useCallback(
     async (username: string, password: string) => {
       setLoginNotice(null);
       setPreferPasswordLoginThisSession(false);
+      applyPhase("authenticating_password", "password_login");
       const tokens = await loginRequest(username, password);
       await saveTokens(tokens);
-      await establishAuthenticatedSession();
-      // Password is never persisted. New refresh token enables fingerprint again.
+      await establishAuthenticatedSession({ validateUi: "login" });
+      // Keep fingerprint eligibility; refresh Keystore re-auth material when already enabled.
       try {
         const status = await getBiometricLoginStatus();
         if (status.enabled) {
-          logStartup("biometric_reconnected", "password login restored refresh token");
+          const userId = employeeIdRef.current;
+          if (userId != null && userId > 0) {
+            await saveBiometricReauthMaterial({
+              identifier: username,
+              secret: password,
+              userId
+            });
+          }
+          logStartup("biometric_reconnected", "password login refreshed reauth material");
         }
       } catch {
         // ignore
       }
     },
-    [establishAuthenticatedSession]
+    [applyPhase, establishAuthenticatedSession]
   );
 
   const attemptBiometricUnlock = useCallback(async (): Promise<BiometricUnlockResult> => {
@@ -588,13 +631,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (
       startedPhase !== "locked" &&
       startedPhase !== "authenticating_biometric" &&
-      startedPhase !== "unauthenticated"
+      startedPhase !== "unauthenticated" &&
+      startedPhase !== "session_expired"
     ) {
       return { ok: false, outcome: "not_enabled" };
     }
     if (startedPhase === "locked" || startedPhase === "authenticating_biometric") {
       applyPhase("authenticating_biometric", "prompt");
     }
+    // session_expired / unauthenticated: stay on Login while the OS prompt is open.
     const result = await unlockSessionWithBiometrics();
     if (!result.ok) {
       if (
@@ -604,18 +649,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         result.outcome === "timeout" ||
         result.outcome === "prompt_busy"
       ) {
-        // Cancel/fail from unlock gate → remain locked. Tokens retained. No password login call.
-        applyPhase(startedPhase === "unauthenticated" ? "unauthenticated" : "locked", result.outcome);
+        // Cancel/fail — remain on lock or session-expired Login. No alarming clear.
+        if (startedPhase === "session_expired") {
+          applyPhase("session_expired", result.outcome);
+        } else if (startedPhase === "unauthenticated") {
+          applyPhase("unauthenticated", result.outcome);
+        } else {
+          applyPhase("locked", result.outcome);
+        }
       } else if (
         result.outcome === "not_enrolled" ||
         result.outcome === "hardware_unavailable" ||
-        result.outcome === "key_invalidated"
+        result.outcome === "key_invalidated" ||
+        result.outcome === "reauth_material_missing" ||
+        result.outcome === "reauth_material_invalid"
       ) {
         setPreferPasswordLoginThisSession(true);
-        applyPhase("unauthenticated", result.outcome);
+        applyPhase(
+          startedPhase === "session_expired" ? "session_expired" : "unauthenticated",
+          result.outcome
+        );
       } else if (result.outcome === "network_error" || result.outcome === "server_error") {
-        // Keep tokens + biometric preference — stay locked for retry.
-        applyPhase(startedPhase === "unauthenticated" ? "unauthenticated" : "locked", result.outcome);
+        if (startedPhase === "session_expired") {
+          applyPhase("session_expired", result.outcome);
+        } else if (startedPhase === "unauthenticated") {
+          applyPhase("unauthenticated", result.outcome);
+        } else {
+          applyPhase("locked", result.outcome);
+        }
       } else if (result.outcome === "session_replaced") {
         setPreferPasswordLoginThisSession(true);
         await performLocalSignOut({
@@ -624,47 +685,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           phase: "session_replaced"
         });
       } else if (result.outcome === "no_refresh_token" || result.outcome === "token_refresh_failed") {
-        // Refresh missing/rejected — clear session, keep biometric preference, password once.
-        setPreferPasswordLoginThisSession(true);
+        // App-lock refresh failed — fall through to session_expired with biometric re-login.
+        setPreferPasswordLoginThisSession(false);
         await performLocalSignOut({
           notice: SESSION_EXPIRED_MESSAGE,
           reason:
             result.outcome === "token_refresh_failed"
               ? "refresh_rejected_after_biometric"
-              : "no_refresh_after_biometric"
+              : "no_refresh_after_biometric",
+          phase: "session_expired"
         });
       } else {
-        applyPhase(startedPhase === "unauthenticated" ? "unauthenticated" : "locked", result.outcome);
+        applyPhase(
+          startedPhase === "session_expired"
+            ? "session_expired"
+            : startedPhase === "unauthenticated"
+              ? "unauthenticated"
+              : "locked",
+          result.outcome
+        );
       }
+    } else if (result.action === "reauthenticate_expired_session") {
+      // Fresh login already stored tokens — bootstrap into the app (stay on Login).
+      await establishAuthenticatedSession({ validateUi: "login" }).catch(() => undefined);
     }
     return result;
-  }, [applyPhase, performLocalSignOut]);
+  }, [applyPhase, establishAuthenticatedSession, performLocalSignOut]);
 
   const completeBiometricUnlock = useCallback(async () => {
-    await establishAuthenticatedSession();
+    await establishAuthenticatedSession({ validateUi: "biometric_lock" });
   }, [establishAuthenticatedSession]);
 
   const choosePasswordLogin = useCallback(() => {
     setPreferPasswordLoginThisSession(true);
-    applyPhase("unauthenticated", "password_fallback");
-    logStartup("password_login_chosen", "tokens retained");
+    const phase = getAuthPhase();
+    applyPhase(phase === "session_expired" ? "session_expired" : "unauthenticated", "password_fallback");
+    logStartup("password_login_chosen", phase === "locked" ? "tokens retained" : "session_expired");
   }, [applyPhase]);
 
-  const signOut = useCallback(async () => {
-    await runPreSignOutHandlers();
+  const signOutInFlightRef = useRef<Promise<void> | null>(null);
 
-    // Explicit logout clears access/refresh/device-session. Biometric preference may
-    // remain, but without a refresh token fingerprint cannot authenticate.
-    setPreferPasswordLoginThisSession(true);
-    resetBiometricUnlockAttemptThisLaunch();
-    try {
-      await logoutRequest();
-    } finally {
-      await performLocalSignOut({ reason: "explicit_logout" });
-      resetStartupCoordinator();
-      markStartupBegin("splash_replay");
-      requestSplashReplay("sign_out");
+  const signOut = useCallback(async () => {
+    if (signOutInFlightRef.current) {
+      return signOutInFlightRef.current;
     }
+    signOutInFlightRef.current = (async () => {
+      await runPreSignOutHandlers();
+
+      // Explicit logout clears tokens AND biometric re-auth — password required once.
+      setPreferPasswordLoginThisSession(true);
+      resetBiometricUnlockAttemptThisLaunch();
+      try {
+        await logoutRequest();
+      } finally {
+        await clearBiometricLogin().catch(() => undefined);
+        await performLocalSignOut({ reason: "explicit_logout" });
+        resetStartupCoordinator();
+        markStartupBegin("splash_replay");
+        requestSplashReplay("sign_out");
+        signOutInFlightRef.current = null;
+      }
+    })();
+    return signOutInFlightRef.current;
   }, [performLocalSignOut]);
 
   const value = useMemo(
@@ -674,6 +756,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       authPhase: authPhaseState,
       authLoading,
       sessionValidating,
+      sessionValidateUi,
       bootstrapIssue,
       loginNotice,
       employee,
@@ -693,6 +776,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       authPhaseState,
       authLoading,
       sessionValidating,
+      sessionValidateUi,
       bootstrapIssue,
       loginNotice,
       employee,

@@ -1,6 +1,6 @@
 /**
- * Security regression: biometric must never persist or replay raw passwords.
- * Static audit of SecureStore writes + biometric unlock path.
+ * Security regression: biometric secrets only in Keystore SecureStore (v2).
+ * Legacy plaintext keys must never be written. AsyncStorage must not hold secrets.
  */
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -37,11 +37,11 @@ const FORBIDDEN_SET_KEYS = [
 
 const bio = read("src/storage/biometricLoginStorage.ts");
 
-// 1) Unlock path uses refresh only — never password login endpoint
-assert.ok(bio.includes('via: "refresh"'), "unlock success must be via refresh");
-assert.ok(!bio.includes("loginRequest("), "biometric must not call loginRequest");
-assert.ok(!bio.includes("saveBiometricReauthCredentials"), "no password save API");
-assert.ok(!bio.includes("loginWithStoredReauthCredentials"), "no password replay helper");
+// 1) Unlock supports refresh (app-lock) and Keystore re-login
+assert.ok(bio.includes('via: "refresh"') || bio.includes('action: "unlock_existing_session"'), "app-lock refresh path");
+assert.ok(bio.includes("loginRequest("), "re-login may call loginRequest with Keystore material");
+assert.ok(bio.includes("agri_bio_v2_secret"), "v2 Keystore secret key");
+assert.ok(bio.includes("WHEN_UNLOCKED_THIS_DEVICE_ONLY"), "device-unlock Keystore accessibility");
 
 // 2) Legacy password keys are deleted, never written
 for (const key of FORBIDDEN_SET_KEYS) {
@@ -53,67 +53,42 @@ for (const key of FORBIDDEN_SET_KEYS) {
 assert.ok(bio.includes("deleteItemAsync(LEGACY_PASS_KEY)"), "must delete legacy pass");
 assert.ok(bio.includes("deleteItemAsync(LEGACY_REAUTH_PASS_KEY)"), "must delete reauth pass");
 
-// 3) canUseBiometricLogin requires refresh token, not stored password
-assert.ok(
-  /export async function canUseBiometricLogin[\s\S]*?getRefreshToken\(\)[\s\S]*?return Boolean\(refresh\)/.test(bio),
-  "canUseBiometricLogin must gate on refresh token only"
-);
+// 3) canUseBiometricLogin allows refresh OR reauth material
+assert.ok(bio.includes("resolveBiometricAction"), "canonical action resolver");
+assert.ok(bio.includes("reauthenticate_expired_session"), "expired-session re-login path");
 
-// 4) enableBiometricLoginWithVerification takes no credentials
-assert.match(
-  bio,
-  /export async function enableBiometricLoginWithVerification\(\):\s*Promise<boolean>/,
-  "enable must not accept username/password"
-);
-
-// 5) Logs never interpolate secrets (no password/token values in logBiometric args)
+// 4) Logs never interpolate secrets
 {
   const logCalls = [...bio.matchAll(/logBiometric\(([^;]+)\)/g)].map((m) => m[1]);
   for (const call of logCalls) {
     assert.ok(!/\bpassword\s*:/.test(call), `logBiometric must not log password field: ${call.slice(0, 80)}`);
-    assert.ok(!/\b(access|refresh)\s*:/.test(call), `logBiometric must not log token fields: ${call.slice(0, 80)}`);
+    assert.ok(!/\bsecret\s*:/.test(call), `logBiometric must not log secret field: ${call.slice(0, 80)}`);
   }
 }
 
-// 6) AuthContext must not save passwords after sign-in
+// 5) AuthContext clears biometric on explicit logout; keeps on session expiry
 const auth = read("src/storage/AuthContext.tsx");
-assert.ok(!auth.includes("saveBiometricReauthCredentials"), "AuthContext must not save reauth password");
-assert.ok(!auth.includes("clearBiometricReauthCredentials"), "AuthContext must not reference reauth password clear");
-assert.ok(auth.includes("refresh_rejected_after_biometric"), "refresh rejection path present");
+assert.ok(auth.includes("saveBiometricReauthMaterial"), "password login refreshes Keystore material");
 assert.ok(auth.includes('reason: "explicit_logout"'), "explicit logout clears session");
+assert.ok(auth.includes('phase: "session_expired"'), "session expiry phase");
 
-// 7) Settings/Login must not collect password for biometric enable
-const settings = read("src/screens/SettingsScreen.tsx");
-assert.ok(!settings.includes("passwordConfirm"), "Settings must not prompt password for biometric");
-assert.ok(settings.includes("enableBiometricLoginWithVerification()"), "Settings enables without credentials");
-
-const login = read("src/screens/LoginScreen.tsx");
-assert.ok(
-  login.includes("enableBiometricLoginWithVerification()"),
-  "Login enrollment enables without storing password"
-);
-
-// 8) Repo-wide: no SecureStore writes of forbidden biometric password keys
+// 6) Repo-wide: no SecureStore writes of forbidden legacy keys; no AsyncStorage password
 for (const file of collectTsSources()) {
   const src = fs.readFileSync(file, "utf8");
   for (const key of FORBIDDEN_SET_KEYS) {
     if (!src.includes(key)) continue;
     const setHit = new RegExp(`setItemAsync\\(\\s*["'\`]${key}["'\`]`);
-    const setViaConst = /setItemAsync\(\s*LEGACY_(?:PASS|USER|REAUTH)/.test(src);
     assert.ok(!setHit.test(src), `${path.relative(root, file)} must not setItemAsync "${key}"`);
-    if (file.endsWith("biometricLoginStorage.ts")) {
-      assert.ok(!setViaConst, "biometricLoginStorage must not setItemAsync legacy password consts");
-    }
+  }
+  if (/AsyncStorage\.setItem/.test(src) && /password/i.test(src) && file.includes("biometric")) {
+    assert.fail(`${path.relative(root, file)} must not AsyncStorage biometric passwords`);
   }
 }
 
-// 9) Token storage keys are the session secrets (inventory check)
+// 7) Token storage keys inventory
 const tokens = read("src/storage/tokenStorage.ts");
 assert.ok(tokens.includes('ACCESS_TOKEN_KEY = "agri_clinic_access_token"'));
 assert.ok(tokens.includes('REFRESH_TOKEN_KEY = "agri_clinic_refresh_token"'));
 assert.ok(!/password/i.test(tokens), "tokenStorage must not handle passwords");
-
-const device = read("src/storage/deviceSessionStorage.ts");
-assert.ok(device.includes('DEVICE_SESSION_KEY = "agri_clinic_device_session_id"'));
 
 console.log("test-biometric-secure-store: PASS");

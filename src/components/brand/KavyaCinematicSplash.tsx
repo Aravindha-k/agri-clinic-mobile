@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Image, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Image, Platform, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
 import Animated, {
@@ -13,6 +13,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { BRAND, LOGO_IMAGE } from "../../config/brand";
 import { isExplicitReducedMotion, usePremiumMotion } from "../../hooks/usePremiumMotion";
+import type { PremiumMotionState } from "../../hooks/usePremiumMotion";
 import {
   brandingWithDelay,
   brandingWithRepeat,
@@ -26,7 +27,6 @@ import {
   CINEMATIC_SPLASH_BG,
   SPLASH_EXIT_FADE_MS,
   SPLASH_EXIT_WASH,
-  SPLASH_HOLD_AFTER_ANIM_MS,
   SPLASH_KEN_BURNS_MS,
   SPLASH_KEN_BURNS_SCALE_MAX,
   SPLASH_KEN_BURNS_SCALE_MIN,
@@ -61,6 +61,9 @@ const SUBTITLE_ANIM_MS = 500;
 const BLOOM_START_MS = 650;
 const BLOOM_ANIM_MS = 750;
 
+/** JS fallback after exit fade — must not depend on Reanimated callback alone. */
+const SPLASH_EXIT_FINISH_FALLBACK_MS = SPLASH_EXIT_FADE_MS + 300;
+
 type Props = {
   onFinish: () => void;
   /** Called once cinematic layer is painted — hide native splash here. */
@@ -74,13 +77,34 @@ type Props = {
   canExit?: boolean;
 };
 
+/** Dev-only: set true to bisect splash animation as crash source (same layout, static logo). */
+const SPLASH_FORCE_STATIC = __DEV__ && false;
+
+/**
+ * Lock splash motion mode once at first layout — never flip when async motion resolves.
+ * unknown → full; explicit reduced (iOS a11y only) → light; Android branding always full.
+ */
+function lockSplashPreferLight(motion: PremiumMotionState): boolean {
+  if (SPLASH_FORCE_STATIC) {
+    return true;
+  }
+  if (!motion.ready) {
+    return false;
+  }
+  if (Platform.OS === "android") {
+    return false;
+  }
+  return isExplicitReducedMotion(motion);
+}
+
 /**
  * Premium product splash: agriculture artwork with Ken Burns motion,
  * centered Kavya logo reveal, then smooth handoff to the app.
  */
 export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit = false }: Props) {
   const motion = usePremiumMotion();
-  const preferLight = isExplicitReducedMotion(motion);
+  const splashPreferLightRef = useRef<boolean | null>(null);
+  const preferLight = splashPreferLightRef.current ?? false;
   const { width: screenW, height: screenH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const layoutAtRef = useRef<number | null>(null);
@@ -88,10 +112,15 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
   const exitStartedRef = useRef(false);
   const finishedRef = useRef(false);
   const animationFloorDoneRef = useRef(false);
+  const animationStartedRef = useRef(false);
+  const exitFinishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canExitRef = useRef(canExit);
   const onReadyRef = useRef(onReady);
   const onExitStartRef = useRef(onExitStart);
   const onFinishRef = useRef(onFinish);
+  const motionRef = useRef(motion);
+  motionRef.current = motion;
+  const [, forceSplashModeRender] = useState(0);
   const [layoutReady, setLayoutReady] = useState(false);
   const [bgFailed, setBgFailed] = useState(false);
   const [backgroundSettled, setBackgroundSettled] = useState(false);
@@ -138,33 +167,40 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     return Math.max(0, Date.now() - start);
   }, []);
 
-  const finishSplash = useCallback(() => {
+  const finishSplashOnce = useCallback(() => {
     if (finishedRef.current) return;
     finishedRef.current = true;
+    if (exitFinishTimerRef.current) {
+      clearTimeout(exitFinishTimerRef.current);
+      exitFinishTimerRef.current = null;
+    }
     logStartup("cinematic_finished", `${elapsed()} ms`);
     onFinishRef.current();
   }, [elapsed]);
 
   const beginExit = useCallback(() => {
-    if (exitStartedRef.current) return;
+    if (exitStartedRef.current || finishedRef.current) return;
     exitStartedRef.current = true;
     logStartup("cinematic_exit_started", `${elapsed()} ms`);
     onExitStartRef.current?.();
 
+    exitFinishTimerRef.current = setTimeout(() => {
+      finishSplashOnce();
+    }, SPLASH_EXIT_FINISH_FALLBACK_MS);
+
     const easeInOut = Easing.inOut(Easing.cubic);
     exitWash.value = brandingWithTiming(1, { duration: SPLASH_EXIT_FADE_MS, easing: easeInOut });
-
-    // OEM Reanimated completion callbacks can stall — finish splash anyway.
-    const finishFailsafe = setTimeout(() => {
-      finishSplash();
-    }, SPLASH_EXIT_FADE_MS + 600);
-
-    screenOpacity.value = brandingWithTiming(0, { duration: SPLASH_EXIT_FADE_MS, easing: easeInOut }, (done) => {
-      if (done) {
-        runOnJS(finishSplash)();
+    screenOpacity.value = brandingWithTiming(
+      0,
+      { duration: SPLASH_EXIT_FADE_MS, easing: easeInOut },
+      (finished) => {
+        "worklet";
+        if (finished) {
+          runOnJS(finishSplashOnce)();
+        }
       }
-    });
-  }, [elapsed, exitWash, finishSplash, screenOpacity]);
+    );
+  }, [elapsed, exitWash, finishSplashOnce, screenOpacity]);
 
   const tryExit = useCallback(() => {
     if (exitStartedRef.current || finishedRef.current) return;
@@ -180,6 +216,12 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
 
   useEffect(() => {
     logStartup("cinematic_component_rendered", "0 ms");
+    return () => {
+      if (exitFinishTimerRef.current) {
+        clearTimeout(exitFinishTimerRef.current);
+        exitFinishTimerRef.current = null;
+      }
+    };
   }, []);
 
   /**
@@ -208,43 +250,42 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     if (readyNotifiedRef.current) return;
     readyNotifiedRef.current = true;
     layoutAtRef.current = Date.now();
+    if (splashPreferLightRef.current === null) {
+      splashPreferLightRef.current = lockSplashPreferLight(motionRef.current);
+      logStartup(
+        "splash_mode_locked",
+        splashPreferLightRef.current ? "light" : "full"
+      );
+      forceSplashModeRender((n) => n + 1);
+    }
     logStartup("cinematic_first_layout", "0 ms");
     setLayoutReady(true);
   }, []);
 
   useEffect(() => {
-    if (!layoutReady) return;
+    if (!layoutReady || animationStartedRef.current) return;
+    animationStartedRef.current = true;
 
+    const preferLightLocked = splashPreferLightRef.current ?? false;
     const easeOut = Easing.out(Easing.cubic);
     const easeInOut = Easing.inOut(Easing.cubic);
-    const minMs = preferLight ? Math.max(1600, SPLASH_MIN_VISIBLE_MS - 600) : SPLASH_MIN_VISIBLE_MS;
+    const minMs = preferLightLocked
+      ? Math.max(1600, SPLASH_MIN_VISIBLE_MS - 600)
+      : SPLASH_MIN_VISIBLE_MS;
     const kenBurnsHalf = SPLASH_KEN_BURNS_MS;
-
-    cancelAnimation(bgScale);
-    cancelAnimation(bgTranslateY);
-    cancelAnimation(logoOpacity);
-    cancelAnimation(logoScale);
-    cancelAnimation(logoTranslateY);
-    cancelAnimation(titleOpacity);
-    cancelAnimation(titleTranslateY);
-    cancelAnimation(subtitleOpacity);
-    cancelAnimation(bloomOpacity);
-    cancelAnimation(bloomScale);
-    cancelAnimation(exitWash);
-    cancelAnimation(screenOpacity);
 
     bgScale.value = SPLASH_KEN_BURNS_SCALE_MIN;
     bgTranslateY.value = 0;
     logoOpacity.value = 1;
-    logoScale.value = preferLight ? 1 : LOGO_SCALE_FROM;
-    logoTranslateY.value = preferLight ? 0 : 8;
-    titleOpacity.value = preferLight ? 1 : 0;
-    titleTranslateY.value = preferLight ? 0 : 14;
-    subtitleOpacity.value = preferLight ? 1 : 0;
+    logoScale.value = preferLightLocked ? 1 : LOGO_SCALE_FROM;
+    logoTranslateY.value = preferLightLocked ? 0 : 8;
+    titleOpacity.value = preferLightLocked ? 1 : 0;
+    titleTranslateY.value = preferLightLocked ? 0 : 14;
+    subtitleOpacity.value = preferLightLocked ? 1 : 0;
     exitWash.value = 0;
     screenOpacity.value = 1;
 
-    if (preferLight) {
+    if (preferLightLocked) {
       logoOpacity.value = 1;
       logoScale.value = 1;
       logoTranslateY.value = 0;
@@ -331,6 +372,7 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
 
     return () => {
       clearTimeout(floorTimer);
+      if (exitStartedRef.current) return;
       cancelAnimation(bgScale);
       cancelAnimation(bgTranslateY);
       cancelAnimation(logoOpacity);
@@ -341,14 +383,25 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
       cancelAnimation(subtitleOpacity);
       cancelAnimation(bloomOpacity);
       cancelAnimation(bloomScale);
-      cancelAnimation(exitWash);
-      cancelAnimation(screenOpacity);
     };
-  }, [layoutReady, preferLight, bgScale, bgTranslateY, bloomOpacity, bloomScale, elapsed, exitWash, logoOpacity, logoScale, logoTranslateY, screenOpacity, subtitleOpacity, titleOpacity, titleTranslateY]);
+  }, [
+    layoutReady,
+    bgScale,
+    bgTranslateY,
+    bloomOpacity,
+    bloomScale,
+    elapsed,
+    logoOpacity,
+    logoScale,
+    logoTranslateY,
+    subtitleOpacity,
+    titleOpacity,
+    titleTranslateY
+  ]);
 
   // Watchdog: never leave branded copy invisible if Reanimated callbacks stall.
   useEffect(() => {
-    if (!layoutReady || preferLight) return;
+    if (!layoutReady || splashPreferLightRef.current) return;
     const timer = setTimeout(() => {
       if (titleOpacity.value < 0.5) titleOpacity.value = 1;
       if (subtitleOpacity.value < 0.5) subtitleOpacity.value = 1;
@@ -356,7 +409,7 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
       if (logoScale.value < 0.5) logoScale.value = 1;
     }, LOGO_ENTRY_DELAY_MS + LOGO_ENTRY_MS + 500);
     return () => clearTimeout(timer);
-  }, [layoutReady, preferLight, logoOpacity, logoScale, subtitleOpacity, titleOpacity]);
+  }, [layoutReady, logoOpacity, logoScale, subtitleOpacity, titleOpacity]);
 
   useEffect(() => {
     if (!layoutReady) return;

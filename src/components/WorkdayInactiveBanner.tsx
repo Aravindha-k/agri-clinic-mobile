@@ -4,13 +4,14 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Colors } from "../../mobile/lib/theme";
 import { useI18n } from "../i18n/I18nContext";
 import { useTracking } from "../storage/TrackingContext";
-import { ensureLocationForWorkdayStart } from "../utils/workdayLocationGate";
-import { workdayStartGateCopy } from "../utils/workdayStartCopy";
+import { useDuty } from "../features/duty/store/DutyContext";
+import { startWorkDayWithLocationGate } from "../features/fieldTrackingSetup";
 import { space } from "../theme/layout";
 
 export function WorkdayInactiveBanner() {
   const { t } = useI18n();
-  const { workdayInactiveBanner, busy, startDay, isActive } = useTracking();
+  const { workdayInactiveBanner, busy, isActive } = useTracking();
+  const { startDuty } = useDuty();
 
   if (!workdayInactiveBanner || isActive) {
     return null;
@@ -27,11 +28,7 @@ export function WorkdayInactiveBanner() {
         accessibilityLabel={t("workdayUx.startWorkday")}
         disabled={busy}
         onPress={() => {
-          void (async () => {
-            const gate = await ensureLocationForWorkdayStart(workdayStartGateCopy(t));
-            if (!gate.ok) return;
-            await startDay().catch(() => undefined);
-          })();
+          void startWorkDayWithLocationGate({ startDuty }).catch(() => undefined);
         }}
         style={[styles.btn, busy && styles.btnDisabled]}
       >

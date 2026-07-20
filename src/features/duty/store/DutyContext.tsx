@@ -20,10 +20,13 @@ import {
 import { useAuth, useAuthSessionReady } from "../../../storage/AuthContext";
 import { flushTrackingGpsQueue, startTrackingBridge, stopTrackingBridge } from "../../../storage/TrackingContext";
 import { subscribeAuthPhase, canSendAuthenticatedRequests } from "../../../storage/authPhase";
-import { fetchCurrentDutyMap, fetchDutyMap } from "../api/dutyMapApi";
-import { fetchMobileBootstrap } from "../api/mobileBootstrapApi";
+import { fetchDutyMap, invalidateDutyMapCache } from "../api/dutyMapApi";
+import { fetchMobileBootstrap, invalidateMobileBootstrapCache } from "../api/mobileBootstrapApi";
+import { toEmployeeDutyMapPresentation } from "../map/employeeDayMapMarkers";
+import { writeScopedDayMap } from "../storage/dayMapCacheStorage";
 import {
   clearCachedDutyState,
+  emptyMapForToday,
   readCachedDutyState,
   toOfflineDutySnapshot,
   writeCachedDutyBootstrap
@@ -33,6 +36,11 @@ import { subscribeVisitDataRefresh } from "../../../../mobile/lib/visit/visitDat
 import { STARTUP_TIMEOUTS, markDutyReady } from "../../../bootstrap/startupCoordinator";
 import { logStartup } from "../../../utils/startupDiagnostics";
 import { trackingDevLog } from "../../../tracking/trackingDevLog";
+import {
+  getCanonicalWorkDateFromServerNow,
+  reconcileDutyForCanonicalDay,
+  resolveDutyWorkDate
+} from "../../../utils/workdayCalendar";
 
 type BootstrapHydrationInput = {
   bootstrap: MobileBootstrap | null;
@@ -44,7 +52,7 @@ type DutyContextValue = DutyStateSnapshot & {
   hydrateFromBootstrap: (input: BootstrapHydrationInput) => Promise<void>;
   refreshBootstrap: (options?: { force?: boolean }) => Promise<void>;
   refreshCurrentDuty: () => Promise<WorkdayStatus | null>;
-  refreshDutyMap: () => Promise<DutyMapSummary | null>;
+  refreshDutyMap: (options?: { force?: boolean }) => Promise<DutyMapSummary | null>;
   startDuty: () => Promise<WorkdayStatus | null>;
   endDuty: () => Promise<WorkdayStatus | null>;
   clearDutyState: (options?: { userId?: number | null; preserveCache?: boolean }) => Promise<void>;
@@ -80,6 +88,16 @@ function initialState(): DutyStateSnapshot {
   };
 }
 
+function mapHasMarkers(map: DutyMapSummary | null | undefined): boolean {
+  if (!map) return false;
+  return Boolean(map.startMarker || map.endMarker || (map.visitMarkers?.length ?? 0) > 0);
+}
+
+function sameSessionMap(map: DutyMapSummary | null | undefined, dutySessionId: number | null | undefined): boolean {
+  if (!map || dutySessionId == null) return false;
+  return map.dutyId == null || map.dutyId === dutySessionId;
+}
+
 async function captureDutyActionLocation(timeoutMs = 12_000) {
   const timeout = new Promise<Awaited<ReturnType<typeof readForegroundLocationIfGranted>>>((resolve) => {
     setTimeout(() => {
@@ -106,17 +124,25 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
   const holdDutyCache = authPhase === "authenticated" || authPhase === "validating_session";
   const [state, setState] = useState<DutyStateSnapshot>(() => initialState());
   const bootstrapPromiseRef = useRef<Promise<void> | null>(null);
+  const mapPromiseRef = useRef<Promise<DutyMapSummary | null> | null>(null);
   const actionPromiseRef = useRef<Promise<WorkdayStatus | null> | null>(null);
   const currentUserIdRef = useRef<number | null>(null);
   const dutyRef = useRef<WorkdayStatus | null>(null);
+  const dutyMapRef = useRef<DutyMapSummary | null>(null);
+  const serverOffsetRef = useRef(0);
   dutyRef.current = state.currentDuty;
+  dutyMapRef.current = state.dutyMap;
+  serverOffsetRef.current = state.serverTimeOffsetMs;
 
   const applyDutyState = useCallback(
     async (
       duty: WorkdayStatus | null,
       options?: {
         dutyMap?: DutyMapSummary | null;
+        /** When true, null dutyMap is an authoritative clear (logout / no duty / new day). */
+        authoritativeEmptyMap?: boolean;
         serverTimeOffsetMs?: number;
+        serverNow?: string | null;
         offline?: boolean;
         syncStatus?: DutyStateSnapshot["syncStatus"];
         hydrationStatus?: DutyStateSnapshot["hydrationStatus"];
@@ -125,28 +151,70 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
       }
     ) => {
       const userId = options?.userId ?? currentUserIdRef.current;
-      const dutyMap = options?.dutyMap !== undefined ? options.dutyMap : dutyRef.current ? state.dutyMap : null;
       const serverTimeOffsetMs =
-        typeof options?.serverTimeOffsetMs === "number" ? options.serverTimeOffsetMs : state.serverTimeOffsetMs;
+        typeof options?.serverTimeOffsetMs === "number" ? options.serverTimeOffsetMs : serverOffsetRef.current;
+      const canonicalDate = getCanonicalWorkDateFromServerNow(options?.serverNow, serverTimeOffsetMs);
+      const reconciled = reconcileDutyForCanonicalDay(duty, canonicalDate);
+      const prevMap = dutyMapRef.current;
 
-      if (duty?.is_active) {
-        await saveDutySessionFromWorkday(duty, { userId, serverTimeAtStart: duty.server_time ?? duty.started_at ?? null });
+      let dutyMap: DutyMapSummary | null;
+      if (!reconciled) {
+        // Authoritative: no today/active duty → clear markers.
+        dutyMap = emptyMapForToday();
+      } else if (options?.dutyMap != null) {
+        dutyMap = toEmployeeDutyMapPresentation(options.dutyMap) ?? emptyMapForToday();
+      } else if (options?.dutyMap === null) {
+        // Compact bootstrap / pending map fetch — preserve same-session markers.
+        if (options.authoritativeEmptyMap) {
+          dutyMap = emptyMapForToday();
+        } else if (sameSessionMap(prevMap, reconciled.duty_session_id) && mapHasMarkers(prevMap)) {
+          dutyMap = toEmployeeDutyMapPresentation(prevMap);
+        } else if (reconciled.is_active && mapHasMarkers(prevMap)) {
+          dutyMap = toEmployeeDutyMapPresentation(prevMap);
+        } else {
+          // loading-with-no-data — keep empty until map endpoint returns
+          dutyMap = emptyMapForToday();
+        }
+      } else if (reconciled.duty_session_id != null && sameSessionMap(prevMap, reconciled.duty_session_id)) {
+        dutyMap = toEmployeeDutyMapPresentation(prevMap) ?? emptyMapForToday();
+      } else if (reconciled.is_active && mapHasMarkers(prevMap)) {
+        dutyMap = toEmployeeDutyMapPresentation(prevMap) ?? emptyMapForToday();
+      } else {
+        dutyMap = emptyMapForToday();
+      }
+
+      // Session / date mismatch → never keep yesterday's markers in today's presentation.
+      if (
+        dutyMap?.dutyId != null &&
+        reconciled?.duty_session_id != null &&
+        dutyMap.dutyId !== reconciled.duty_session_id
+      ) {
+        dutyMap = emptyMapForToday();
+      }
+
+      if (reconciled?.is_active) {
+        await saveDutySessionFromWorkday(reconciled, {
+          userId,
+          serverTimeAtStart: reconciled.server_time ?? reconciled.started_at ?? null
+        });
       } else {
         await clearCachedActiveWorkday(userId).catch(() => undefined);
       }
 
       if (userId != null && Number.isFinite(userId) && userId > 0) {
         await writeCachedDutyBootstrap(userId, {
-          currentDuty: duty,
+          currentDuty: reconciled,
           dutyMap: dutyMap ?? null,
-          serverTimeOffsetMs
+          serverTimeOffsetMs,
+          serverNow: options?.serverNow ?? null,
+          canonicalDate
         }).catch(() => undefined);
       }
 
       setState((prev) => ({
         ...prev,
         hydrationStatus: options?.hydrationStatus ?? "ready",
-        currentDuty: duty,
+        currentDuty: reconciled,
         dutyMap: dutyMap ?? null,
         serverTimeOffsetMs,
         isOffline: options?.offline ?? false,
@@ -155,7 +223,7 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
         bootstrapError: options?.bootstrapError ?? null
       }));
     },
-    [state.dutyMap, state.serverTimeOffsetMs]
+    []
   );
 
   const clearDutyState = useCallback(async (options?: { userId?: number | null; preserveCache?: boolean }) => {
@@ -163,6 +231,9 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
     const userId = options?.userId ?? currentUserIdRef.current;
     currentUserIdRef.current = options?.userId ?? currentUserIdRef.current;
     dutyRef.current = null;
+    dutyMapRef.current = null;
+    invalidateMobileBootstrapCache();
+    invalidateDutyMapCache();
     setState(initialState());
     await clearCachedActiveWorkday(userId).catch(() => undefined);
     if (!options?.preserveCache) {
@@ -176,11 +247,17 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
       if (bootstrap) {
         setConnectivityOnline(true);
         await clearObsoleteWorkdayAuthorityKeys().catch(() => undefined);
+        // Omit null compact map so applyDutyState preserves existing markers while map loads.
         await applyDutyState(bootstrap.currentDuty, {
-          dutyMap: bootstrap.dutyMap,
+          ...(bootstrap.dutyMap != null
+            ? { dutyMap: bootstrap.dutyMap }
+            : bootstrap.currentDuty
+              ? { dutyMap: null }
+              : { dutyMap: null, authoritativeEmptyMap: true }),
           serverTimeOffsetMs: bootstrap.serverTimeOffsetMs,
+          serverNow: bootstrap.serverNow,
           hydrationStatus: "ready",
-          syncStatus: "confirmed",
+          syncStatus: bootstrap.dutyMap != null ? "confirmed" : "syncing",
           bootstrapError: null,
           userId
         });
@@ -188,6 +265,25 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
           await startTrackingBridge().catch(() => undefined);
         } else {
           await stopTrackingBridge().catch(() => undefined);
+        }
+        if (bootstrap.currentDuty?.duty_session_id && !mapHasMarkers(bootstrap.dutyMap)) {
+          try {
+            const dutyMap = await fetchDutyMap(bootstrap.currentDuty.duty_session_id);
+            await applyDutyState(bootstrap.currentDuty, {
+              dutyMap,
+              serverTimeOffsetMs: bootstrap.serverTimeOffsetMs,
+              serverNow: bootstrap.serverNow,
+              hydrationStatus: "ready",
+              syncStatus: "confirmed",
+              userId
+            });
+          } catch {
+            // Map is best-effort after duty hydrate — keep prior markers.
+            setState((prev) => ({
+              ...prev,
+              syncStatus: prev.dutyMap && mapHasMarkers(prev.dutyMap) ? "confirmed" : prev.syncStatus
+            }));
+          }
         }
         return;
       }
@@ -213,108 +309,189 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
     [applyDutyState]
   );
 
-  const refreshBootstrap = useCallback(async () => {
-    if (!canSendAuthenticatedRequests()) {
-      return;
-    }
-    if (bootstrapPromiseRef.current) {
-      await bootstrapPromiseRef.current;
-      return;
-    }
-
-    let settle!: () => void;
-    const active = new Promise<void>((resolve) => {
-      settle = resolve;
-    });
-    bootstrapPromiseRef.current = active;
-
-    setState((prev) => ({
-      ...prev,
-      hydrationStatus: prev.hydrationStatus === "ready" ? "ready" : "loading",
-      syncStatus: "syncing",
-      bootstrapError: null
-    }));
-
-    try {
-      const bootstrap = await fetchMobileBootstrap();
-      await hydrateFromBootstrap({
-        bootstrap,
-        userId: bootstrap.user?.id ?? currentUserIdRef.current ?? null
-      });
-    } catch (error) {
-      await hydrateFromBootstrap({
-        bootstrap: null,
-        userId: currentUserIdRef.current,
-        error
-      });
-    } finally {
-      if (bootstrapPromiseRef.current === active) {
-        bootstrapPromiseRef.current = null;
+  const refreshBootstrap = useCallback(
+    async (options?: { force?: boolean }) => {
+      if (!canSendAuthenticatedRequests()) {
+        return;
       }
-      settle();
-    }
-  }, [hydrateFromBootstrap]);
+      if (bootstrapPromiseRef.current) {
+        await bootstrapPromiseRef.current;
+        return;
+      }
 
+      let settle!: () => void;
+      const active = new Promise<void>((resolve) => {
+        settle = resolve;
+      });
+      bootstrapPromiseRef.current = active;
+
+      setState((prev) => ({
+        ...prev,
+        // refreshing-with-existing-data: never drop hydration to loading if already ready
+        hydrationStatus: prev.hydrationStatus === "ready" ? "ready" : "loading",
+        syncStatus: "syncing",
+        bootstrapError: null
+      }));
+
+      try {
+        const bootstrap = await fetchMobileBootstrap({ force: options?.force === true });
+        await hydrateFromBootstrap({
+          bootstrap,
+          userId: bootstrap.user?.id ?? currentUserIdRef.current ?? null
+        });
+      } catch (error) {
+        await hydrateFromBootstrap({
+          bootstrap: null,
+          userId: currentUserIdRef.current,
+          error
+        });
+      } finally {
+        if (bootstrapPromiseRef.current === active) {
+          bootstrapPromiseRef.current = null;
+        }
+        settle();
+      }
+    },
+    [hydrateFromBootstrap]
+  );
   const refreshCurrentDuty = useCallback(async () => {
     setState((prev) => ({ ...prev, syncStatus: "syncing", bootstrapError: null }));
     const result = await fetchCurrentDuty();
     if (result.kind === "active" || result.kind === "completed") {
-      await applyDutyState(result.workday, {
+      const canonicalDate = getCanonicalWorkDateFromServerNow(
+        result.workday.server_time,
+        serverOffsetRef.current
+      );
+      const reconciled = reconcileDutyForCanonicalDay(result.workday, canonicalDate);
+      if (!reconciled) {
+        await applyDutyState(null, {
+          dutyMap: null,
+          authoritativeEmptyMap: true,
+          serverNow: result.workday.server_time,
+          hydrationStatus: "ready",
+          syncStatus: "confirmed",
+          offline: false
+        });
+        await stopTrackingBridge().catch(() => undefined);
+        return null;
+      }
+      // Do not pass dutyMap — preserve existing markers while refreshing duty metadata.
+      await applyDutyState(reconciled, {
+        serverNow: reconciled.server_time,
         hydrationStatus: "ready",
         syncStatus: "confirmed",
         offline: false
       });
-      if (result.workday.is_active) {
+      if (reconciled.is_active) {
         await startTrackingBridge().catch(() => undefined);
       } else {
         await stopTrackingBridge().catch(() => undefined);
       }
-      return result.workday;
+      return reconciled;
     }
     await applyDutyState(null, {
-      dutyMap: state.dutyMap,
+      dutyMap: null,
+      authoritativeEmptyMap: true,
       hydrationStatus: "ready",
       syncStatus: "confirmed",
       offline: false
     });
     await stopTrackingBridge().catch(() => undefined);
     return null;
-  }, [applyDutyState, state.dutyMap]);
+  }, [applyDutyState]);
 
-  const refreshDutyMap = useCallback(async () => {
-    try {
-      setState((prev) => ({ ...prev, syncStatus: "syncing" }));
-      const duty = dutyRef.current;
-      const dutyMap =
-        duty?.duty_session_id != null ? await fetchDutyMap(duty.duty_session_id) : await fetchCurrentDutyMap();
-      setState((prev) => ({
-        ...prev,
-        dutyMap,
-        isOffline: false,
-        lastSyncedAt: new Date().toISOString(),
-        syncStatus: "confirmed",
-        bootstrapError: null
-      }));
-      if (currentUserIdRef.current != null) {
-        await writeCachedDutyBootstrap(currentUserIdRef.current, {
-          currentDuty: dutyRef.current,
-          dutyMap,
-          serverTimeOffsetMs: state.serverTimeOffsetMs
-        }).catch(() => undefined);
-      }
-      return dutyMap;
-    } catch (error) {
-      const offline = isNetworkError(error);
-      setState((prev) => ({
-        ...prev,
-        isOffline: offline,
-        syncStatus: offline ? "offline" : "error",
-        bootstrapError: error instanceof Error ? error.message : "Unable to load duty map."
-      }));
-      return null;
+  const refreshDutyMap = useCallback(async (options?: { force?: boolean }) => {
+    if (mapPromiseRef.current) {
+      return mapPromiseRef.current;
     }
-  }, [state.serverTimeOffsetMs]);
 
+    const run = (async (): Promise<DutyMapSummary | null> => {
+      try {
+        // refreshing-with-existing-data — keep markers; only mark syncing.
+        setState((prev) => ({ ...prev, syncStatus: "syncing" }));
+        const duty = dutyRef.current;
+        if (!duty?.duty_session_id) {
+          const empty = emptyMapForToday();
+          setState((prev) => ({
+            ...prev,
+            dutyMap: empty,
+            syncStatus: "confirmed",
+            bootstrapError: null
+          }));
+          if (currentUserIdRef.current != null) {
+            await writeCachedDutyBootstrap(currentUserIdRef.current, {
+              currentDuty: null,
+              dutyMap: empty,
+              serverTimeOffsetMs: serverOffsetRef.current,
+              serverNow: null
+            }).catch(() => undefined);
+          }
+          return empty;
+        }
+
+        const dutyMap = toEmployeeDutyMapPresentation(
+          await fetchDutyMap(duty.duty_session_id, { force: options?.force === true })
+        );
+        // Ignore stale responses if duty changed while the request was in flight.
+        if (dutyRef.current?.duty_session_id !== duty.duty_session_id) {
+          return null;
+        }
+        const presented = dutyMap ?? emptyMapForToday();
+        setState((prev) => ({
+          ...prev,
+          dutyMap: presented,
+          isOffline: false,
+          lastSyncedAt: new Date().toISOString(),
+          syncStatus: "confirmed",
+          bootstrapError: null
+        }));
+        if (currentUserIdRef.current != null) {
+          const businessDate =
+            resolveDutyWorkDate(duty) ??
+            getCanonicalWorkDateFromServerNow(duty.server_time ?? null, serverOffsetRef.current);
+          await writeScopedDayMap({
+            userId: currentUserIdRef.current,
+            businessDate,
+            dutySessionId: duty.duty_session_id,
+            dutyMap: presented
+          }).catch(() => undefined);
+          await writeCachedDutyBootstrap(currentUserIdRef.current, {
+            currentDuty: dutyRef.current,
+            dutyMap: presented,
+            serverTimeOffsetMs: serverOffsetRef.current,
+            serverNow: dutyRef.current?.server_time ?? null,
+            canonicalDate: businessDate
+          }).catch(() => undefined);
+        }
+        return presented;
+      } catch (error) {
+        const offline = isNetworkError(error);
+        if (!dutyRef.current?.duty_session_id) {
+          const empty = emptyMapForToday();
+          setState((prev) => ({
+            ...prev,
+            dutyMap: empty,
+            isOffline: offline,
+            syncStatus: offline ? "offline" : "confirmed",
+            bootstrapError: null
+          }));
+          return empty;
+        }
+        setState((prev) => ({
+          ...prev,
+          isOffline: offline,
+          syncStatus: offline ? "offline" : "error",
+          bootstrapError: error instanceof Error ? error.message : "Unable to load duty map."
+        }));
+        return dutyMapRef.current;
+      } finally {
+        mapPromiseRef.current = null;
+      }
+    })();
+
+    mapPromiseRef.current = run;
+    return run;
+  }, []);
   const runSingleFlightAction = useCallback(async (run: () => Promise<WorkdayStatus | null>) => {
     if (actionPromiseRef.current) {
       return actionPromiseRef.current;
@@ -329,13 +506,16 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
     return runSingleFlightAction(async () => {
       setState((prev) => ({ ...prev, syncStatus: "syncing", bootstrapError: null }));
       try {
-        const { ensureLocationReadyForWorkday, promptFixLocationAccess } = await import(
-          "../../fieldTrackingSetup"
-        );
-        const ready = await ensureLocationReadyForWorkday();
-        if (!ready.ok) {
-          setState((prev) => ({ ...prev, syncStatus: "idle" }));
-          promptFixLocationAccess(ready);
+        // Callers (Today / FAB) own the interactive location gate. Here we only
+        // silently verify OS readiness — never request permission, never Alert/Settings.
+        const { ensureLocationReadyForAction } = await import("../../fieldTrackingSetup");
+        const ready = await ensureLocationReadyForAction({ probeOnly: true });
+        if (ready.status !== "ready") {
+          setState((prev) => ({
+            ...prev,
+            syncStatus: "idle",
+            bootstrapError: ready.message || null
+          }));
           return null;
         }
 
@@ -346,15 +526,7 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
             syncStatus: "idle",
             bootstrapError: locationResult.message
           }));
-          // Do not throw — callers must handle null without crashing.
-          promptFixLocationAccess({
-            ok: false,
-            state: "temporarily_unavailable",
-            reason: "temporarily_unavailable",
-            missing: [],
-            message: locationResult.message,
-            readiness: ready.readiness
-          });
+          // Duty may already exist on retry — do not re-run Start Work Day UI gate.
           return null;
         }
         const coords = locationResult.location.coords;
@@ -367,7 +539,7 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
           if (started) {
             await applyDutyState(started, { hydrationStatus: "ready", syncStatus: "confirmed" });
             await startTrackingBridge().catch(() => undefined);
-            await refreshDutyMap().catch(() => undefined);
+            await refreshDutyMap({ force: true }).catch(() => undefined);
             return started;
           }
         } catch (error) {
@@ -406,6 +578,9 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     return subscribeAuthPhase((phase, previous) => {
       if (phase === "locked" || phase === "unauthenticated" || phase === "session_replaced") {
+        void import("../../fieldTrackingSetup").then(({ clearPendingStartWorkDay }) => {
+          clearPendingStartWorkDay();
+        });
         void stopTrackingBridge().catch(() => undefined);
         return;
       }
@@ -446,25 +621,28 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
     if (!sessionReady) return;
     return NetInfo.addEventListener((next) => {
       const online = Boolean(next.isConnected && next.isInternetReachable !== false);
-      setState((prev) => ({ ...prev, isOffline: !online }));
+      setState((prev) => {
+        if (prev.isOffline === !online) return prev;
+        return { ...prev, isOffline: !online };
+      });
       if (online) {
-        void refreshBootstrap()
-          .then(() => refreshDutyMap().catch(() => undefined))
+        // Forced reconcile after reconnect — single bootstrap pipeline hydrates duty + map.
+        void refreshBootstrap({ force: true })
           .then(() => flushTrackingGpsQueue().catch(() => undefined));
       }
     });
-  }, [refreshBootstrap, refreshDutyMap, sessionReady]);
+  }, [refreshBootstrap, sessionReady]);
 
   useEffect(() => {
     if (!sessionReady) return;
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (nextState === "active") {
-        void refreshCurrentDuty().catch(() => undefined);
-        void refreshDutyMap().catch(() => undefined);
+        // Freshness-aware bootstrap only — avoids Auth+Duty+map triple storm.
+        void refreshBootstrap({ force: false }).catch(() => undefined);
       }
     });
     return () => subscription.remove();
-  }, [refreshCurrentDuty, refreshDutyMap, sessionReady]);
+  }, [refreshBootstrap, sessionReady]);
 
   useEffect(() => {
     dutyBootstrapBridge = {
@@ -488,7 +666,7 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     const unsubscribe = subscribeVisitDataRefresh(() => {
       if (cancelled) return;
-      void refreshDutyMap().catch(() => undefined);
+      void refreshDutyMap({ force: true }).catch(() => undefined);
     });
     return () => {
       cancelled = true;

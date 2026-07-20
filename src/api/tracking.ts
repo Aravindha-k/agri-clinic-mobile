@@ -78,6 +78,8 @@ export type WorkdayStatus = {
   duty_session_id?: number;
   latitude?: string | number | null;
   longitude?: string | number | null;
+  /** Asia/Kolkata business date YYYY-MM-DD from backend. */
+  work_date?: string;
   date?: string;
   start_time?: string;
   started_at?: string;

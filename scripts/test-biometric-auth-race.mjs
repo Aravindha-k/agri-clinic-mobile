@@ -37,6 +37,7 @@ mustInclude(
     '"validating_session"',
     '"authenticated"',
     '"unauthenticated"',
+    '"session_expired"',
     "canSendAuthenticatedRequests",
     "canEnterAppShell"
   ],
@@ -129,8 +130,8 @@ mustInclude(
 
 mustInclude(
   "src/storage/biometricLoginStorage.ts",
-  ["via: \"refresh\"", "migrateLegacyBiometricPasswords", "legacy_password_material_cleared"],
-  "F biometric unlock uses refresh only"
+  ['via: "refresh"', "migrateLegacyBiometricPasswords", "legacy_password_material_cleared", "reauthenticate_expired_session"],
+  "F biometric unlock uses refresh (app-lock) or Keystore re-login"
 );
 
 mustNotInclude(
@@ -138,17 +139,22 @@ mustNotInclude(
   [
     "saveBiometricReauthCredentials",
     "loginWithStoredReauthCredentials",
-    "loginRequest(",
     "SecureStore.setItemAsync(LEGACY_REAUTH"
   ],
-  "F never store or replay password for biometric"
+  "F never write legacy password keys"
+);
+
+mustInclude(
+  "src/storage/biometricLoginStorage.ts",
+  ["loginRequest(", "agri_bio_v2_secret"],
+  "F Keystore re-login calls loginRequest with v2 material"
 );
 
 // Assert no setItemAsync writes password/credential material
 {
   const bio = read("src/storage/biometricLoginStorage.ts");
   assert.ok(
-    !/SecureStore\.setItemAsync\(\s*(?:REAUTH_|LEGACY_REAUTH_|LEGACY_PASS|LEGACY_USER)/.test(bio),
+    !/SecureStore\.setItemAsync\(\s*(?:LEGACY_REAUTH_|LEGACY_PASS|LEGACY_USER)/.test(bio),
     "F: must not write legacy password/username keys to SecureStore"
   );
   assert.ok(
@@ -177,8 +183,20 @@ mustInclude(
 
 mustInclude(
   "src/storage/biometricLoginStorage.ts",
-  ['outcome: "token_refresh_failed"', "SESSION_EXPIRED"],
-  "refresh expiry returns token_refresh_failed"
+  ['outcome: "token_refresh_failed"', "reauthenticate_expired_session"],
+  "refresh expiry returns token_refresh_failed; reauth routes expired session"
+);
+
+mustInclude(
+  "src/storage/authPhase.ts",
+  ['"session_expired"', "isSessionExpiredPhase"],
+  "SESSION_EXPIRED lives in canonical auth phase machine"
+);
+
+mustInclude(
+  "src/storage/AuthContext.tsx",
+  ["forceSessionExpiredLogout", "SESSION_EXPIRED_MESSAGE"],
+  "session expiry surfaces Login with preserved biometric eligibility"
 );
 
 // H — single bootstrap

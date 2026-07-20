@@ -1,10 +1,12 @@
 import { useEffect, useRef } from "react";
 import { SESSION_EXPIRED_MESSAGE } from "../constants/authMessages";
 import { SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
+import { TRACKING_HEALTH_COPY } from "../constants/trackingHealth";
 import { useAuth } from "../storage/AuthContext";
-import { useGpsCompliance } from "../storage/GpsComplianceContext";
 import { useNotifications } from "../storage/NotificationsContext";
 import { useOfflineSync } from "../storage/OfflineSyncContext";
+import { useTrackingHealthOptional } from "../storage/TrackingHealthContext";
+import { isTrackingHealthBlocking } from "../tracking/trackingHealthTypes";
 
 function SyncFailReporter() {
   const { lastSyncFailed } = useOfflineSync();
@@ -26,9 +28,9 @@ function SyncFailReporter() {
 /** Pushes in-app notifications from auth, GPS, tracking, and sync state. */
 export function NotificationBridge() {
   const { loginNotice } = useAuth();
-  const { status: gpsStatus } = useGpsCompliance();
+  const trackingHealth = useTrackingHealthOptional();
   const { push } = useNotifications();
-  const lastGps = useRef(gpsStatus);
+  const lastOutage = useRef<string | null>(null);
   const lastLoginNotice = useRef<string | null>(null);
 
   useEffect(() => {
@@ -44,17 +46,20 @@ export function NotificationBridge() {
   }, [loginNotice, push]);
 
   useEffect(() => {
-    if (gpsStatus === lastGps.current) return;
-    lastGps.current = gpsStatus;
-    if (gpsStatus === "blocked") {
-      push({
-        type: "gps_off",
-        title: "GPS required",
-        message: "Location has been off for 30 minutes. Enable GPS to continue field work."
-      });
+    const health = trackingHealth?.health;
+    if (!health) return;
+    if (!isTrackingHealthBlocking(health)) {
+      lastOutage.current = null;
+      return;
     }
-  }, [gpsStatus, push]);
+    if (lastOutage.current === health.status) return;
+    lastOutage.current = health.status;
+    push({
+      type: "gps_off",
+      title: TRACKING_HEALTH_COPY.notificationTitle,
+      message: TRACKING_HEALTH_COPY.notificationBody
+    });
+  }, [push, trackingHealth?.health]);
 
   return <SyncFailReporter />;
 }
-

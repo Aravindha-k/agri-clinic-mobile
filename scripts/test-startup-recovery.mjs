@@ -145,9 +145,12 @@ assert.match(duty, /AppState\.addEventListener/);
 assert.match(duty, /NetInfo\.addEventListener/);
 
 const navigator = read("src/navigation/RootNavigator.tsx");
-assert.match(navigator, /isStartupContinueOffline\(\)/);
 assert.match(navigator, /markStartupComplete/);
-assert.match(navigator, /Loading workday/);
+assert.match(navigator, /sessionValidateUi/);
+assert.doesNotMatch(navigator, /Loading workday/);
+assert.doesNotMatch(navigator, /import \{ LoadingState \}/);
+assert.doesNotMatch(navigator, /<LoadingState/);
+assert.match(navigator, /sessionValidateUi === "login"/);
 
 const recovery = read("src/screens/StartupScreen.tsx");
 assert.match(recovery, /markContinueOffline/);
@@ -161,11 +164,11 @@ const splash = read("src/components/brand/KavyaCinematicSplash.tsx");
 assert.match(splash, /backgroundSettled/);
 assert.match(splash, /logoSettled/);
 assert.match(splash, /onLoadEnd=\{\(\) => setLogoSettled\(true\)\}/);
-assert.match(splash, /cancelAnimation\(screenOpacity\)/);
-assert.match(splash, /const maxVisibleTimer = setTimeout/);
-assert.match(splash, /usePremiumMotion/);
-assert.match(splash, /preferLight/);
-assert.match(splash, /if \(preferLight\)/);
+assert.match(splash, /cancelAnimation\(screenOpacity\)|exitFinishTimerRef/);
+assert.match(splash, /finishSplashOnce/);
+assert.match(splash, /splashPreferLightRef/);
+assert.match(splash, /splash_mode_locked/);
+assert.match(splash, /preferLightLocked/);
 
 const premiumMotion = read("src/hooks/usePremiumMotion.ts");
 assert.match(premiumMotion, /buildMotionState\(false, false, false\)/);

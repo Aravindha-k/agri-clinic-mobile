@@ -27,20 +27,19 @@ export function resetFieldTrackingSetupOfferSession(): void {
 }
 
 /**
- * Start Workday health check.
- * Returns true when tracking-critical permissions are ready.
- * Never requests OS permission dialogs.
+ * Start Workday health check (silent probe only).
+ * Interactive Start Work Day uses startWorkDayWithLocationGate instead.
  */
 export async function ensureFieldTrackingReadyForWorkday(): Promise<{
   ok: boolean;
   missing: SetupStepId[];
 }> {
-  const { ensureLocationReadyForWorkday } = await import("./locationPermissionService");
-  const result = await ensureLocationReadyForWorkday();
-  if (result.ok) {
+  const { ensureLocationReadyForAction } = await import("./locationReadinessGate");
+  const result = await ensureLocationReadyForAction({ probeOnly: true });
+  if (result.status === "ready") {
     return { ok: true, missing: [] };
   }
-  return { ok: false, missing: result.missing };
+  return { ok: false, missing: ["foreground"] };
 }
 
 export function showFieldTrackingNeedsAttentionAlert(

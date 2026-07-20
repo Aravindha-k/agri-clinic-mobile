@@ -112,7 +112,7 @@ function TrackingWorkspaceScreenInner() {
       setVisitsCompleted(0);
       setFarmersCovered(0);
     }
-  }, [dutyMap, refreshDutyMap]);
+  }, [refreshDutyMap]);
 
   useFocusEffect(
     useCallback(() => {

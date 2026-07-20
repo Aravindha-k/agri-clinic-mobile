@@ -2,7 +2,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { FieldMapView } from "../../../src/components/map/FieldMapView";
-import type { MapPin } from "../../../src/components/map/FieldMapView.types";
+import {
+  buildEmployeeDayFitCoordinates,
+  buildEmployeeDayMapMarkers
+} from "../../../src/features/duty/map/employeeDayMapMarkers";
 import { useDuty } from "../../../src/features/duty/store/DutyContext";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { DEFAULT_MAP_REGION, fitMapRegion } from "../../../src/utils/mapRegion";
@@ -35,40 +38,33 @@ export function DaySummaryRouteCard({
   onPress
 }: Props) {
   const { t } = useI18n();
-  const { dutyMap } = useDuty();
+  const { currentDuty, dutyMap } = useDuty();
   const [previewWidth, setPreviewWidth] = useState(0);
   const loading = false;
 
+  const workdayEnded = Boolean(
+    currentDuty &&
+      !currentDuty.is_active &&
+      (Boolean(currentDuty.ended_at) || Boolean(currentDuty.end_time) || currentDuty.is_active === false)
+  );
+
   const markers = useMemo(
     () =>
-      [
-        dutyMap?.startMarker
-          ? {
-              id: "route-start",
-              lat: dutyMap.startMarker.latitude,
-              lng: dutyMap.startMarker.longitude,
-              title: t("myLocation.legendRouteStart"),
-              description: t("myLocation.workStartHint"),
-              kind: "route_start" as const
-            }
-          : null,
-        ...(dutyMap?.visitMarkers ?? []),
-        dutyMap?.endMarker
-          ? {
-              id: "route-end",
-              lat: dutyMap.endMarker.latitude,
-              lng: dutyMap.endMarker.longitude,
-              title: "Work end",
-              kind: "route_end" as const
-            }
-          : null
-      ].filter((marker): marker is MapPin => marker != null),
-    [dutyMap, t]
+      buildEmployeeDayMapMarkers({
+        dutyMap,
+        workdayEnded,
+        labels: {
+          startTitle: t("myLocation.legendRouteStart"),
+          startDescription: t("myLocation.workStartHint"),
+          visitTitle: t("myLocation.legendVisit"),
+          endTitle: t("myLocation.legendRouteEnd")
+        }
+      }),
+    [dutyMap, t, workdayEnded]
   );
 
   const fitCoordinates = useMemo(
-    () =>
-      markers.map((m) => ({ latitude: m.lat, longitude: m.lng })),
+    () => buildEmployeeDayFitCoordinates(markers),
     [markers]
   );
 
@@ -77,6 +73,8 @@ export function DaySummaryRouteCard({
     return fitMapRegion(fitCoordinates.map((p) => ({ lat: p.latitude, lng: p.longitude })));
   }, [fitCoordinates]);
   const showMap = !loading && previewWidth > 0;
+
+  void workdayId;
 
   return (
     <View style={styles.section}>

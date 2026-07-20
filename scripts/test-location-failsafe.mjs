@@ -56,14 +56,14 @@ must(
 
 must(
   "src/features/duty/store/DutyContext.tsx",
-  ["ensureLocationReadyForWorkday", "promptFixLocationAccess", "return null"],
-  "startDuty never throws on GPS fail"
+  ["ensureLocationReadyForAction", "probeOnly: true", "return null"],
+  "startDuty silently probes — never throws on GPS fail"
 );
 
 mustNot(
   "src/features/duty/store/DutyContext.tsx",
-  ["throw new Error(locationResult.message)"],
-  "no throw on location capture fail"
+  ["throw new Error(locationResult.message)", "promptFixLocationAccess"],
+  "no throw / no Alert redirect on location capture fail"
 );
 
 must(
@@ -97,8 +97,8 @@ must(
 
 must(
   "src/components/ui/BottomNav.tsx",
-  ["ensureLocationReadyForWorkday", "promptFixLocationAccess"],
-  "BottomNav gated start"
+  ["startWorkDayWithLocationGate"],
+  "BottomNav one-tap gated start"
 );
 
 must(

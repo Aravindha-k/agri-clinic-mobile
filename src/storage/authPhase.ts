@@ -4,11 +4,13 @@
  */
 export type AuthPhase =
   | "initializing"
+  | "unauthenticated"
+  | "authenticating_password"
   | "locked"
   | "authenticating_biometric"
   | "validating_session"
   | "authenticated"
-  | "unauthenticated"
+  | "session_expired"
   | "session_replaced"
   | "fatal_error";
 
@@ -53,11 +55,16 @@ export function canEnterAppShell(): boolean {
   return phase === "authenticated";
 }
 
-/** Biometric unlock / branded wait — not Login. */
+/** Biometric unlock / branded wait — not Login (tokens still present). */
 export function isBiometricLockPhase(value: AuthPhase = phase): boolean {
   return value === "locked" || value === "authenticating_biometric";
 }
 
 export function isAuthBootstrapping(value: AuthPhase = phase): boolean {
   return value === "initializing" || value === "validating_session";
+}
+
+/** Login with fingerprint re-login + password (tokens cleared). */
+export function isSessionExpiredPhase(value: AuthPhase = phase): boolean {
+  return value === "session_expired";
 }

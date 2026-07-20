@@ -31,6 +31,7 @@ import { I18nProvider } from "./src/i18n/I18nContext";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 import { StartupScreen } from "./src/screens/StartupScreen";
 import { TrackingProvider } from "./src/storage/TrackingContext";
+import { TrackingHealthProvider } from "./src/storage/TrackingHealthContext";
 import { DutyProvider } from "./src/features/duty/store/DutyContext";
 import { GpsComplianceProvider } from "./src/storage/GpsComplianceContext";
 import { NotificationsProvider } from "./src/storage/NotificationsContext";
@@ -111,17 +112,19 @@ function CriticalStartupGate({
 }) {
   const { isReady } = useAuth();
   const firedRef = useRef(false);
+  const onCriticalReadyRef = useRef(onCriticalReady);
+  onCriticalReadyRef.current = onCriticalReady;
   const [timedOut, setTimedOut] = useState(false);
   const [offlineContinued, setOfflineContinued] = useState(false);
 
   useEffect(() => {
     if (!fontsReady || !isReady) return;
     setTimedOut(false);
-    if (!firedRef.current && onCriticalReady) {
+    if (!firedRef.current) {
       firedRef.current = true;
-      onCriticalReady();
+      onCriticalReadyRef.current?.();
     }
-  }, [fontsReady, isReady, onCriticalReady]);
+  }, [fontsReady, isReady]);
 
   useEffect(() => {
     if (fontsReady && isReady) return;
@@ -137,13 +140,13 @@ function CriticalStartupGate({
       setTimedOut(true);
       logStartup("auth_bootstrap_timeout", "critical startup watchdog");
       markStartupFailed("critical_gate", "fonts_or_auth_timeout");
-      if (!firedRef.current && onCriticalReady) {
+      if (!firedRef.current) {
         firedRef.current = true;
-        onCriticalReady();
+        onCriticalReadyRef.current?.();
       }
     }, STARTUP_TIMEOUTS.criticalBootstrapMs);
     return () => clearTimeout(timer);
-  }, [fontsReady, isReady, onCriticalReady]);
+  }, [fontsReady, isReady]);
 
   if (offlineContinued) return null;
   return timedOut ? (
@@ -168,13 +171,17 @@ export default function AppProviders({ onShellReady, onCriticalReady, onFatalErr
   const [fontsForced, setFontsForced] = useState(false);
   const fontsReady = fontsLoaded || fontError != null || fontsForced;
   const shellReadyFired = useRef(false);
+  const onShellReadyRef = useRef(onShellReady);
+  const onCriticalReadyRef = useRef(onCriticalReady);
+  onShellReadyRef.current = onShellReady;
+  onCriticalReadyRef.current = onCriticalReady;
 
   useEffect(() => {
     markStartupBegin("AppProviders");
     logStartup("fonts_loading");
     if (!shellReadyFired.current) {
       shellReadyFired.current = true;
-      onShellReady?.();
+      onShellReadyRef.current?.();
     }
     const timer = setTimeout(() => {
       if (!fontsLoaded && fontError == null) {
@@ -184,7 +191,7 @@ export default function AppProviders({ onShellReady, onCriticalReady, onFatalErr
       }
     }, STARTUP_TIMEOUTS.fontsMs);
     return () => clearTimeout(timer);
-  }, [fontsLoaded, fontError, onShellReady]);
+  }, [fontsLoaded, fontError]);
 
   useEffect(() => {
     if (fontsLoaded) {
@@ -210,13 +217,14 @@ export default function AppProviders({ onShellReady, onCriticalReady, onFatalErr
                           <I18nProvider>
                             <CriticalStartupGate
                               fontsReady={fontsReady}
-                              onCriticalReady={onCriticalReady}
+                              onCriticalReady={() => onCriticalReadyRef.current?.()}
                             />
                             <OfflineSyncProvider>
                               <AutomaticSyncProvider>
                               <GpsComplianceProvider>
                                 <DutyProvider>
                                 <TrackingProvider>
+                                  <TrackingHealthProvider>
                                   <BottomSheetModalProvider>
                                     <ToastProvider>
                                       <NotificationBridge />
@@ -227,6 +235,7 @@ export default function AppProviders({ onShellReady, onCriticalReady, onFatalErr
                                       </GpsComplianceShell>
                                     </ToastProvider>
                                   </BottomSheetModalProvider>
+                                  </TrackingHealthProvider>
                                 </TrackingProvider>
                                 </DutyProvider>
                               </GpsComplianceProvider>

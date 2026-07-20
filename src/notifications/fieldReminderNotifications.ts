@@ -1,5 +1,9 @@
-import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
+import {
+  isExpoGoNotificationsSupported,
+  loadExpoNotifications,
+  warnExpoGoNotificationsOnce
+} from "./expoNotificationsAccess";
 import { parseFieldReminderKind, playFieldReminderSound, usesInAppReminderSounds } from "./playReminderSound";
 
 export const FIELD_REMINDER_IDS = {
@@ -21,36 +25,47 @@ let channelsReady = false;
 let handlerReady = false;
 
 export function initFieldReminderNotifications() {
-  if (handlerReady || Platform.OS === "web") {
+  if (handlerReady || Platform.OS === "web" || !isExpoGoNotificationsSupported()) {
+    if (!isExpoGoNotificationsSupported()) {
+      warnExpoGoNotificationsOnce();
+    }
     return;
   }
   handlerReady = true;
 
-  Notifications.setNotificationHandler({
-    handleNotification: async (notification) => {
-      const kind = parseFieldReminderKind(notification.request.content.data?.fieldReminderKind);
-      const soundsOn = notification.request.content.data?.reminderSounds === true;
+  void loadExpoNotifications().then((Notifications) => {
+    if (!Notifications) return;
+    Notifications.setNotificationHandler({
+      handleNotification: async (notification) => {
+        const kind = parseFieldReminderKind(notification.request.content.data?.fieldReminderKind);
+        const soundsOn = notification.request.content.data?.reminderSounds === true;
 
-      if (soundsOn && usesInAppReminderSounds() && kind === "water") {
-        void playFieldReminderSound();
+        if (soundsOn && usesInAppReminderSounds() && kind === "water") {
+          void playFieldReminderSound();
+        }
+
+        const suppressOsSound = soundsOn && usesInAppReminderSounds() && kind === "water";
+
+        return {
+          shouldShowAlert: true,
+          shouldPlaySound: !suppressOsSound,
+          shouldSetBadge: false,
+          shouldShowBanner: true,
+          shouldShowList: true
+        };
       }
-
-      const suppressOsSound = soundsOn && usesInAppReminderSounds() && kind === "water";
-
-      return {
-        shouldShowAlert: true,
-        shouldPlaySound: !suppressOsSound,
-        shouldSetBadge: false,
-        shouldShowBanner: true,
-        shouldShowList: true
-      };
-    }
+    });
   });
 }
 
 export async function ensureFieldReminderChannels(): Promise<void> {
   if (channelsReady || Platform.OS !== "android") {
     channelsReady = true;
+    return;
+  }
+
+  const Notifications = await loadExpoNotifications();
+  if (!Notifications) {
     return;
   }
 
@@ -74,6 +89,11 @@ export async function ensureFieldReminderChannels(): Promise<void> {
 
 export async function ensureFieldReminderPermissions(): Promise<boolean> {
   if (Platform.OS === "web") {
+    return false;
+  }
+
+  const Notifications = await loadExpoNotifications();
+  if (!Notifications) {
     return false;
   }
 
@@ -120,7 +140,10 @@ function androidChannelId(soundsEnabled: boolean): string | undefined {
   return CHANNEL_WATER;
 }
 
-function buildContent(soundsEnabled: boolean): Notifications.NotificationContentInput {
+function buildContent(
+  Notifications: NonNullable<Awaited<ReturnType<typeof loadExpoNotifications>>>,
+  soundsEnabled: boolean
+) {
   const copy = reminderCopy();
   const inAppSounds = usesInAppReminderSounds();
   const osCustomSound = soundsEnabled && !inAppSounds ? WATER_REMINDER_SOUND : false;
@@ -136,9 +159,7 @@ function buildContent(soundsEnabled: boolean): Notifications.NotificationContent
   };
 }
 
-type SchedulableTrigger = Exclude<Notifications.NotificationTriggerInput, null>;
-
-function withAndroidChannel<T extends SchedulableTrigger>(trigger: T, soundsEnabled: boolean): T {
+function withAndroidChannel<T extends object>(trigger: T, soundsEnabled: boolean): T {
   const channelId = androidChannelId(soundsEnabled);
   if (!channelId) {
     return trigger;
@@ -158,23 +179,35 @@ function isWaterReminderIdentifier(id: string): boolean {
 const LEGACY_REMINDER_IDS = ["field-reminder-heat", "field-reminder-battery"];
 
 export async function scheduleWaterReminder(soundsEnabled: boolean): Promise<void> {
+  const Notifications = await loadExpoNotifications();
+  if (!Notifications) {
+    return;
+  }
+
   for (let slot = 1; slot <= WATER_REMINDER_SLOTS; slot += 1) {
+    const trigger = withAndroidChannel(
+      {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: WATER_INTERVAL_SEC * slot,
+        repeats: false
+      },
+      soundsEnabled
+    );
     await Notifications.scheduleNotificationAsync({
       identifier: waterReminderIdentifier(slot),
-      content: buildContent(soundsEnabled),
-      trigger: withAndroidChannel(
-        {
-          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-          seconds: WATER_INTERVAL_SEC * slot,
-          repeats: false
-        },
-        soundsEnabled
-      )
+      content: buildContent(Notifications, soundsEnabled),
+      // Dynamic import widens enum; cast preserves runtime TIME_INTERVAL value.
+      trigger: trigger as Parameters<typeof Notifications.scheduleNotificationAsync>[0]["trigger"]
     });
   }
 }
 
 export async function cancelWorkdayFieldReminders(): Promise<void> {
+  const Notifications = await loadExpoNotifications();
+  if (!Notifications) {
+    return;
+  }
+
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
   await Promise.all(
     scheduled
@@ -186,7 +219,8 @@ export async function cancelWorkdayFieldReminders(): Promise<void> {
 }
 
 export async function syncWorkdayFieldReminders(soundsEnabled: boolean): Promise<void> {
-  if (Platform.OS === "web") {
+  if (Platform.OS === "web" || !isExpoGoNotificationsSupported()) {
+    warnExpoGoNotificationsOnce();
     return;
   }
 
@@ -215,6 +249,11 @@ export async function scheduleReminderSoundTest(
     return "web";
   }
 
+  if (!isExpoGoNotificationsSupported()) {
+    warnExpoGoNotificationsOnce();
+    return "denied";
+  }
+
   initFieldReminderNotifications();
   await ensureFieldReminderChannels();
 
@@ -227,25 +266,31 @@ export async function scheduleReminderSoundTest(
     return "ok";
   }
 
+  const Notifications = await loadExpoNotifications();
+  if (!Notifications) {
+    return "denied";
+  }
+
   const testId = `${SOUND_TEST_ID}-water`;
   await Notifications.cancelScheduledNotificationAsync(testId);
 
   const copy = reminderCopy();
+  const trigger = withAndroidChannel(
+    {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: Math.max(3, delaySeconds),
+      repeats: false
+    },
+    soundsEnabled
+  );
   await Notifications.scheduleNotificationAsync({
     identifier: testId,
     content: {
-      ...buildContent(soundsEnabled),
+      ...buildContent(Notifications, soundsEnabled),
       title: `[Test] ${copy.title}`,
       body: copy.body
     },
-    trigger: withAndroidChannel(
-      {
-        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-        seconds: Math.max(3, delaySeconds),
-        repeats: false
-      },
-      soundsEnabled
-    )
+    trigger: trigger as Parameters<typeof Notifications.scheduleNotificationAsync>[0]["trigger"]
   });
 
   return "ok";

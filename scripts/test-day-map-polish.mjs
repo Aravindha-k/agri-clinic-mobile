@@ -16,19 +16,16 @@ test("Day screen keeps approved structure without timer, distance, or End Workda
   assert.doesNotMatch(day, /timerDisplay|<DutyTimer/);
 });
 
-test("Day map uses capped camera, live while active, and top legend away from attribution", () => {
+test("Day map uses capped camera, marker-only Start/Visit/End, and top legend", () => {
   const map = read("mobile/components/duty/DutyMapCard.tsx");
   assert.match(map, /cameraMode="cappedRegion"/);
   assert.match(map, /maxDelta:\s*0\.048/);
-  assert.match(map, /id: "current-live"/);
-  assert.match(map, /kind: "current"/);
+  assert.match(map, /buildEmployeeDayMapMarkers/);
+  assert.doesNotMatch(map, /current-live/);
+  assert.doesNotMatch(map, /kind: "current"/);
   assert.match(map, /dutyActive/);
-  assert.match(map, /showNativeLive/);
   assert.match(map, /styles\.legend/);
-  assert.match(map, /top:\s*10/);
-  assert.match(map, /locate-outline/);
   assert.match(map, /scan-outline/);
-  assert.match(map, /Fix Location/);
   assert.match(map, /stableFitSignature/);
   assert.doesNotMatch(map, /sampleRouteForFit/);
   assert.match(map, /route=\{\[\]\}/);

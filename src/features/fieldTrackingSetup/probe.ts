@@ -1,8 +1,8 @@
 import * as Location from "expo-location";
-import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { getAndroidApiLevel, getAndroidCapabilities } from "../../utils/androidCapabilities";
 import { isExpoGo } from "../../utils/expoRuntime";
+import { loadExpoNotifications } from "../../notifications/expoNotificationsAccess";
 import { detectManufacturerFamily } from "./manufacturer";
 import { readFieldTrackingSetupRecord } from "./persistence";
 import type { FieldTrackingHealth, FieldTrackingProbe, SetupStepId, SetupStepState } from "./types";
@@ -28,7 +28,12 @@ async function readPreciseOk(foregroundGranted: boolean): Promise<boolean> {
 
 async function readNotificationsGranted(required: boolean): Promise<boolean> {
   if (!required) return true;
+  if (isExpoGo()) {
+    return true;
+  }
   try {
+    const Notifications = await loadExpoNotifications();
+    if (!Notifications) return false;
     const current = await Notifications.getPermissionsAsync();
     return current.granted || current.status === "granted";
   } catch {

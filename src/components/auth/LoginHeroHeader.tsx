@@ -74,15 +74,23 @@ export function LoginHeroHeader({ topInset }: Props) {
 
     logoScale.value = brandingWithRepeat(
       brandingWithSequence(
-        brandingWithTiming(LOGO_BREATH_MAX, { duration: LOGO_BREATH_HALF_MS, easing: Easing.inOut(Easing.sin) }),
-        brandingWithTiming(1, { duration: LOGO_BREATH_HALF_MS, easing: Easing.inOut(Easing.sin) })
+        brandingWithTiming(LOGO_BREATH_MAX, {
+          duration: LOGO_BREATH_HALF_MS,
+          easing: Easing.inOut(Easing.sin)
+        }),
+        brandingWithTiming(1, {
+          duration: LOGO_BREATH_HALF_MS,
+          easing: Easing.inOut(Easing.sin)
+        })
       ),
       -1,
       false
     );
 
     return () => cancelAnimation(logoScale);
-  }, [logoScale, shouldAnimate, motion.preference, motion.ready]);
+    // shouldAnimate already encodes motion preference + AppState — do not restart
+    // on motion.preference flips (OEM reduced → still branding).
+  }, [logoScale, shouldAnimate]);
 
   const logoAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: logoScale.value }]
@@ -107,13 +115,10 @@ export function LoginHeroHeader({ topInset }: Props) {
 
       <View style={[styles.content, { paddingTop: topInset + Spacing.sm }]}>
         <View style={styles.logoWrap}>
-          {shouldAnimate ? (
-            <Reanimated.View style={logoAnimStyle}>
-              <CompanyLogo size={LOGO_SIZE} />
-            </Reanimated.View>
-          ) : (
+          {/* Always mount Animated.View so shared-value breathing is never detached. */}
+          <Reanimated.View style={shouldAnimate ? logoAnimStyle : undefined}>
             <CompanyLogo size={LOGO_SIZE} />
-          )}
+          </Reanimated.View>
         </View>
 
         <Text style={styles.greeting}>Welcome Back</Text>

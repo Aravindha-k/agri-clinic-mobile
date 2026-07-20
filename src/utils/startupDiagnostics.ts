@@ -14,6 +14,7 @@ export type StartupPhase =
   | "cinematic_component_rendered"
   | "cinematic_mounted"
   | "cinematic_first_layout"
+  | "splash_mode_locked"
   | "cinematic_animation_started"
   | "cinematic_ready"
   | "cinematic_exit_start"

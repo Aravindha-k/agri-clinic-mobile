@@ -1,27 +1,52 @@
+/**
+ * Biometric app-lock + session re-login.
+ *
+ * App-lock: valid refresh token still exists → fingerprint unlocks UI, silent refresh.
+ * Re-login: refresh gone / expired → fingerprint reads Keystore re-auth material → login API.
+ *
+ * Re-auth secret lives only in SecureStore (Keystore-backed). Never plain device storage or logs.
+ */
 import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
-import { getRefreshToken } from "./tokenStorage";
+import { API_BASE_URL } from "../api/config";
+import { loginRequest } from "../api/auth";
 import { refreshAccessTokenOnce } from "../api/tokenRefresh";
 import { STARTUP_TIMEOUTS } from "../bootstrap/startupCoordinator";
 import { withTimeout } from "../utils/withTimeout";
 import { ApiRequestError, isNetworkError, isServerError } from "../utils/apiError";
+import { getRefreshToken, saveTokens } from "./tokenStorage";
 
 const ENABLED_KEY = "biometric_login_enabled";
 const PROMPT_DISMISSED_KEY = "biometric_login_prompt_dismissed";
+
 /** @deprecated legacy plaintext password — deleted on every migration pass */
 const LEGACY_PASS_KEY = "biometric_login_pass";
 const LEGACY_USER_KEY = "biometric_login_user";
-/** @deprecated password reauth keys — never store raw passwords; deleted on migration */
+/** @deprecated password reauth keys — deleted on migration */
 const LEGACY_REAUTH_USER_KEY = "biometric_reauth_username";
 const LEGACY_REAUTH_PASS_KEY = "biometric_reauth_password";
+
+/** Keystore-backed re-auth (v2) — not the forbidden legacy keys. */
+const REAUTH_IDENTIFIER_KEY = "agri_bio_v2_identifier";
+const REAUTH_SECRET_KEY = "agri_bio_v2_secret";
+const REAUTH_META_KEY = "agri_bio_v2_meta";
+
+const SECURE_OPTS: SecureStore.SecureStoreOptions = {
+  keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY
+};
+
 /** OEM biometric prompts that never settle must not block login forever. */
 const BIOMETRIC_PROMPT_MS = 45_000;
+
+export type BiometricAction = "unlock_existing_session" | "reauthenticate_expired_session";
 
 export type BiometricLoginStatus = {
   hardwareAvailable: boolean;
   enrolled: boolean;
   enabled: boolean;
   label: string;
+  /** True when Keystore re-auth material is present for this employee + API env. */
+  reauthMaterialReady: boolean;
 };
 
 export type BiometricUnlockOutcome =
@@ -34,6 +59,8 @@ export type BiometricUnlockOutcome =
   | "key_invalidated"
   | "no_refresh_token"
   | "token_refresh_failed"
+  | "reauth_material_missing"
+  | "reauth_material_invalid"
   | "session_replaced"
   | "network_error"
   | "server_error"
@@ -44,9 +71,14 @@ export type BiometricUnlockOutcome =
 export type BiometricUnlockResult = {
   ok: boolean;
   outcome: BiometricUnlockOutcome;
+  action?: BiometricAction;
 };
 
-/** Structured biometric logs. Never includes tokens/secrets/secure-store values. */
+type BiometricReauthMeta = {
+  userId: number;
+  apiEnv: string;
+};
+
 type BiometricLogEvent =
   | "capability_checked"
   | "onboarding_required"
@@ -63,7 +95,10 @@ type BiometricLogEvent =
   | "legacy_password_material_cleared"
   | "prompt_suppressed_duplicate"
   | "enabled_flag_cleared"
-  | "biometric_material_cleared";
+  | "biometric_material_cleared"
+  | "reauth_material_saved"
+  | "reauth_material_cleared"
+  | "reauth_env_mismatch";
 
 export function logBiometric(event: BiometricLogEvent, detail?: Record<string, unknown>) {
   // eslint-disable-next-line no-console
@@ -71,22 +106,10 @@ export function logBiometric(event: BiometricLogEvent, detail?: Record<string, u
 }
 
 let legacyCleared = false;
-
-/**
- * Only one native biometric prompt may be active at a time. Prevents duplicate
- * prompts from React Strict Mode, focus listeners, token hydration, and
- * repeated app-state events all racing into authenticateAsync().
- */
 let biometricPromptInProgress = false;
-
-/**
- * One auto-unlock attempt per app launch (process). Survives LoginScreen
- * remounts so navigation/tab changes never re-open the prompt on their own.
- */
 let unlockAttemptedThisLaunch = false;
-
-/** User chose password on the unlock screen — do not auto-prompt again this session. */
 let preferPasswordLoginThisSession = false;
+let biometricActionInFlight: Promise<BiometricUnlockResult> | null = null;
 
 export function hasAttemptedBiometricUnlockThisLaunch(): boolean {
   return unlockAttemptedThisLaunch;
@@ -100,9 +123,9 @@ export function resetBiometricUnlockAttemptForTests(): void {
   unlockAttemptedThisLaunch = false;
   biometricPromptInProgress = false;
   preferPasswordLoginThisSession = false;
+  biometricActionInFlight = null;
 }
 
-/** Allow a fresh auto-prompt after sign-out / splash replay. */
 export function resetBiometricUnlockAttemptThisLaunch(): void {
   unlockAttemptedThisLaunch = false;
   biometricPromptInProgress = false;
@@ -120,10 +143,13 @@ export function shouldPreferPasswordLoginThisSession(): boolean {
   return preferPasswordLoginThisSession;
 }
 
-/**
- * Remove any historically stored plaintext passwords / username+password reauth
- * material. Safe to call often. Never re-introduce password storage.
- */
+function apiEnvFingerprint(): string {
+  return String(API_BASE_URL || "")
+    .trim()
+    .replace(/\/+$/, "")
+    .toLowerCase();
+}
+
 export async function migrateLegacyBiometricPasswords(): Promise<void> {
   if (legacyCleared) return;
   await Promise.all([
@@ -154,32 +180,101 @@ export async function getBiometricTypeLabel(): Promise<string> {
   return "Biometrics";
 }
 
+async function readReauthMeta(): Promise<BiometricReauthMeta | null> {
+  try {
+    const raw = await SecureStore.getItemAsync(REAUTH_META_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<BiometricReauthMeta>;
+    if (typeof parsed.userId !== "number" || typeof parsed.apiEnv !== "string") return null;
+    return { userId: parsed.userId, apiEnv: parsed.apiEnv };
+  } catch {
+    return null;
+  }
+}
+
+async function hasValidReauthMaterial(): Promise<boolean> {
+  try {
+    const [identifier, secret, meta] = await Promise.all([
+      SecureStore.getItemAsync(REAUTH_IDENTIFIER_KEY),
+      SecureStore.getItemAsync(REAUTH_SECRET_KEY),
+      readReauthMeta()
+    ]);
+    if (!identifier?.trim() || !secret || !meta) return false;
+    if (meta.apiEnv !== apiEnvFingerprint()) {
+      logBiometric("reauth_env_mismatch");
+      await clearBiometricReauthMaterial("api_env_changed");
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Persist Keystore-backed re-auth material after password login / enable.
+ * Never logs the secret.
+ */
+export async function saveBiometricReauthMaterial(input: {
+  identifier: string;
+  secret: string;
+  userId: number;
+}): Promise<void> {
+  const identifier = input.identifier.trim();
+  const secret = input.secret;
+  if (!identifier || !secret || !Number.isFinite(input.userId) || input.userId <= 0) {
+    return;
+  }
+  await migrateLegacyBiometricPasswords();
+  const meta: BiometricReauthMeta = {
+    userId: input.userId,
+    apiEnv: apiEnvFingerprint()
+  };
+  await SecureStore.setItemAsync(REAUTH_IDENTIFIER_KEY, identifier, SECURE_OPTS);
+  await SecureStore.setItemAsync(REAUTH_SECRET_KEY, secret, SECURE_OPTS);
+  await SecureStore.setItemAsync(REAUTH_META_KEY, JSON.stringify(meta), SECURE_OPTS);
+  logBiometric("reauth_material_saved", { userId: input.userId });
+}
+
+export async function clearBiometricReauthMaterial(reason: string): Promise<void> {
+  await Promise.all([
+    SecureStore.deleteItemAsync(REAUTH_IDENTIFIER_KEY).catch(() => undefined),
+    SecureStore.deleteItemAsync(REAUTH_SECRET_KEY).catch(() => undefined),
+    SecureStore.deleteItemAsync(REAUTH_META_KEY).catch(() => undefined)
+  ]);
+  logBiometric("reauth_material_cleared", { reason });
+}
+
 const EMPTY_BIOMETRIC_STATUS: BiometricLoginStatus = {
   hardwareAvailable: false,
   enrolled: false,
   enabled: false,
-  label: "Biometrics"
+  label: "Biometrics",
+  reauthMaterialReady: false
 };
 
 export async function getBiometricLoginStatus(): Promise<BiometricLoginStatus> {
   try {
     await migrateLegacyBiometricPasswords();
-    const [hardwareAvailable, enrolled, enabledFlag] = await Promise.all([
+    const [hardwareAvailable, enrolled, enabledFlag, reauthMaterialReady] = await Promise.all([
       withTimeout(LocalAuthentication.hasHardwareAsync().catch(() => false), STARTUP_TIMEOUTS.biometricLookupMs, false, "hasHardwareAsync"),
       withTimeout(LocalAuthentication.isEnrolledAsync().catch(() => false), STARTUP_TIMEOUTS.biometricLookupMs, false, "isEnrolledAsync"),
-      withTimeout(SecureStore.getItemAsync(ENABLED_KEY).catch(() => null), STARTUP_TIMEOUTS.biometricLookupMs, null, "biometric_enabled_flag")
+      withTimeout(SecureStore.getItemAsync(ENABLED_KEY).catch(() => null), STARTUP_TIMEOUTS.biometricLookupMs, null, "biometric_enabled_flag"),
+      withTimeout(hasValidReauthMaterial().catch(() => false), STARTUP_TIMEOUTS.biometricLookupMs, false, "biometric_reauth_ready")
     ]);
 
     const status = {
       hardwareAvailable: Boolean(hardwareAvailable),
       enrolled: Boolean(enrolled),
       enabled: enabledFlag === "1",
-      label: await getBiometricTypeLabel()
+      label: await getBiometricTypeLabel(),
+      reauthMaterialReady: Boolean(reauthMaterialReady)
     };
     logBiometric("capability_checked", {
       hardwareAvailable: status.hardwareAvailable,
       enrolled: status.enrolled,
-      enabled: status.enabled
+      enabled: status.enabled,
+      reauthMaterialReady: status.reauthMaterialReady
     });
     return status;
   } catch (err) {
@@ -193,18 +288,24 @@ export async function getBiometricLoginStatus(): Promise<BiometricLoginStatus> {
   }
 }
 
+/** Which biometric path applies given current tokens + material. */
+export async function resolveBiometricAction(): Promise<BiometricAction | null> {
+  const status = await getBiometricLoginStatus();
+  if (!status.hardwareAvailable || !status.enrolled || !status.enabled) {
+    return null;
+  }
+  const refresh = await getRefreshToken();
+  if (refresh) return "unlock_existing_session";
+  if (status.reauthMaterialReady) return "reauthenticate_expired_session";
+  return null;
+}
+
 /**
- * Fingerprint unlock is available only when preference is on AND a refresh token
- * exists. Never unlocks via stored password.
+ * Fingerprint unlock when preference is on AND (refresh token OR re-auth material).
  */
 export async function canUseBiometricLogin(): Promise<boolean> {
   try {
-    const status = await getBiometricLoginStatus();
-    if (!status.hardwareAvailable || !status.enrolled || !status.enabled) {
-      return false;
-    }
-    const refresh = await getRefreshToken();
-    return Boolean(refresh);
+    return (await resolveBiometricAction()) != null;
   } catch {
     return false;
   }
@@ -223,7 +324,6 @@ export async function clearBiometricEnrollmentDismissed(): Promise<void> {
   await SecureStore.deleteItemAsync(PROMPT_DISMISSED_KEY).catch(() => undefined);
 }
 
-/** True when we may show the one-time enrollment prompt after password login. */
 export async function shouldOfferBiometricEnrollment(): Promise<boolean> {
   const [status, dismissed] = await Promise.all([
     getBiometricLoginStatus(),
@@ -248,10 +348,13 @@ export async function shouldOfferBiometricEnrollment(): Promise<boolean> {
 }
 
 /**
- * Verify biometric once, then persist the enablement flag only.
- * Does not accept or store username/password.
+ * Verify biometric once, persist enablement, optionally store re-auth material.
  */
-export async function enableBiometricLoginWithVerification(): Promise<boolean> {
+export async function enableBiometricLoginWithVerification(credentials?: {
+  identifier: string;
+  secret: string;
+  userId: number;
+}): Promise<boolean> {
   await migrateLegacyBiometricPasswords();
   if (biometricPromptInProgress) {
     logBiometric("prompt_suppressed_duplicate", { source: "setup" });
@@ -266,7 +369,7 @@ export async function enableBiometricLoginWithVerification(): Promise<boolean> {
     return false;
   }
   const refresh = await getRefreshToken();
-  if (!refresh) {
+  if (!refresh && !credentials) {
     logBiometric("setup_failed", { reason: "no_refresh_token" });
     return false;
   }
@@ -290,6 +393,9 @@ export async function enableBiometricLoginWithVerification(): Promise<boolean> {
     }
 
     await SecureStore.setItemAsync(ENABLED_KEY, "1");
+    if (credentials) {
+      await saveBiometricReauthMaterial(credentials);
+    }
     await clearBiometricEnrollmentDismissed();
     logBiometric("setup_success");
     return true;
@@ -323,17 +429,12 @@ function mapLocalAuthError(error: string | undefined): BiometricUnlockOutcome {
   ) {
     return "hardware_unavailable";
   }
-  // Expo / OEM may surface invalidated keys as unknown or unable_to_process.
   if (code.includes("invalidat") || code === "unable_to_process") {
     return "key_invalidated";
   }
   return "authentication_failed";
 }
 
-/**
- * Clear only biometric preference material — never tokens or device session.
- * Use for permanent key invalidation or explicit user disable in Settings.
- */
 export async function clearBiometricCredentialMaterial(reason: string): Promise<void> {
   await Promise.all([
     SecureStore.deleteItemAsync(ENABLED_KEY).catch(() => undefined),
@@ -341,143 +442,191 @@ export async function clearBiometricCredentialMaterial(reason: string): Promise<
     SecureStore.deleteItemAsync(LEGACY_PASS_KEY).catch(() => undefined),
     SecureStore.deleteItemAsync(LEGACY_USER_KEY).catch(() => undefined),
     SecureStore.deleteItemAsync(LEGACY_REAUTH_USER_KEY).catch(() => undefined),
-    SecureStore.deleteItemAsync(LEGACY_REAUTH_PASS_KEY).catch(() => undefined)
+    SecureStore.deleteItemAsync(LEGACY_REAUTH_PASS_KEY).catch(() => undefined),
+    clearBiometricReauthMaterial(reason)
   ]);
   logBiometric("biometric_material_cleared", { reason });
 }
 
-/**
- * Prompt biometrics, then restore session via refresh token only.
- * Cancel / mismatch / lockout never clears tokens or the biometric-enabled flag.
- * Never calls the password-login endpoint.
- */
-export async function unlockSessionWithBiometrics(): Promise<BiometricUnlockResult> {
-  await migrateLegacyBiometricPasswords();
-  if (biometricPromptInProgress) {
-    logBiometric("prompt_suppressed_duplicate", { source: "login" });
-    return { ok: false, outcome: "prompt_busy" };
+async function runBiometricPrompt(promptMessage: string): Promise<BiometricUnlockOutcome | "ok"> {
+  const auth = await withTimeout(
+    LocalAuthentication.authenticateAsync({
+      promptMessage,
+      cancelLabel: "Cancel",
+      disableDeviceFallback: false
+    }),
+    BIOMETRIC_PROMPT_MS,
+    { success: false, error: "timeout" } as LocalAuthentication.LocalAuthenticationResult,
+    "biometric_login_prompt"
+  );
+  if (!auth.success) {
+    return mapLocalAuthError(auth.error);
   }
-  const enabled = await SecureStore.getItemAsync(ENABLED_KEY);
-  if (enabled !== "1") {
-    return { ok: false, outcome: "not_enabled" };
-  }
+  return "ok";
+}
 
-  const [hardwareAvailable, enrolled] = await Promise.all([
-    LocalAuthentication.hasHardwareAsync().catch(() => false),
-    LocalAuthentication.isEnrolledAsync().catch(() => false)
-  ]);
-  if (!hardwareAvailable) {
-    logBiometric("prompt_result", { outcome: "hardware_unavailable" });
-    return { ok: false, outcome: "hardware_unavailable" };
-  }
-  if (!enrolled) {
-    await clearBiometricCredentialMaterial("not_enrolled_after_enable");
-    logBiometric("prompt_result", { outcome: "key_invalidated" });
-    return { ok: false, outcome: "key_invalidated" };
-  }
-
-  const refresh = await getRefreshToken();
-  if (!refresh) {
-    logBiometric("prompt_result", { outcome: "no_refresh_token" });
-    return { ok: false, outcome: "no_refresh_token" };
-  }
-
-  biometricPromptInProgress = true;
-  unlockAttemptedThisLaunch = true;
-  logBiometric("prompt_started");
-  logBiometric("login_prompt_started");
+async function unlockViaRefresh(): Promise<BiometricUnlockResult> {
   try {
-    const auth = await withTimeout(
-      LocalAuthentication.authenticateAsync({
-        promptMessage: "Unlock your field workspace",
-        cancelLabel: "Cancel",
-        disableDeviceFallback: false
-      }),
-      BIOMETRIC_PROMPT_MS,
-      { success: false, error: "timeout" } as LocalAuthentication.LocalAuthenticationResult,
-      "biometric_login_prompt"
-    );
-    if (!auth.success) {
-      const outcome = mapLocalAuthError(auth.error);
-      if (outcome === "user_cancel" || outcome === "timeout") {
-        logBiometric("login_cancelled", { error: auth.error ?? outcome });
-      } else {
-        logBiometric("login_failed", { error: auth.error ?? outcome });
-      }
-      logBiometric("prompt_result", { outcome });
-      if (outcome === "key_invalidated") {
-        await clearBiometricCredentialMaterial("platform_key_invalidated");
-      }
-      return { ok: false, outcome };
+    const access = await refreshAccessTokenOnce();
+    if (access) {
+      logBiometric("login_success", { via: "refresh", action: "unlock_existing_session" });
+      return { ok: true, outcome: "success", action: "unlock_existing_session" };
     }
-
-    try {
-      const access = await refreshAccessTokenOnce();
-      if (access) {
-        logBiometric("login_success", { via: "refresh" });
-        logBiometric("prompt_result", { outcome: "success" });
-        return { ok: true, outcome: "success" };
-      }
-      logBiometric("login_failed", { reason: "empty_access_after_refresh" });
-      logBiometric("prompt_result", { outcome: "token_refresh_failed" });
-      return { ok: false, outcome: "token_refresh_failed" };
-    } catch (err) {
-      if (isNetworkError(err)) {
-        logBiometric("login_failed", { reason: "network_error" });
-        logBiometric("prompt_result", { outcome: "network_error" });
-        return { ok: false, outcome: "network_error" };
-      }
-      if (isServerError(err)) {
-        logBiometric("login_failed", { reason: "server_error" });
-        logBiometric("prompt_result", { outcome: "server_error" });
-        return { ok: false, outcome: "server_error" };
-      }
-      const code =
-        err instanceof ApiRequestError
-          ? err.code
-          : err && typeof err === "object" && "code" in err
-            ? String((err as { code?: unknown }).code ?? "")
-            : "";
-      if (code === "AUTH_UNCERTAIN") {
-        logBiometric("login_failed", { reason: "auth_uncertain" });
-        logBiometric("prompt_result", { outcome: "network_error" });
-        return { ok: false, outcome: "network_error" };
-      }
-      if (code === "SESSION_REPLACED" || code === "DEVICE_SESSION_REQUIRED") {
-        await clearBiometricCredentialMaterial(code);
-        logBiometric("login_failed", { reason: code });
-        logBiometric("prompt_result", { outcome: "session_replaced" });
-        return { ok: false, outcome: "session_replaced" };
-      }
-      if (code === "ACCOUNT_DISABLED") {
-        await clearBiometricCredentialMaterial(code);
-        logBiometric("login_failed", { reason: code });
-        logBiometric("prompt_result", { outcome: "token_refresh_failed" });
-        return { ok: false, outcome: "token_refresh_failed" };
-      }
-      // SESSION_EXPIRED / refresh rejected — password required. Preference kept.
-      logBiometric("login_failed", { reason: code || "token_refresh_failed" });
-      logBiometric("prompt_result", { outcome: "token_refresh_failed" });
-      return { ok: false, outcome: "token_refresh_failed" };
-    }
-  } finally {
-    biometricPromptInProgress = false;
+    return { ok: false, outcome: "token_refresh_failed", action: "unlock_existing_session" };
+  } catch (err) {
+    return mapRefreshError(err, "unlock_existing_session");
   }
 }
 
+async function unlockViaReauthLogin(): Promise<BiometricUnlockResult> {
+  const [identifier, secret] = await Promise.all([
+    SecureStore.getItemAsync(REAUTH_IDENTIFIER_KEY),
+    SecureStore.getItemAsync(REAUTH_SECRET_KEY)
+  ]);
+  if (!identifier?.trim() || !secret) {
+    await clearBiometricReauthMaterial("missing_on_relogin");
+    return { ok: false, outcome: "reauth_material_missing", action: "reauthenticate_expired_session" };
+  }
+
+  try {
+    const tokens = await loginRequest(identifier.trim(), secret);
+    await saveTokens(tokens);
+    logBiometric("login_success", { via: "reauth_login", action: "reauthenticate_expired_session" });
+    return { ok: true, outcome: "success", action: "reauthenticate_expired_session" };
+  } catch (err) {
+    if (isNetworkError(err)) {
+      return { ok: false, outcome: "network_error", action: "reauthenticate_expired_session" };
+    }
+    if (isServerError(err)) {
+      return { ok: false, outcome: "server_error", action: "reauthenticate_expired_session" };
+    }
+    const code = err instanceof ApiRequestError ? err.code : "";
+    if (code === "SESSION_REPLACED" || code === "DEVICE_SESSION_REQUIRED") {
+      await clearBiometricCredentialMaterial(code);
+      return { ok: false, outcome: "session_replaced", action: "reauthenticate_expired_session" };
+    }
+    if (code === "INVALID_CREDENTIALS" || code === "ACCOUNT_DISABLED") {
+      await clearBiometricReauthMaterial(code || "invalid_credentials");
+      return { ok: false, outcome: "reauth_material_invalid", action: "reauthenticate_expired_session" };
+    }
+    return { ok: false, outcome: "token_refresh_failed", action: "reauthenticate_expired_session" };
+  }
+}
+
+function mapRefreshError(err: unknown, action: BiometricAction): BiometricUnlockResult {
+  if (isNetworkError(err)) {
+    return { ok: false, outcome: "network_error", action };
+  }
+  if (isServerError(err)) {
+    return { ok: false, outcome: "server_error", action };
+  }
+  const code =
+    err instanceof ApiRequestError
+      ? err.code
+      : err && typeof err === "object" && "code" in err
+        ? String((err as { code?: unknown }).code ?? "")
+        : "";
+  if (code === "AUTH_UNCERTAIN") {
+    return { ok: false, outcome: "network_error", action };
+  }
+  if (code === "SESSION_REPLACED" || code === "DEVICE_SESSION_REQUIRED") {
+    void clearBiometricCredentialMaterial(code);
+    return { ok: false, outcome: "session_replaced", action };
+  }
+  if (code === "ACCOUNT_DISABLED") {
+    void clearBiometricCredentialMaterial(code);
+    return { ok: false, outcome: "token_refresh_failed", action };
+  }
+  return { ok: false, outcome: "token_refresh_failed", action };
+}
+
 /**
- * @deprecated Never returns credentials — password storage is forbidden.
- * Kept as a no-op null for any legacy callers; always migrates deletions.
+ * Prompt biometrics, then either refresh (app-lock) or password-login via Keystore material.
+ * Cancel / mismatch never clears tokens or biometric preference.
  */
+export async function unlockSessionWithBiometrics(): Promise<BiometricUnlockResult> {
+  if (biometricActionInFlight) {
+    return biometricActionInFlight;
+  }
+
+  biometricActionInFlight = (async (): Promise<BiometricUnlockResult> => {
+    await migrateLegacyBiometricPasswords();
+    if (biometricPromptInProgress) {
+      logBiometric("prompt_suppressed_duplicate", { source: "login" });
+      return { ok: false, outcome: "prompt_busy" };
+    }
+
+    const action = await resolveBiometricAction();
+    if (!action) {
+      const enabled = await SecureStore.getItemAsync(ENABLED_KEY);
+      if (enabled !== "1") return { ok: false, outcome: "not_enabled" };
+      const refresh = await getRefreshToken();
+      if (!refresh) return { ok: false, outcome: "reauth_material_missing" };
+      return { ok: false, outcome: "not_enabled" };
+    }
+
+    const [hardwareAvailable, enrolled] = await Promise.all([
+      LocalAuthentication.hasHardwareAsync().catch(() => false),
+      LocalAuthentication.isEnrolledAsync().catch(() => false)
+    ]);
+    if (!hardwareAvailable) {
+      return { ok: false, outcome: "hardware_unavailable", action };
+    }
+    if (!enrolled) {
+      await clearBiometricCredentialMaterial("not_enrolled_after_enable");
+      return { ok: false, outcome: "key_invalidated", action };
+    }
+
+    biometricPromptInProgress = true;
+    unlockAttemptedThisLaunch = true;
+    logBiometric("prompt_started", { action });
+    logBiometric("login_prompt_started", { action });
+    try {
+      const prompt =
+        action === "unlock_existing_session"
+          ? "Unlock your field workspace"
+          : "Sign in with fingerprint";
+      const promptResult = await runBiometricPrompt(prompt);
+      if (promptResult !== "ok") {
+        if (promptResult === "user_cancel" || promptResult === "timeout") {
+          logBiometric("login_cancelled", { outcome: promptResult });
+        } else {
+          logBiometric("login_failed", { outcome: promptResult });
+        }
+        logBiometric("prompt_result", { outcome: promptResult, action });
+        if (promptResult === "key_invalidated") {
+          await clearBiometricCredentialMaterial("platform_key_invalidated");
+        }
+        return { ok: false, outcome: promptResult, action };
+      }
+
+      if (action === "unlock_existing_session") {
+        const result = await unlockViaRefresh();
+        logBiometric("prompt_result", { outcome: result.outcome, action });
+        return result;
+      }
+
+      const result = await unlockViaReauthLogin();
+      logBiometric("prompt_result", { outcome: result.outcome, action });
+      return result;
+    } finally {
+      biometricPromptInProgress = false;
+    }
+  })();
+
+  try {
+    return await biometricActionInFlight;
+  } finally {
+    biometricActionInFlight = null;
+  }
+}
+
+/** @deprecated Never returns credentials. */
 export async function readBiometricCredentials(): Promise<null> {
   await migrateLegacyBiometricPasswords();
   return null;
 }
 
-/**
- * Explicit disable (Settings) or confirmed permanent invalidation.
- * Do not call on cancel / failed fingerprint / Expo Go quirks.
- */
 export async function clearBiometricLogin(): Promise<void> {
   await clearBiometricCredentialMaterial("explicit_clear");
   logBiometric("enabled_flag_cleared");

@@ -61,17 +61,9 @@ export function BottomNav({ state, descriptors, navigation }: BottomTabBarProps)
 
   const handleStartWorkdayFromSheet = useCallback(async () => {
     try {
-      const {
-        ensureLocationReadyForWorkday,
-        promptFixLocationAccess
-      } = await import("../../features/fieldTrackingSetup");
-      const ready = await ensureLocationReadyForWorkday();
-      if (!ready.ok) {
-        promptFixLocationAccess(ready);
-        return;
-      }
-      const started = await startDuty();
-      if (!started) return;
+      const { startWorkDayWithLocationGate } = await import("../../features/fieldTrackingSetup");
+      const outcome = await startWorkDayWithLocationGate({ startDuty });
+      if (!outcome.ok) return;
       workdaySheetRef.current?.close();
       navigateToNewVisit();
     } catch {

@@ -6,6 +6,9 @@ import { useGpsCompliance } from "../storage/GpsComplianceContext";
 import { useMapForegroundPermission } from "./useMapForegroundPermission";
 import { useTracking } from "../storage/TrackingContext";
 import { useDuty } from "../features/duty/store/DutyContext";
+import {
+  buildEmployeeDayMapMarkers
+} from "../features/duty/map/employeeDayMapMarkers";
 import { DEFAULT_MAP_REGION, fitMapRegion } from "../utils/mapRegion";
 import { formatDistanceKm } from "../../mobile/lib/format";
 
@@ -43,12 +46,14 @@ export function useMyLocationScreen() {
 
   const visitsToday = useMemo<MyLocationVisitRow[]>(
     () =>
-      (dutyMap?.visitMarkers ?? []).map((marker) => ({
+      (dutyMap?.visitMarkers ?? [])
+        .filter((marker) => marker.pending !== true)
+        .map((marker) => ({
         id: marker.visitId ?? marker.id,
         farmerName: marker.title ?? "Farmer",
         village: marker.description ?? "—",
         visitedAt: null,
-        statusLabel: marker.pending ? "Pending sync" : "Completed",
+        statusLabel: "Completed",
         latitude: marker.lat,
         longitude: marker.lng
       })),
@@ -56,41 +61,18 @@ export function useMyLocationScreen() {
   );
 
   const markers = useMemo((): MapPin[] => {
-    const rows: MapPin[] = [];
-    if (dutyMap?.startMarker) {
-      rows.push({
-        id: "route-start",
-        lat: dutyMap.startMarker.latitude,
-        lng: dutyMap.startMarker.longitude,
-        title: "Start",
-        kind: "route_start"
-      });
-    }
-    for (const marker of dutyMap?.visitMarkers ?? []) {
-      rows.push({
-        ...marker,
-        kind: "visit",
-        label: marker.sequence ?? marker.label
-      });
-    }
-    if (workdayFinished && dutyMap?.endMarker) {
-      rows.push({
-        id: "route-end",
-        lat: dutyMap.endMarker.latitude,
-        lng: dutyMap.endMarker.longitude,
-        title: "End",
-        kind: "route_end"
-      });
-    }
-    return rows;
+    return buildEmployeeDayMapMarkers({
+      dutyMap,
+      workdayEnded: workdayFinished
+    });
   }, [dutyMap, workdayFinished]);
 
   const fitCoordinates = useMemo<MapCoordinate[] | undefined>(() => {
     if (!markers.length) {
-      return isActive && liveCoordinate ? [liveCoordinate] : undefined;
+      return undefined;
     }
     return markers.map((m) => ({ latitude: m.lat, longitude: m.lng }));
-  }, [isActive, liveCoordinate, markers]);
+  }, [markers]);
 
   const mapRegion = useMemo(() => {
     if (!fitCoordinates?.length) return DEFAULT_MAP_REGION;

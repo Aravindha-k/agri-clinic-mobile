@@ -3,6 +3,11 @@ import type { MapCoordinate, MapPin } from "../../../components/map/FieldMapView
 import { hasValidMapCoords, parseMapCoord } from "../../../utils/mapCoords";
 import type { DutyMapSummary, DutyMapVisitMarker } from "../types/duty";
 
+/** Reuse identical in-flight map GETs; optional short freshness for non-forced reads. */
+const MAP_FRESH_MS = 20_000;
+const mapFlights = new Map<number, Promise<DutyMapSummary>>();
+const mapCache = new Map<number, { at: number; data: DutyMapSummary }>();
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
 }
@@ -109,20 +114,58 @@ export function normalizeDutyMapPayload(raw: unknown): DutyMapSummary {
   };
 }
 
-export async function fetchCurrentDutyMap(): Promise<DutyMapSummary> {
+export function invalidateDutyMapCache(dutyId?: number): void {
+  if (dutyId == null) {
+    mapCache.clear();
+    return;
+  }
+  mapCache.delete(dutyId);
+}
+
+export async function fetchCurrentDutyMap(options?: { force?: boolean }): Promise<DutyMapSummary> {
   const raw = await apiClient<unknown>("tracking/duty/current/map/", {
     method: "GET",
     source: "DutyMap",
-    dedupe: false
+    dedupe: options?.force !== true
   });
   return normalizeDutyMapPayload(raw);
 }
 
-export async function fetchDutyMap(dutyId: number): Promise<DutyMapSummary> {
-  const raw = await apiClient<unknown>(`tracking/duty/${dutyId}/map/`, {
-    method: "GET",
-    source: "DutyMap",
-    dedupe: false
-  });
-  return normalizeDutyMapPayload(raw);
+/**
+ * Canonical Day-map fetch — single-flight per duty session id.
+ * Concurrent callers share one network request. Non-forced reads may reuse a short cache.
+ */
+export async function fetchDutyMap(
+  dutyId: number,
+  options?: { force?: boolean }
+): Promise<DutyMapSummary> {
+  if (!options?.force) {
+    const cached = mapCache.get(dutyId);
+    if (cached && Date.now() - cached.at < MAP_FRESH_MS) {
+      return cached.data;
+    }
+  }
+
+  const existing = mapFlights.get(dutyId);
+  if (existing) {
+    return existing;
+  }
+
+  const flight = (async () => {
+    try {
+      const raw = await apiClient<unknown>(`tracking/duty/${dutyId}/map/`, {
+        method: "GET",
+        source: "DutyMap"
+        // GET dedupe enabled (default) — matches single-flight keying
+      });
+      const data = normalizeDutyMapPayload(raw);
+      mapCache.set(dutyId, { at: Date.now(), data });
+      return data;
+    } finally {
+      mapFlights.delete(dutyId);
+    }
+  })();
+
+  mapFlights.set(dutyId, flight);
+  return flight;
 }

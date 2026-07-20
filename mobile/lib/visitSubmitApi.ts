@@ -6,6 +6,10 @@ import { uploadVisitAttachmentFile } from "../../src/api/visitAttachments";
 import { normalizeMobileVisitSubmitPayload } from "../../src/utils/format";
 import { isLanOnlyError, isNetworkError } from "../../src/utils/apiError";
 import { unwrapSuccessEnvelope } from "../../src/utils/apiUnwrap";
+import {
+  normalizeVisitSubmitUserMessage,
+  visitSubmitErrorFromHttp
+} from "../../src/utils/visitSubmitErrors";
 import { getAccessToken } from "../../src/storage/tokenStorage";
 import { prepareVisitForSubmit } from "../../src/visit/prepareVisitSubmit";
 import { validateVisitSubmitValues } from "../../src/visit/visitValidation";
@@ -17,6 +21,7 @@ import {
   type VisitDutyFields
 } from "./visitDutyContext";
 import { isDuplicateVisitResponse } from "./visitDuplicate";
+import type { PickedProfileImage } from "../../src/utils/profileImagePick";
 
 function severityNote(severity: VisitSeverity) {
   if (severity === "low") return "Severity: Low";
@@ -120,9 +125,16 @@ async function postVisitMultipart(fields: Record<string, string>): Promise<{ vis
             return;
           }
           const text = xhr.responseText || "";
-          const data = text ? JSON.parse(text) : null;
+          let data: unknown = null;
+          if (text) {
+            try {
+              data = JSON.parse(text);
+            } catch {
+              data = null;
+            }
+          }
           if (xhr.status < 200 || xhr.status >= 300) {
-            reject(new Error(typeof data === "object" && data ? JSON.stringify(data) : "Submit failed"));
+            reject(visitSubmitErrorFromHttp(xhr.status, data, text));
             return;
           }
           const unwrapped = unwrapSuccessEnvelope<{
@@ -253,7 +265,9 @@ export async function submitVisitFromStore(
 ): Promise<{ visit: Visit; evidenceFailed: string[] }> {
   const duty = extras?.duty ?? (await getVisitDutyFields());
   const values = buildVisitFormValuesFromStore(state, localSyncId, { ...extras, duty });
-  const prepared = await prepareVisitForSubmit(values);
+  const pendingFarmerPhoto =
+    (state as { pendingFarmerPhoto?: PickedProfileImage | null }).pendingFarmerPhoto ?? null;
+  const prepared = await prepareVisitForSubmit(values, { pendingFarmerPhoto });
   const validationError = validateVisitSubmitValues(prepared);
   if (validationError) {
     throw new Error(validationError);
@@ -265,8 +279,12 @@ export async function submitVisitFromStore(
     const flat = flattenPayload(prepared, localSyncId);
     const result = await postVisitMultipart(flat);
     visit = result.visit;
-  } catch {
-    visit = await submitMobileVisit(prepared, { localSyncId });
+  } catch (multipartErr) {
+    try {
+      visit = await submitMobileVisit(prepared, { localSyncId });
+    } catch (jsonErr) {
+      throw new Error(normalizeVisitSubmitUserMessage(jsonErr ?? multipartErr));
+    }
   }
 
   const evidenceFailed = state.photos.length ? await uploadVisitPhotos(visit.id, state.photos) : [];

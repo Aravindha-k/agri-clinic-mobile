@@ -387,7 +387,13 @@ export async function flushVisitQueue(
         });
 
         try {
-          const prepared = await prepareVisitForSubmit(visit.payload as VisitFormValues);
+          const payload = visit.payload as Record<string, unknown>;
+          const pendingFarmerPhoto = (payload.__pending_farmer_photo ?? null) as
+            | import("../../../src/utils/profileImagePick").PickedProfileImage
+            | null;
+          const prepared = await prepareVisitForSubmit(visit.payload as VisitFormValues, {
+            pendingFarmerPhoto
+          });
           const validationError = validateVisitSubmitValues(prepared);
           if (validationError) {
             throw new Error(validationError);
@@ -399,8 +405,9 @@ export async function flushVisitQueue(
           const body = unwrapApiData<Record<string, unknown>>(response.data);
           if (response.status === 200 || response.status === 201 || isDuplicateVisitResponse(body)) {
             const visitId = Number(body.id ?? body.visit_id);
-            const pendingAttachments = (visit.payload as Record<string, unknown>)
-              .__pending_attachments as PendingVisitAttachment[] | undefined;
+            const pendingAttachments = payload.__pending_attachments as
+              | PendingVisitAttachment[]
+              | undefined;
             if (visitId > 0 && pendingAttachments?.length) {
               const { failed } = await uploadAllPendingAttachments(visitId, pendingAttachments);
               if (failed.length > 0) {

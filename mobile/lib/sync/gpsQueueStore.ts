@@ -1,6 +1,6 @@
 import { getJson, setJson, SYNC_STORAGE_KEYS } from "../storage";
 import { GPS_QUEUE_MAX_POINTS } from "../../../src/tracking/trackingConfig";
-import type { PendingGPSPoint } from "./fieldQueueTypes";
+import type { PendingGPSPoint, QueueSyncStatus } from "./fieldQueueTypes";
 import { generateLocalPointId } from "./queueIds";
 import {
   filterQueueForActiveUser,
@@ -8,8 +8,30 @@ import {
   quarantineOrphanQueueItems
 } from "./queueOwnership";
 
+/** Bound retries for otherwise-retryable GPS failures. */
+export const MAX_GPS_RETRY_COUNT = 20;
+
 function nowIso() {
   return new Date().toISOString();
+}
+
+/** Statuses eligible for network flush — never includes quarantined or synced. */
+export function isFlushableGpsStatus(status: QueueSyncStatus | undefined): boolean {
+  return status === "pending" || status === "failed" || status === "syncing";
+}
+
+export function selectFlushableGpsPoints(points: PendingGPSPoint[]): PendingGPSPoint[] {
+  return points.filter((p) => isFlushableGpsStatus(p.sync_status));
+}
+
+export function isValidGpsCoordinate(latitude: number, longitude: number): boolean {
+  return (
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude) &&
+    Math.abs(latitude) <= 90 &&
+    Math.abs(longitude) <= 180 &&
+    !(latitude === 0 && longitude === 0)
+  );
 }
 
 export function ensureGpsPointIdentity(
@@ -38,11 +60,26 @@ export function migrateGpsQueueRecords(raw: unknown[]): PendingGPSPoint[] {
     ) {
       continue;
     }
+    const latitude = Number(record.latitude);
+    const longitude = Number(record.longitude);
+    let syncStatus = (record.sync_status as PendingGPSPoint["sync_status"]) ?? "pending";
+    let failureCode = record.failure_code != null ? String(record.failure_code) : undefined;
+    let lastError = record.last_error != null ? String(record.last_error) : undefined;
+    if (!isValidGpsCoordinate(latitude, longitude)) {
+      syncStatus = "quarantined";
+      failureCode = failureCode ?? "INVALID_COORDINATES";
+      lastError = lastError ?? "Malformed coordinates";
+    }
+    if (syncStatus !== "quarantined" && Number(record.retry_count ?? 0) >= MAX_GPS_RETRY_COUNT) {
+      syncStatus = "quarantined";
+      failureCode = failureCode ?? "MAX_RETRIES";
+      lastError = lastError ?? "Exceeded GPS retry limit";
+    }
     migrated.push(
       ensureGpsPointIdentity({
         local_point_id: String(record.local_point_id ?? generateLocalPointId()),
-        latitude: Number(record.latitude),
-        longitude: Number(record.longitude),
+        latitude,
+        longitude,
         accuracy: Number(record.accuracy ?? 0),
         speed: record.speed != null ? Number(record.speed) : null,
         heading: record.heading != null ? Number(record.heading) : null,
@@ -58,10 +95,10 @@ export function migrateGpsQueueRecords(raw: unknown[]): PendingGPSPoint[] {
         user_id: record.user_id != null ? Number(record.user_id) : undefined,
         device_session_id:
           record.device_session_id != null ? String(record.device_session_id) : undefined,
-        sync_status: (record.sync_status as PendingGPSPoint["sync_status"]) ?? "pending",
+        sync_status: syncStatus,
         retry_count: Number(record.retry_count ?? 0),
-        last_error: record.last_error != null ? String(record.last_error) : undefined,
-        failure_code: record.failure_code != null ? String(record.failure_code) : undefined,
+        last_error: lastError,
+        failure_code: failureCode,
         created_at: String(record.created_at ?? record.recorded_at),
         updated_at: record.updated_at != null ? String(record.updated_at) : undefined
       })
@@ -80,7 +117,10 @@ export function writeFullGpsQueue(queue: PendingGPSPoint[]): void {
   setJson(SYNC_STORAGE_KEYS.pendingGps, capped);
 }
 
-export function readActiveUserGpsQueue(): PendingGPSPoint[] {
+/**
+ * Active user's GPS rows that are not synced (includes quarantined for diagnostics).
+ */
+export function readActiveUserGpsQueueIncludingQuarantined(): PendingGPSPoint[] {
   const all = readFullGpsQueue();
   const userId = getActiveSyncUserId();
   if (userId == null) return [];
@@ -93,9 +133,27 @@ export function readActiveUserGpsQueue(): PendingGPSPoint[] {
   return owned.filter((p) => p.sync_status !== "synced");
 }
 
+/**
+ * Flushable GPS only — quarantined points stay in storage but never return here.
+ */
+export function readFlushableActiveUserGpsQueue(): PendingGPSPoint[] {
+  return selectFlushableGpsPoints(readActiveUserGpsQueueIncludingQuarantined());
+}
+
+/** @deprecated Prefer readFlushableActiveUserGpsQueue for flush workers. */
+export function readActiveUserGpsQueue(): PendingGPSPoint[] {
+  return readFlushableActiveUserGpsQueue();
+}
+
 export function appendGpsQueuePoint(point: PendingGPSPoint): void {
   const all = readFullGpsQueue();
-  all.push(ensureGpsPointIdentity(point));
+  const next = ensureGpsPointIdentity(point);
+  if (!isValidGpsCoordinate(next.latitude, next.longitude)) {
+    next.sync_status = "quarantined";
+    next.failure_code = next.failure_code ?? "INVALID_COORDINATES";
+    next.last_error = next.last_error ?? "Malformed coordinates";
+  }
+  all.push(next);
   if (all.length > GPS_QUEUE_MAX_POINTS) {
     all.splice(0, all.length - GPS_QUEUE_MAX_POINTS);
   }
@@ -136,7 +194,11 @@ export function discardAllGpsQueuePoints(): void {
 }
 
 export function countActiveUserPendingGps(): number {
-  return readActiveUserGpsQueue().filter(
-    (p) => p.sync_status === "pending" || p.sync_status === "failed"
-  ).length;
+  return readFlushableActiveUserGpsQueue().length;
+}
+
+/** Quarantined rows kept for diagnostics (not flushable). */
+export function countActiveUserQuarantinedGps(): number {
+  return readActiveUserGpsQueueIncludingQuarantined().filter((p) => p.sync_status === "quarantined")
+    .length;
 }

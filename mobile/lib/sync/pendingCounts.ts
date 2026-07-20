@@ -1,5 +1,6 @@
 import { countActiveUserPendingGps } from "./gpsQueueStore";
 import { getPendingEvidenceCount } from "./pendingEvidenceQueue";
+import { getPendingFarmerPhotoCount } from "./pendingFarmerPhotoQueue";
 import { countPendingWorkdayOps } from "./workdayOperationQueue";
 import { getJson, setJson, SYNC_STORAGE_KEYS } from "../storage";
 import type { PendingVisit } from "./fieldQueueTypes";
@@ -45,7 +46,7 @@ export function getFieldPendingCounts(): FieldPendingCounts {
   ).length;
   const permanentFailures = visits.filter((v) => v.status === "failed" || v.status === "quarantined")
     .length;
-  const photos = getPendingEvidenceCount();
+  const photos = getPendingEvidenceCount() + getPendingFarmerPhotoCount();
   const gps = countActiveUserPendingGps();
   const workdayOps = countPendingWorkdayOps();
   const total = pendingVisits + photos + gps + workdayOps;

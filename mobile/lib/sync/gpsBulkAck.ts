@@ -1,10 +1,12 @@
 import type { GpsBulkAckPayload, GpsBulkFailedItem, PendingGPSPoint } from "./fieldQueueTypes";
+import { MAX_GPS_RETRY_COUNT } from "./gpsQueueStore";
 
 const PERMANENT_FAILURE_CODES = new Set([
   "INVALID_POINT",
   "INVALID_ACCURACY",
   "INVALID_COORDINATES",
-  "BULK_LIMIT_EXCEEDED"
+  "BULK_LIMIT_EXCEEDED",
+  "MAX_RETRIES"
 ]);
 
 export function isRetryableGpsFailure(code: string, retryable?: boolean): boolean {
@@ -23,6 +25,7 @@ export type GpsAckApplyResult = {
 /**
  * Apply bulk GPS acknowledgement — remove only explicitly accepted points.
  * Never clears the full queue on partial success.
+ * Permanent failures become quarantined and must not flush again.
  */
 export function applyGpsBulkAcknowledgement(
   queue: PendingGPSPoint[],
@@ -62,41 +65,46 @@ export function applyGpsBulkAcknowledgement(
   let failedCount = 0;
   let quarantinedCount = 0;
 
-  const remaining = queue.map((point, index) => {
-    const pointId = point.local_point_id;
-    const wasSent = sentPointIds.includes(pointId);
+  const remaining = queue
+    .map((point, index) => {
+      const pointId = point.local_point_id;
+      const wasSent = sentPointIds.includes(pointId);
 
-    if (!wasSent) {
-      return point;
-    }
+      if (!wasSent) {
+        return point;
+      }
 
-    if (accepted.has(pointId)) {
-      removedCount += 1;
-      return null;
-    }
+      if (accepted.has(pointId)) {
+        removedCount += 1;
+        return null;
+      }
 
-    const failure = failedById.get(pointId) ?? failedByIndex.get(index);
-    if (!failure) {
-      return point;
-    }
+      const failure = failedById.get(pointId) ?? failedByIndex.get(index);
+      if (!failure) {
+        return point;
+      }
 
-    failedCount += 1;
-    const retryable = isRetryableGpsFailure(failure.code, failure.retryable);
-    const nextRetry = (point.retry_count ?? 0) + 1;
-    const nextStatus = retryable ? "pending" : "quarantined";
-    if (nextStatus === "quarantined") {
-      quarantinedCount += 1;
-    }
+      failedCount += 1;
+      const nextRetry = (point.retry_count ?? 0) + 1;
+      let retryable = isRetryableGpsFailure(failure.code, failure.retryable);
+      if (nextRetry >= MAX_GPS_RETRY_COUNT) {
+        retryable = false;
+      }
+      const nextStatus = retryable ? "pending" : "quarantined";
+      if (nextStatus === "quarantined") {
+        quarantinedCount += 1;
+      }
 
-    return {
-      ...point,
-      sync_status: nextStatus as PendingGPSPoint["sync_status"],
-      retry_count: nextRetry,
-      last_error: failure.message,
-      failure_code: failure.code,
-      updated_at: new Date().toISOString()
-    };
-  }).filter((row): row is PendingGPSPoint => row !== null);
+      return {
+        ...point,
+        sync_status: nextStatus as PendingGPSPoint["sync_status"],
+        retry_count: nextRetry,
+        last_error: failure.message,
+        failure_code: failure.code,
+        updated_at: new Date().toISOString()
+      };
+    })
+    .filter((row): row is PendingGPSPoint => row !== null);
 
   return { remaining, removedCount, failedCount, quarantinedCount };
 }

@@ -78,6 +78,7 @@ type VisitFormState = {
   revisitContext: RevisitContext | null;
   photos: VisitPhotoAsset[];
   extraAttachments: PendingVisitAttachment[];
+  pendingFarmerPhoto: import("../../src/utils/profileImagePick").PickedProfileImage | null;
   nextVisitDate: string | null;
   submissionLocalSyncId: string | null;
   visitedAt: string | null;
@@ -109,6 +110,9 @@ type VisitFormState = {
   addExtraAttachment: (attachment: PendingVisitAttachment) => void;
   removeExtraAttachment: (id: string) => void;
   clearExtraAttachments: () => void;
+  setPendingFarmerPhoto: (
+    photo: import("../../src/utils/profileImagePick").PickedProfileImage | null
+  ) => void;
   setNextVisitDate: (value: string | null) => void;
   setSubmissionLocalSyncId: (value: string | null) => void;
   setVisitedAt: (value: string | null) => void;
@@ -152,6 +156,7 @@ const initialStep2 = {
   revisitContext: null as RevisitContext | null,
   photos: [] as VisitPhotoAsset[],
   extraAttachments: [] as PendingVisitAttachment[],
+  pendingFarmerPhoto: null as import("../../src/utils/profileImagePick").PickedProfileImage | null,
   nextVisitDate: null as string | null
 };
 
@@ -298,6 +303,7 @@ export const useVisitFormStore = create<VisitFormState>()(
       extraAttachments: state.extraAttachments.filter((a) => a.id !== id)
     })),
   clearExtraAttachments: () => set({ extraAttachments: [] }),
+  setPendingFarmerPhoto: (pendingFarmerPhoto) => set({ pendingFarmerPhoto }),
   setNextVisitDate: (nextVisitDate) => set({ nextVisitDate, followUpDate: nextVisitDate }),
   setSubmissionLocalSyncId: (submissionLocalSyncId) => set({ submissionLocalSyncId }),
   setVisitedAt: (visitedAt) => set({ visitedAt, draftUpdatedAt: new Date().toISOString() }),
@@ -424,6 +430,7 @@ export const useVisitFormStore = create<VisitFormState>()(
         revisitContext: state.revisitContext,
         photos: state.photos,
         extraAttachments: state.extraAttachments,
+        pendingFarmerPhoto: state.pendingFarmerPhoto,
         nextVisitDate: state.nextVisitDate,
         submissionLocalSyncId: state.submissionLocalSyncId,
         visitedAt: state.visitedAt,

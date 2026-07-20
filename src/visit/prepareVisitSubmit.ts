@@ -36,7 +36,10 @@ async function resolveVillagePk(districtRaw: unknown, villageRaw: unknown): Prom
 }
 
 /** Trim strings, normalize GPS, and ensure farmer_id links to directory farmer. */
-export async function prepareVisitForSubmit(values: VisitFormValues): Promise<VisitFormValues> {
+export async function prepareVisitForSubmit(
+  values: VisitFormValues,
+  options?: { pendingFarmerPhoto?: import("../utils/profileImagePick").PickedProfileImage | null }
+): Promise<VisitFormValues> {
   const linkedFarmerId = resolveFarmerPk(values as Record<string, unknown>);
   const resolvedVillage = await resolveVillagePk(values.district, values.village);
 
@@ -113,9 +116,16 @@ export async function prepareVisitForSubmit(values: VisitFormValues): Promise<Vi
       village: villagePk
     });
     if (created.id != null) {
+      const farmerId = String(created.id);
+      if (options?.pendingFarmerPhoto) {
+        const { uploadPendingFarmerPhotoIfNeeded } = await import("./uploadPendingFarmerPhoto");
+        await uploadPendingFarmerPhotoIfNeeded(farmerId, options.pendingFarmerPhoto, {
+          enqueueOnFailure: true
+        });
+      }
       return {
         ...next,
-        farmer_id: String(created.id),
+        farmer_id: farmerId,
         farmer_name: coerceStr(created.name) || farmerName,
         farmer_phone: coerceStr(created.phone) || farmerPhone,
         district: masterPkToString(created.district) || next.district,
@@ -126,9 +136,16 @@ export async function prepareVisitForSubmit(values: VisitFormValues): Promise<Vi
     try {
       const existing = await findFarmerByPhoneOrName(farmerPhone, farmerName);
       if (existing?.id != null) {
+        const farmerId = String(existing.id);
+        if (options?.pendingFarmerPhoto) {
+          const { uploadPendingFarmerPhotoIfNeeded } = await import("./uploadPendingFarmerPhoto");
+          await uploadPendingFarmerPhotoIfNeeded(farmerId, options.pendingFarmerPhoto, {
+            enqueueOnFailure: true
+          });
+        }
         return {
           ...next,
-          farmer_id: String(existing.id),
+          farmer_id: farmerId,
           farmer_name: coerceStr(existing.name) || farmerName,
           farmer_phone: coerceStr(existing.phone) || farmerPhone
         };

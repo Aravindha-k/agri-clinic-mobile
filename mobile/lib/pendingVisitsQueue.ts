@@ -54,7 +54,8 @@ export async function readPendingVisits(): Promise<PendingVisitRecord[]> {
 
 export async function enqueuePendingVisit(
   record: PendingVisitRecord,
-  extraAttachments: PendingVisitAttachment[] = []
+  extraAttachments: PendingVisitAttachment[] = [],
+  pendingFarmerPhoto: import("../../src/utils/profileImagePick").PickedProfileImage | null = null
 ): Promise<void> {
   if (getPendingVisits().some((visit) => visit.local_sync_id === record.local_sync_id)) {
     return;
@@ -98,12 +99,16 @@ export async function enqueuePendingVisit(
       })),
       ...persistedExtras
     ];
+    const payload: Record<string, unknown> = {
+      ...record.values,
+      __pending_attachments: attachments,
+      pending_photos: persistedPhotos
+    };
+    if (pendingFarmerPhoto) {
+      payload.__pending_farmer_photo = pendingFarmerPhoto;
+    }
     await addToVisitQueue(
-      {
-        ...record.values,
-        __pending_attachments: attachments,
-        pending_photos: persistedPhotos
-      },
+      payload,
       record.values.farmer_name?.trim() || "Farmer",
       record.values.crop_name?.trim() || "Crop",
       record.local_sync_id

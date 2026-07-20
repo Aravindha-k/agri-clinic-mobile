@@ -3,6 +3,10 @@ import { getActiveDutySessionId, getActiveWorkdayId } from "../../../src/storage
 import { flushPendingVisitEvidence } from "./pendingEvidenceQueue";
 import { flushGPSQueue, flushVisitQueue } from "./offlineSyncManager";
 import {
+  readActiveUserPendingFarmerPhotos
+} from "./pendingFarmerPhotoQueue";
+import { flushPendingFarmerPhotos } from "../../../src/visit/uploadPendingFarmerPhoto";
+import {
   countPendingWorkdayOps,
   markWorkdayOpSynced,
   readActiveUserWorkdayOps
@@ -69,6 +73,7 @@ export async function runOrderedFieldSync(options?: {
       useSyncStore.getState().setSyncPhase("syncing");
 
       const visits = await flushVisitQueue(options?.onVisitProgress);
+      const farmerPhotos = await flushPendingFarmerPhotos(readActiveUserPendingFarmerPhotos());
       const evidence = await flushPendingVisitEvidence();
       const gps = await flushGPSQueue();
       const workdayEnd = await flushPendingWorkdayEnds();
@@ -77,6 +82,7 @@ export async function runOrderedFieldSync(options?: {
       const partial =
         visits.failed > 0 ||
         evidence.remaining > 0 ||
+        farmerPhotos.remaining > 0 ||
         counts.gps > 0 ||
         workdayEnd.failed > 0 ||
         counts.permanentFailures > 0;

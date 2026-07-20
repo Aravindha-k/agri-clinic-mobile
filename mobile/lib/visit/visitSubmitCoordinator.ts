@@ -17,6 +17,7 @@ import {
 } from "../../../src/visit/pendingAttachments";
 import type { WorkdayStatus } from "../../../src/api/tracking";
 import { ensureLocationReadyForVisit } from "../../../src/features/fieldTrackingSetup";
+import { normalizeVisitSubmitUserMessage } from "../../../src/utils/visitSubmitErrors";
 
 export type VisitSubmitProgress =
   | "idle"
@@ -142,7 +143,8 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
             status: "pending",
             attempts: 0
           },
-          snapshot.extraAttachments
+          snapshot.extraAttachments,
+          snapshot.pendingFarmerPhoto
         );
         bumpAfterVisitChange();
         const summary = buildSubmittedVisitSummary({
@@ -230,7 +232,9 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
         if (!isOfflineSubmitError(err) && (err as Error)?.message !== "offline") {
           return {
             ok: false,
-            message: err instanceof Error ? err.message : t("visitFlow.submitFailed")
+            message: normalizeVisitSubmitUserMessage(err, {
+              fallback: t("visitFlow.submitFailed")
+            })
           };
         }
 
@@ -252,7 +256,8 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
             status: "pending",
             attempts: 0
           },
-          latest.extraAttachments
+          latest.extraAttachments,
+          latest.pendingFarmerPhoto
         );
 
         bumpAfterVisitChange();

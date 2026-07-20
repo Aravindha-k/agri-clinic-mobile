@@ -375,6 +375,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: CARD_TOP_RADIUS,
     flexGrow: 1,
     minHeight: "100%",
+    overflow: "hidden",
     paddingBottom: Spacing.lg,
     paddingHorizontal: CARD_PAD,
     paddingTop: CARD_PAD,

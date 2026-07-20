@@ -39,6 +39,15 @@ test("brand surfaces use CompanyLogo or LOGO_IMAGE from canonical asset", () => 
   }
 });
 
+test("Login hero uses field photo background and canonical circular logo", () => {
+  const hero = read("src/components/auth/LoginHeroHeader.tsx");
+  assert.match(hero, /login_field_bg\.jpg/);
+  assert.match(hero, /CompanyLogo/);
+  // Full mockup must not be rendered — it contains a baked-in second login UI
+  assert.doesNotMatch(hero, /require\(["'].*login_field_hero\.jpg["']\)/);
+  assert.doesNotMatch(hero, /app_icon|adaptive_icon_foreground/);
+});
+
 test("brand.ts requires only logo_circle_transparent.png", () => {
   const brandTs = read("src/config/brand.ts");
   assert.match(brandTs, /logo_circle_transparent\.png/);

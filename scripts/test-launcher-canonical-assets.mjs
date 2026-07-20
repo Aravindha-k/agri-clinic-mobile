@@ -61,10 +61,16 @@ const splashColors = read("src/components/brand/splashColors.ts");
 assert.match(splashColors, /NATIVE_LAUNCH_BG = "#D8ECF8"/);
 assert.doesNotMatch(splashColors, /NATIVE_LAUNCH_BG = "#0B3D2E"/);
 
+const ensureAndroid = read("scripts/ensure-android-release-config.mjs");
+assert.match(ensureAndroid, /nativeSplashBackgroundColor/);
+assert.doesNotMatch(ensureAndroid, /NATIVE_LAUNCH_BG\s*=\s*"#0B3D2E"/);
+assert.doesNotMatch(ensureAndroid, /splashscreen_background[^#]*#0B3D2E/);
+
 const colors = read("android/app/src/main/res/values/colors.xml");
 assert.match(colors, /iconBackground[^>]*>#004D17</i);
 assert.match(colors, /splashscreen_background[^>]*>#D8ECF8</i);
 assert.doesNotMatch(colors, /iconBackground[^>]*>#0F6B43</i);
+assert.doesNotMatch(colors, /splashscreen_background[^>]*>#0B3D2E</i);
 
 const styles = read("android/app/src/main/res/values/styles.xml");
 assert.match(styles, /windowSplashScreenAnimatedIcon">@drawable\/splashscreen_icon/);

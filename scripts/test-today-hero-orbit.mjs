@@ -64,8 +64,8 @@ mustNot(
 
 must(
   "mobile/components/brand/AgriNatureMark.tsx",
-  ["cancelAnimation", "chipsOnTrack", "Easing.linear", "chipPadOverride"],
-  "orbit duration + on-track chips"
+  ["cancelAnimation", "chipsOnTrack", "Easing.linear", "chipPadOverride", "minimalTrack", "Crisp primary ring"],
+  "orbit duration + on-track chips + refined track"
 );
 
 must("mobile/components/today/HomeLogoHero.tsx", ["shouldRunBrandingMotion", "shouldAnimate"], "reduced motion gates animation");

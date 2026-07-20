@@ -53,14 +53,14 @@ function preferredOrbit(w) {
 
 function iconSize(orbit, compact) {
   if (compact) {
-    if (orbit < 150) return 11;
-    if (orbit < 180) return 12;
-    return 14;
+    if (orbit < 150) return 13;
+    if (orbit < 180) return 15;
+    return 17;
   }
-  if (orbit < 140) return 12;
-  if (orbit < 170) return 14;
-  if (orbit < 200) return 16;
-  return 18;
+  if (orbit < 140) return 14;
+  if (orbit < 170) return 16;
+  if (orbit < 200) return 18;
+  return 20;
 }
 
 function chipSize(orbit, chipPad, compact) {
@@ -115,7 +115,7 @@ function measure(w) {
   const minO = minOrbit(logo);
   let tight = false;
   let compact = false;
-  let chipPad = 5;
+  let chipPad = 6;
   let edgePad = 5;
   let gap = columnGap(w, tight);
   let inset = leftInset(w, tight);

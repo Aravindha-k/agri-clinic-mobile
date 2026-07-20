@@ -75,7 +75,7 @@ function RoundIconChip({
   iconSize: number;
   chipSize: number;
 }) {
-  const wellSize = Math.min(chipSize - 4, iconSize + (iconSize <= 16 ? 6 : 10));
+  const wellSize = Math.min(chipSize - 4, iconSize + (iconSize <= 16 ? 8 : 12));
   return (
     <View
       accessibilityLabel={icon.service}
@@ -85,7 +85,7 @@ function RoundIconChip({
           width: chipSize,
           height: chipSize,
           borderRadius: chipSize / 2,
-          borderColor: `${icon.color}66`
+          borderColor: `${icon.color}55`
         }
       ]}
     >
@@ -241,21 +241,32 @@ export function AgriNatureOrbit({
         <Svg width={stage} height={stage} style={styles.orbitTrack}>
           {minimalTrack ? (
             <>
+              {/* Soft base track */}
               <Circle
                 cx={trackCenter}
                 cy={trackCenter}
                 r={trackRadius}
-                stroke="rgba(15, 107, 67, 0.22)"
-                strokeWidth={Math.max(2, diameter * 0.02)}
+                stroke="rgba(15, 107, 67, 0.10)"
+                strokeWidth={Math.max(3, diameter * 0.028)}
                 fill="none"
               />
+              {/* Crisp primary ring */}
               <Circle
                 cx={trackCenter}
                 cy={trackCenter}
                 r={trackRadius}
-                stroke="rgba(184, 148, 58, 0.78)"
-                strokeWidth={Math.max(1.5, diameter * 0.014)}
-                strokeDasharray={`${Math.max(4, Math.round(diameter * 0.04))} ${Math.max(6, Math.round(diameter * 0.05))}`}
+                stroke="rgba(15, 107, 67, 0.38)"
+                strokeWidth={Math.max(1.25, diameter * 0.011)}
+                fill="none"
+              />
+              {/* Refined gold accent dashes — modern, not busy */}
+              <Circle
+                cx={trackCenter}
+                cy={trackCenter}
+                r={trackRadius}
+                stroke="rgba(184, 148, 58, 0.62)"
+                strokeWidth={Math.max(1.5, diameter * 0.012)}
+                strokeDasharray={`${Math.max(5, Math.round(diameter * 0.035))} ${Math.max(10, Math.round(diameter * 0.085))}`}
                 strokeLinecap="round"
                 fill="none"
               />
@@ -323,22 +334,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     aspectRatio: 1,
     backgroundColor: "#FFFFFF",
-    borderWidth: 1.5,
+    borderWidth: StyleSheet.hairlineWidth,
     justifyContent: "center",
     overflow: "hidden",
     ...Platform.select({
       ios: {
         shadowColor: "#0A3D28",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.16,
-        shadowRadius: 5
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.14,
+        shadowRadius: 6
       },
-      default: { elevation: 4 }
+      default: { elevation: 3 }
     })
   },
   iconWell: {
     alignItems: "center",
-    backgroundColor: "rgba(248, 252, 249, 0.98)",
+    backgroundColor: "rgba(246, 251, 248, 1)",
     justifyContent: "center"
   },
   orbitStage: {

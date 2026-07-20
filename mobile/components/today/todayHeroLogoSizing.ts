@@ -22,7 +22,7 @@ export const TODAY_ORBIT_SAFE_FILL_MAX = 0.9;
 export const TODAY_ORBIT_EDGE_PAD_DEFAULT = 5;
 export const TODAY_ORBIT_EDGE_PAD_MIN = 4;
 
-export const TODAY_ORBIT_CHIP_PAD_DEFAULT = 5;
+export const TODAY_ORBIT_CHIP_PAD_DEFAULT = 6;
 export const TODAY_ORBIT_CHIP_PAD_MIN = 3;
 
 const HEADER_PAD_H = 12;
@@ -75,15 +75,16 @@ export function todayLogoFitsOrbitAtMaxScale(orbitDiameter: number, logoSize: nu
 }
 
 export function todayOrbitIconSize(orbitDiameter: number, compactChips = false): number {
+  // Slightly larger glyphs for a clearer, more modern orbit band.
   if (compactChips) {
-    if (orbitDiameter < 150) return 11;
-    if (orbitDiameter < 180) return 12;
-    return 14;
+    if (orbitDiameter < 150) return 13;
+    if (orbitDiameter < 180) return 15;
+    return 17;
   }
-  if (orbitDiameter < 140) return 12;
-  if (orbitDiameter < 170) return 14;
-  if (orbitDiameter < 200) return 16;
-  return 18;
+  if (orbitDiameter < 140) return 14;
+  if (orbitDiameter < 170) return 16;
+  if (orbitDiameter < 200) return 18;
+  return 20;
 }
 
 export const TODAY_ORBIT_CHIP_PAD = TODAY_ORBIT_CHIP_PAD_DEFAULT;

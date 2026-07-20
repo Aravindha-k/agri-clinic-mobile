@@ -34,7 +34,7 @@ const appConfig = read("app.config.js");
 assert.match(appConfig, /foregroundImage:\s*brand\.adaptiveIconAsset/);
 assert.match(appConfig, /backgroundColor:\s*brand\.iconBackgroundColor/);
 assert.match(appConfig, /icon:\s*brand\.iconAsset/);
-assert.match(appConfig, /versionCode:\s*7/);
+assert.match(appConfig, /versionCode:\s*8/);
 
 const companyLogo = read("src/components/brand/CompanyLogo.tsx");
 assert.match(companyLogo, /LOGO_IMAGE/);

@@ -168,9 +168,10 @@ assert.match(splash, /preferLight/);
 assert.match(splash, /if \(preferLight\)/);
 
 const premiumMotion = read("src/hooks/usePremiumMotion.ts");
-assert.match(premiumMotion, /buildMotionState\(true, false, false\)/);
+assert.match(premiumMotion, /buildMotionState\(false, false, false\)/);
 assert.match(premiumMotion, /STARTUP_TIMEOUTS\.motionPreferenceMs/);
 assert.match(premiumMotion, /withTimeout/);
+assert.match(premiumMotion, /shouldRunCoreMotion/);
 
 const biometric = read("src/storage/biometricLoginStorage.ts");
 assert.match(biometric, /STARTUP_TIMEOUTS\.biometricLookupMs/);
@@ -190,7 +191,8 @@ assert.match(homeHero, /cancelAnimation\(breath\)/);
 assert.match(homeHero, /cancelAnimation\(glow\)/);
 assert.match(homeHero, /TODAY_LOGO_BREATH_MIN/);
 assert.match(homeHero, /TODAY_LOGO_BREATH_MAX/);
-assert.match(homeHero, /TODAY_LOGO_BREATH_HALF_MS/);
+assert.match(homeHero, /shouldRunCoreMotion/);
+assert.match(homeHero, /isExplicitReducedMotion/);
 
 const sync = read("src/storage/AutomaticSyncProvider.tsx");
 assert.match(sync, /app_foreground/);

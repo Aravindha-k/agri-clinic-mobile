@@ -149,18 +149,8 @@ function OrbitGlyph({
   rotation: SharedValue<number>;
   animate: boolean;
 }) {
-  if (!animate) {
-    const x = Math.cos(phase) * radius;
-    const y = Math.sin(phase) * radius;
-    return (
-      <View style={[styles.orbitGlyph, { transform: [{ translateX: x }, { translateY: y }] }]}>
-        <RoundIconChip icon={icon} iconSize={iconSize} chipSize={chipSize} />
-      </View>
-    );
-  }
-
   const motion = useAnimatedStyle(() => {
-    const angle = rotation.value + phase;
+    const angle = animate ? rotation.value + phase : phase;
     return {
       transform: [
         { translateX: Math.cos(angle) * radius },

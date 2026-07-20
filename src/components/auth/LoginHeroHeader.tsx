@@ -9,6 +9,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import Reanimated, {
+  cancelAnimation,
   Easing,
   useAnimatedStyle,
   useSharedValue,
@@ -17,6 +18,7 @@ import Reanimated, {
   withTiming
 } from "react-native-reanimated";
 import { CompanyLogo } from "../brand/CompanyLogo";
+import { isExplicitReducedMotion, shouldRunCoreMotion, usePremiumMotion } from "../../hooks/usePremiumMotion";
 import { FONTS } from "../../theme/fonts";
 import { Colors, Spacing } from "../../../mobile/lib/theme";
 
@@ -30,6 +32,8 @@ export const LOGIN_FIELD_BG = require("../../../assets/login/login_field_bg.jpg"
 export const LOGIN_HEADER_OVERLAP = 28;
 
 const LOGO_SIZE = 104;
+const LOGO_BREATH_MAX = 1.05;
+const LOGO_BREATH_HALF_MS = 1400;
 
 const FEATURES: Array<{ icon: keyof typeof Ionicons.glyphMap; label: string }> = [
   { icon: "cloud-offline-outline", label: "Works offline" },
@@ -47,18 +51,27 @@ type Props = {
 export function LoginHeroHeader({ topInset }: Props) {
   const { height: screenH, width: screenW } = useWindowDimensions();
   const headerHeight = Math.max(248, Math.round(screenH * 0.36));
+  const motion = usePremiumMotion();
+  const preferReduced = isExplicitReducedMotion(motion);
+  const shouldAnimate = shouldRunCoreMotion(motion) && !preferReduced;
   const logoScale = useSharedValue(1);
 
   useEffect(() => {
+    cancelAnimation(logoScale);
+    logoScale.value = 1;
+    if (!shouldAnimate) return;
+
     logoScale.value = withRepeat(
       withSequence(
-        withTiming(1.05, { duration: 1400, easing: Easing.inOut(Easing.sin) }),
-        withTiming(1, { duration: 1400, easing: Easing.inOut(Easing.sin) })
+        withTiming(LOGO_BREATH_MAX, { duration: LOGO_BREATH_HALF_MS, easing: Easing.inOut(Easing.sin) }),
+        withTiming(1, { duration: LOGO_BREATH_HALF_MS, easing: Easing.inOut(Easing.sin) })
       ),
       -1,
       false
     );
-  }, [logoScale]);
+
+    return () => cancelAnimation(logoScale);
+  }, [logoScale, shouldAnimate]);
 
   const logoAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: logoScale.value }]
@@ -83,9 +96,15 @@ export function LoginHeroHeader({ topInset }: Props) {
       />
 
       <View style={[styles.content, { paddingTop: topInset + Spacing.sm }]}>
-        <Reanimated.View style={[styles.logoWrap, logoAnimStyle]}>
-          <CompanyLogo size={LOGO_SIZE} />
-        </Reanimated.View>
+        <View style={styles.logoWrap}>
+          {shouldAnimate ? (
+            <Reanimated.View style={logoAnimStyle}>
+              <CompanyLogo size={LOGO_SIZE} />
+            </Reanimated.View>
+          ) : (
+            <CompanyLogo size={LOGO_SIZE} />
+          )}
+        </View>
 
         <Text style={styles.greeting}>Welcome Back</Text>
         <Text style={styles.subtitle}>Sign in to continue your field work</Text>

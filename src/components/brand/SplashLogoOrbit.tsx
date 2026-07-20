@@ -64,21 +64,22 @@ export function SplashLogoOrbit({
 
     cancelAnimation(opacity);
     cancelAnimation(rotation);
-    opacity.value = 0;
     rotation.value = 0;
 
-    opacity.value = withDelay(
-      startDelayMs,
-      withTiming(1, { duration: RING_FADE_MS, easing: Easing.out(Easing.cubic) })
-    );
-
     if (reducedMotion) {
+      opacity.value = 1;
       logStartup("ring_animation_started", "static_reduced_motion");
       return () => {
         cancelAnimation(opacity);
         logStartup("ring_animation_stopped", "reduced_motion_unmount");
       };
     }
+
+    opacity.value = 0;
+    opacity.value = withDelay(
+      startDelayMs,
+      withTiming(1, { duration: RING_FADE_MS, easing: Easing.out(Easing.cubic) })
+    );
 
     rotation.value = withDelay(
       startDelayMs,

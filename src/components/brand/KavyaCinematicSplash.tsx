@@ -16,7 +16,7 @@ import Animated, {
   withTiming
 } from "react-native-reanimated";
 import { BRAND, LOGO_IMAGE } from "../../config/brand";
-import { usePremiumMotion } from "../../hooks/usePremiumMotion";
+import { isExplicitReducedMotion, usePremiumMotion } from "../../hooks/usePremiumMotion";
 import { logStartup } from "../../utils/startupDiagnostics";
 import { SPLASH_ASSETS } from "./splashAssets";
 import { SplashLogoOrbit } from "./SplashLogoOrbit";
@@ -77,9 +77,8 @@ type Props = {
  * centered Kavya logo reveal, then smooth handoff to the app.
  */
 export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit = false }: Props) {
-  const { ready: motionReady, reduced } = usePremiumMotion();
-  const [motionFallback, setMotionFallback] = useState(false);
-  const effectiveMotionReady = motionReady || motionFallback;
+  const motion = usePremiumMotion();
+  const preferLight = isExplicitReducedMotion(motion);
   const { width: screenW, height: screenH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const layoutAtRef = useRef<number | null>(null);
@@ -87,7 +86,6 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
   const exitStartedRef = useRef(false);
   const finishedRef = useRef(false);
   const animationFloorDoneRef = useRef(false);
-  const animationStartedRef = useRef(false);
   const canExitRef = useRef(canExit);
   const onReadyRef = useRef(onReady);
   const onExitStartRef = useRef(onExitStart);
@@ -182,13 +180,6 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     logStartup("cinematic_component_rendered", "0 ms");
   }, []);
 
-  // Prefer motion prefs when ready; never block splash animation forever on OEM hangs.
-  useEffect(() => {
-    if (motionReady) return;
-    const timer = setTimeout(() => setMotionFallback(true), 2000);
-    return () => clearTimeout(timer);
-  }, [motionReady]);
-
   /**
    * Last-resort: some OEM skins never fire onLayout / Reanimated callbacks.
    * Force native splash hide + cinematic exit so no device stays blank forever.
@@ -204,7 +195,6 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
       }
       setBackgroundSettled(true);
       setLogoSettled(true);
-      setMotionFallback(true);
       onReadyRef.current?.();
       animationFloorDoneRef.current = true;
       beginExitRef.current();
@@ -220,18 +210,13 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     setLayoutReady(true);
   }, []);
 
-  const preferLightRef = useRef(false);
-  preferLightRef.current = reduced;
-
   useEffect(() => {
-    if (!layoutReady || !effectiveMotionReady || animationStartedRef.current) return;
-    animationStartedRef.current = true;
+    if (!layoutReady) return;
 
     const easeOut = Easing.out(Easing.cubic);
     const easeInOut = Easing.inOut(Easing.cubic);
-    const preferLight = preferLightRef.current;
     const minMs = preferLight ? Math.max(1600, SPLASH_MIN_VISIBLE_MS - 600) : SPLASH_MIN_VISIBLE_MS;
-    const kenBurnsHalf = preferLight ? SPLASH_KEN_BURNS_MS : SPLASH_KEN_BURNS_MS;
+    const kenBurnsHalf = SPLASH_KEN_BURNS_MS;
 
     cancelAnimation(bgScale);
     cancelAnimation(bgTranslateY);
@@ -248,12 +233,12 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
 
     bgScale.value = SPLASH_KEN_BURNS_SCALE_MIN;
     bgTranslateY.value = 0;
-    logoOpacity.value = 0;
-    logoScale.value = LOGO_SCALE_FROM;
-    logoTranslateY.value = preferLight ? 4 : 8;
-    titleOpacity.value = 0;
-    titleTranslateY.value = 14;
-    subtitleOpacity.value = 0;
+    logoOpacity.value = 1;
+    logoScale.value = preferLight ? 1 : LOGO_SCALE_FROM;
+    logoTranslateY.value = preferLight ? 0 : 8;
+    titleOpacity.value = preferLight ? 1 : 0;
+    titleTranslateY.value = preferLight ? 0 : 14;
+    subtitleOpacity.value = preferLight ? 1 : 0;
     exitWash.value = 0;
     screenOpacity.value = 1;
 
@@ -357,8 +342,19 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
       cancelAnimation(exitWash);
       cancelAnimation(screenOpacity);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- cold-mount cinematic sequence
-  }, [layoutReady, effectiveMotionReady]);
+  }, [layoutReady, preferLight, bgScale, bgTranslateY, bloomOpacity, bloomScale, elapsed, exitWash, logoOpacity, logoScale, logoTranslateY, screenOpacity, subtitleOpacity, titleOpacity, titleTranslateY]);
+
+  // Watchdog: never leave branded copy invisible if Reanimated callbacks stall.
+  useEffect(() => {
+    if (!layoutReady || preferLight) return;
+    const timer = setTimeout(() => {
+      if (titleOpacity.value < 0.5) titleOpacity.value = 1;
+      if (subtitleOpacity.value < 0.5) subtitleOpacity.value = 1;
+      if (logoOpacity.value < 0.5) logoOpacity.value = 1;
+      if (logoScale.value < 0.5) logoScale.value = 1;
+    }, LOGO_ENTRY_DELAY_MS + LOGO_ENTRY_MS + 500);
+    return () => clearTimeout(timer);
+  }, [layoutReady, preferLight, logoOpacity, logoScale, subtitleOpacity, titleOpacity]);
 
   useEffect(() => {
     if (!layoutReady) return;
@@ -468,7 +464,7 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
               top={0}
               active={layoutReady}
               startDelayMs={300}
-              reducedMotion={reduced}
+              reducedMotion={preferLight}
             />
             <Animated.View
               style={[

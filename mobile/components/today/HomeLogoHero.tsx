@@ -11,7 +11,7 @@ import Animated, {
   withSequence,
   withTiming
 } from "react-native-reanimated";
-import { usePremiumMotion } from "../../../src/hooks/usePremiumMotion";
+import { isExplicitReducedMotion, shouldRunCoreMotion, usePremiumMotion } from "../../../src/hooks/usePremiumMotion";
 import { LOGO_IMAGE } from "../../../src/config/brand";
 import { AgriNatureOrbit } from "../brand/AgriNatureMark";
 import {
@@ -39,11 +39,11 @@ type Props = {
  */
 export function HomeLogoHero({ replayKey = 0 }: Props) {
   const { width } = useWindowDimensions();
-  const { coreMotion, ready: motionReady, reduced } = usePremiumMotion();
+  const motion = usePremiumMotion();
   const isFocused = useIsFocused();
   const [appActive, setAppActive] = useState(AppState.currentState === "active");
   const breath = useSharedValue(1);
-  const glow = useSharedValue(coreMotion ? GLOW_MIN : (GLOW_MIN + GLOW_MAX) / 2);
+  const glow = useSharedValue((GLOW_MIN + GLOW_MAX) / 2);
 
   const measured = useMemo(() => measureTodayHeroStage(width), [width]);
   const orbitDiameter = measured.orbit;
@@ -53,7 +53,8 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
   const logoCanvas = Math.ceil(logoSize * TODAY_LOGO_BREATH_MAX);
   const glowSize = Math.min(canvas, Math.round(orbitDiameter * 1.15));
 
-  const shouldAnimate = motionReady && coreMotion && isFocused && appActive && !reduced;
+  const preferReduced = isExplicitReducedMotion(motion);
+  const shouldAnimate = shouldRunCoreMotion(motion) && isFocused && appActive && !preferReduced;
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
@@ -163,6 +164,8 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
         <AgriNatureOrbit
           diameter={orbitDiameter}
           animate={shouldAnimate}
+          showTrack={!shouldAnimate}
+          minimalTrack
           gapRatio={0}
           compact
           chipsOnTrack

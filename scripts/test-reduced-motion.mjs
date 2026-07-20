@@ -8,6 +8,7 @@ const read = (file) => readFileSync(resolve(root, file), "utf8");
 
 const motionSurfaces = [
   "src/components/ui/VisitFabTabButton.tsx",
+  "src/components/auth/LoginHeroHeader.tsx",
   "mobile/components/today/HomeLogoHero.tsx",
   "mobile/components/ui/FadeInSection.tsx",
   "mobile/components/ui/ShimmerBlock.tsx",

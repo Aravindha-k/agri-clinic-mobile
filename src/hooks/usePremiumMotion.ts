@@ -2,20 +2,27 @@ import * as Battery from "expo-battery";
 import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Platform } from "react-native";
 import { withTimeout } from "../utils/withTimeout";
+import { logMotionDiagnosticsOnce } from "../utils/motionDiagnostics";
 import { STARTUP_TIMEOUTS } from "../bootstrap/startupCoordinator";
 
+export type MotionPreference = "full" | "reduced" | "unknown";
+
 export type PremiumMotionState = {
-  /** Accessibility and power preferences have been resolved at least once. */
+  /** Resolved accessibility preference — unknown until OS reports. */
+  preference: MotionPreference;
+  /** Accessibility preference has been resolved at least once. */
   ready: boolean;
   /**
    * Heavy decorative effects only (particles, Lottie, glass sheen, splash golden dust).
    * May be off during battery saver — core logo/screen motion still runs.
    */
   enabled: boolean;
-  /** User or system prefers reduced motion — disables all motion. */
+  /** User or system explicitly prefers reduced motion. */
   reduced: boolean;
-  /** Core UI motion (screen entrances, logo zoom, splash orbit). Inverse of `reduced`. */
+  /** Core UI motion (screen entrances, logo zoom, splash orbit). */
   coreMotion: boolean;
+  /** Attempt full motion unless the OS explicitly reports reduced motion. */
+  wantsFullMotion: boolean;
 };
 
 let cachedState: PremiumMotionState | null = null;
@@ -30,12 +37,15 @@ function buildMotionState(
   batterySaver: boolean,
   ready = true
 ): PremiumMotionState {
-  const heavyEffects = !reduced && !batterySaver;
+  const preference: MotionPreference = !ready ? "unknown" : reduced ? "reduced" : "full";
+  const heavyEffects = ready ? !reduced && !batterySaver : !batterySaver;
   return {
+    preference,
     ready,
-    reduced,
+    reduced: ready ? reduced : false,
     enabled: heavyEffects,
-    coreMotion: !reduced
+    coreMotion: ready ? !reduced : true,
+    wantsFullMotion: ready ? !reduced : true
   };
 }
 
@@ -66,14 +76,23 @@ async function resolveMotionState(): Promise<PremiumMotionState> {
     }
   }
 
-  return buildMotionState(reduced, batterySaver);
+  return buildMotionState(reduced, batterySaver, true);
 }
 
-// Stay static until the async accessibility preference is known. This avoids
-// briefly starting motion for users who have Reduce Motion enabled.
-const DEFAULT_MOTION: PremiumMotionState = buildMotionState(true, false, false);
+/** Unknown → attempt full motion with safe watchdogs; explicit reduced → static fallback. */
+const DEFAULT_MOTION: PremiumMotionState = buildMotionState(false, false, false);
 
-/** Gates animations — core logo/screen motion runs on all devices unless reduce-motion is on. */
+/** True only when the OS has explicitly enabled reduce motion. */
+export function isExplicitReducedMotion(state: PremiumMotionState): boolean {
+  return state.ready && state.reduced;
+}
+
+/** Core motion runs unless reduce motion is explicitly enabled. */
+export function shouldRunCoreMotion(state: PremiumMotionState): boolean {
+  return state.ready ? !state.reduced : true;
+}
+
+/** Gates animations — core logo/screen motion runs unless reduce-motion is explicitly on. */
 export function usePremiumMotion(): PremiumMotionState {
   const [state, setState] = useState<PremiumMotionState>(cachedState ?? DEFAULT_MOTION);
   const batterySaverRef = useRef(false);
@@ -85,11 +104,15 @@ export function usePremiumMotion(): PremiumMotionState {
       cachedState = next;
       batterySaverRef.current = !next.enabled && !next.reduced;
       if (mounted) setState(next);
+      void logMotionDiagnosticsOnce({
+        motionPreference: next.preference,
+        motionReady: next.ready
+      });
     });
 
     const reduceSub = AccessibilityInfo.addEventListener("reduceMotionChanged", (reduced) => {
       setState((prev) => {
-        const next = buildMotionState(reduced, batterySaverRef.current);
+        const next = buildMotionState(reduced, batterySaverRef.current, true);
         cachedState = next;
         return next;
       });
@@ -99,7 +122,7 @@ export function usePremiumMotion(): PremiumMotionState {
       ? Battery.addLowPowerModeListener(({ lowPowerMode }) => {
           batterySaverRef.current = lowPowerMode;
           setState((prev) => {
-            const next = buildMotionState(prev.reduced, lowPowerMode);
+            const next = buildMotionState(prev.ready ? prev.reduced : false, lowPowerMode, prev.ready);
             cachedState = next;
             return next;
           });
@@ -121,5 +144,6 @@ export function getPremiumMotionEnabled(): boolean {
 }
 
 export function getCoreMotionEnabled(): boolean {
-  return cachedState?.coreMotion ?? true;
+  if (!cachedState) return true;
+  return cachedState.coreMotion;
 }

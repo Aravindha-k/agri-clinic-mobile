@@ -48,7 +48,7 @@ must(
     "LOGO_IMAGE",
     'resizeMode="contain"',
     "shouldAnimate",
-    "coreMotion",
+    "shouldRunCoreMotion",
     "cancelAnimation",
     "homeLogoGlow",
     "transform: [{ scale: breath.value }]"
@@ -68,7 +68,7 @@ must(
   "orbit duration + on-track chips"
 );
 
-must("mobile/components/today/HomeLogoHero.tsx", ["!reduced", "shouldAnimate"], "reduced motion gates animation");
+must("mobile/components/today/HomeLogoHero.tsx", ["shouldRunCoreMotion", "shouldAnimate"], "reduced motion gates animation");
 
 const agriIcons = read("mobile/components/brand/agriProductIcons.tsx");
 const orbitKeys = [...agriIcons.matchAll(/key:\s*"(leaf|spray|seed|lab|tractor)"/g)].map((m) => m[1]);

@@ -23,7 +23,6 @@ function mustNot(file, needles, label) {
   }
 }
 
-// Canonical motion preference hook
 must(
   "src/hooks/usePremiumMotion.ts",
   [
@@ -43,10 +42,23 @@ mustNot(
   "must not default to reduced motion"
 );
 
-// Splash: watchdog + explicit reduced only
+must(
+  "src/utils/brandingReanimated.ts",
+  [
+    "ReduceMotion.Never",
+    "BRANDING_REANIMATED_ACTIVE",
+    "shouldRunBrandingMotion",
+    "brandingWithTiming",
+    "brandingWithRepeat"
+  ],
+  "branding reanimated override"
+);
+
 must(
   "src/components/brand/KavyaCinematicSplash.tsx",
   [
+    "brandingWithTiming",
+    "brandingWithRepeat",
     "isExplicitReducedMotion",
     "preferLight",
     "SPLASH_ABSOLUTE_FAILSAFE_MS",
@@ -63,13 +75,12 @@ mustNot(
   "splash must not lock animation on stale prefs"
 );
 
-// Login logo: static base + optional breathe
 must(
   "src/components/auth/LoginHeroHeader.tsx",
   [
-    "usePremiumMotion",
-    "shouldRunCoreMotion",
-    "isExplicitReducedMotion",
+    "shouldRunBrandingMotion",
+    "brandingWithRepeat",
+    "AppState.addEventListener",
     "CompanyLogo",
     "cancelAnimation(logoScale)",
     "logoScale.value = 1"
@@ -83,15 +94,14 @@ mustNot(
   "login logo must never hide"
 );
 
-// Today orbit: static positions + focus lifecycle
 must(
   "mobile/components/today/HomeLogoHero.tsx",
   [
-    "shouldRunCoreMotion",
-    "isExplicitReducedMotion",
+    "shouldRunBrandingMotion",
+    "brandingWithRepeat",
     "useIsFocused",
     "AppState.addEventListener",
-    "showTrack={!shouldAnimate}",
+    "showTrack",
     "cancelAnimation(breath)"
   ],
   "today orbit reliability"
@@ -102,6 +112,7 @@ must(
   [
     "const angle = animate ? rotation.value + phase : phase",
     "useAnimatedStyle",
+    "brandingWithRepeat",
     "cancelAnimation(rotation)"
   ],
   "orbit glyph hooks safety"
@@ -113,21 +124,18 @@ mustNot(
   "orbit glyph must not use conditional hook branches"
 );
 
-// Splash ring reduced mode shows immediately
 must(
   "src/components/brand/SplashLogoOrbit.tsx",
-  ["reducedMotion", "opacity.value = 1"],
+  ["reducedMotion", "opacity.value = 1", "brandingWithRepeat"],
   "splash ring reduced fallback"
 );
 
-// Dev diagnostics guarded
 must(
   "src/utils/motionDiagnostics.ts",
-  ["__DEV__", "loggedOnce", "Manufacturer", "reduceMotionEnabled"],
+  ["__DEV__", "loggedOnce", "Manufacturer", "reduceMotionEnabled", "reanimatedReducedMotion"],
   "motion diagnostics"
 );
 
-// Reanimated plugin last
 must("babel.config.js", ['plugins: ["react-native-reanimated/plugin"]'], "babel reanimated plugin");
 must("App.tsx", ['import "react-native-reanimated"'], "reanimated side-effect import");
 

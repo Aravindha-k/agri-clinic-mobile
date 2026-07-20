@@ -6,12 +6,15 @@ import Animated, {
   Easing,
   cancelAnimation,
   useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming
+  useSharedValue
 } from "react-native-reanimated";
-import { isExplicitReducedMotion, shouldRunCoreMotion, usePremiumMotion } from "../../../src/hooks/usePremiumMotion";
+import { usePremiumMotion } from "../../../src/hooks/usePremiumMotion";
+import {
+  brandingWithRepeat,
+  brandingWithSequence,
+  brandingWithTiming,
+  shouldRunBrandingMotion
+} from "../../../src/utils/brandingReanimated";
 import { LOGO_IMAGE } from "../../../src/config/brand";
 import { AgriNatureOrbit } from "../brand/AgriNatureMark";
 import {
@@ -53,8 +56,7 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
   const logoCanvas = Math.ceil(logoSize * TODAY_LOGO_BREATH_MAX);
   const glowSize = Math.min(canvas, Math.round(orbitDiameter * 1.15));
 
-  const preferReduced = isExplicitReducedMotion(motion);
-  const shouldAnimate = shouldRunCoreMotion(motion) && isFocused && appActive && !preferReduced;
+  const shouldAnimate = shouldRunBrandingMotion(motion) && isFocused && appActive;
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
@@ -73,13 +75,13 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
     }
 
     breath.value = TODAY_LOGO_BREATH_MIN;
-    breath.value = withRepeat(
-      withSequence(
-        withTiming(TODAY_LOGO_BREATH_MAX, {
+    breath.value = brandingWithRepeat(
+      brandingWithSequence(
+        brandingWithTiming(TODAY_LOGO_BREATH_MAX, {
           duration: TODAY_LOGO_BREATH_HALF_MS,
           easing: Easing.inOut(Easing.ease)
         }),
-        withTiming(TODAY_LOGO_BREATH_MIN, {
+        brandingWithTiming(TODAY_LOGO_BREATH_MIN, {
           duration: TODAY_LOGO_BREATH_HALF_MS,
           easing: Easing.inOut(Easing.ease)
         })
@@ -89,10 +91,10 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
     );
 
     glow.value = GLOW_MIN;
-    glow.value = withRepeat(
-      withSequence(
-        withTiming(GLOW_MAX, { duration: GLOW_HALF_MS, easing: Easing.inOut(Easing.ease) }),
-        withTiming(GLOW_MIN, { duration: GLOW_HALF_MS, easing: Easing.inOut(Easing.ease) })
+    glow.value = brandingWithRepeat(
+      brandingWithSequence(
+        brandingWithTiming(GLOW_MAX, { duration: GLOW_HALF_MS, easing: Easing.inOut(Easing.ease) }),
+        brandingWithTiming(GLOW_MIN, { duration: GLOW_HALF_MS, easing: Easing.inOut(Easing.ease) })
       ),
       -1,
       false
@@ -101,9 +103,7 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
       cancelAnimation(breath);
       cancelAnimation(glow);
     };
-  }, [breath, glow, shouldAnimate]);
-
-  void replayKey;
+  }, [breath, glow, shouldAnimate, motion.preference, motion.ready, replayKey]);
 
   const logoBreathStyle = useAnimatedStyle(() => ({
     transform: [{ scale: breath.value }]
@@ -145,7 +145,6 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
 
   return (
     <View style={[styles.canvas, { width: canvas, height: canvas }]}>
-      {/* Glow — behind, capped to canvas */}
       <Animated.View pointerEvents="none" style={[centerLayer(glowSize), glowStyle, { zIndex: 0 }]}>
         <Svg width={glowSize} height={glowSize}>
           <Defs>
@@ -159,12 +158,11 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
         </Svg>
       </Animated.View>
 
-      {/* Static ring + rotating icons — chips on track, stage = canvas */}
       <View pointerEvents="none" style={[centerLayer(canvas), { zIndex: 1 }]}>
         <AgriNatureOrbit
           diameter={orbitDiameter}
           animate={shouldAnimate}
-          showTrack={!shouldAnimate}
+          showTrack
           minimalTrack
           gapRatio={0}
           compact
@@ -176,13 +174,10 @@ export function HomeLogoHero({ replayKey = 0 }: Props) {
         />
       </View>
 
-      {/* Logo — scale-only breathe; shared centre */}
       <View style={[centerLayer(logoCanvas), styles.logoSlot]}>
-        {shouldAnimate ? (
-          <Animated.View style={[styles.logoBreathWrap, logoBreathStyle]}>{logoBadge}</Animated.View>
-        ) : (
-          logoBadge
-        )}
+        <Animated.View style={[styles.logoBreathWrap, shouldAnimate ? logoBreathStyle : undefined]}>
+          {logoBadge}
+        </Animated.View>
       </View>
     </View>
   );

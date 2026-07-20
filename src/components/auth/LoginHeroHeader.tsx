@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
+  AppState,
   Image,
   StyleSheet,
   Text,
@@ -12,13 +13,16 @@ import Reanimated, {
   cancelAnimation,
   Easing,
   useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming
+  useSharedValue
 } from "react-native-reanimated";
 import { CompanyLogo } from "../brand/CompanyLogo";
-import { isExplicitReducedMotion, shouldRunCoreMotion, usePremiumMotion } from "../../hooks/usePremiumMotion";
+import { usePremiumMotion } from "../../hooks/usePremiumMotion";
+import {
+  brandingWithRepeat,
+  brandingWithSequence,
+  brandingWithTiming,
+  shouldRunBrandingMotion
+} from "../../utils/brandingReanimated";
 import { FONTS } from "../../theme/fonts";
 import { Colors, Spacing } from "../../../mobile/lib/theme";
 
@@ -52,32 +56,38 @@ export function LoginHeroHeader({ topInset }: Props) {
   const { height: screenH, width: screenW } = useWindowDimensions();
   const headerHeight = Math.max(248, Math.round(screenH * 0.36));
   const motion = usePremiumMotion();
-  const preferReduced = isExplicitReducedMotion(motion);
-  const shouldAnimate = shouldRunCoreMotion(motion) && !preferReduced;
+  const [appActive, setAppActive] = useState(AppState.currentState === "active");
+  const shouldAnimate = shouldRunBrandingMotion(motion) && appActive;
   const logoScale = useSharedValue(1);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      setAppActive(state === "active");
+    });
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     cancelAnimation(logoScale);
     logoScale.value = 1;
     if (!shouldAnimate) return;
 
-    logoScale.value = withRepeat(
-      withSequence(
-        withTiming(LOGO_BREATH_MAX, { duration: LOGO_BREATH_HALF_MS, easing: Easing.inOut(Easing.sin) }),
-        withTiming(1, { duration: LOGO_BREATH_HALF_MS, easing: Easing.inOut(Easing.sin) })
+    logoScale.value = brandingWithRepeat(
+      brandingWithSequence(
+        brandingWithTiming(LOGO_BREATH_MAX, { duration: LOGO_BREATH_HALF_MS, easing: Easing.inOut(Easing.sin) }),
+        brandingWithTiming(1, { duration: LOGO_BREATH_HALF_MS, easing: Easing.inOut(Easing.sin) })
       ),
       -1,
       false
     );
 
     return () => cancelAnimation(logoScale);
-  }, [logoScale, shouldAnimate]);
+  }, [logoScale, shouldAnimate, motion.preference, motion.ready]);
 
   const logoAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: logoScale.value }]
   }));
 
-  // Top-align field band (avoid cover-centering into any residual mid-frame).
   const bgHeight = Math.max(headerHeight, Math.round(screenW * (480 / 472)));
 
   return (

@@ -4,12 +4,14 @@ import Animated, {
   Easing,
   cancelAnimation,
   useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withRepeat,
-  withTiming
+  useSharedValue
 } from "react-native-reanimated";
 import Svg, { Circle } from "react-native-svg";
+import {
+  brandingWithDelay,
+  brandingWithRepeat,
+  brandingWithTiming
+} from "../../utils/brandingReanimated";
 import { logStartup } from "../../utils/startupDiagnostics";
 
 const ORBIT_DURATION_MS = 2800;
@@ -45,7 +47,7 @@ export function SplashLogoOrbit({
   startDelayMs = 280,
   reducedMotion = false
 }: Props) {
-  const opacity = useSharedValue(0);
+  const opacity = useSharedValue(1);
   const rotation = useSharedValue(0);
 
   const ringStroke = useMemo(() => Math.max(1.75, size * 0.014), [size]);
@@ -75,16 +77,15 @@ export function SplashLogoOrbit({
       };
     }
 
-    opacity.value = 0;
-    opacity.value = withDelay(
+    opacity.value = brandingWithDelay(
       startDelayMs,
-      withTiming(1, { duration: RING_FADE_MS, easing: Easing.out(Easing.cubic) })
+      brandingWithTiming(1, { duration: RING_FADE_MS, easing: Easing.out(Easing.cubic) })
     );
 
-    rotation.value = withDelay(
+    rotation.value = brandingWithDelay(
       startDelayMs,
-      withRepeat(
-        withTiming(360, { duration: ORBIT_DURATION_MS, easing: Easing.linear }),
+      brandingWithRepeat(
+        brandingWithTiming(360, { duration: ORBIT_DURATION_MS, easing: Easing.linear }),
         -1,
         false
       )

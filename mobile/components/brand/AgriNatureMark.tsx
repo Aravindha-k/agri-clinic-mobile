@@ -6,10 +6,9 @@ import Animated, {
   cancelAnimation,
   type SharedValue,
   useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming
+  useSharedValue
 } from "react-native-reanimated";
+import { brandingWithRepeat, brandingWithTiming } from "../../../src/utils/brandingReanimated";
 import { AgriProductIcon, AGRI_CLUSTER_ICONS, AGRI_ORBIT_ICONS } from "./agriProductIcons";
 import { BRAND_ORBIT_GAP_RATIO } from "./brandHeaderSpacing";
 
@@ -228,8 +227,8 @@ export function AgriNatureOrbit({
     }
     cancelAnimation(rotation);
     rotation.value = 0;
-    rotation.value = withRepeat(
-      withTiming(Math.PI * 2, { duration: durationMs, easing: Easing.linear }),
+    rotation.value = brandingWithRepeat(
+      brandingWithTiming(Math.PI * 2, { duration: durationMs, easing: Easing.linear }),
       -1,
       false
     );

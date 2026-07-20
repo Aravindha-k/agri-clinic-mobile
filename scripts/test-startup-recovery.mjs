@@ -191,8 +191,7 @@ assert.match(homeHero, /cancelAnimation\(breath\)/);
 assert.match(homeHero, /cancelAnimation\(glow\)/);
 assert.match(homeHero, /TODAY_LOGO_BREATH_MIN/);
 assert.match(homeHero, /TODAY_LOGO_BREATH_MAX/);
-assert.match(homeHero, /shouldRunCoreMotion/);
-assert.match(homeHero, /isExplicitReducedMotion/);
+assert.match(homeHero, /shouldRunBrandingMotion/);
 
 const sync = read("src/storage/AutomaticSyncProvider.tsx");
 assert.match(sync, /app_foreground/);

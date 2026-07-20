@@ -9,14 +9,16 @@ import Animated, {
   cancelAnimation,
   runOnJS,
   useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withRepeat,
-  withSequence,
-  withTiming
+  useSharedValue
 } from "react-native-reanimated";
 import { BRAND, LOGO_IMAGE } from "../../config/brand";
 import { isExplicitReducedMotion, usePremiumMotion } from "../../hooks/usePremiumMotion";
+import {
+  brandingWithDelay,
+  brandingWithRepeat,
+  brandingWithSequence,
+  brandingWithTiming
+} from "../../utils/brandingReanimated";
 import { logStartup } from "../../utils/startupDiagnostics";
 import { SPLASH_ASSETS } from "./splashAssets";
 import { SplashLogoOrbit } from "./SplashLogoOrbit";
@@ -150,14 +152,14 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
     onExitStartRef.current?.();
 
     const easeInOut = Easing.inOut(Easing.cubic);
-    exitWash.value = withTiming(1, { duration: SPLASH_EXIT_FADE_MS, easing: easeInOut });
+    exitWash.value = brandingWithTiming(1, { duration: SPLASH_EXIT_FADE_MS, easing: easeInOut });
 
     // OEM Reanimated completion callbacks can stall — finish splash anyway.
     const finishFailsafe = setTimeout(() => {
       finishSplash();
     }, SPLASH_EXIT_FADE_MS + 600);
 
-    screenOpacity.value = withTiming(0, { duration: SPLASH_EXIT_FADE_MS, easing: easeInOut }, (done) => {
+    screenOpacity.value = brandingWithTiming(0, { duration: SPLASH_EXIT_FADE_MS, easing: easeInOut }, (done) => {
       if (done) {
         runOnJS(finishSplash)();
       }
@@ -252,70 +254,70 @@ export function KavyaCinematicSplash({ onFinish, onReady, onExitStart, canExit =
       bloomOpacity.value = 0.12;
       bloomScale.value = 1;
     } else {
-      bgScale.value = withRepeat(
-        withSequence(
-          withTiming(SPLASH_KEN_BURNS_SCALE_MAX, { duration: kenBurnsHalf / 2, easing: easeInOut }),
-          withTiming(SPLASH_KEN_BURNS_SCALE_MIN, { duration: kenBurnsHalf / 2, easing: easeInOut })
+      bgScale.value = brandingWithRepeat(
+        brandingWithSequence(
+          brandingWithTiming(SPLASH_KEN_BURNS_SCALE_MAX, { duration: kenBurnsHalf / 2, easing: easeInOut }),
+          brandingWithTiming(SPLASH_KEN_BURNS_SCALE_MIN, { duration: kenBurnsHalf / 2, easing: easeInOut })
         ),
         -1,
         false
       );
-      bgTranslateY.value = withRepeat(
-        withSequence(
-          withTiming(-4, { duration: kenBurnsHalf / 2, easing: easeInOut }),
-          withTiming(0, { duration: kenBurnsHalf / 2, easing: easeInOut })
+      bgTranslateY.value = brandingWithRepeat(
+        brandingWithSequence(
+          brandingWithTiming(-4, { duration: kenBurnsHalf / 2, easing: easeInOut }),
+          brandingWithTiming(0, { duration: kenBurnsHalf / 2, easing: easeInOut })
         ),
         -1,
         false
       );
 
-      logoOpacity.value = withDelay(
+      logoOpacity.value = brandingWithDelay(
         LOGO_ENTRY_DELAY_MS,
-        withTiming(1, { duration: LOGO_ENTRY_MS, easing: easeOut })
+        brandingWithTiming(1, { duration: LOGO_ENTRY_MS, easing: easeOut })
       );
-      logoScale.value = withDelay(
+      logoScale.value = brandingWithDelay(
         LOGO_ENTRY_DELAY_MS,
-        withSequence(
-          withTiming(1.08, { duration: 620, easing: easeOut }),
-          withTiming(1, { duration: 380, easing: easeInOut }),
-          withRepeat(
-            withSequence(
-              withTiming(LOGO_BREATHE_MAX, { duration: SPLASH_LOGO_BREATHE_MS, easing: easeInOut }),
-              withTiming(LOGO_BREATHE_MIN, { duration: SPLASH_LOGO_BREATHE_MS, easing: easeInOut })
+        brandingWithSequence(
+          brandingWithTiming(1.08, { duration: 620, easing: easeOut }),
+          brandingWithTiming(1, { duration: 380, easing: easeInOut }),
+          brandingWithRepeat(
+            brandingWithSequence(
+              brandingWithTiming(LOGO_BREATHE_MAX, { duration: SPLASH_LOGO_BREATHE_MS, easing: easeInOut }),
+              brandingWithTiming(LOGO_BREATHE_MIN, { duration: SPLASH_LOGO_BREATHE_MS, easing: easeInOut })
             ),
             -1,
             false
           )
         )
       );
-      logoTranslateY.value = withDelay(
+      logoTranslateY.value = brandingWithDelay(
         LOGO_ENTRY_DELAY_MS,
-        withTiming(0, { duration: LOGO_ENTRY_MS, easing: easeOut })
+        brandingWithTiming(0, { duration: LOGO_ENTRY_MS, easing: easeOut })
       );
 
-      titleOpacity.value = withDelay(
+      titleOpacity.value = brandingWithDelay(
         TITLE_START_MS,
-        withTiming(1, { duration: TITLE_ANIM_MS, easing: easeOut })
+        brandingWithTiming(1, { duration: TITLE_ANIM_MS, easing: easeOut })
       );
-      titleTranslateY.value = withDelay(
+      titleTranslateY.value = brandingWithDelay(
         TITLE_START_MS,
-        withTiming(0, { duration: TITLE_ANIM_MS, easing: easeOut })
+        brandingWithTiming(0, { duration: TITLE_ANIM_MS, easing: easeOut })
       );
-      subtitleOpacity.value = withDelay(
+      subtitleOpacity.value = brandingWithDelay(
         SUBTITLE_START_MS,
-        withTiming(1, { duration: SUBTITLE_ANIM_MS, easing: easeOut })
+        brandingWithTiming(1, { duration: SUBTITLE_ANIM_MS, easing: easeOut })
       );
 
-      bloomOpacity.value = withDelay(
+      bloomOpacity.value = brandingWithDelay(
         BLOOM_START_MS,
-        withSequence(
-          withTiming(0.42, { duration: BLOOM_ANIM_MS * 0.5, easing: easeOut }),
-          withTiming(0.2, { duration: BLOOM_ANIM_MS * 0.5, easing: easeInOut })
+        brandingWithSequence(
+          brandingWithTiming(0.42, { duration: BLOOM_ANIM_MS * 0.5, easing: easeOut }),
+          brandingWithTiming(0.2, { duration: BLOOM_ANIM_MS * 0.5, easing: easeInOut })
         )
       );
-      bloomScale.value = withDelay(
+      bloomScale.value = brandingWithDelay(
         BLOOM_START_MS,
-        withTiming(1.08, { duration: BLOOM_ANIM_MS, easing: easeOut })
+        brandingWithTiming(1.08, { duration: BLOOM_ANIM_MS, easing: easeOut })
       );
     }
 

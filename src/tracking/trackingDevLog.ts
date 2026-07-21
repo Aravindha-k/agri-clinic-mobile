@@ -26,6 +26,7 @@ type TrackingLogEvent =
   | "tracking_deferred_auth_not_ready"
   | "tracking_deferred_permission_missing"
   | "tracking_stopped_permission_revoked"
+  | "duty_start_gps_confirm"
   | "resumed_after_auth";
 
 /**

@@ -9,7 +9,7 @@ import { getFieldPendingCounts } from "../../mobile/lib/sync/pendingCounts";
 import { refreshSyncStoreCounts } from "../../mobile/lib/sync/offlineSyncManager";
 import { useDuty } from "../features/duty/store/DutyContext";
 import { useDutyTimer } from "../features/duty/hooks/useDutyTimer";
-import { handleForcedLocationUpdate, handleLocationUpdate } from "../tracking/locationSyncService";
+import { handleLocationUpdate } from "../tracking/locationSyncService";
 import { startBackgroundLocationTracking, stopBackgroundLocationTracking } from "../tracking/backgroundLocationService";
 import {
   getForegroundPollIntervalMs,
@@ -266,7 +266,8 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       if (firstFix) {
         setCurrentLocation(normalizeLocation(firstFix));
         setTrackingMotionState(isLocationMoving(firstFix.coords.speed ?? null));
-        await handleForcedLocationUpdate(firstFix).catch(() => undefined);
+        // Non-force: Start Work Day already pushed a confirmation point; skip duplicate.
+        await handleLocationUpdate(firstFix).catch(() => undefined);
       }
 
       const backgroundResult = await startBackgroundLocationTracking().catch(() => ({

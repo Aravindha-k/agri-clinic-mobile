@@ -738,6 +738,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         await logoutRequest();
       } finally {
+        clearLocalFieldQueuesOnSessionReplace();
         await clearBiometricLogin().catch(() => undefined);
         await performLocalSignOut({ reason: "explicit_logout" });
         resetStartupCoordinator();

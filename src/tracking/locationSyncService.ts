@@ -23,7 +23,11 @@ import { isDutySessionMismatchMessage, isWorkdayInactiveMessage } from "../utils
 import { shouldSendLocation, type RoutePoint } from "./shouldSendLocation";
 import { trackingDevLog } from "./trackingDevLog";
 import { getBatteryPercent } from "../../mobile/lib/gps/trackingService";
-import { isDutyTrackingSessionActive, restoreDutySessionFromStorage } from "./trackingSession";
+import {
+  isDutyTrackingSessionActive,
+  markDutyTrackingSessionActive,
+  restoreDutySessionFromStorage
+} from "./trackingSession";
 import { notifyRouteSynced } from "../utils/routeSyncBus";
 import { refreshSyncStoreCounts } from "../../mobile/lib/sync/offlineSyncManager";
 import { applyGpsBulkAcknowledgement } from "../../mobile/lib/sync/gpsBulkAck";
@@ -75,15 +79,21 @@ function payloadToRoutePoint(payload: LocationPushPayload): RoutePoint {
 
 async function buildPayload(
   location: Location.LocationObject,
-  options?: { gpsEnabledHint?: boolean }
+  options?: {
+    gpsEnabledHint?: boolean;
+    workdayId?: number | null;
+    dutySessionId?: number | null;
+  }
 ): Promise<LocationPushPayload> {
   const { getGpsStateReport } = await import("../utils/gpsStateReport");
-  const [workdayId, dutySessionId, batteryLevel, gpsState] = await Promise.all([
+  const [storedWorkdayId, storedDutySessionId, batteryLevel, gpsState] = await Promise.all([
     getActiveWorkdayId(),
     getActiveDutySessionId(),
     getBatteryPercent(),
     getGpsStateReport(options)
   ]);
+  const workdayId = options?.workdayId ?? storedWorkdayId;
+  const dutySessionId = options?.dutySessionId ?? storedDutySessionId;
   const clientPointId = generateLocalPointId();
   return {
     ...toTrackingPayload(
@@ -263,7 +273,11 @@ export async function flushOfflineLocationQueue(): Promise<number> {
  */
 export async function handleLocationUpdate(
   location: Location.LocationObject,
-  options?: { force?: boolean }
+  options?: {
+    force?: boolean;
+    workdayId?: number | null;
+    dutySessionId?: number | null;
+  }
 ): Promise<LocationHandleResult> {
   const dutyActive =
     options?.force || isDutyTrackingSessionActive() || (await restoreDutySessionFromStorage());
@@ -295,7 +309,10 @@ export async function handleLocationUpdate(
     }
 
     try {
-      const payload = await buildPayload(location);
+      const payload = await buildPayload(location, {
+        workdayId: options?.workdayId,
+        dutySessionId: options?.dutySessionId
+      });
       await syncLocationPoint(payload);
       return "sent";
     } catch {
@@ -310,6 +327,33 @@ export async function handleForcedLocationUpdate(
   location: Location.LocationObject
 ): Promise<LocationHandleResult> {
   return handleLocationUpdate(location, { force: true });
+}
+
+/**
+ * Immediate Start Work Day GPS confirmation via canonical location/update.
+ * Links the point to the returned DutySession; queues only this GPS update if offline.
+ * Never retries duty/start.
+ */
+export async function confirmDutyStartLocation(
+  location: Location.LocationObject,
+  session: {
+    duty_session_id?: number | null;
+    workday_id?: number | null;
+    id?: number | null;
+  }
+): Promise<LocationHandleResult> {
+  markDutyTrackingSessionActive(true);
+  const workdayId = session.workday_id ?? session.id ?? null;
+  const dutySessionId = session.duty_session_id ?? workdayId;
+  trackingDevLog(
+    "duty_start_gps_confirm",
+    `duty=${dutySessionId ?? "?"} workday=${workdayId ?? "?"}`
+  );
+  return handleLocationUpdate(location, {
+    force: true,
+    workdayId,
+    dutySessionId
+  });
 }
 
 /** Process GPS batch from native background task — must await so data persists before OS suspends JS. */

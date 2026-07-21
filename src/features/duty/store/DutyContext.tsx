@@ -19,6 +19,7 @@ import {
 } from "../../../storage/workdaySessionStorage";
 import { useAuth, useAuthSessionReady } from "../../../storage/AuthContext";
 import { flushTrackingGpsQueue, startTrackingBridge, stopTrackingBridge } from "../../../storage/TrackingContext";
+import { confirmDutyStartLocation } from "../../../tracking/locationSyncService";
 import { subscribeAuthPhase, canSendAuthenticatedRequests } from "../../../storage/authPhase";
 import { fetchDutyMap, invalidateDutyMapCache } from "../api/dutyMapApi";
 import { fetchMobileBootstrap, invalidateMobileBootstrapCache } from "../api/mobileBootstrapApi";
@@ -538,6 +539,9 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
           });
           if (started) {
             await applyDutyState(started, { hydrationStatus: "ready", syncStatus: "confirmed" });
+            // Immediate confirmation via location/update — do not wait for poll interval.
+            // Queues GPS only if offline; never retries duty/start.
+            await confirmDutyStartLocation(locationResult.location, started).catch(() => undefined);
             await startTrackingBridge().catch(() => undefined);
             await refreshDutyMap({ force: true }).catch(() => undefined);
             return started;

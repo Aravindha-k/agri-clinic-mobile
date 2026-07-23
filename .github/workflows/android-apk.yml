@@ -174,7 +174,7 @@ jobs:
       - name: Print APK build metadata (safe)
         run: |
           echo "versionName=1.0.1"
-          echo "versionCode=9"
+          echo "versionCode=10"
           echo "package=com.kavya.agriclinic"
           echo "gitCommit=${GITHUB_SHA::7}"
           echo "workflowRun=${GITHUB_RUN_NUMBER}"

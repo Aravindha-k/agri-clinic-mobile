@@ -294,7 +294,11 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
         setConnectivityOnline(false);
         const cached = await readCachedDutyState(userId);
         if (cached) {
-          setState(toOfflineDutySnapshot(cached));
+          const snapshot = toOfflineDutySnapshot(cached);
+          setState(snapshot);
+          if (snapshot.currentDuty?.is_active) {
+            await startTrackingBridge().catch(() => undefined);
+          }
           return;
         }
       }

@@ -148,7 +148,14 @@ export async function autoFlushPendingGps(): Promise<{ synced: number }> {
     refreshSyncStoreCounts();
     return { synced: 0 };
   }
-  return flushGPSQueue();
+  const gps = await flushGPSQueue();
+  try {
+    const { flushHeartbeatQueue } = await import("../../../src/tracking/heartbeatService");
+    await flushHeartbeatQueue();
+  } catch {
+    /* best-effort */
+  }
+  return gps;
 }
 
 async function migrateLegacyQueues() {

@@ -2,12 +2,10 @@ import * as Location from "expo-location";
 import { BRAND } from "../config/brand";
 import { BACKGROUND_LOCATION_TASK } from "./registerBackgroundLocationTask";
 import {
-  getBackgroundDistanceIntervalMeters,
   getBackgroundTimeIntervalMs
 } from "./trackingConfig";
 import {
   canStartBackgroundWatcher,
-  getBackgroundTrackingAccuracy,
   isDutyTrackingSessionActive,
   markBackgroundWatcherRunning,
   restoreDutySessionFromStorage
@@ -16,10 +14,18 @@ import { trackingDevLog } from "./trackingDevLog";
 import { isExpoGo } from "../utils/expoRuntime";
 
 export const EXPO_GO_TRACKING_MESSAGE =
-  "Expo Go only tracks GPS while this app is open. Install the dev build (npm run android) or field APK for full background route recording.";
+  "Expo Go only tracks GPS while this app is open. Install the field APK for background tracking during your workday.";
 
 export const BACKGROUND_PERMISSION_MESSAGE =
-  "Allow location all the time for route tracking.";
+  "Allow location all the time so field tracking can continue when the app is minimized.";
+
+/** Persistent FGS notification — no coordinates. */
+export const FIELD_TRACKING_NOTIFICATION_TITLE = `${BRAND.appName} — Field tracking active`;
+export const FIELD_TRACKING_NOTIFICATION_BODY =
+  "Your location is being updated during your workday.";
+
+export const FIELD_TRACKING_NOTIFICATION_GPS_OFF_BODY =
+  "Phone location is off. Turn GPS on so the office can see your latest field location.";
 
 export async function isBackgroundLocationTrackingActive(): Promise<boolean> {
   try {
@@ -36,7 +42,14 @@ export type StartBackgroundTrackingResult = {
   message?: string;
 };
 
-export async function startBackgroundLocationTracking(): Promise<StartBackgroundTrackingResult> {
+export type StartBackgroundTrackingOptions = {
+  /** When GPS services are off, surface that in the persistent notification. */
+  gpsEnabled?: boolean;
+};
+
+export async function startBackgroundLocationTracking(
+  options?: StartBackgroundTrackingOptions
+): Promise<StartBackgroundTrackingResult> {
   const dutyActive =
     isDutyTrackingSessionActive() || (await restoreDutySessionFromStorage());
   if (!dutyActive) {
@@ -61,15 +74,23 @@ export async function startBackgroundLocationTracking(): Promise<StartBackground
       return { ok: true, alreadyRunning: true };
     }
 
+    const gpsEnabled = options?.gpsEnabled !== false;
     await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
-      accuracy: getBackgroundTrackingAccuracy(),
-      distanceInterval: getBackgroundDistanceIntervalMeters(),
+      // Balanced accuracy reduces battery while supporting ~5 min field updates.
+      accuracy: Location.Accuracy.Balanced,
+      // distanceInterval 0 → time-based wakes even when stationary (heartbeat path).
+      // Movement filtering for route points remains in shouldSendLocation.
+      distanceInterval: 0,
       timeInterval: getBackgroundTimeIntervalMs(),
+      deferredUpdatesInterval: 0,
       pausesUpdatesAutomatically: false,
       showsBackgroundLocationIndicator: true,
       foregroundService: {
-        notificationTitle: `${BRAND.appName} tracking`,
-        notificationBody: "Your workday route is being recorded",
+        notificationTitle: FIELD_TRACKING_NOTIFICATION_TITLE,
+        notificationBody: gpsEnabled
+          ? FIELD_TRACKING_NOTIFICATION_BODY
+          : FIELD_TRACKING_NOTIFICATION_GPS_OFF_BODY,
+        notificationColor: "#0F6B43",
         killServiceOnDestroy: false
       }
     });

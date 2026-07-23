@@ -19,9 +19,17 @@ export function generateLocalPhotoId(): string {
   return `ph-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+export function generateLocalHeartbeatId(): string {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return `hb-${globalThis.crypto.randomUUID()}`;
+  }
+  return `hb-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function generateLocalOperationId(): string {
   if (typeof globalThis.crypto?.randomUUID === "function") {
     return `wd-${globalThis.crypto.randomUUID()}`;
   }
   return `wd-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
+

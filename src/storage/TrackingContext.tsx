@@ -243,17 +243,14 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       setPermissionDenied(permission?.status === "denied");
       setGpsEnabled(Boolean(servicesEnabled));
 
-      if (!granted || !servicesEnabled) {
-        trackingDevLog(
-          "tracking_deferred_permission_missing",
-          !servicesEnabled ? "services_disabled" : "foreground_missing"
-        );
-        setError(
-          !servicesEnabled
-            ? "Phone location is turned off."
-            : "Location access is needed for workday tracking."
-        );
-        // Do not start native tracking or pretend the session is active.
+      if (!granted) {
+        trackingDevLog("tracking_deferred_permission_missing", "foreground_missing");
+        setError("Location access is needed for workday tracking.");
+        // Duty stays Working; report Offline-capable heartbeat so Admin sees permission revoked.
+        markDutyTrackingSessionActive(true);
+        startGpsTrackingService({ isGpsEnabled: () => false });
+        const { emitTrackingHeartbeat } = await import("../tracking/heartbeatService");
+        await emitTrackingHeartbeat({ gpsEnabledHint: false }).catch(() => undefined);
         return;
       }
 
@@ -262,15 +259,35 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       setForegroundTrackingActive(true);
       clearPollTimer();
 
+      if (!servicesEnabled) {
+        trackingDevLog("tracking_deferred_permission_missing", "services_disabled");
+        setError("Phone location is turned off.");
+        const backgroundResult = await startBackgroundLocationTracking({ gpsEnabled: false }).catch(
+          () => ({ ok: false, alreadyRunning: false, expoGoLimited: false })
+        );
+        setBackgroundTrackingActive(Boolean(backgroundResult.ok || backgroundResult.alreadyRunning));
+        const { emitTrackingHeartbeat } = await import("../tracking/heartbeatService");
+        await emitTrackingHeartbeat({ gpsEnabledHint: false }).catch(() => undefined);
+        return;
+      }
+
       const firstFix = await readCurrentFix();
       if (firstFix) {
         setCurrentLocation(normalizeLocation(firstFix));
         setTrackingMotionState(isLocationMoving(firstFix.coords.speed ?? null));
-        // Non-force: Start Work Day already pushed a confirmation point; skip duplicate.
-        await handleLocationUpdate(firstFix).catch(() => undefined);
+        // Force after long gap / process restart so recovery is not discarded as jitter.
+        // Same-session Start Work Day confirmation already uploaded — skip duplicate when fresh.
+        const { getLastSentRoutePoint } = await import("../storage/lastSentRouteStorage");
+        const previous = await getLastSentRoutePoint().catch(() => null);
+        const staleMs = 5 * 60 * 1000;
+        const forceRecovery =
+          !previous || Date.now() - previous.timestamp > staleMs;
+        await handleLocationUpdate(firstFix, { force: forceRecovery }).catch(() => undefined);
       }
 
-      const backgroundResult = await startBackgroundLocationTracking().catch(() => ({
+      const backgroundResult = await startBackgroundLocationTracking({
+        gpsEnabled: true
+      }).catch(() => ({
         ok: false,
         alreadyRunning: false,
         expoGoLimited: false
@@ -344,6 +361,8 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
                 setPermissionDenied(true);
                 await stopBackgroundLocationTracking().catch(() => undefined);
                 setBackgroundTrackingActive(false);
+                const { emitTrackingHeartbeat } = await import("../tracking/heartbeatService");
+                await emitTrackingHeartbeat({ gpsEnabledHint: false }).catch(() => undefined);
                 syncPendingGpsCount();
                 await refreshTrackingState();
                 return;
@@ -353,7 +372,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
               const fix = await readCurrentFix();
               if (fix) {
                 setCurrentLocation(normalizeLocation(fix));
-                await handleLocationUpdate(fix).catch(() => undefined);
+                await handleLocationUpdate(fix, { force: true }).catch(() => undefined);
               }
               const result = await startBackgroundLocationTracking().catch(() => ({
                 ok: false,
@@ -361,8 +380,13 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
                 expoGoLimited: false
               }));
               setBackgroundTrackingActive(Boolean(result.ok || result.alreadyRunning));
-              // Single-flight queue flush (shared mutex with locationSyncService).
+              // Single-flight queue flush (GPS + heartbeat).
               await flushGpsQueue();
+              const { flushHeartbeatQueue, emitTrackingHeartbeat } = await import(
+                "../tracking/heartbeatService"
+              );
+              await flushHeartbeatQueue().catch(() => 0);
+              await emitTrackingHeartbeat().catch(() => undefined);
             }
             await refreshTrackingState();
           } catch {

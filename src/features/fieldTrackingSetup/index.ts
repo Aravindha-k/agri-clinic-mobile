@@ -80,6 +80,11 @@ export {
   type StartWorkDayGateOutcome
 } from "./locationReadinessGate";
 export {
+  ensureBackgroundLocationForWorkday,
+  WORKDAY_LOCATION_DISCLOSURE,
+  type BackgroundLocationPermissionResult
+} from "./ensureBackgroundLocation";
+export {
   recoveryCopyForState,
   logLocationPermission,
   type LocationRecoveryCopy,

@@ -73,7 +73,8 @@ export function removeKey(key: string) {
 
 export const SYNC_STORAGE_KEYS = {
   pendingVisits: "pending_visits_v1",
-  pendingGps: "pending_gps_v1"
+  pendingGps: "pending_gps_v1",
+  pendingHeartbeats: "pending_heartbeats_v1"
 } as const;
 
 export const StorageKeys = {
@@ -96,6 +97,7 @@ export function touchCacheTimestamp(key: string, at = new Date()) {
 const MANAGED_KEYS = [
   SYNC_STORAGE_KEYS.pendingVisits,
   SYNC_STORAGE_KEYS.pendingGps,
+  SYNC_STORAGE_KEYS.pendingHeartbeats,
   "last_gps_sync_v1",
   "farmers_cache_v1",
   "form_options_v1",

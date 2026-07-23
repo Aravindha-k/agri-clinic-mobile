@@ -298,10 +298,12 @@ export async function requestForegroundLocation() {
   return result;
 }
 
-/** No-op — background location is not requested in the current product. */
+/** Workday-scoped — requests background location after disclosure (not at app launch). */
 export async function requestBackgroundLocation() {
-  logLocationPermission("request_started", { kind: "background_skipped" });
-  return runBackgroundLocationStep();
+  logLocationPermission("request_started", { kind: "background" });
+  const result = await runBackgroundLocationStep();
+  if (!result.ok) logLocationPermission("request_denied", { kind: "background" });
+  return result;
 }
 
 export { ensureForegroundLocationPermission };

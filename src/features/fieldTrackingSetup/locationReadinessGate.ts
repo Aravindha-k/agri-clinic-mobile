@@ -206,6 +206,11 @@ export async function ensureLocationReadyForAction(
         }
       }
 
+      // Background ("all the time") + tracking notification — only at workday start,
+      // after clear disclosure. Declining BG still allows start; FGS uses FG permission.
+      const { ensureBackgroundLocationForWorkday } = await import("./ensureBackgroundLocation");
+      await ensureBackgroundLocationForWorkday().catch(() => undefined);
+
       emitPhase(onPhase, "idle");
       return result("ready", "", {
         permission: { ...permission, granted: true },

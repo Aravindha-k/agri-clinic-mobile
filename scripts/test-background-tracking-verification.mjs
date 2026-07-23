@@ -66,7 +66,13 @@ must(
 // FGS notification present
 must(
   "src/tracking/backgroundLocationService.ts",
-  ["foregroundService", "killServiceOnDestroy: false", "pausesUpdatesAutomatically: false"],
+  [
+    "foregroundService",
+    "killServiceOnDestroy: false",
+    "pausesUpdatesAutomatically: false",
+    "Field tracking active",
+    "Your location is being updated during your workday"
+  ],
   "native FGS"
 );
 

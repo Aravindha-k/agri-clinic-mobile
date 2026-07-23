@@ -71,7 +71,13 @@ must(
 mustNot(
   gate,
   ["requestBackgroundPermissionsAsync", "ACCESS_BACKGROUND_LOCATION"],
-  "foreground location only"
+  "gate delegates background request (no inline OS call)"
+);
+
+must(
+  gate,
+  ["ensureBackgroundLocationForWorkday"],
+  "Start Work Day discloses + requests background via helper"
 );
 
 // 3. Settings never open automatically inside the readiness sequence
@@ -155,13 +161,22 @@ assert.ok(
   "only ensureForegroundLocation may call requestForegroundPermissionsAsync"
 );
 
-// 8. No background permission request anywhere in app sources
-for (const file of repoFiles) {
+// 8. Background permission OS request lives only in ensureBackgroundLocation
+const bgOwners = repoFiles.filter((file) => {
   const src = fs.readFileSync(file, "utf8");
-  if (src.includes("requestBackgroundPermissionsAsync")) {
-    assert.fail(`unexpected requestBackgroundPermissionsAsync in ${path.relative(root, file)}`);
-  }
-}
+  return src.includes("requestBackgroundPermissionsAsync");
+});
+assert.equal(
+  bgOwners.length,
+  1,
+  `requestBackgroundPermissionsAsync must live in exactly one TS file, found:\n${bgOwners
+    .map((f) => path.relative(root, f))
+    .join("\n")}`
+);
+assert.ok(
+  bgOwners[0].endsWith(`${path.sep}ensureBackgroundLocation.ts`),
+  "only ensureBackgroundLocation may call requestBackgroundPermissionsAsync"
+);
 
 // 9. BottomNav / Visit FAB use one-tap gate
 must("src/components/ui/BottomNav.tsx", ["startWorkDayWithLocationGate"], "BottomNav gate");

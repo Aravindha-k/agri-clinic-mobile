@@ -6,12 +6,25 @@ export const ROUTE_MAX_ACCURACY_METERS = 100;
 export const ROUTE_MOVING_SPEED_MPS = 0.8;
 export const ROUTE_STATIONARY_SPEED_MPS = 0.5;
 
-/** Target 15–30 s while moving. */
-export const ROUTE_MOVING_INTERVAL_MS = 22_500;
+/**
+ * Admin Online/Stale/Offline contract (heartbeat-based):
+ * Online ≤ 7 min, Stale ≤ 15 min, Offline > 15 min.
+ * Mobile targets one heartbeat ≈ every 5 minutes while duty is active.
+ */
+export const TRACKING_HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
 
-/** Target 60–120 s while stopped. */
+/** Native FGS wake interval — ~5 min so lock-screen / minimize keep admin Online. */
+export const BACKGROUND_LOCATION_TIME_INTERVAL_MS = TRACKING_HEARTBEAT_INTERVAL_MS;
+
+/** Foreground poll while the app is open (UI freshness; not the admin heartbeat). */
+export const ROUTE_MOVING_INTERVAL_MS = 22_500;
 export const ROUTE_STOPPED_INTERVAL_MS = 90_000;
-export const ROUTE_STOPPED_KEEPALIVE_MS = 120_000;
+
+/**
+ * @deprecated Stationary keepalive must use tracking/heartbeat/, not duplicate location points.
+ * Kept for callers that still reference the constant.
+ */
+export const ROUTE_STOPPED_KEEPALIVE_MS = TRACKING_HEARTBEAT_INTERVAL_MS;
 
 export const BATTERY_SAVER_INTERVAL_MULTIPLIER = 1.5;
 export const GPS_QUEUE_MAX_POINTS = 200;
@@ -35,13 +48,20 @@ function withBatterySaver(ms: number) {
 }
 
 export function getBackgroundTimeIntervalMs() {
-  return withBatterySaver(ROUTE_MOVING_INTERVAL_MS);
+  // Cap at 5 min — battery saver must not push past Admin Online (≤7 min) window.
+  return BACKGROUND_LOCATION_TIME_INTERVAL_MS;
 }
 
 export function getBackgroundDistanceIntervalMeters() {
-  return ROUTE_MIN_MOVE_METERS;
+  // FGS uses distanceInterval: 0 for time wakes; this remains for documentation/tests.
+  return 0;
 }
 
 export function getForegroundPollIntervalMs(isMoving: boolean) {
   return withBatterySaver(isMoving ? ROUTE_MOVING_INTERVAL_MS : ROUTE_STOPPED_INTERVAL_MS);
+}
+
+export function getTrackingHeartbeatIntervalMs() {
+  // Never stretch heartbeat past 5 min (Admin Online SLA).
+  return TRACKING_HEARTBEAT_INTERVAL_MS;
 }

@@ -57,11 +57,12 @@ export function isTrackingMotionMoving() {
   return lastKnownMoving;
 }
 
-/** High accuracy while moving; balanced when stopped to save battery. */
+/** High accuracy while moving in foreground; balanced otherwise to save battery. */
 export function getForegroundTrackingAccuracy() {
   return lastKnownMoving ? Location.Accuracy.High : Location.Accuracy.Balanced;
 }
 
+/** Background FGS always uses balanced accuracy (~5 min field updates). */
 export function getBackgroundTrackingAccuracy() {
-  return lastKnownMoving ? Location.Accuracy.High : Location.Accuracy.Balanced;
+  return Location.Accuracy.Balanced;
 }

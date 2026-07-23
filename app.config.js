@@ -107,11 +107,14 @@ module.exports = () => ({
     /** Resize window with IME so visit/login forms stay reachable above the keyboard. */
     softwareKeyboardLayoutMode: "resize",
     minSdkVersion: 26,
-    versionCode: 8,
+    versionCode: 9,
     usesCleartextTraffic: allowCleartext,
     permissions: [
       "ACCESS_COARSE_LOCATION",
       "ACCESS_FINE_LOCATION",
+      "ACCESS_BACKGROUND_LOCATION",
+      "FOREGROUND_SERVICE",
+      "FOREGROUND_SERVICE_LOCATION",
       "ACCESS_NETWORK_STATE",
       "CAMERA",
       "RECORD_AUDIO",
@@ -157,8 +160,10 @@ module.exports = () => ({
       "expo-location",
       {
         locationWhenInUsePermission: `Allow ${brand.appName} to use your location while you are working in the field.`,
-        isAndroidBackgroundLocationEnabled: false,
-        isAndroidForegroundServiceEnabled: false
+        locationAlwaysAndWhenInUsePermission:
+          "Location is used during your active workday so the office can view your latest field location.",
+        isAndroidBackgroundLocationEnabled: true,
+        isAndroidForegroundServiceEnabled: true
       }
     ],
     [

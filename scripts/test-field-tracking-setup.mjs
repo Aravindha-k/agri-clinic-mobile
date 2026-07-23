@@ -1,5 +1,5 @@
 /**
- * Field Tracking setup — foreground location only (no background / App Info redirects).
+ * Field Tracking setup — foreground at setup; background only at Start Work Day.
  */
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -49,15 +49,20 @@ mustNot(
 );
 
 must(
-  "src/features/fieldTrackingSetup/actions.ts",
-  ["enableLocationForFieldWork", "skipped_foreground_only", "openedSettings: false"],
-  "actions use enable flow; background is no-op"
+  "src/features/fieldTrackingSetup/ensureBackgroundLocation.ts",
+  [
+    "ensureBackgroundLocationForWorkday",
+    "requestBackgroundPermissionsAsync",
+    "WORKDAY_LOCATION_DISCLOSURE",
+    "Location is used during your active workday so the office can view your latest field location."
+  ],
+  "workday-scoped background permission with disclosure"
 );
 
-mustNot(
+must(
   "src/features/fieldTrackingSetup/actions.ts",
-  ["requestBackgroundPermissionsAsync", "Allow all the time"],
-  "no runtime background permission request"
+  ["enableLocationForFieldWork", "ensureBackgroundLocationForWorkday", "openedSettings: false"],
+  "actions use enable flow; background via workday helper"
 );
 
 must(
@@ -69,7 +74,7 @@ must(
 mustNot(
   "src/features/fieldTrackingSetup/probe.ts",
   ['missing.push("background")', 'missing.push("notifications")'],
-  "background/notifications not critical"
+  "background/notifications not critical for setup screen"
 );
 
 must(
@@ -95,7 +100,7 @@ mustNot(
     "runBackgroundLocationStep",
     "Allow all the time"
   ],
-  "no multi-step background/battery flow"
+  "no multi-step background/battery flow on setup screen"
 );
 
 must(
@@ -107,7 +112,7 @@ must(
     "requestForegroundLocation",
     "readyForWorkday = servicesEnabled && probe.foregroundGranted && probe.preciseOk"
   ],
-  "workday readiness is foreground-only"
+  "workday readiness still requires foreground + precise"
 );
 
 must(
@@ -119,52 +124,50 @@ must(
   "permanently denied copy + explicit settings action"
 );
 
-// Expo / Android config — no background location
-mustNot(
-  "app.config.js",
-  ["ACCESS_BACKGROUND_LOCATION", "isAndroidBackgroundLocationEnabled: true", "FOREGROUND_SERVICE_LOCATION"],
-  "release config drops background location"
-);
-
+// Expo / Android config — FGS + background for active workday tracking
 must(
   "app.config.js",
-  ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "isAndroidBackgroundLocationEnabled: false"],
-  "foreground location declared"
-);
-
-mustNot(
-  "android/app/src/main/AndroidManifest.xml",
-  ["ACCESS_BACKGROUND_LOCATION", "FOREGROUND_SERVICE_LOCATION"],
-  "manifest drops background location"
+  [
+    "ACCESS_FINE_LOCATION",
+    "ACCESS_COARSE_LOCATION",
+    "ACCESS_BACKGROUND_LOCATION",
+    "FOREGROUND_SERVICE_LOCATION",
+    "isAndroidBackgroundLocationEnabled: true",
+    "isAndroidForegroundServiceEnabled: true"
+  ],
+  "release config enables FGS + background location"
 );
 
 must(
   "android/app/src/main/AndroidManifest.xml",
-  ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"],
-  "manifest keeps fine/coarse"
+  [
+    "ACCESS_FINE_LOCATION",
+    "ACCESS_COARSE_LOCATION",
+    "ACCESS_BACKGROUND_LOCATION",
+    "FOREGROUND_SERVICE_LOCATION"
+  ],
+  "manifest declares FGS + background location"
 );
 
-// Repo-wide: no runtime background permission request
+// requestBackgroundPermissionsAsync only in ensureBackgroundLocation (+ tests)
+const allowedBg = new Set([
+  path.join(root, "src", "features", "fieldTrackingSetup", "ensureBackgroundLocation.ts")
+]);
 const repoTs = [];
 function walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.name === "node_modules" || entry.name === ".git" || entry.name === "android") continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) walk(full);
-    else if (/\.(ts|tsx|js|mjs)$/.test(entry.name)) repoTs.push(full);
+    else if (/\.(ts|tsx|js)$/.test(entry.name)) repoTs.push(full);
   }
 }
 walk(path.join(root, "src"));
 walk(path.join(root, "mobile"));
-walk(path.join(root, "scripts"));
 
 for (const file of repoTs) {
   const src = fs.readFileSync(file, "utf8");
-  if (src.includes("requestBackgroundPermissionsAsync")) {
-    // Allow only documentation / mustNot strings in tests that assert absence.
-    if (file.includes("test-field-tracking-setup") || file.includes("test-map-permission") || file.includes("test-foreground-location") || file.includes("test-location-readiness-gate") || file.includes("test-tracking-health-gate") || file.includes("test-employee-day-map")) {
-      continue;
-    }
+  if (src.includes("requestBackgroundPermissionsAsync") && !allowedBg.has(file)) {
     assert.fail(`unexpected requestBackgroundPermissionsAsync in ${path.relative(root, file)}`);
   }
 }
@@ -201,5 +204,11 @@ mustNot(
   "no splash permission spam"
 );
 
-console.log("Field tracking foreground-only setup checks passed.");
+must(
+  "src/features/fieldTrackingSetup/locationReadinessGate.ts",
+  ["ensureBackgroundLocationForWorkday"],
+  "Start Work Day gate requests background after disclosure"
+);
+
+console.log("Field tracking setup + workday FGS permission checks passed.");
 process.exit(0);

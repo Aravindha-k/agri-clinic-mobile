@@ -258,18 +258,13 @@ export function endWorkday() {
   return endDutySession();
 }
 
-export async function sendTrackingHeartbeat(options?: { gpsEnabledHint?: boolean }) {
-  const { assertTrackingAuthReady } = await import("../tracking/trackingAuthGate");
-  const gate = await assertTrackingAuthReady("sendTrackingHeartbeat");
-  if (!gate.ready) {
-    return null;
-  }
-  const { getGpsStateReport } = await import("../utils/gpsStateReport");
-  const report = await getGpsStateReport(options);
-  return apiClient("tracking/heartbeat/", {
-    method: "POST",
-    body: JSON.stringify(report)
-  });
+export async function sendTrackingHeartbeat(options?: {
+  gpsEnabledHint?: boolean;
+  accuracy?: number | null;
+}) {
+  const { emitTrackingHeartbeat } = await import("../tracking/heartbeatService");
+  const result = await emitTrackingHeartbeat(options);
+  return result === "sent" ? { ok: true } : null;
 }
 
 /** @deprecated Prefer sendTrackingHeartbeat — still accepts boolean hint for callers. */

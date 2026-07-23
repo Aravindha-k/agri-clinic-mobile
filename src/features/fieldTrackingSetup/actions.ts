@@ -64,12 +64,26 @@ export async function runForegroundLocationStep(): Promise<StepActionResult> {
 }
 
 /**
- * Background location is not part of the product flow.
- * Kept as a no-op so older callers never request ACCESS_BACKGROUND_LOCATION.
+ * Background location for active workdays (FGS + lock-screen tracking).
+ * Prefer ensureBackgroundLocationForWorkday from the Start Work Day gate.
+ * Setup screen does not auto-request this at launch.
  */
 export async function runBackgroundLocationStep(): Promise<StepActionResult> {
-  trackingDevLog("background_permission", "skipped_foreground_only");
-  return { ok: true, message: "Foreground location is enough for field tracking." };
+  const { ensureBackgroundLocationForWorkday, WORKDAY_LOCATION_DISCLOSURE } = await import(
+    "./ensureBackgroundLocation"
+  );
+  const result = await ensureBackgroundLocationForWorkday();
+  trackingDevLog(
+    "background_permission",
+    result.granted ? "granted_via_setup_step" : result.status
+  );
+  return {
+    ok: result.granted,
+    openedSettings: false,
+    message: result.granted
+      ? "Background location allowed for workday tracking."
+      : WORKDAY_LOCATION_DISCLOSURE
+  };
 }
 
 /** Precise guidance — never auto-opens Settings. */

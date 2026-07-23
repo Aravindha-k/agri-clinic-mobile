@@ -3,7 +3,6 @@ import * as SecureStore from "expo-secure-store";
 import type { LocationPushPayload } from "../../../src/api/tracking";
 import {
   pushLocationsBulk,
-  sendTrackingHeartbeat as postTrackingHeartbeat,
   syncLocationQueue
 } from "../../../src/api/tracking";
 import {
@@ -21,7 +20,7 @@ import { getActiveSyncUserId } from "../sync/queueOwnership";
 import { refreshSyncStoreCounts } from "../sync/offlineSyncManager";
 import { payloadToPendingPoint, pendingPointToPayload } from "../../../src/storage/locationPushQueue";
 import { storage } from "../storage";
-import { GPS_QUEUE_MAX_POINTS } from "../../../src/tracking/trackingConfig";
+import { GPS_QUEUE_MAX_POINTS, getTrackingHeartbeatIntervalMs } from "../../../src/tracking/trackingConfig";
 
 const LEGACY_QUEUE_KEY = "agri_pending_location_push_v2";
 
@@ -118,7 +117,8 @@ export function getLastBufferedPointTime(): string | null {
 
 export async function sendTrackingHeartbeat() {
   const gpsEnabled = gpsEnabledProbe?.() ?? true;
-  await postTrackingHeartbeat({ gpsEnabledHint: gpsEnabled });
+  const { emitTrackingHeartbeat } = await import("../../../src/tracking/heartbeatService");
+  await emitTrackingHeartbeat({ gpsEnabledHint: gpsEnabled });
 }
 
 export function startGpsTrackingService(options?: { isGpsEnabled?: () => boolean }) {
@@ -128,14 +128,17 @@ export function startGpsTrackingService(options?: { isGpsEnabled?: () => boolean
 
   void migrateLegacyGpsQueueIfNeeded();
   void flushGpsBuffer().catch(() => undefined);
+  // Immediate heartbeat so Admin flips Online without waiting for the first interval.
+  void sendTrackingHeartbeat().catch(() => undefined);
 
   flushTimer = setInterval(() => {
     void flushGpsBuffer().catch(() => undefined);
   }, GPS_FLUSH_INTERVAL_MS);
 
+  const heartbeatMs = getTrackingHeartbeatIntervalMs();
   heartbeatTimer = setInterval(() => {
     void sendTrackingHeartbeat().catch(() => undefined);
-  }, GPS_HEARTBEAT_INTERVAL_MS);
+  }, heartbeatMs);
 }
 
 export function stopGpsTrackingService() {

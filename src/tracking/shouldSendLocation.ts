@@ -4,7 +4,6 @@ import {
   ROUTE_MOVING_INTERVAL_MS,
   ROUTE_STATIONARY_SPEED_MPS,
   ROUTE_STOPPED_INTERVAL_MS,
-  ROUTE_STOPPED_KEEPALIVE_MS,
   isLocationMoving
 } from "./trackingConfig";
 
@@ -16,7 +15,7 @@ export type RoutePoint = {
   timestamp: number;
 };
 
-export type SkipReason = "stationary_jitter" | "no_movement";
+export type SkipReason = "stationary_jitter" | "no_movement" | "stationary_heartbeat_only";
 
 export type ShouldSendResult =
   | { send: true; distanceMeters: number; heartbeat?: boolean }
@@ -40,9 +39,12 @@ export function distanceMeters(
 }
 
 /**
- * Decide whether a GPS reading should be uploaded.
- * Poor accuracy is still sent (accuracy included in payload).
- * Heartbeat allowed when stopped >= 120 s without 30–50 m move.
+ * Decide whether a GPS reading should become a location point (route/marker).
+ *
+ * Stationary employees must NOT upload duplicate coordinates — Online status
+ * is maintained by POST tracking/heartbeat/ (see processBackgroundLocations).
+ *
+ * Use `force: true` for first workday fix, post-recovery, and service restart.
  */
 export function shouldSendLocation(
   previousPoint: RoutePoint | null,
@@ -51,8 +53,14 @@ export function shouldSendLocation(
 ): ShouldSendResult {
   const distanceM = previousPoint ? distanceMeters(previousPoint, newPoint) : 0;
 
-  if (options?.force || options?.heartbeat || !previousPoint) {
-    return { send: true, distanceMeters: distanceM, heartbeat: options?.heartbeat };
+  // First point / forced recovery / explicit location force — never treat as jitter.
+  if (options?.force || !previousPoint) {
+    return { send: true, distanceMeters: distanceM };
+  }
+
+  // Heartbeat option is for the separate heartbeat API — not a location upload.
+  if (options?.heartbeat) {
+    return { send: false, reason: "stationary_heartbeat_only", distanceMeters: distanceM };
   }
 
   const speed = newPoint.speed;
@@ -63,9 +71,6 @@ export function shouldSendLocation(
     distanceM < ROUTE_JITTER_DISTANCE_METERS &&
     (speed == null || !Number.isFinite(speed) || Math.abs(speed) < ROUTE_STATIONARY_SPEED_MPS)
   ) {
-    if (!moving && elapsedMs >= ROUTE_STOPPED_KEEPALIVE_MS) {
-      return { send: true, distanceMeters: distanceM, heartbeat: true };
-    }
     return { send: false, reason: "stationary_jitter", distanceMeters: distanceM };
   }
 
@@ -79,10 +84,6 @@ export function shouldSendLocation(
 
   if (!moving && elapsedMs >= ROUTE_STOPPED_INTERVAL_MS && distanceM >= ROUTE_JITTER_DISTANCE_METERS) {
     return { send: true, distanceMeters: distanceM };
-  }
-
-  if (!moving && elapsedMs >= ROUTE_STOPPED_KEEPALIVE_MS) {
-    return { send: true, distanceMeters: distanceM, heartbeat: true };
   }
 
   return { send: false, reason: "no_movement", distanceMeters: distanceM };

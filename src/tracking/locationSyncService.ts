@@ -364,8 +364,14 @@ export async function processBackgroundLocations(locations: Location.LocationObj
     return;
   }
 
+  let lastAccuracy: number | null = null;
+  let gpsEnabledHint = true;
   for (const location of locations) {
     try {
+      const accuracy = location.coords.accuracy;
+      if (typeof accuracy === "number" && Number.isFinite(accuracy)) {
+        lastAccuracy = accuracy;
+      }
       await handleLocationUpdate(location);
     } catch (err) {
       trackingDevLog(
@@ -373,6 +379,24 @@ export async function processBackgroundLocations(locations: Location.LocationObj
         err instanceof Error ? err.message : "background location failed"
       );
     }
+  }
+
+  if (!locations.length) {
+    // Stationary / time wake with no new fix — still heartbeat so Admin stays Online.
+    gpsEnabledHint = true;
+  }
+
+  try {
+    const { emitTrackingHeartbeat } = await import("./heartbeatService");
+    await emitTrackingHeartbeat({
+      gpsEnabledHint,
+      accuracy: lastAccuracy
+    });
+  } catch (err) {
+    trackingDevLog(
+      "task_error",
+      err instanceof Error ? err.message : "background heartbeat failed"
+    );
   }
 }
 

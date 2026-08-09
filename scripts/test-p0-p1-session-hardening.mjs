@@ -110,6 +110,12 @@ test("11–12. Failed immediate GPS confirm does not duplicate Work Day; schedul
   const applyIdx = body.indexOf("applyDutyState(started");
   const confirmIdx = body.indexOf("confirmDutyStartLocationOrRetry");
   assert.ok(startIdx >= 0 && applyIdx > startIdx && confirmIdx > applyIdx);
+  // Confirm still scheduled, but must not block Start Work Day return (post-start freeze fix).
+  assert.match(body, /void \(async \(\) => \{/);
+  assert.doesNotMatch(
+    body,
+    /await confirmDutyStartLocationOrRetry\(locationResult\.location,\s*started\);\s*await startTrackingBridge/
+  );
 });
 
 test("13–14. startDuty only reconciles already-active / 409; other errors surface", () => {

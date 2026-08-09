@@ -34,7 +34,10 @@ function messageForOutcome(outcome: BiometricUnlockOutcome | null): string {
       return "Couldn’t reach the server. Check your connection and try fingerprint again.";
     case "token_refresh_failed":
     case "no_refresh_token":
-      return "Your session expired. Please sign in again.";
+      return "Couldn’t restore your session. Try fingerprint again or sign in with your password.";
+    case "reauth_material_missing":
+    case "reauth_material_invalid":
+      return "Sign in with your password once to reconnect fingerprint unlock.";
     case "session_replaced":
       return "Signed in on another device. Please sign in again.";
     default:

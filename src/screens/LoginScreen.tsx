@@ -37,6 +37,12 @@ import { ProductionApiDiagnosticsPanel } from "../../mobile/components/diagnosti
 import { TechnicalDetailsCollapsible } from "../../mobile/components/layout";
 import { ApiRequestError, getNetworkMessage, isNetworkError } from "../utils/apiError";
 import {
+  MOBILE_LOGIN_PREFIX,
+  isLegacyEmployeeIdIdentifier,
+  normalizeMobileLoginSuffix,
+  toMobileLoginIdentifier
+} from "../utils/mobileLoginUsername";
+import {
   categorizeLoginNetworkError,
   loginErrorMessageForCategory
 } from "../utils/loginDiagnostics";
@@ -159,7 +165,7 @@ export function LoginScreen() {
   }
 
   async function handleLogin() {
-    const user = empId.trim();
+    const user = toMobileLoginIdentifier(empId);
     if (!user || !password.trim()) {
       setLoginError(t("login.missingCredentials"));
       return;
@@ -206,12 +212,15 @@ export function LoginScreen() {
         } else if (unlocked.outcome === "authentication_failed" || unlocked.outcome === "timeout") {
           setLoginError(t("login.biometricRetry"));
         } else if (
-          unlocked.outcome === "token_refresh_failed" ||
-          unlocked.outcome === "no_refresh_token" ||
           unlocked.outcome === "reauth_material_missing" ||
           unlocked.outcome === "reauth_material_invalid"
         ) {
-          setLoginError(t("login.sessionExpired"));
+          setLoginError(t("login.biometricReconnectPassword"));
+        } else if (
+          unlocked.outcome === "token_refresh_failed" ||
+          unlocked.outcome === "no_refresh_token"
+        ) {
+          setLoginError(t("login.biometricReconnectPassword"));
         } else if (unlocked.outcome === "lockout") {
           setLoginError(t("login.biometricLockout"));
         } else if (unlocked.outcome === "network_error" || unlocked.outcome === "server_error") {
@@ -316,16 +325,18 @@ export function LoginScreen() {
 
             <Text style={styles.fieldLabel}>{t("login.employeeId")}</Text>
             <EnterpriseTextField
-              leftIcon="person-outline"
+              prefixText={isLegacyEmployeeIdIdentifier(empId) ? undefined : MOBILE_LOGIN_PREFIX}
               value={empId}
               onChangeText={(v) => {
-                setEmpId(v);
+                setEmpId(normalizeMobileLoginSuffix(v));
                 if (loginError) setLoginError("");
               }}
               onFocus={() => handleFieldFocus("empId")}
               placeholder={t("login.employeeIdPlaceholder")}
-              autoCapitalize="none"
+              autoCapitalize="characters"
               autoCorrect={false}
+              autoComplete="username"
+              textContentType="username"
               editable={!loading}
               returnKeyType="next"
               accessibilityLabel={t("login.employeeId")}

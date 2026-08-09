@@ -12,6 +12,7 @@ import { getDeviceInfo } from "../utils/deviceInfo";
 import { categorizeLoginNetworkError, logAuthEvent } from "../utils/loginDiagnostics";
 import { normalizeLoginResponse } from "../utils/parseLoginResponse";
 import { ApiRequestError } from "../utils/apiError";
+import { isLegacyEmployeeIdIdentifier } from "../utils/mobileLoginUsername";
 
 const MOBILE_AUTH_LOGIN = "mobile/auth/login/";
 
@@ -55,7 +56,7 @@ export async function loginRequest(identifier: string, password: string): Promis
   const deviceInfo = getDeviceInfo();
   const deviceId = await getOrCreateDeviceId();
 
-  const loginBody = /^[A-Za-z]+-\d+$/i.test(trimmed)
+  const loginBody = isLegacyEmployeeIdIdentifier(trimmed)
     ? { employee_id: trimmed, password, device_id: deviceId, ...deviceInfo }
     : { username: trimmed, password, device_id: deviceId, ...deviceInfo };
 

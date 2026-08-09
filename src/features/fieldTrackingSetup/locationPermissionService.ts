@@ -324,9 +324,18 @@ async function runRecoveryAction(
   callbacks?: { onRetry?: () => void; onGoBack?: () => void; onCancel?: () => void }
 ): Promise<void> {
   switch (action) {
-    case "allow_location":
-      openFieldTrackingFix(result.missing.length ? result.missing : ["foreground"]);
+    case "allow_location": {
+      logLocationPermission("request_started", { kind: "foreground", via: "recovery_allow" });
+      const fg = await runForegroundLocationStep();
+      if (fg.ok) {
+        callbacks?.onRetry?.();
+      } else if (fg.permanentlyDenied) {
+        await openAppSettingsPage().catch(() => undefined);
+      } else {
+        callbacks?.onRetry?.();
+      }
       break;
+    }
     case "open_settings":
       logLocationPermission("settings_opened", { state: result.state });
       if (result.state === "precise_location_disabled") {

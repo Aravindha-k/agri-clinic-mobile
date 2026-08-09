@@ -52,7 +52,7 @@ export const en = {
     subtitle: "Enter your Employee ID and password",
     employeeId: "Employee ID",
     password: "Password",
-    employeeIdPlaceholder: "Example: AG-8821",
+    employeeIdPlaceholder: "ARAVINDH01",
     passwordPlaceholder: "Enter your password",
     forgotPassword: "Forgot password? Contact your administrator.",
     submit: "Login",
@@ -64,6 +64,8 @@ export const en = {
     biometricRetry: "Fingerprint did not match. Try again or sign in with your password.",
     biometricLockout: "Fingerprint is temporarily locked. Sign in with your password.",
     biometricFailed: "Fingerprint unlock failed. Sign in with your password.",
+    biometricReconnectPassword:
+      "Sign in with your password once to reconnect fingerprint unlock.",
     sessionExpiredTitle: "Session expired",
     sessionExpired: "Use fingerprint or sign in with your password to continue.",
     accountDisabled: "Your account is currently disabled. Please contact your administrator.",

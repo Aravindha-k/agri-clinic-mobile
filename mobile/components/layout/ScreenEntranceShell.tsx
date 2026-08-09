@@ -1,5 +1,5 @@
-import { createContext, useContext, type ReactNode } from "react";
-import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { InteractionManager, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
 import { Spacing } from "../../lib/theme";
 import { ScreenCanvas } from "./ScreenCanvas";
@@ -16,6 +16,8 @@ type Props = {
   children: ReactNode | ((tick: number) => ReactNode);
   style?: StyleProp<ViewStyle>;
   withCanvas?: boolean;
+  /** Defer SVG backdrop until after navigation transition (smoother push). */
+  deferCanvas?: boolean;
   /** Animated brand row at top — on by default for stack/detail screens. */
   withBrandHeader?: boolean;
 };
@@ -25,14 +27,28 @@ export function ScreenEntranceShell({
   children,
   style,
   withCanvas = true,
+  deferCanvas = false,
   withBrandHeader = false
 }: Props) {
   const entranceTick = useScreenEntrance();
+  const [canvasReady, setCanvasReady] = useState(!deferCanvas);
+
+  useEffect(() => {
+    if (!deferCanvas || !withCanvas) {
+      setCanvasReady(!deferCanvas);
+      return;
+    }
+    setCanvasReady(false);
+    const task = InteractionManager.runAfterInteractions(() => {
+      setCanvasReady(true);
+    });
+    return () => task.cancel();
+  }, [deferCanvas, withCanvas]);
 
   return (
     <EntranceTickContext.Provider value={entranceTick}>
       <View style={[styles.root, style]}>
-        {withCanvas ? <ScreenCanvas /> : null}
+        {withCanvas && canvasReady ? <ScreenCanvas /> : null}
         <ScreenEntranceBloom replayKey={entranceTick} />
         {withBrandHeader ? <BrandPageHeader style={styles.brandHeader} /> : null}
         {typeof children === "function" ? children(entranceTick) : children}

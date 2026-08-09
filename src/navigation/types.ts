@@ -11,16 +11,28 @@ export type VisitsStackParamList = {
   VisitDetail: { id: number; fromSubmit?: boolean };
 };
 
+export type FarmerDetailPrefill = {
+  name?: string;
+  phone?: string;
+  village_name?: string;
+  photo_url?: string | null;
+  profile_photo_url?: string | null;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
+  land_area?: string | number;
+  total_visits?: number;
+};
+
 export type FarmersStackParamList = {
   FarmersList: undefined;
-  FarmerDetail: { id: number };
+  FarmerDetail: { id: number; prefill?: FarmerDetailPrefill };
   FarmerMap: FarmerMapParams;
 };
 
 /** V2 Work tab — queue + visits with shared detail routes. */
 export type WorkStackParamList = {
   WorkHome: { segment?: "queue" | "visits" } | undefined;
-  FarmerDetail: { id: number };
+  FarmerDetail: { id: number; prefill?: FarmerDetailPrefill };
   FarmerMap: FarmerMapParams;
   VisitDetail: { id: number; fromSubmit?: boolean };
 };

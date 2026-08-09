@@ -122,13 +122,14 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
     async (isRefresh = false) => {
       try {
         setError("");
-        const row = await fetchVisitDetail(visitId);
+        const [row, atts] = await Promise.all([
+          fetchVisitDetail(visitId),
+          fetchVisitAttachments(visitId).catch(() => [] as VisitAttachment[])
+        ]);
         setVisit(row);
         const parsed = parseFieldNotes(row.field_notes);
         const combined = visitFieldNotesText(row) || parsed.fieldNotes;
         setDraftFieldNotes(combined);
-
-        const atts = await fetchVisitAttachments(visitId).catch(() => [] as VisitAttachment[]);
         setAttachments(atts);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load visit.");
@@ -244,7 +245,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
 
   if (loading) {
     return (
-      <ScreenEntranceShell style={[styles.screen, { paddingTop: safeTop }]}>
+      <ScreenEntranceShell style={[styles.screen, { paddingTop: safeTop }]} deferCanvas>
         {() => (
           <>
             <View style={styles.header}>
@@ -268,7 +269,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
 
   if (error || !visit || !farmer) {
     return (
-      <ScreenEntranceShell style={[styles.screen, { paddingTop: safeTop }]}>
+      <ScreenEntranceShell style={[styles.screen, { paddingTop: safeTop }]} deferCanvas>
         {(entranceTick) => (
           <>
             <View style={styles.header}>
@@ -304,7 +305,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
   const scrollBottomPad = editMode ? Layout.buttonHeight + Spacing.xxl : Spacing.xxl;
 
   return (
-    <ScreenEntranceShell style={[styles.screen, { paddingTop: safeTop }]}>
+    <ScreenEntranceShell style={[styles.screen, { paddingTop: safeTop }]} deferCanvas>
       {(entranceTick) => (
         <KeyboardAvoidingView
           style={styles.flex}

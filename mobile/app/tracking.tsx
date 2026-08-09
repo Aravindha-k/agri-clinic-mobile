@@ -1,6 +1,6 @@
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { useCallback, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useRef, useState } from "react";
+import { InteractionManager, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { AppErrorBoundary } from "../../src/components/AppErrorBoundary";
@@ -119,10 +119,13 @@ function TrackingWorkspaceScreenInner() {
   useFocusEffect(
     useCallback(() => {
       logDayTabOpen();
-      void autoFlushPendingGps();
-      void loadSummary();
-      void refreshTrackingState().catch(() => undefined);
-      void refreshBootstrap({ force: false }).catch(() => undefined);
+      const task = InteractionManager.runAfterInteractions(() => {
+        void autoFlushPendingGps();
+        void loadSummary();
+        void refreshTrackingState().catch(() => undefined);
+        void refreshBootstrap({ force: false }).catch(() => undefined);
+      });
+      return () => task.cancel();
     }, [loadSummary, refreshBootstrap, refreshTrackingState])
   );
 

@@ -6,7 +6,8 @@ import type { Farmer } from "../../../src/api/farmers";
 import {
   cacheBustPhotoUrl,
   extractPhotoUrl,
-  initialsFromName
+  initialsFromName,
+  photoCacheVersion
 } from "../../../src/utils/profilePhotoUrl";
 import {
   handleProfilePickerError,
@@ -26,17 +27,20 @@ type Props = {
 export function FarmerPhotoAvatar({ farmer, onFarmerUpdated, size = 52, style }: Props) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [photoVersion, setPhotoVersion] = useState(Date.now());
+  const [photoVersion, setPhotoVersion] = useState<string | number | null>(() =>
+    photoCacheVersion(farmer)
+  );
   const [localUrl, setLocalUrl] = useState<string | null>(null);
   const [imgFailed, setImgFailed] = useState(false);
 
   const displayName = farmer.name || "Farmer";
   const serverUrl = extractPhotoUrl(farmer);
   const previewUri = localUrl || serverUrl;
+  const bustVersion = localUrl ? photoVersion : photoCacheVersion(farmer) ?? photoVersion;
 
   useEffect(() => {
     setImgFailed(false);
-  }, [previewUri, photoVersion]);
+  }, [previewUri, bustVersion]);
 
   async function runPick(source: "camera" | "library") {
     try {
@@ -88,7 +92,7 @@ export function FarmerPhotoAvatar({ farmer, onFarmerUpdated, size = 52, style }:
   }
 
   const uri =
-    previewUri && !imgFailed ? cacheBustPhotoUrl(previewUri, photoVersion) : null;
+    previewUri && !imgFailed ? cacheBustPhotoUrl(previewUri, bustVersion) : null;
 
   return (
     <Pressable

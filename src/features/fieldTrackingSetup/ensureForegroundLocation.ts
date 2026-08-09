@@ -26,7 +26,7 @@ export type EnableLocationFlowResult = {
 };
 
 export const PERMANENTLY_DENIED_MESSAGE =
-  "Location permission is disabled. Enable it from app settings to use field tracking.";
+  "Location permission is disabled for Kavya Agri Clinic.";
 
 export const RETRY_PERMISSION_MESSAGE =
   "Choose “While using the app” and allow Precise location when asked.";

@@ -172,18 +172,22 @@ export function getFarmerFields(id: number) {
   return apiClient(`farmers/${id}/fields/`);
 }
 
-export function getFarmerVisits(id: number) {
-  return getAllFarmerVisits(id);
+export function getFarmerVisits(id: number, options?: { maxPages?: number }) {
+  return getAllFarmerVisits(id, options?.maxPages ?? MAX_FARMER_VISIT_PAGES);
 }
+
+/** Profile screens only need recent history — avoid 20-page waterfall on open. */
+export const FARMER_PROFILE_VISIT_MAX_PAGES = 2;
 
 const MAX_FARMER_VISIT_PAGES = 20;
 
-async function getAllFarmerVisits(id: number): Promise<Visit[]> {
+async function getAllFarmerVisits(id: number, maxPages = MAX_FARMER_VISIT_PAGES): Promise<Visit[]> {
   const base = `farmers/${id}/visits/`;
   const all: Visit[] = [];
   let next: string | null = null;
+  const pageLimit = Math.max(1, Math.min(maxPages, MAX_FARMER_VISIT_PAGES));
 
-  for (let page = 0; page < MAX_FARMER_VISIT_PAGES; page += 1) {
+  for (let page = 0; page < pageLimit; page += 1) {
     const path: string = next ? apiPathFromNextUrl(next) : base;
     if (!path) {
       break;

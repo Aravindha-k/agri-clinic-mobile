@@ -126,8 +126,17 @@ export async function requestVisitLocationAccess(
 
 /** @deprecated Use requestVisitLocationAccess or requestGpsForFieldWork. */
 export function showLocationRequiredModal(onEnable?: () => void) {
-  void onEnable;
-  void import("../features/fieldTrackingSetup").then(({ openFieldTrackingFix }) => {
-    openFieldTrackingFix(["foreground"]);
-  });
+  void (async () => {
+    const { enableLocationForFieldWork } = await import(
+      "../features/fieldTrackingSetup/ensureForegroundLocation"
+    );
+    const result = await enableLocationForFieldWork();
+    if (result.ok) {
+      onEnable?.();
+      return;
+    }
+    if (result.permanentlyDenied) {
+      await openSettingsForPendingStartWorkDay(async () => undefined);
+    }
+  })();
 }

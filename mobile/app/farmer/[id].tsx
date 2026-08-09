@@ -3,6 +3,7 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Linking,
   Pressable,
@@ -13,6 +14,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import type { Farmer } from "../../../src/api/farmers";
 import type { Visit } from "../../../src/api/visits";
 import { useRefreshControlProps } from "../../../src/hooks/useRefreshControlProps";
 import { useI18n } from "../../../src/i18n/I18nContext";
@@ -28,20 +30,57 @@ import { ScreenErrorBoundary } from "../../../src/components/ScreenErrorBoundary
 import { qaLogNavParamsMissing, qaLogScreenOpen } from "../../../src/utils/qaLog";
 import { FarmerPhotoAvatar } from "../../components/farmers/FarmerPhotoAvatar";
 import { EmptyState, GhostButton, PrimaryButton, SectionHeader, StatusChip } from "../../components/ui";
-import { ScreenLoader } from "../../components/layout/ScreenLoader";
 import { FadeInSection, entranceListStagger, entranceStagger } from "../../components/ui/FadeInSection";
 import { ScreenEntranceShell, StackScreenHeader } from "../../components/layout";
+import { getCachedFarmers } from "../../lib/farmersCache";
+import {
+  readFarmerProfileCache,
+  readFreshFarmerProfileCache
+} from "../../lib/farmerProfileCache";
 import {
   cropFromVisit,
   fetchMobileFarmerProfile,
   problemCategoryFromVisit,
   recommendationFromVisit,
+  seedMobileFarmerProfile,
   severityFromVisit,
   type CurrentCropCard,
   type FarmerField,
   type MobileFarmerProfile
 } from "../../lib/farmerProfileApi";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
+
+const VISITS_PREVIEW_COUNT = 5;
+const VISITS_EXPAND_CAP = 15;
+
+function initialProfileFromRoute(
+  farmerId: number,
+  prefill: WorkStackParamList["FarmerDetail"]["prefill"] | undefined
+): MobileFarmerProfile | null {
+  if (!Number.isFinite(farmerId) || farmerId <= 0) return null;
+  const fresh = readFreshFarmerProfileCache(farmerId);
+  if (fresh) return fresh;
+  const cached = readFarmerProfileCache(farmerId);
+  if (cached) return cached;
+  const fromDirectory = getCachedFarmers().find((row) => Number(row.id) === farmerId);
+  if (fromDirectory) return seedMobileFarmerProfile(fromDirectory);
+  if (prefill) {
+    const seeded: Farmer = {
+      id: farmerId,
+      name: prefill.name,
+      phone: prefill.phone,
+      village_name: prefill.village_name,
+      photo_url: prefill.photo_url,
+      profile_photo_url: prefill.profile_photo_url,
+      latitude: prefill.latitude,
+      longitude: prefill.longitude,
+      land_area: prefill.land_area,
+      total_visits: prefill.total_visits
+    };
+    return seedMobileFarmerProfile(seeded);
+  }
+  return null;
+}
 
 const CROP_CARD_BG: Record<CurrentCropCard["tone"], string> = {
   blue: Colors.blueBg,
@@ -173,6 +212,7 @@ function FarmerProfileScreenInner() {
   const route = useRoute<RouteProp<WorkStackParamList, "FarmerDetail">>();
   const rawId = route.params?.id;
   const farmerId = typeof rawId === "number" ? rawId : Number(rawId);
+  const routePrefill = route.params?.prefill;
 
   useEffect(() => {
     qaLogScreenOpen("FarmerDetail", Number.isFinite(farmerId) ? `id=${farmerId}` : "invalid_id");
@@ -180,13 +220,16 @@ function FarmerProfileScreenInner() {
       qaLogNavParamsMissing("FarmerDetail", "id");
     }
   }, [farmerId]);
-  const { top: safeTop, bottom: safeBottom } = useSafeAreaInsetsCompat();
+  const { bottom: safeBottom } = useSafeAreaInsetsCompat();
   const refreshControlProps = useRefreshControlProps();
   const { bumpAfterFarmerPhotoChange } = useFieldDataRefresh();
 
-  const [profile, setProfile] = useState<MobileFarmerProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<MobileFarmerProfile | null>(() =>
+    initialProfileFromRoute(farmerId, routePrefill)
+  );
+  const [loading, setLoading] = useState(() => !initialProfileFromRoute(farmerId, routePrefill));
   const [refreshing, setRefreshing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
   const [expandedFields, setExpandedFields] = useState<Set<string>>(new Set());
   const [showAllVisits, setShowAllVisits] = useState(false);
@@ -198,32 +241,40 @@ function FarmerProfileScreenInner() {
       if (!Number.isFinite(farmerId) || farmerId <= 0) {
         setError(t("farmerDetail.invalidFarmer"));
         setLoading(false);
+        setSyncing(false);
         return;
       }
       try {
         setError("");
+        if (!isRefresh) setSyncing(true);
         const data = await fetchMobileFarmerProfile(farmerId);
         setProfile(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load farmer profile.");
       } finally {
-        if (!isRefresh) setLoading(false);
-        setRefreshing(false);
+        setLoading(false);
+        setSyncing(false);
+        if (isRefresh) setRefreshing(false);
       }
     },
     [farmerId, t]
   );
 
   useEffect(() => {
-    setProfile(null);
-    setLoading(true);
+    const seeded = initialProfileFromRoute(farmerId, route.params?.prefill);
+    setProfile(seeded);
+    setLoading(!seeded);
     setError("");
+    setShowAllVisits(false);
     void load(false);
+    // Prefill is only used for first paint seed; farmerId drives reloads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid object-identity refetch loops
   }, [farmerId, load]);
 
   const visitsPreview = useMemo(() => {
     if (!profile) return [];
-    return showAllVisits ? profile.visits : profile.visits.slice(0, 5);
+    if (showAllVisits) return profile.visits.slice(0, VISITS_EXPAND_CAP);
+    return profile.visits.slice(0, VISITS_PREVIEW_COUNT);
   }, [profile, showAllVisits]);
 
   const lastVisit = profile?.visits[0] ?? null;
@@ -293,7 +344,7 @@ function FarmerProfileScreenInner() {
     });
   }
 
-  if (loading) {
+  if (loading && !profile) {
     return (
       <SafeAreaView style={styles.screen} edges={["top"]}>
         <StackScreenHeader
@@ -301,12 +352,15 @@ function FarmerProfileScreenInner() {
           onBack={() => navigation.goBack()}
           includeSafeTop={false}
         />
-        <ScreenLoader message={t("common.loading")} />
+        <View style={styles.inlineLoading}>
+          <ActivityIndicator color={Colors.brand700} />
+          <Text style={styles.inlineLoadingText}>{t("common.loading")}</Text>
+        </View>
       </SafeAreaView>
     );
   }
 
-  if (error || !profile) {
+  if ((error && !profile) || !profile) {
     return (
       <SafeAreaView style={styles.screen} edges={["top"]}>
         <StackScreenHeader
@@ -329,7 +383,7 @@ function FarmerProfileScreenInner() {
   const phone = farmer.phone?.trim() || "—";
 
   return (
-    <ScreenEntranceShell style={styles.screen} withBrandHeader={false}>
+    <ScreenEntranceShell style={styles.screen} withBrandHeader={false} deferCanvas>
       {(entranceTick) => (
         <>
       <StackScreenHeader
@@ -338,9 +392,12 @@ function FarmerProfileScreenInner() {
         onBack={() => navigation.goBack()}
         includeSafeTop
         right={
-          <Pressable onPress={openOptionsMenu} style={styles.menuBtn} hitSlop={8}>
-            <Ionicons name="ellipsis-vertical" size={20} color={Colors.text2} />
-          </Pressable>
+          <View style={styles.headerRight}>
+            {syncing ? <ActivityIndicator size="small" color={Colors.brand700} /> : null}
+            <Pressable onPress={openOptionsMenu} style={styles.menuBtn} hitSlop={8}>
+              <Ionicons name="ellipsis-vertical" size={20} color={Colors.text2} />
+            </Pressable>
+          </View>
         }
       />
 
@@ -534,6 +591,22 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1
+  },
+  headerRight: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 4
+  },
+  inlineLoading: {
+    alignItems: "center",
+    flex: 1,
+    gap: Spacing.sm,
+    justifyContent: "center",
+    paddingHorizontal: Spacing.screen
+  },
+  inlineLoadingText: {
+    color: Colors.text3,
+    fontSize: FontSize.sm
   },
   menuBtn: {
     alignItems: "center",

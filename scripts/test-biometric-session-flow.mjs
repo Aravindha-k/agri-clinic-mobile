@@ -58,8 +58,10 @@ test("session expiry keeps biometric and uses session_expired phase", () => {
 test("explicit logout clears biometric material", () => {
   const auth = read("src/storage/AuthContext.tsx");
   const signOut = auth.slice(auth.indexOf("const signOut = useCallback"), auth.indexOf("const value = useMemo"));
-  assert.match(signOut, /clearBiometricLogin/);
+  assert.match(signOut, /clearBiometricReauthMaterial/);
   assert.match(signOut, /explicit_logout/);
+  // Preference (ENABLED) must remain so password login can reconnect fingerprint.
+  assert.doesNotMatch(signOut, /clearBiometricLogin/);
 });
 
 test("session replaced clears biometric", () => {
@@ -70,6 +72,36 @@ test("session replaced clears biometric", () => {
     auth.indexOf("forceSessionExpiredLogout")
   );
   assert.match(conflict, /clearBiometricLogin/);
+});
+
+test("cold start with biometric prefers locked gate over session_expired logout UX", () => {
+  const auth = read("src/storage/AuthContext.tsx");
+  const bootStart = auth.indexOf("const runFastLocalBootstrap");
+  const bootEnd = auth.indexOf("bootstrapAttemptedRef.current");
+  const boot = auth.slice(bootStart, bootEnd);
+  assert.match(boot, /getRefreshToken/);
+  assert.match(boot, /canUseBiometricLogin/);
+  assert.match(boot, /lockSessionForBiometric/);
+  assert.match(boot, /setLoginNotice\(null\)/);
+  assert.doesNotMatch(boot, /setLoginNotice\(SESSION_EXPIRED_MESSAGE\)/);
+});
+
+test("fingerprint refresh does not force session-expired teardown", () => {
+  const expired = read("src/storage/sessionExpired.ts");
+  assert.match(expired, /withoutSessionExpiredTeardown/);
+  assert.match(expired, /suppressExpiredTeardownDepth/);
+
+  const bio = read("src/storage/biometricLoginStorage.ts");
+  assert.match(bio, /withoutSessionExpiredTeardown/);
+  assert.match(bio, /login_refresh_fallback_reauth/);
+});
+
+test("Login maps missing reauth material to reconnect copy not session expired", () => {
+  const login = read("src/screens/LoginScreen.tsx");
+  assert.match(login, /biometricReconnectPassword/);
+  assert.match(login, /reauth_material_missing/);
+  const en = read("src/i18n/en.ts");
+  assert.match(en, /biometricReconnectPassword/);
 });
 
 test("Login shows fingerprint + password on session expiry", () => {

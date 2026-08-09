@@ -39,15 +39,19 @@ type GpsComplianceContextValue = {
 const GpsComplianceContext = createContext<GpsComplianceContextValue | undefined>(undefined);
 
 function promptOpenSettings() {
-  Alert.alert("Location permission", GPS_PERMISSION_MESSAGE, [
-    { text: "Not now", style: "cancel" },
-    {
-      text: "Open Settings",
-      onPress: () => {
-        void Linking.openSettings().catch(() => undefined);
+  Alert.alert(
+    "Location permission",
+    "Location permission is disabled for Kavya Agri Clinic. Enable it from App Settings to continue field work.",
+    [
+      { text: "Not now", style: "cancel" },
+      {
+        text: "Open Settings",
+        onPress: () => {
+          void Linking.openSettings().catch(() => undefined);
+        }
       }
-    }
-  ]);
+    ]
+  );
 }
 
 export function GpsComplianceProvider({ children }: { children: React.ReactNode }) {
@@ -139,8 +143,25 @@ export function GpsComplianceProvider({ children }: { children: React.ReactNode 
     availability === "permission_denied" || availability === "permission_undetermined";
 
   const showPermissionHelp = useCallback(() => {
-    promptOpenSettings();
-  }, []);
+    // Exceptional recovery only — never replace the native permission dialog.
+    void (async () => {
+      try {
+        const { ensureForegroundLocationPermission } = await import(
+          "../features/fieldTrackingSetup/ensureForegroundLocation"
+        );
+        const result = await ensureForegroundLocationPermission();
+        if (result.granted) {
+          notifyGpsGranted();
+          return;
+        }
+        if (result.permanentlyDenied) {
+          promptOpenSettings();
+        }
+      } catch {
+        promptOpenSettings();
+      }
+    })();
+  }, [notifyGpsGranted]);
 
   const ensureWorkAllowed = useCallback(
     (_actionLabel?: string) => {
@@ -151,14 +172,35 @@ export function GpsComplianceProvider({ children }: { children: React.ReactNode 
       if (availability === "permission_denied") {
         Alert.alert("GPS blocked", GPS_BLOCKED_MESSAGE, [
           { text: "Cancel", style: "cancel" },
-          { text: "Open Settings", onPress: () => void Linking.openSettings().catch(() => undefined) }
+          {
+            text: "Allow Location",
+            onPress: () => {
+              void (async () => {
+                try {
+                  const { ensureForegroundLocationPermission } = await import(
+                    "../features/fieldTrackingSetup/ensureForegroundLocation"
+                  );
+                  const result = await ensureForegroundLocationPermission();
+                  if (result.granted) {
+                    notifyGpsGranted();
+                    return;
+                  }
+                  if (result.permanentlyDenied) {
+                    promptOpenSettings();
+                  }
+                } catch {
+                  promptOpenSettings();
+                }
+              })();
+            }
+          }
         ]);
       } else {
         Alert.alert("GPS blocked", GPS_BLOCKED_MESSAGE);
       }
       return false;
     },
-    [availability, sessionReady, status]
+    [availability, notifyGpsGranted, sessionReady, status]
   );
 
   const bannerCopy = useMemo(() => {
@@ -174,7 +216,7 @@ export function GpsComplianceProvider({ children }: { children: React.ReactNode 
     if (availability === "permission_denied") {
       return {
         title: "GPS Required",
-        subtitle: "Allow location permission in Settings for field work."
+        subtitle: "Allow location when prompted to continue field work."
       };
     }
     return {

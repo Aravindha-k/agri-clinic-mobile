@@ -1,6 +1,6 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback } from "react";
-import { Platform } from "react-native";
+import { InteractionManager, Platform } from "react-native";
 import * as ScreenCapture from "expo-screen-capture";
 import { isExpoGo } from "../utils/expoRuntime";
 
@@ -29,11 +29,16 @@ export function useSecureScreen() {
       }
 
       let active = true;
-      void enableSecureFlag().catch(() => undefined);
+      let cancelled = false;
+      const task = InteractionManager.runAfterInteractions(() => {
+        if (cancelled || !active) return;
+        void enableSecureFlag().catch(() => undefined);
+      });
 
       return () => {
-        if (!active) return;
+        cancelled = true;
         active = false;
+        task.cancel?.();
         void disableSecureFlag().catch(() => undefined);
       };
     }, [])

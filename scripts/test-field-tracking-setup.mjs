@@ -37,7 +37,7 @@ must(
     "hasServicesEnabledAsync",
     "isPermanentlyDenied",
     'status === "denied" && response.canAskAgain === false',
-    "Location permission is disabled. Enable it from app settings to use field tracking."
+    "Location permission is disabled for Kavya Agri Clinic."
   ],
   "single-flight foreground permission service"
 );
@@ -118,7 +118,7 @@ must(
 must(
   "src/features/fieldTrackingSetup/locationStates.ts",
   [
-    "Location permission is disabled. Enable it from app settings to use field tracking.",
+    "Location permission is disabled for Kavya Agri Clinic.",
     'action: "open_app_settings"'
   ],
   "permanently denied copy + explicit settings action"

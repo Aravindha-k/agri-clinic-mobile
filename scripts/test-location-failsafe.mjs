@@ -34,7 +34,7 @@ must(
     "unsupported_in_expo_go",
     "capture_timeout",
     "Location access needed",
-    "Location permission is disabled. Enable it from app settings to use field tracking.",
+    "Location permission is disabled for Kavya Agri Clinic.",
     "Phone location is turned off",
     "logLocationPermission"
   ],

@@ -11,4 +11,4 @@ export const GPS_BLOCKED_MESSAGE =
   "Location has been off for 30 minutes. Turn on GPS to start your workday, record visits, and sync tracking again.";
 
 export const GPS_PERMISSION_MESSAGE =
-  "Location permission is required. Open Settings, allow location access for this app, then return and try again.";
+  "Location permission is required. Tap Allow when Android asks, then continue field work.";

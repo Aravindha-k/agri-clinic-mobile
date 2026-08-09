@@ -19,6 +19,8 @@ type Props = TextInputProps & {
   required?: boolean;
   disabled?: boolean;
   leftIcon?: keyof typeof Ionicons.glyphMap;
+  /** Fixed non-editable text inside the same field (e.g. KAC-). */
+  prefixText?: string;
   right?: ReactNode;
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onRightIconPress?: () => void;
@@ -35,6 +37,7 @@ export function EnterpriseTextField({
   required,
   disabled,
   leftIcon,
+  prefixText,
   right,
   rightIcon,
   onRightIconPress,
@@ -62,6 +65,11 @@ export function EnterpriseTextField({
       >
         {leftIcon ? (
           <Ionicons name={leftIcon} size={IconSize.md} color={Colors.text3} style={styles.leftIcon} />
+        ) : null}
+        {prefixText ? (
+          <Text style={styles.prefixText} accessibilityElementsHidden importantForAccessibility="no">
+            {prefixText}
+          </Text>
         ) : null}
         <TextInput
           {...inputProps}
@@ -132,10 +140,19 @@ const styles = StyleSheet.create({
   leftIcon: {
     marginRight: Spacing.sm
   },
+  prefixText: {
+    color: Colors.text2,
+    fontSize: FontSize.body,
+    fontWeight: FontWeight.semibold,
+    marginRight: 2,
+    paddingVertical: Spacing.md
+  },
   input: {
     color: Colors.text1,
     flex: 1,
     fontSize: FontSize.body,
+    fontWeight: FontWeight.semibold,
+    letterSpacing: 0.3,
     paddingVertical: Spacing.md
   },
   inputMultiline: {

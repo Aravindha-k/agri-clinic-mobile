@@ -54,11 +54,11 @@ export function initialsFromName(name?: string | null, fallback = "?") {
   return (parts[0]?.[0] || fallback[0] || "?").toUpperCase();
 }
 
-/** Append cache-buster so Image reloads after upload. */
+/** Append cache-buster so Image reloads after upload. Skip bust when version absent. */
 export function cacheBustPhotoUrl(url: string, version?: string | number | null) {
   const resolved = resolveMediaUrl(url) ?? url;
   if (!resolved) return resolved;
-  const token = version ?? Date.now();
+  if (version == null || version === "") return resolved;
   const sep = resolved.includes("?") ? "&" : "?";
-  return `${resolved}${sep}v=${encodeURIComponent(String(token))}`;
+  return `${resolved}${sep}v=${encodeURIComponent(String(version))}`;
 }

@@ -4,6 +4,7 @@ import { FlashList } from "@shopify/flash-list";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import {
   ActivityIndicator,
+  InteractionManager,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -71,6 +72,7 @@ export function WorkVisitsPanel({
   const syncing = useSyncStore((s) => s.isSyncing);
   const requestId = useRef(0);
 
+  const lastVisitsFocusLoadRef = useRef(0);
   const [visits, setVisits] = useState<Visit[]>([]);
   const [pendingVisits, setPendingVisits] = useState<PendingVisitRecord[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -134,9 +136,19 @@ export function WorkVisitsPanel({
   useFocusEffect(
     useCallback(() => {
       if (!isFocused || !active) return;
-      void loadPending();
-      void loadVisits({ refresh: true });
-    }, [active, isFocused, loadPending, loadVisits])
+      const now = Date.now();
+      // Soft TTL — avoid full visits refresh fighting tab animation every return.
+      if (now - lastVisitsFocusLoadRef.current < 45_000 && visits.length > 0) {
+        void loadPending();
+        return;
+      }
+      lastVisitsFocusLoadRef.current = now;
+      const task = InteractionManager.runAfterInteractions(() => {
+        void loadPending();
+        void loadVisits({ refresh: true });
+      });
+      return () => task.cancel();
+    }, [active, isFocused, loadPending, loadVisits, visits.length])
   );
 
   useEffect(() => {

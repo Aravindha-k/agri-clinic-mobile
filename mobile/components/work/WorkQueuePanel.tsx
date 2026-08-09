@@ -131,7 +131,20 @@ export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
           onPress={() => {
             const id = Number(farmer?.id);
             if (!Number.isFinite(id) || id <= 0) return;
-            navigation.push("FarmerDetail", { id });
+            navigation.push("FarmerDetail", {
+              id,
+              prefill: {
+                name: farmer.name,
+                phone: farmer.phone,
+                village_name: String(farmer.village_name || farmer.village || ""),
+                photo_url: farmer.photo_url,
+                profile_photo_url: farmer.profile_photo_url,
+                latitude: farmer.latitude,
+                longitude: farmer.longitude,
+                land_area: farmer.land_area ?? farmer.total_land_area,
+                total_visits: farmer.total_visits ?? farmer.visit_count
+              }
+            });
           }}
           onMap={() =>
             navigateFarmerMap(navigation, {

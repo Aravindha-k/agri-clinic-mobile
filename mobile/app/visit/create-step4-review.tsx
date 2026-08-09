@@ -30,8 +30,7 @@ import { farmerDisplayName, useVisitFormStore } from "../../store/visitFormStore
 import { resolveVisitReviewFarmer } from "../../lib/visitReviewFarmer";
 import { EntranceBlocks } from "../../components/ui/EntranceBlocks";
 import { useVisitEntranceKey } from "../../context/VisitEntranceContext";
-import { navigateRoot } from "../../../src/navigation/rootNavigationRef";
-import { openLocationPermissionSettings } from "../../../src/features/fieldTrackingSetup";
+import { openDeviceLocationSettings } from "../../../src/utils/workdayLocationGate";
 import { Colors, FontSize, FontWeight, Layout, Radius, Spacing, TextStyles, minTouchStyle } from "../../lib/theme";
 
 type Props = {
@@ -155,6 +154,31 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
       captureInFlight.current = false;
     }
   }, [applyGpsResult]);
+
+  const requestVisitLocationPermission = useCallback(async () => {
+    const { enableLocationForFieldWork } = await import(
+      "../../../src/features/fieldTrackingSetup/ensureForegroundLocation"
+    );
+    const { openSettingsForMissing } = await import("../../../src/features/fieldTrackingSetup");
+    const enabled = await enableLocationForFieldWork();
+    if (enabled.ok) {
+      await runGpsCapture();
+      return;
+    }
+    if (enabled.permanentlyDenied) {
+      setGpsUi("permission_missing");
+      setGpsMessage(enabled.message || "Location permission is disabled for Kavya Agri Clinic.");
+      await openSettingsForMissing("foreground");
+      return;
+    }
+    if (enabled.servicesDisabled) {
+      setGpsUi("services_disabled");
+      setGpsMessage(enabled.message || "Turn on phone location to record this visit.");
+      return;
+    }
+    setGpsUi("permission_missing");
+    setGpsMessage(enabled.message || "Location permission is required.");
+  }, [runGpsCapture]);
 
   useEffect(() => {
     if (visitGpsIsUsable(gpsCoords)) {
@@ -388,14 +412,14 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
               {gpsUi === "permission_missing" ? (
                 <PrimaryButton
                   label={t("visitFlow.gpsFixLocationAccess")}
-                  onPress={() => navigateRoot("FieldTrackingSetup", { focusMissing: ["foreground"] })}
+                  onPress={() => void requestVisitLocationPermission()}
                   style={styles.gpsActionBtn}
                 />
               ) : null}
               {gpsUi === "services_disabled" ? (
                 <PrimaryButton
                   label={t("visitFlow.gpsOpenLocationSettings")}
-                  onPress={() => void openLocationPermissionSettings()}
+                  onPress={() => void openDeviceLocationSettings()}
                   style={styles.gpsActionBtn}
                 />
               ) : null}

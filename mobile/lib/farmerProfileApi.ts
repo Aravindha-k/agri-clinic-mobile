@@ -1,6 +1,7 @@
 import { apiClient } from "../../src/api/client";
 import {
   Farmer,
+  FARMER_PROFILE_VISIT_MAX_PAGES,
   getFarmer,
   getFarmerFields,
   getFarmerVisits
@@ -9,6 +10,7 @@ import type { Visit } from "../../src/api/visits";
 import { asArray, getVisitDisplayDateTime } from "../../src/utils/format";
 import { cropLabelFromVisit } from "../../src/utils/farmerPrefill";
 import { countOpenIssues } from "../../src/utils/farmerTimeline";
+import { writeFarmerProfileCache } from "./farmerProfileCache";
 
 export type FieldCrop = {
   crop_name: string;
@@ -246,7 +248,11 @@ export async function fetchMobileFarmerProfile(pk: number): Promise<MobileFarmer
   try {
     const data = await apiClient<unknown>(`mobile/farmers/${pk}/`, { source: "FarmerProfile" });
     const normalized = normalizeMobileProfile(data, pk);
-    if (normalized) return sanitizeProfile(normalized);
+    if (normalized) {
+      const profile = sanitizeProfile(normalized);
+      writeFarmerProfileCache(profile);
+      return profile;
+    }
   } catch {
     // fallback below
   }
@@ -254,10 +260,17 @@ export async function fetchMobileFarmerProfile(pk: number): Promise<MobileFarmer
   const [farmer, fieldsRaw, visits] = await Promise.all([
     getFarmer(pk),
     getFarmerFields(pk).catch(() => []),
-    getFarmerVisits(pk).catch(() => [])
+    getFarmerVisits(pk, { maxPages: FARMER_PROFILE_VISIT_MAX_PAGES }).catch(() => [])
   ]);
 
-  return sanitizeProfile(buildFromParts(farmer, asArray(fieldsRaw), visits));
+  const profile = sanitizeProfile(buildFromParts(farmer, asArray(fieldsRaw), visits));
+  writeFarmerProfileCache(profile);
+  return profile;
+}
+
+/** Instant paint from list row / directory cache while network profile loads. */
+export function seedMobileFarmerProfile(farmer: Farmer): MobileFarmerProfile {
+  return sanitizeProfile(buildFromParts(sanitizeFarmer(farmer), [], []));
 }
 
 export function problemCategoryFromVisit(visit: Visit | null | undefined): string {

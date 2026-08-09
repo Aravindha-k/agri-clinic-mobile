@@ -53,7 +53,7 @@ export function recoveryCopyForState(state: LocationIssueState): LocationRecover
         state,
         title: "Location access is blocked",
         message:
-          "Location permission is disabled. Enable it from app settings to use field tracking.",
+          "Location permission is disabled for Kavya Agri Clinic.",
         primary: { label: "Open Settings", action: "open_app_settings" },
         secondary: { label: "Cancel", action: "cancel" }
       };

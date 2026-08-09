@@ -73,11 +73,15 @@ function setHealthIfChanged(
   setHealth((prev) => (healthEquals(prev, next) ? prev : next));
 }
 
+/** Avoid blocking modal while TrackingContext starts after Start Work Day. */
+const TRACKING_START_GRACE_MS = 20_000;
+
 async function evaluateHealth(input: {
   workdayActive: boolean;
   foregroundTrackingActive: boolean;
   lastLocationAt: string | null;
   appActive: boolean;
+  workdayActiveForMs?: number | null;
 }): Promise<TrackingHealth> {
   if (!input.workdayActive) {
     return { status: "idle" };
@@ -99,6 +103,11 @@ async function evaluateHealth(input: {
     }
 
     if (!input.foregroundTrackingActive) {
+      const age = input.workdayActiveForMs;
+      if (typeof age === "number" && age >= 0 && age < TRACKING_START_GRACE_MS) {
+        // Bridge still starting — do not brick UI with Resume modal.
+        return { status: "recovering" };
+      }
       return { status: "tracking_stopped" };
     }
 
@@ -131,6 +140,7 @@ export function TrackingHealthProvider({ children }: { children: React.ReactNode
   const appActiveRef = useRef(AppState.currentState === "active");
   const lastLocationAtRef = useRef<string | null>(null);
   const lastLocationKeyRef = useRef<string | null>(null);
+  const workdayActivatedAtRef = useRef<number | null>(null);
   const healthRef = useRef(health);
   healthRef.current = health;
 
@@ -140,6 +150,16 @@ export function TrackingHealthProvider({ children }: { children: React.ReactNode
   workdayActiveRef.current = workdayActive;
   const foregroundTrackingActiveRef = useRef(foregroundTrackingActive);
   foregroundTrackingActiveRef.current = foregroundTrackingActive;
+
+  useEffect(() => {
+    if (workdayActive) {
+      if (workdayActivatedAtRef.current == null) {
+        workdayActivatedAtRef.current = Date.now();
+      }
+    } else {
+      workdayActivatedAtRef.current = null;
+    }
+  }, [workdayActive]);
 
   useEffect(() => {
     if (!currentLocation) return;
@@ -166,11 +186,13 @@ export function TrackingHealthProvider({ children }: { children: React.ReactNode
         return idle;
       }
 
+      const activatedAt = workdayActivatedAtRef.current;
       const next = await evaluateHealth({
         workdayActive: workdayActiveRef.current,
         foregroundTrackingActive: foregroundTrackingActiveRef.current,
         lastLocationAt: lastLocationAtRef.current,
-        appActive: appActiveRef.current
+        appActive: appActiveRef.current,
+        workdayActiveForMs: activatedAt != null ? Date.now() - activatedAt : null
       });
 
       let nextWarn = false;

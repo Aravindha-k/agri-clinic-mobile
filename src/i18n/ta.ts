@@ -54,7 +54,7 @@ export const ta: TranslationTree = {
     subtitle: "உங்கள் பணியாளர் ஐடியும் கடவுச்சொல்லும் உள்ளிடவும்",
     employeeId: "பணியாளர் ஐடி",
     password: "கடவுச்சொல்",
-    employeeIdPlaceholder: "எடுத்துக்காட்டு: AG-8821",
+    employeeIdPlaceholder: "ARAVINDH01",
     passwordPlaceholder: "கடவுச்சொல்லை உள்ளிடவும்",
     forgotPassword: "கடவுச்சொல் மறந்துவிட்டதா? நிர்வாகியைத் தொடர்பு கொள்ளவும்.",
     submit: "உள்நுழை",
@@ -66,6 +66,8 @@ export const ta: TranslationTree = {
     biometricRetry: "கைரேகை பொருந்தவில்லை. மீண்டும் முயலவும் அல்லது கடவுச்சொல்லுடன் உள்நுழையவும்.",
     biometricLockout: "கைரேகை தற்காலிகமாக பூட்டப்பட்டது. கடவுச்சொல்லுடன் உள்நுழையவும்.",
     biometricFailed: "கைரேகை திறப்பு தோல்வியடைந்தது. கடவுச்சொல்லுடன் உள்நுழையவும்.",
+    biometricReconnectPassword:
+      "கைரேகை திறப்பை மீண்டும் இணைக்க ஒருமுறை கடவுச்சொல்லுடன் உள்நுழையவும்.",
     sessionExpiredTitle: "அமர்வு காலாவதியானது",
     sessionExpired: "தொடர கைரேகை அல்லது கடவுச்சொல்லுடன் உள்நுழையவும்.",
     accountDisabled: "உங்கள் கணக்கு தற்போது முடக்கப்பட்டுள்ளது. நிர்வாகியைத் தொடர்பு கொள்ளவும்.",

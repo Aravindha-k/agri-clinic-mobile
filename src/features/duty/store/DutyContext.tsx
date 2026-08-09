@@ -543,11 +543,15 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
           });
           if (started) {
             await applyDutyState(started, { hydrationStatus: "ready", syncStatus: "confirmed" });
-            // Immediate confirmation via location/update — do not wait for poll interval.
-            // Keep Work Day on failure; queue/retry GPS only (never re-POST duty/start).
-            await confirmDutyStartLocationOrRetry(locationResult.location, started);
-            await startTrackingBridge().catch(() => undefined);
-            await refreshDutyMap({ force: true }).catch(() => undefined);
+            // Unlock Start Work Day UI immediately. Confirm/bridge/map must not block —
+            // OEM getCurrentPositionAsync can hang forever and froze the app after start.
+            // TrackingContext also auto-starts on is_active; GPS confirm retries on failure.
+            const confirmLocation = locationResult.location;
+            void (async () => {
+              await confirmDutyStartLocationOrRetry(confirmLocation, started).catch(() => undefined);
+              void startTrackingBridge().catch(() => undefined);
+              void refreshDutyMap({ force: true }).catch(() => undefined);
+            })();
             return started;
           }
         } catch (error) {

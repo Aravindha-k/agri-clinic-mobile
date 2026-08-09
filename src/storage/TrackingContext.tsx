@@ -102,18 +102,29 @@ function normalizeLocation(location: Location.LocationObject | null): CurrentLoc
   };
 }
 
-async function readCurrentFix() {
+/** OEM GPS can hang indefinitely — never await unbounded getCurrentPositionAsync. */
+const CURRENT_FIX_TIMEOUT_MS = 10_000;
+
+async function readCurrentFix(timeoutMs = CURRENT_FIX_TIMEOUT_MS) {
+  const timeout = new Promise<null>((resolve) => {
+    setTimeout(() => resolve(null), timeoutMs);
+  });
   try {
-    return await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-      mayShowUserSettingsDialog: false
-    });
+    const fix = await Promise.race([
+      Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+        mayShowUserSettingsDialog: false
+      }),
+      timeout
+    ]);
+    if (fix) return fix;
   } catch {
-    try {
-      return await Location.getLastKnownPositionAsync();
-    } catch {
-      return null;
-    }
+    /* fall through to last-known */
+  }
+  try {
+    return await Location.getLastKnownPositionAsync();
+  } catch {
+    return null;
   }
 }
 
@@ -256,8 +267,11 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
 
       markDutyTrackingSessionActive(true);
       startGpsTrackingService({ isGpsEnabled: () => servicesEnabled && granted });
+      // Mark active before slow GPS/FGS so health gate does not flash tracking_stopped.
       setForegroundTrackingActive(true);
       clearPollTimer();
+      // Clear Start/busy UI before OEM GPS — unbounded fixes used to freeze post-start.
+      setBusy(false);
 
       if (!servicesEnabled) {
         trackingDevLog("tracking_deferred_permission_missing", "services_disabled");
@@ -302,7 +316,8 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
             ? "already_running"
             : "native_background"
       );
-      await pollOnce();
+      // Do not await poll loop setup — first poll also calls readCurrentFix.
+      void pollOnce();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to start GPS tracking.");
       trackingDevLog("tracking_deferred_permission_missing", "start_error");

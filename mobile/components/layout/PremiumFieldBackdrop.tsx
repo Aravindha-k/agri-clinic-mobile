@@ -1,4 +1,5 @@
 import Svg, { Ellipse, G, Path } from "react-native-svg";
+import { useMemo } from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { DecorOpacity, Harvest } from "../../lib/designSystem";
 
@@ -13,12 +14,14 @@ const LEAF_SILHOUETTES = [
 /** Subtle crop contours + leaf silhouettes — opacity capped at 3%. */
 export function PremiumFieldBackdrop() {
   const { width, height } = useWindowDimensions();
-  const rows = 8;
-  const paths = Array.from({ length: rows }, (_, i) => {
-    const y = height * 0.08 + i * (height * 0.1);
-    const amp = 10 + i * 1.5;
-    return `M 0 ${y} Q ${width * 0.25} ${y - amp} ${width * 0.5} ${y} T ${width} ${y}`;
-  });
+  const paths = useMemo(() => {
+    const rows = 8;
+    return Array.from({ length: rows }, (_, i) => {
+      const y = height * 0.08 + i * (height * 0.1);
+      const amp = 10 + i * 1.5;
+      return `M 0 ${y} Q ${width * 0.25} ${y - amp} ${width * 0.5} ${y} T ${width} ${y}`;
+    });
+  }, [width, height]);
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">

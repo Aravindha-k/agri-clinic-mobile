@@ -53,12 +53,12 @@ export async function checkForegroundPermission(): Promise<{ granted: boolean; m
     }
     return {
       granted: false,
-      message: "Location access is off. Open Field Tracking Setup in Settings once."
+      message: "Location access is off. Allow location when Android asks."
     };
   } catch {
     return {
       granted: false,
-      message: "Location access is off. Open Field Tracking Setup in Settings once."
+      message: "Location access is off. Allow location when Android asks."
     };
   }
 }

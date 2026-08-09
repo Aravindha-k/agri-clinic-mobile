@@ -92,6 +92,7 @@ type BiometricLogEvent =
   | "login_success"
   | "login_cancelled"
   | "login_failed"
+  | "login_refresh_fallback_reauth"
   | "legacy_password_material_cleared"
   | "prompt_suppressed_duplicate"
   | "enabled_flag_cleared"
@@ -467,7 +468,8 @@ async function runBiometricPrompt(promptMessage: string): Promise<BiometricUnloc
 
 async function unlockViaRefresh(): Promise<BiometricUnlockResult> {
   try {
-    const access = await refreshAccessTokenOnce();
+    const { withoutSessionExpiredTeardown } = await import("./sessionExpired");
+    const access = await withoutSessionExpiredTeardown(() => refreshAccessTokenOnce());
     if (access) {
       logBiometric("login_success", { via: "refresh", action: "unlock_existing_session" });
       return { ok: true, outcome: "success", action: "unlock_existing_session" };
@@ -601,9 +603,25 @@ export async function unlockSessionWithBiometrics(): Promise<BiometricUnlockResu
       }
 
       if (action === "unlock_existing_session") {
-        const result = await unlockViaRefresh();
-        logBiometric("prompt_result", { outcome: result.outcome, action });
-        return result;
+        const refreshResult = await unlockViaRefresh();
+        if (
+          refreshResult.ok ||
+          (refreshResult.outcome !== "token_refresh_failed" &&
+            refreshResult.outcome !== "no_refresh_token")
+        ) {
+          logBiometric("prompt_result", { outcome: refreshResult.outcome, action });
+          return refreshResult;
+        }
+        // Refresh dead — same fingerprint gesture may still re-login via Keystore material.
+        const status = await getBiometricLoginStatus();
+        if (status.reauthMaterialReady) {
+          logBiometric("login_refresh_fallback_reauth", { from: refreshResult.outcome });
+          const reauth = await unlockViaReauthLogin();
+          logBiometric("prompt_result", { outcome: reauth.outcome, action: reauth.action });
+          return reauth;
+        }
+        logBiometric("prompt_result", { outcome: refreshResult.outcome, action });
+        return refreshResult;
       }
 
       const result = await unlockViaReauthLogin();

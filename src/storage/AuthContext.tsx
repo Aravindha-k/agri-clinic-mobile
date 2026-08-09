@@ -13,10 +13,11 @@ import { clearDeviceSessionId, DEVICE_SESSION_STORAGE_ERROR, ensureDeviceSession
 import { registerSessionExpiredTeardown } from "./sessionExpired";
 import { registerSessionTeardown } from "./sessionConflict";
 import { runPreSignOutHandlers } from "./preSignOut";
-import { getAccessToken, saveTokens, clearTokens } from "./tokenStorage";
+import { getAccessToken, getRefreshToken, saveTokens, clearTokens } from "./tokenStorage";
 import {
   canUseBiometricLogin,
   clearBiometricLogin,
+  clearBiometricReauthMaterial,
   getBiometricLoginStatus,
   resetBiometricUnlockAttemptThisLaunch,
   saveBiometricReauthMaterial,
@@ -401,21 +402,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const token = await getAccessToken();
         if (isStale()) return;
         if (!token) {
-          let canBioReauth = false;
+          // SecureStore can flake — check refresh before treating as logged out.
+          const refresh =
+            (await getRefreshToken().catch(() => null)) ||
+            (await getRefreshToken().catch(() => null));
+          let canBioUnlock = false;
           try {
-            canBioReauth = await canUseBiometricLogin();
+            canBioUnlock = await canUseBiometricLogin();
           } catch {
-            canBioReauth = false;
+            canBioUnlock = false;
           }
-          if (canBioReauth) {
-            endedPhase = "session_expired";
-            applyPhase("session_expired", "no access token — biometric re-login available");
-            setLoginNotice(SESSION_EXPIRED_MESSAGE);
-          } else {
-            endedPhase = "unauthenticated";
-            applyPhase("unauthenticated", "no saved token");
+          if (canBioUnlock) {
+            // Fingerprint is enabled: use app-lock gate — never "Session expired" logout UX.
+            await ensureDeviceSessionLoaded().catch(() => undefined);
+            if (isStale()) return;
+            lockSessionForBiometric();
+            setLoginNotice(null);
+            endedPhase = "locked";
+            logStartup(
+              "session_locked",
+              refresh ? "no_access_refresh_present" : "no_access_reauth_material"
+            );
+            return;
           }
-          logStartup("session_cleared", canBioReauth ? "session_expired_biometric" : "no saved token");
+          endedPhase = "unauthenticated";
+          applyPhase("unauthenticated", "no saved token");
+          logStartup("session_cleared", "no saved token");
           return;
         }
 
@@ -685,16 +697,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           phase: "session_replaced"
         });
       } else if (result.outcome === "no_refresh_token" || result.outcome === "token_refresh_failed") {
-        // App-lock refresh failed — fall through to session_expired with biometric re-login.
-        setPreferPasswordLoginThisSession(false);
-        await performLocalSignOut({
-          notice: SESSION_EXPIRED_MESSAGE,
-          reason:
-            result.outcome === "token_refresh_failed"
-              ? "refresh_rejected_after_biometric"
-              : "no_refresh_after_biometric",
-          phase: "session_expired"
-        });
+        // Do not force a "session expired" logout when fingerprint can still re-login.
+        const status = await getBiometricLoginStatus().catch(() => null);
+        if (status?.enabled && status.reauthMaterialReady) {
+          setPreferPasswordLoginThisSession(false);
+          setLoginNotice(null);
+          applyPhase("locked", "refresh_failed_reauth_available");
+          logStartup("session_locked", "refresh_failed_reauth_available");
+        } else if (status?.enabled) {
+          // Preference on but Keystore material missing — password once reconnects fingerprint.
+          setPreferPasswordLoginThisSession(true);
+          await clearTokens().catch(() => undefined);
+          applyPhase("unauthenticated", result.outcome);
+          setLoginNotice(null);
+          logStartup("session_cleared", "biometric_needs_password_reconnect");
+        } else {
+          setPreferPasswordLoginThisSession(false);
+          await performLocalSignOut({
+            notice: SESSION_EXPIRED_MESSAGE,
+            reason:
+              result.outcome === "token_refresh_failed"
+                ? "refresh_rejected_after_biometric"
+                : "no_refresh_after_biometric",
+            phase: "session_expired"
+          });
+        }
       } else {
         applyPhase(
           startedPhase === "session_expired"
@@ -707,7 +734,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } else if (result.action === "reauthenticate_expired_session") {
       // Fresh login already stored tokens — bootstrap into the app (stay on Login).
-      await establishAuthenticatedSession({ validateUi: "login" }).catch(() => undefined);
+      try {
+        await establishAuthenticatedSession({ validateUi: "login" });
+      } catch (err) {
+        applyPhase("locked", "reauth_bootstrap_failed");
+        logStartup(
+          "session_locked",
+          err instanceof Error ? `reauth_bootstrap_failed:${err.message}` : "reauth_bootstrap_failed"
+        );
+        return {
+          ok: false,
+          outcome: isNetworkError(err) ? "network_error" : "server_error",
+          action: "reauthenticate_expired_session"
+        };
+      }
     }
     return result;
   }, [applyPhase, establishAuthenticatedSession, performLocalSignOut]);
@@ -732,14 +772,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signOutInFlightRef.current = (async () => {
       await runPreSignOutHandlers();
 
-      // Explicit logout clears tokens AND biometric re-auth — password required once.
+      // Explicit logout: revoke session + clear Keystore reauth so biometric cannot bypass.
+      // Keep ENABLED preference — password login reconnects material for future reopen.
       setPreferPasswordLoginThisSession(true);
       resetBiometricUnlockAttemptThisLaunch();
       try {
         await logoutRequest();
       } finally {
         clearLocalFieldQueuesOnSessionReplace();
-        await clearBiometricLogin().catch(() => undefined);
+        await clearBiometricReauthMaterial("explicit_logout").catch(() => undefined);
         await performLocalSignOut({ reason: "explicit_logout" });
         resetStartupCoordinator();
         markStartupBegin("splash_replay");

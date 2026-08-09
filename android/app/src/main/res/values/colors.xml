@@ -2,5 +2,6 @@
   <color name="splashscreen_background">#D8ECF8</color>
   <color name="iconBackground">#004D17</color>
   <color name="colorPrimary">#023c69</color>
-  <color name="colorPrimaryDark">#004D17</color>
+  <!-- Match native splash sky — avoid green status-bar / theme flash before splash. -->
+  <color name="colorPrimaryDark">#D8ECF8</color>
 </resources>

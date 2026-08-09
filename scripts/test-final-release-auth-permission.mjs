@@ -49,6 +49,10 @@ test("1–3. Native splash background is sky #D8ECF8; colorPrimaryDark does not 
   const brand = read("src/config/brand.config.js");
   assert.match(brand, /nativeSplashBackgroundColor:\s*"#D8ECF8"/);
 
+  const ensure = read("scripts/ensure-android-release-config.mjs");
+  assert.match(ensure, /colorPrimaryDark/);
+  assert.match(ensure, /NATIVE_LAUNCH_BG/);
+
   const splashColors = read("src/components/brand/splashColors.ts");
   assert.match(splashColors, /#D8ECF8/);
 

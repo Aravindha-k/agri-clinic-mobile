@@ -63,6 +63,7 @@ assert.doesNotMatch(splashColors, /NATIVE_LAUNCH_BG = "#0B3D2E"/);
 
 const ensureAndroid = read("scripts/ensure-android-release-config.mjs");
 assert.match(ensureAndroid, /nativeSplashBackgroundColor/);
+assert.match(ensureAndroid, /colorPrimaryDark/);
 assert.doesNotMatch(ensureAndroid, /NATIVE_LAUNCH_BG\s*=\s*"#0B3D2E"/);
 assert.doesNotMatch(ensureAndroid, /splashscreen_background[^#]*#0B3D2E/);
 

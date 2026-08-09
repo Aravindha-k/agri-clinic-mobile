@@ -97,9 +97,21 @@ if (existsSync(colorsPath)) {
       `<resources>\n  <color name="splashscreen_background">${NATIVE_LAUNCH_BG}</color>`
     );
   }
+  // Match status/theme primary-dark to splash sky — avoid green pre-splash flash after prebuild.
+  if (/<color name="colorPrimaryDark">[^<]*<\/color>/.test(colors)) {
+    colors = colors.replace(
+      /<color name="colorPrimaryDark">[^<]*<\/color>/,
+      `<color name="colorPrimaryDark">${NATIVE_LAUNCH_BG}</color>`
+    );
+  } else {
+    colors = colors.replace(
+      "</resources>",
+      `  <color name="colorPrimaryDark">${NATIVE_LAUNCH_BG}</color>\n</resources>`
+    );
+  }
   writeFileSync(colorsPath, colors);
   console.log(
-    `[ensure-android-release-config] patched splashscreen_background → ${NATIVE_LAUNCH_BG}`
+    `[ensure-android-release-config] patched splashscreen_background + colorPrimaryDark → ${NATIVE_LAUNCH_BG}`
   );
 }
 

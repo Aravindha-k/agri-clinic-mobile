@@ -3,10 +3,26 @@ import { getInfoAsync } from "expo-file-system/legacy";
 
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
+/** Document-picker MIME allowlist — matches backend visits.media_validation. */
+export const VISIT_DOCUMENT_PICKER_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/mp4",
+  "audio/m4a",
+  "audio/aac",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/wave",
+  "audio/ogg"
+] as const;
+
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
 const PDF_EXTENSIONS = new Set([".pdf"]);
-const AUDIO_EXTENSIONS = new Set([".mp3", ".m4a", ".wav", ".aac", ".webm"]);
-const DOC_EXTENSIONS = new Set([".doc", ".docx", ".xls", ".xlsx", ".txt", ".csv"]);
+const AUDIO_EXTENSIONS = new Set([".mp3", ".m4a", ".wav", ".aac", ".webm", ".ogg"]);
 
 export type VisitAttachmentType = "image" | "pdf" | "audio" | "text" | "other";
 
@@ -21,8 +37,16 @@ export function inferAttachmentType(filename: string, mimeType = ""): VisitAttac
   if (IMAGE_EXTENSIONS.has(ext) || mime.startsWith("image/")) return "image";
   if (PDF_EXTENSIONS.has(ext) || mime === "application/pdf") return "pdf";
   if (AUDIO_EXTENSIONS.has(ext) || mime.startsWith("audio/")) return "audio";
-  if (DOC_EXTENSIONS.has(ext)) return "other";
   return "other";
+}
+
+/** Reject unsupported business MIME/types after picker (defense in depth). */
+export function assertSupportedVisitAttachment(filename: string, mimeType = "") {
+  const type = inferAttachmentType(filename, mimeType);
+  if (type === "image" || type === "pdf" || type === "audio" || type === "text") {
+    return type;
+  }
+  throw new Error("That file type is not supported. Please use a photo, PDF, or voice recording.");
 }
 
 export async function getLocalFileSize(uri: string): Promise<number | null> {

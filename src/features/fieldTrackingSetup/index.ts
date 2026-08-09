@@ -65,6 +65,10 @@ export {
   type LocationIssueState
 } from "./locationPermissionService";
 export {
+  getLocationPermissionSnapshot,
+  type LocationPermissionSnapshot
+} from "./locationPermissionSnapshot";
+export {
   ensureLocationReadyForAction,
   startWorkDayWithLocationGate,
   openSettingsForPendingStartWorkDay,

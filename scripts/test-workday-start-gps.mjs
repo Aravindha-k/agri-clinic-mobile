@@ -31,8 +31,8 @@ test("startDuty captures GPS and confirms via location update before bridge", ()
   const src = read("src/features/duty/store/DutyContext.tsx");
   assert.match(src, /captureDutyActionLocation/);
   assert.match(src, /startDutySession\(\{\s*latitude:\s*coords\.latitude/s);
-  assert.match(src, /confirmDutyStartLocation\(locationResult\.location,\s*started\)/);
-  assert.match(src, /await confirmDutyStartLocation[\s\S]*await startTrackingBridge/s);
+  assert.match(src, /confirmDutyStartLocationOrRetry\(locationResult\.location,\s*started\)/);
+  assert.match(src, /await confirmDutyStartLocationOrRetry[\s\S]*await startTrackingBridge/s);
 
   const startBlock = src.match(
     /const startDuty = useCallback\(async \(\) => \{[\s\S]*?\}, \[applyDutyState/
@@ -40,7 +40,7 @@ test("startDuty captures GPS and confirms via location update before bridge", ()
   assert.ok(startBlock, "startDuty callback not found");
   const body = startBlock[0];
   const startIdx = body.indexOf("startDutySession");
-  const confirmIdx = body.indexOf("confirmDutyStartLocation");
+  const confirmIdx = body.indexOf("confirmDutyStartLocationOrRetry");
   assert.ok(startIdx >= 0 && confirmIdx > startIdx, "confirm must run after startDutySession");
   assert.equal(
     body.split("startDutySession").length - 1,
@@ -52,6 +52,8 @@ test("startDuty captures GPS and confirms via location update before bridge", ()
 test("confirmDutyStartLocation forces upload linked to returned session", () => {
   const src = read("src/tracking/locationSyncService.ts");
   assert.match(src, /export async function confirmDutyStartLocation/);
+  assert.match(src, /confirmDutyStartLocationOrRetry/);
+  assert.match(src, /scheduleDutyStartGpsConfirmRetry/);
   assert.match(src, /force:\s*true/);
   assert.match(src, /duty_session_id/);
   assert.match(src, /markDutyTrackingSessionActive\(true\)/);
@@ -62,6 +64,7 @@ test("GPS sync queues offline without retrying duty start", () => {
   const sync = read("src/tracking/locationSyncService.ts");
   assert.match(sync, /queued_offline/);
   assert.match(sync, /appendLocationPush/);
+  assert.doesNotMatch(sync, /startDutySession/);
   const duty = read("src/features/duty/store/DutyContext.tsx");
   assert.match(duty, /runSingleFlightAction/);
   assert.match(duty, /isWorkdayAlreadyActiveMessage/);

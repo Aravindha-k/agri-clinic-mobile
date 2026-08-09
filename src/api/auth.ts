@@ -86,6 +86,9 @@ export async function loginRequest(identifier: string, password: string): Promis
   }
 }
 
+/** Canonical mobile logout — revokes EmployeeDeviceSession (web `auth/logout/` does not). */
+export const MOBILE_AUTH_LOGOUT = "mobile/auth/logout/";
+
 /** Single-flight logout — repeated taps / overlapping teardowns share one request. */
 let logoutFlight: Promise<void> | null = null;
 
@@ -97,16 +100,16 @@ export async function logoutRequest(): Promise<void> {
   logoutFlight = (async () => {
     try {
       const refresh = await getRefreshToken();
-      await apiClient("auth/logout/", {
+      // apiClient attaches Bearer + X-Device-Session when available.
+      // Network / 401 / 403 / 429 failures must not block local sign-out.
+      await apiClient(MOBILE_AUTH_LOGOUT, {
         method: "POST",
         body: JSON.stringify(refresh ? { refresh } : {})
       });
     } catch (err) {
-      // Rate-limit / already-logged-out: continue local cleanup; do not retry in a loop.
       if (err instanceof ApiRequestError && (err.status === 429 || err.status === 401 || err.status === 403)) {
         return;
       }
-      // Network blips — still allow local sign-out.
       if (__DEV__) {
         console.warn("[Auth] logout request failed", err instanceof Error ? err.message : "unknown");
       }

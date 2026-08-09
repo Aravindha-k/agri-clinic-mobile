@@ -42,16 +42,44 @@ export function FarmerPhotoAvatar({ farmer, onFarmerUpdated, size = 52, style }:
     try {
       const picked = await pickProfileImage(source);
       if (!picked || !farmer.id) return;
+      // Show local preview immediately — do not wait for remote URL.
+      setLocalUrl(picked.uri);
+      setPhotoVersion(Date.now());
+      setImgFailed(false);
       setUploading(true);
       setProgress(0);
       const result = await uploadFarmerPhoto(farmer.id, picked, setProgress);
-      const url = result.photo_url || extractPhotoUrl(result.entity) || null;
-      setLocalUrl(url);
-      setPhotoVersion(Date.now());
-      if (result.entity && typeof result.entity === "object" && "id" in result.entity) {
-        onFarmerUpdated?.(result.entity as Farmer);
+      let url = result.photo_url || extractPhotoUrl(result.entity) || null;
+      let entity = result.entity;
+
+      if (!url && farmer.id) {
+        try {
+          const { refreshFarmer } = await import("../../../src/api/profilePhotos");
+          const refreshed = await refreshFarmer(farmer.id);
+          entity = refreshed;
+          url = extractPhotoUrl(refreshed);
+        } catch {
+          /* keep optimistic local preview */
+        }
+      }
+
+      if (url) {
+        setLocalUrl(url);
+        setPhotoVersion(Date.now());
+      }
+
+      if (entity && typeof entity === "object" && "id" in entity) {
+        onFarmerUpdated?.(entity as Farmer);
+      }
+
+      if (!url && !extractPhotoUrl(entity)) {
+        Alert.alert(
+          "Photo uploaded",
+          "The photo was saved but could not be refreshed yet. Pull to refresh if it does not appear."
+        );
       }
     } catch (err) {
+      setLocalUrl(null);
       Alert.alert("Upload failed", handleProfilePickerError(err) || "Please try again.");
     } finally {
       setUploading(false);

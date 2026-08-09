@@ -202,10 +202,20 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
     setUploadingPhoto(true);
     try {
       const next = await uploadVisitPhoto(visit.id, photo);
-      setAttachments(next);
+      // Always replace with a new array reference from the upload helper.
+      setAttachments([...next]);
       bumpAfterVisitChange();
     } catch (err) {
       Alert.alert("Upload failed", err instanceof Error ? err.message : "Please try again.");
+      // Recover visible state if the server accepted the file but UI sync failed.
+      try {
+        const recovered = await fetchVisitAttachments(visit.id, { dedupe: false });
+        if (recovered.length > 0) {
+          setAttachments([...recovered]);
+        }
+      } catch {
+        /* keep prior attachments */
+      }
     } finally {
       setUploadingPhoto(false);
     }

@@ -50,24 +50,54 @@ export function FarmerPhotoPicker({
         if (!picked) return;
 
         if (farmer?.id) {
+          // Immediate local preview before remote URL arrives.
+          setLocalUrl(picked.uri);
+          setPhotoVersion(Date.now());
           setUploading(true);
           setProgress(0);
           const result = await uploadFarmerPhoto(farmer.id, picked, setProgress);
-          const url = result.photo_url || extractPhotoUrl(result.entity) || null;
-          setLocalUrl(url);
-          setPhotoVersion(Date.now());
-          onPhotoUrlChange?.(url);
-          if (result.entity && typeof result.entity === "object" && "id" in result.entity) {
-            onFarmerUpdated?.(result.entity as Farmer);
+          let url = result.photo_url || extractPhotoUrl(result.entity) || null;
+          let entity = result.entity;
+
+          if (!url) {
+            try {
+              const { refreshFarmer } = await import("../api/profilePhotos");
+              const refreshed = await refreshFarmer(farmer.id);
+              entity = refreshed;
+              url = extractPhotoUrl(refreshed);
+            } catch {
+              /* keep optimistic preview */
+            }
+          }
+
+          if (url) {
+            setLocalUrl(url);
+            setPhotoVersion(Date.now());
+            onPhotoUrlChange?.(url);
+          }
+
+          if (entity && typeof entity === "object" && "id" in entity) {
+            onFarmerUpdated?.(entity as Farmer);
           }
           onPendingPhotoChange?.(null);
-          Alert.alert("Photo saved", "Farmer profile photo updated.");
+
+          if (!url && !extractPhotoUrl(entity)) {
+            Alert.alert(
+              "Photo uploaded",
+              "The photo was saved but could not be refreshed yet. Pull to refresh if it does not appear."
+            );
+          } else {
+            Alert.alert("Photo saved", "Farmer profile photo updated.");
+          }
         } else {
           onPendingPhotoChange?.(picked);
           setLocalUrl(picked.uri);
           Alert.alert("Photo added", "Photo will upload when the farmer is saved with the visit.");
         }
       } catch (err) {
+        if (farmer?.id) {
+          setLocalUrl(null);
+        }
         Alert.alert("Upload failed", handleProfilePickerError(err) || "Please try again.");
       } finally {
         setUploading(false);

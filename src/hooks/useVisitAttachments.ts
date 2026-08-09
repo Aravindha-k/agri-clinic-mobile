@@ -31,8 +31,8 @@ export function useVisitAttachments(visitId: number | null | undefined) {
     setLoading(true);
     setError("");
     try {
-      const rows = await listVisitAttachments(visitId);
-      setAttachments(rows);
+      const rows = await listVisitAttachments(visitId, { dedupe: false });
+      setAttachments([...rows]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load attachments.");
     } finally {
@@ -49,11 +49,11 @@ export function useVisitAttachments(visitId: number | null | undefined) {
         const orig = await uploadVisitAttachmentFile(visitId, original, (p) =>
           setUploading({ progress: p * 0.45, label: original.name })
         );
-        setAttachments((prev) => [orig, ...prev]);
+        setAttachments((prev) => [orig, ...prev.filter((row) => row.id !== orig.id)]);
         const proofRow = await uploadVisitAttachmentFile(visitId, proof, (p) =>
           setUploading({ progress: 0.45 + p * 0.55, label: proof.name })
         );
-        setAttachments((prev) => [proofRow, ...prev]);
+        setAttachments((prev) => [proofRow, ...prev.filter((row) => row.id !== proofRow.id)]);
       } catch (err) {
         setError(friendlyUploadError(err));
         throw err;
@@ -73,7 +73,10 @@ export function useVisitAttachments(visitId: number | null | undefined) {
         const created = await uploadVisitAttachmentFile(visitId, file, (p) =>
           setUploading({ progress: p, label: file.name })
         );
-        setAttachments((prev) => [created, ...prev]);
+        if (!created?.id) {
+          throw new Error("Upload succeeded but the attachment could not be loaded. Please refresh.");
+        }
+        setAttachments((prev) => [created, ...prev.filter((row) => row.id !== created.id)]);
       } catch (err) {
         setError(friendlyUploadError(err));
         throw err;

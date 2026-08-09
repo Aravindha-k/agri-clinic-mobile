@@ -1,9 +1,13 @@
 import { API_BASE_URL } from "./config";
+import { DEVICE_SESSION_HEADER } from "../constants/deviceSession";
+import { getDeviceSessionId } from "../storage/deviceSessionStorage";
 import { getRefreshToken, updateAccessToken } from "../storage/tokenStorage";
+import { handleDeviceSessionConflict } from "../storage/sessionConflict";
 import { handleSessionExpired } from "../storage/sessionExpired";
 import {
   ApiRequestError,
   formatApiErrorMessage,
+  isDeviceSessionConflictPayload,
   isNetworkError,
   networkError,
   serverError,
@@ -12,6 +16,7 @@ import {
 } from "../utils/apiError";
 import { classify401Response } from "../utils/authFailure";
 import { unwrapSuccessEnvelope } from "../utils/apiUnwrap";
+import { SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
 
 async function readResponseBody(response: Response): Promise<unknown> {
   const text = await response.text();
@@ -37,6 +42,14 @@ function extractAccessToken(data: unknown): string | null {
   return access || null;
 }
 
+async function teardownSessionReplaced(status: number): Promise<never> {
+  await handleDeviceSessionConflict();
+  throw new ApiRequestError(SESSION_REPLACED_MESSAGE, {
+    code: "SESSION_REPLACED",
+    status
+  });
+}
+
 /** Refresh access token — only logs out on confirmed auth failure (401 / missing refresh). */
 export async function refreshAccessTokenShared(): Promise<string> {
   const refresh = await getRefreshToken();
@@ -45,12 +58,20 @@ export async function refreshAccessTokenShared(): Promise<string> {
     throw new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
   }
 
+  const deviceSessionId = await getDeviceSessionId();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const body: Record<string, string> = { refresh };
+  if (deviceSessionId) {
+    headers[DEVICE_SESSION_HEADER] = deviceSessionId;
+    body.device_session_id = deviceSessionId;
+  }
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}mobile/auth/refresh/`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh })
+      headers,
+      body: JSON.stringify(body)
     });
   } catch (err) {
     if (isNetworkError(err)) {
@@ -59,18 +80,29 @@ export async function refreshAccessTokenShared(): Promise<string> {
     throw err;
   }
 
+  if (response.status === 409) {
+    const data = await readResponseBody(response);
+    if (isDeviceSessionConflictPayload(data, 409)) {
+      await teardownSessionReplaced(409);
+    }
+    throw new ApiRequestError(formatApiErrorMessage(data, "Could not refresh session.", 409), {
+      status: 409
+    });
+  }
+
   if (response.status === 401) {
     const data = await readResponseBody(response);
+    if (isDeviceSessionConflictPayload(data, 401)) {
+      await teardownSessionReplaced(401);
+    }
     const kind = classify401Response(data, 401);
     if (kind === "token_expired") {
       await handleSessionExpired();
       throw new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
     }
     if (kind === "device_session") {
-      throw new ApiRequestError("Device session could not be verified. Please sign in again.", {
-        code: "DEVICE_SESSION_REQUIRED",
-        status: 401
-      });
+      // Missing/invalid device session on refresh — same canonical teardown as API 409.
+      await teardownSessionReplaced(401);
     }
     throw new ApiRequestError(formatApiErrorMessage(data, "Could not refresh session. Please try again.", 401), {
       code: "AUTH_UNCERTAIN",
@@ -96,6 +128,9 @@ export async function refreshAccessTokenShared(): Promise<string> {
       throw serverError(SERVER_MESSAGE, response.status);
     }
     const data = await readResponseBody(response);
+    if (isDeviceSessionConflictPayload(data, response.status)) {
+      await teardownSessionReplaced(response.status);
+    }
     throw new ApiRequestError(formatApiErrorMessage(data, "Could not refresh session.", response.status), {
       status: response.status
     });

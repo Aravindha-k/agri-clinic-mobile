@@ -329,6 +329,12 @@ export async function handleForcedLocationUpdate(
   return handleLocationUpdate(location, { force: true });
 }
 
+export type DutyStartConfirmSession = {
+  duty_session_id?: number | null;
+  workday_id?: number | null;
+  id?: number | null;
+};
+
 /**
  * Immediate Start Work Day GPS confirmation via canonical location/update.
  * Links the point to the returned DutySession; queues only this GPS update if offline.
@@ -336,11 +342,7 @@ export async function handleForcedLocationUpdate(
  */
 export async function confirmDutyStartLocation(
   location: Location.LocationObject,
-  session: {
-    duty_session_id?: number | null;
-    workday_id?: number | null;
-    id?: number | null;
-  }
+  session: DutyStartConfirmSession
 ): Promise<LocationHandleResult> {
   markDutyTrackingSessionActive(true);
   const workdayId = session.workday_id ?? session.id ?? null;
@@ -354,6 +356,79 @@ export async function confirmDutyStartLocation(
     workdayId,
     dutySessionId
   });
+}
+
+const CONFIRM_RETRY_DELAYS_MS = [2_000, 5_000, 15_000] as const;
+let confirmRetryTimers: ReturnType<typeof setTimeout>[] = [];
+
+function clearDutyStartGpsConfirmRetries() {
+  for (const timer of confirmRetryTimers) {
+    clearTimeout(timer);
+  }
+  confirmRetryTimers = [];
+}
+
+/**
+ * After a failed/queued immediate confirm: keep the started Work Day and schedule
+ * short retries (never re-POST duty/start). Uses the returned session ids.
+ */
+export function scheduleDutyStartGpsConfirmRetry(
+  location: Location.LocationObject,
+  session: DutyStartConfirmSession
+): void {
+  clearDutyStartGpsConfirmRetries();
+  trackingDevLog("duty_start_gps_confirm_retry_scheduled", `${CONFIRM_RETRY_DELAYS_MS.join(",")}ms`);
+  // Immediate offline flush when confirm already queued the point.
+  void flushOfflineLocationQueue().catch(() => undefined);
+
+  for (const delayMs of CONFIRM_RETRY_DELAYS_MS) {
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const result = await confirmDutyStartLocation(location, session);
+          trackingDevLog("duty_start_gps_confirm_retry", result);
+          if (result === "sent") {
+            clearDutyStartGpsConfirmRetries();
+            return;
+          }
+          if (result === "queued") {
+            await flushOfflineLocationQueue().catch(() => undefined);
+          }
+        } catch (err) {
+          trackingDevLog(
+            "duty_start_gps_confirm_retry_error",
+            err instanceof Error ? err.message : "confirm retry failed"
+          );
+          await flushOfflineLocationQueue().catch(() => undefined);
+        }
+      })();
+    }, delayMs);
+    confirmRetryTimers.push(timer);
+  }
+}
+
+/**
+ * Confirm immediately; on non-sent outcome schedule safe retries without duplicating Work Day.
+ */
+export async function confirmDutyStartLocationOrRetry(
+  location: Location.LocationObject,
+  session: DutyStartConfirmSession
+): Promise<LocationHandleResult> {
+  try {
+    const result = await confirmDutyStartLocation(location, session);
+    if (result === "sent") {
+      return result;
+    }
+    scheduleDutyStartGpsConfirmRetry(location, session);
+    return result;
+  } catch (err) {
+    trackingDevLog(
+      "duty_start_gps_confirm_error",
+      err instanceof Error ? err.message : "confirm failed"
+    );
+    scheduleDutyStartGpsConfirmRetry(location, session);
+    return "queued";
+  }
 }
 
 /** Process GPS batch from native background task — must await so data persists before OS suspends JS. */

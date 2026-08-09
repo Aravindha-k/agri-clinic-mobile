@@ -7,6 +7,7 @@ import { AppErrorBoundary } from "../../src/components/AppErrorBoundary";
 import { shouldShowExpoGoDevWarning } from "../../src/utils/expoRuntime";
 import { logDayTabApi, logDayTabError, logDayTabOpen } from "../../src/utils/dayTabDiagnostics";
 import { useResponsiveLayout } from "../../src/hooks/useResponsiveLayout";
+import { useSecureScreen } from "../../src/hooks/useSecureScreen";
 import { useTabBarBottomInset } from "../../src/hooks/useTabBarBottomInset";
 import { useI18n } from "../../src/i18n/I18nContext";
 import { useTracking } from "../../src/storage/TrackingContext";
@@ -57,6 +58,7 @@ export default function TrackingWorkspaceScreen() {
 
 function TrackingWorkspaceScreenInner() {
   const { t } = useI18n();
+  useSecureScreen();
   const navigation = useNavigation<any>();
   const tabInset = useTabBarBottomInset();
   const { compactHeight, dayMapMinHeight } = useResponsiveLayout();

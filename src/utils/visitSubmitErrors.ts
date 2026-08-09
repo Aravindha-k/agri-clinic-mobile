@@ -1,6 +1,13 @@
-import { ApiRequestError, formatApiErrorMessage, isNetworkError, NETWORK_MESSAGE, SERVER_MESSAGE } from "./apiError";
+import {
+  ApiRequestError,
+  formatApiErrorMessage,
+  isDeviceSessionConflictPayload,
+  isNetworkError,
+  NETWORK_MESSAGE,
+  SERVER_MESSAGE
+} from "./apiError";
 import { SESSION_EXPIRED_MESSAGE } from "../constants/authMessages";
-import { SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
+import { SESSION_REPLACED_CODES, SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
 
 export const VISIT_SUBMIT_FALLBACK = "Could not submit the visit. Please try again.";
 
@@ -19,6 +26,15 @@ function parseMaybeJson(text: string): unknown | null {
   } catch {
     return null;
   }
+}
+
+function payloadLooksLikeSessionConflict(data: unknown): boolean {
+  if (!data || typeof data !== "object") return false;
+  const code =
+    typeof (data as { code?: unknown }).code === "string"
+      ? (data as { code: string }).code.trim()
+      : "";
+  return Boolean(code && SESSION_REPLACED_CODES.has(code));
 }
 
 /**
@@ -80,21 +96,35 @@ export function normalizeVisitSubmitUserMessage(
     if (lower.includes("network")) {
       return NETWORK_MESSAGE;
     }
-    if (looksLikeRawJson(input) || input.includes(" at ") && input.includes("Error:")) {
+    if (looksLikeRawJson(input) || (input.includes(" at ") && input.includes("Error:"))) {
       return fallback;
     }
     return input.trim() || fallback;
   }
 
   if (input && typeof input === "object") {
-    const err = input as { message?: unknown; status?: number; response?: { status?: number; data?: unknown } };
+    const err = input as {
+      message?: unknown;
+      status?: number;
+      code?: string;
+      response?: { status?: number; data?: unknown };
+    };
     const httpStatus = status ?? err.status ?? err.response?.status;
+    const data = err.response?.data ?? input;
+
     if (httpStatus === 401) return SESSION_EXPIRED_MESSAGE;
+
     if (httpStatus === 409) {
-      const data = err.response?.data;
-      const formatted = formatApiErrorMessage(data ?? input, SESSION_REPLACED_MESSAGE, 409);
-      return formatted;
+      if (
+        payloadLooksLikeSessionConflict(data) ||
+        isDeviceSessionConflictPayload(data, 409) ||
+        (typeof err.code === "string" && SESSION_REPLACED_CODES.has(err.code))
+      ) {
+        return SESSION_REPLACED_MESSAGE;
+      }
+      return formatApiErrorMessage(data, fallback, 409);
     }
+
     if (httpStatus === 413) {
       return "One or more files are too large. Please use a smaller photo or document.";
     }
@@ -124,7 +154,7 @@ export function visitSubmitErrorFromHttp(status: number, data: unknown, rawText?
   if (status === 401) {
     return new ApiRequestError(SESSION_EXPIRED_MESSAGE, { code: "SESSION_EXPIRED", status: 401 });
   }
-  if (status === 409) {
+  if (status === 409 && isDeviceSessionConflictPayload(data, 409)) {
     return new ApiRequestError(
       formatApiErrorMessage(data, SESSION_REPLACED_MESSAGE, 409),
       { code: "SESSION_REPLACED", status: 409 }
@@ -135,7 +165,7 @@ export function visitSubmitErrorFromHttp(status: number, data: unknown, rawText?
     fallback: VISIT_SUBMIT_FALLBACK
   });
   return new ApiRequestError(message, {
-    code: status >= 500 ? "SERVER_ERROR" : "VISIT_SUBMIT_FAILED",
+    code: status >= 500 ? "SERVER_ERROR" : status === 409 ? "VISIT_CONFLICT" : "VISIT_SUBMIT_FAILED",
     status
   });
 }

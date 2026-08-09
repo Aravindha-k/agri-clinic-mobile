@@ -95,6 +95,33 @@ test("session replaced uses canonical session message", () => {
   );
 });
 
+test("ordinary 409 conflict is not forced to SESSION_REPLACED", () => {
+  const src = read("src/utils/visitSubmitErrors.ts");
+  assert.match(src, /isDeviceSessionConflictPayload/);
+  assert.match(src, /VISIT_CONFLICT/);
+  assert.match(src, /status === 409 && isDeviceSessionConflictPayload/);
+
+  // visitSubmitErrorFromHttp: only session codes → SESSION_REPLACED teardown path.
+  assert.match(src, /if \(status === 409 && isDeviceSessionConflictPayload\(data, 409\)\)/);
+  assert.match(src, /code: status >= 500 \? "SERVER_ERROR" : status === 409 \? "VISIT_CONFLICT"/);
+
+  const SESSION_REPLACED_CODES = new Set(["SESSION_REPLACED", "DEVICE_SESSION_CONFLICT"]);
+  function isDeviceSessionConflictPayload(data, status) {
+    const code =
+      data && typeof data === "object" && typeof data.code === "string" ? data.code.trim() : null;
+    if (code && SESSION_REPLACED_CODES.has(code)) return true;
+    return status === 409 && code != null && SESSION_REPLACED_CODES.has(code);
+  }
+  function classify409(data) {
+    if (isDeviceSessionConflictPayload(data, 409)) return "SESSION_REPLACED";
+    return "VISIT_CONFLICT";
+  }
+  assert.equal(classify409({ code: "SESSION_REPLACED" }), "SESSION_REPLACED");
+  assert.equal(classify409({ code: "DEVICE_SESSION_CONFLICT" }), "SESSION_REPLACED");
+  assert.equal(classify409({ detail: "Visit already submitted" }), "VISIT_CONFLICT");
+  assert.equal(classify409({ code: "DUPLICATE_VISIT" }), "VISIT_CONFLICT");
+});
+
 test("canonical helper module exists with diagnostics-safe mapping", () => {
   const src = read("src/utils/visitSubmitErrors.ts");
   assert.match(src, /normalizeVisitSubmitUserMessage/);

@@ -19,7 +19,7 @@ import {
 } from "../../../storage/workdaySessionStorage";
 import { useAuth, useAuthSessionReady } from "../../../storage/AuthContext";
 import { flushTrackingGpsQueue, startTrackingBridge, stopTrackingBridge } from "../../../storage/TrackingContext";
-import { confirmDutyStartLocation } from "../../../tracking/locationSyncService";
+import { confirmDutyStartLocationOrRetry } from "../../../tracking/locationSyncService";
 import { subscribeAuthPhase, canSendAuthenticatedRequests } from "../../../storage/authPhase";
 import { fetchDutyMap, invalidateDutyMapCache } from "../api/dutyMapApi";
 import { fetchMobileBootstrap, invalidateMobileBootstrapCache } from "../api/mobileBootstrapApi";
@@ -544,24 +544,39 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
           if (started) {
             await applyDutyState(started, { hydrationStatus: "ready", syncStatus: "confirmed" });
             // Immediate confirmation via location/update — do not wait for poll interval.
-            // Queues GPS only if offline; never retries duty/start.
-            await confirmDutyStartLocation(locationResult.location, started).catch(() => undefined);
+            // Keep Work Day on failure; queue/retry GPS only (never re-POST duty/start).
+            await confirmDutyStartLocationOrRetry(locationResult.location, started);
             await startTrackingBridge().catch(() => undefined);
             await refreshDutyMap({ force: true }).catch(() => undefined);
             return started;
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          if (!(error instanceof ApiRequestError) && !isWorkdayAlreadyActiveMessage(message)) {
+          const alreadyActive =
+            isWorkdayAlreadyActiveMessage(message) ||
+            (error instanceof ApiRequestError && error.status === 409);
+
+          if (alreadyActive) {
+            return refreshCurrentDuty();
+          }
+
+          if (isNetworkError(error)) {
             setState((prev) => ({
               ...prev,
               syncStatus: "idle",
-              bootstrapError: message
+              bootstrapError: message || "No internet connection. Check your network and try again."
             }));
             return null;
           }
+
+          setState((prev) => ({
+            ...prev,
+            syncStatus: "idle",
+            bootstrapError: message || null
+          }));
+          return null;
         }
-        return refreshCurrentDuty();
+        return null;
       } catch {
         setState((prev) => ({ ...prev, syncStatus: "idle" }));
         return null;

@@ -35,9 +35,117 @@ export type LocalFilePayload = {
 
 const BASE = (visitId: number) => `mobile/visits/${visitId}/attachments/`;
 
-export function listVisitAttachments(visitId: number) {
-  return apiClient<VisitAttachment[] | { results: VisitAttachment[] }>(BASE(visitId)).then((data) =>
-    resolveList<VisitAttachment>(data)
+const ATTACHMENT_TYPES = new Set<VisitAttachmentType>(["image", "pdf", "audio", "text", "other"]);
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+}
+
+function firstString(...candidates: unknown[]): string | null {
+  for (const value of candidates) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function extractNestedFileUrl(row: Record<string, unknown>): string | null {
+  const direct = firstString(row.file_url, row.file, row.url, row.media_url, row.photo_url, row.photo);
+  if (direct) return direct;
+  const fileObj = asRecord(row.file);
+  if (fileObj) {
+    return firstString(fileObj.url, fileObj.file_url, fileObj.path, fileObj.uri);
+  }
+  return null;
+}
+
+function coerceAttachmentType(
+  raw: unknown,
+  mimeType: string | null,
+  fileUrl: string | null
+): VisitAttachmentType {
+  if (typeof raw === "string") {
+    const normalized = raw.trim().toLowerCase() as VisitAttachmentType;
+    if (ATTACHMENT_TYPES.has(normalized)) return normalized;
+  }
+  const mime = (mimeType || "").toLowerCase();
+  if (mime.startsWith("image/")) return "image";
+  if (mime === "application/pdf") return "pdf";
+  if (mime.startsWith("audio/")) return "audio";
+  if (mime.startsWith("text/")) return "text";
+  if (fileUrl && /\.(jpe?g|png|webp)(\?|$)/i.test(fileUrl)) return "image";
+  return "other";
+}
+
+/** Normalize create/list attachment payloads into one UI shape. */
+export function normalizeVisitAttachment(raw: unknown): VisitAttachment | null {
+  const root = asRecord(raw);
+  if (!root) return null;
+  const nested =
+    asRecord(root.attachment) ||
+    asRecord(root.data) ||
+    asRecord(root.result) ||
+    root;
+
+  const id = Number(nested.id);
+  if (!Number.isFinite(id) || id <= 0) return null;
+
+  const mime_type = firstString(nested.mime_type, nested.mimeType, nested.content_type);
+  const file_url = extractNestedFileUrl(nested) || extractNestedFileUrl(root);
+  const attachment_type = coerceAttachmentType(nested.attachment_type ?? nested.type, mime_type, file_url);
+
+  return {
+    id,
+    visit: Number(nested.visit) || 0,
+    employee: typeof nested.employee === "number" ? nested.employee : undefined,
+    attachment_type,
+    file_url,
+    text_content: firstString(nested.text_content, nested.textContent),
+    original_filename: firstString(nested.original_filename, nested.originalFilename, nested.filename, nested.name),
+    mime_type,
+    file_size:
+      typeof nested.file_size === "number"
+        ? nested.file_size
+        : typeof nested.size === "number"
+          ? nested.size
+          : null,
+    uploaded_at:
+      firstString(nested.uploaded_at, nested.created_at, nested.updated_at) || new Date().toISOString(),
+    uploaded_by: typeof nested.uploaded_by === "number" ? nested.uploaded_by : undefined,
+    uploaded_by_username: firstString(nested.uploaded_by_username) || undefined,
+    employee_username: firstString(nested.employee_username) || undefined
+  };
+}
+
+export function isDisplayableVisitImage(attachment: VisitAttachment | null | undefined): boolean {
+  return Boolean(attachment && attachment.attachment_type === "image" && attachment.file_url?.trim());
+}
+
+/** Prefer newer rows; keep stable unique ids. */
+export function mergeVisitAttachmentsById(
+  existing: VisitAttachment[],
+  incoming: VisitAttachment[]
+): VisitAttachment[] {
+  const byId = new Map<number, VisitAttachment>();
+  for (const row of existing) {
+    byId.set(row.id, row);
+  }
+  for (const row of incoming) {
+    byId.set(row.id, row);
+  }
+  return Array.from(byId.values()).sort((a, b) => {
+    const ta = new Date(a.uploaded_at || 0).getTime();
+    const tb = new Date(b.uploaded_at || 0).getTime();
+    return tb - ta;
+  });
+}
+
+export function listVisitAttachments(visitId: number, options?: { dedupe?: boolean }) {
+  return apiClient<VisitAttachment[] | { results: VisitAttachment[] }>(BASE(visitId), {
+    dedupe: options?.dedupe
+  }).then((data) =>
+    resolveList<unknown>(data)
+      .map((row) => normalizeVisitAttachment(row))
+      .filter((row): row is VisitAttachment => row != null)
   );
 }
 
@@ -68,11 +176,12 @@ async function parseUploadResponse(xhr: XMLHttpRequest): Promise<VisitAttachment
     }
     throw new Error(formatApiErrorMessage(data, "Upload failed", xhr.status));
   }
-  const unwrapped = unwrapSuccessEnvelope<VisitAttachment>(data);
-  if (!unwrapped || typeof unwrapped !== "object") {
+  const unwrapped = unwrapSuccessEnvelope<unknown>(data);
+  const normalized = normalizeVisitAttachment(unwrapped);
+  if (!normalized) {
     throw new Error("Upload response was invalid.");
   }
-  return unwrapped;
+  return normalized;
 }
 
 export function uploadVisitAttachmentFile(

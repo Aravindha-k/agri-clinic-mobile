@@ -27,6 +27,10 @@ type TrackingLogEvent =
   | "tracking_deferred_permission_missing"
   | "tracking_stopped_permission_revoked"
   | "duty_start_gps_confirm"
+  | "duty_start_gps_confirm_error"
+  | "duty_start_gps_confirm_retry_scheduled"
+  | "duty_start_gps_confirm_retry"
+  | "duty_start_gps_confirm_retry_error"
   | "tracking_heartbeat"
   | "resumed_after_auth";
 

@@ -4,9 +4,10 @@ import * as ImagePicker from "expo-image-picker";
 import { Alert } from "react-native";
 import {
   assertFileUnderLimit,
+  assertSupportedVisitAttachment,
   friendlyPickerCancel,
-  inferAttachmentType,
-  prepareImageForUpload
+  prepareImageForUpload,
+  VISIT_DOCUMENT_PICKER_MIME_TYPES
 } from "../utils/visitAttachmentFiles";
 import { createPendingAttachmentId, PendingVisitAttachment } from "./pendingAttachments";
 
@@ -60,13 +61,13 @@ export async function pickPendingDocument(): Promise<PendingVisitAttachment | nu
   const result = await DocumentPicker.getDocumentAsync({
     copyToCacheDirectory: true,
     multiple: false,
-    type: ["application/pdf", "audio/*", "text/*", "application/*", "image/*"]
+    type: [...VISIT_DOCUMENT_PICKER_MIME_TYPES]
   });
   if (result.canceled || !result.assets[0]) return null;
   const asset = result.assets[0];
   const name = asset.name || `file-${Date.now()}`;
   const mime = asset.mimeType || "application/octet-stream";
-  const attachmentType = inferAttachmentType(name, mime);
+  const attachmentType = assertSupportedVisitAttachment(name, mime);
   await assertFileUnderLimit(asset.uri, name);
   return {
     id: createPendingAttachmentId(),

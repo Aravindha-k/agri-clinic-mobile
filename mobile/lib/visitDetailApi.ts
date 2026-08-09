@@ -1,9 +1,13 @@
 import { API_BASE_URL } from "../../src/api/config";
 import { apiClient } from "../../src/api/client";
+import { getDeviceSessionHeaderEntries } from "../../src/api/deviceSessionHeaders";
 import { getFarmerVisits } from "../../src/api/farmers";
 import {
   deleteVisitAttachment,
+  isDisplayableVisitImage,
   listVisitAttachments,
+  mergeVisitAttachmentsById,
+  normalizeVisitAttachment,
   uploadVisitAttachmentFile,
   type VisitAttachment
 } from "../../src/api/visitAttachments";
@@ -126,9 +130,12 @@ export async function fetchVisitDetail(pk: number): Promise<Visit> {
   return getMobileVisit(pk);
 }
 
-export async function fetchVisitAttachments(pk: number): Promise<VisitAttachment[]> {
-  const rows = await listVisitAttachments(pk);
-  return rows.filter((row) => row.attachment_type === "image" && row.file_url);
+export async function fetchVisitAttachments(
+  pk: number,
+  options?: { dedupe?: boolean }
+): Promise<VisitAttachment[]> {
+  const rows = await listVisitAttachments(pk, options);
+  return rows.filter(isDisplayableVisitImage);
 }
 
 export async function patchMobileVisit(pk: number, body: VisitPatchBody): Promise<Visit> {
@@ -143,12 +150,28 @@ export async function patchMobileVisit(pk: number, body: VisitPatchBody): Promis
   return normalizeVisitFromApi(data);
 }
 
-async function postVisitMedia(visitId: number, photo: VisitPhotoAsset) {
+async function postVisitMedia(
+  visitId: number,
+  photo: VisitPhotoAsset
+): Promise<VisitAttachment | null> {
+  // Canonical attachments upload already sends Bearer + X-Device-Session.
+  try {
+    return await uploadVisitAttachmentFile(visitId, {
+      uri: photo.uri,
+      name: photo.name,
+      mimeType: photo.mimeType,
+      attachmentType: "image"
+    });
+  } catch {
+    /* fall through to legacy media path with the same session context */
+  }
+
   const paths = [`mobile/visits/${visitId}/media/`, `mobile/visits/${visitId}/attachments/`];
   let lastError: Error | null = null;
   for (const path of paths) {
     try {
       const token = await getAccessToken();
+      const sessionHeaders = await getDeviceSessionHeaderEntries();
       const url = `${API_BASE_URL}${path}`;
       const formData = new FormData();
       formData.append("file", {
@@ -158,33 +181,66 @@ async function postVisitMedia(visitId: number, photo: VisitPhotoAsset) {
       } as unknown as Blob);
       formData.append("attachment_type", "image");
 
-      await new Promise<void>((resolve, reject) => {
+      const created = await new Promise<VisitAttachment | null>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", url);
         xhr.setRequestHeader("Accept", "application/json");
         if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error("Upload failed")));
+        for (const [key, value] of Object.entries(sessionHeaders)) {
+          xhr.setRequestHeader(key, value);
+        }
+        xhr.onload = () => {
+          if (xhr.status < 200 || xhr.status >= 300) {
+            reject(new Error("Upload failed"));
+            return;
+          }
+          try {
+            const parsed = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+            resolve(normalizeVisitAttachment(parsed));
+          } catch {
+            resolve(null);
+          }
+        };
         xhr.onerror = () => reject(new Error("Upload failed"));
         xhr.send(formData);
       });
-      return;
+      return created;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error("Upload failed");
     }
   }
   if (lastError) {
-    await uploadVisitAttachmentFile(visitId, {
-      uri: photo.uri,
-      name: photo.name,
-      mimeType: photo.mimeType,
-      attachmentType: "image"
-    });
+    throw lastError;
   }
+  return null;
 }
 
+/**
+ * Upload visit photo and return the image list for immediate UI update.
+ * Uses the create response first so a stale/deduped GET cannot blank the grid.
+ */
 export async function uploadVisitPhoto(pk: number, photo: VisitPhotoAsset) {
-  await postVisitMedia(pk, photo);
-  return fetchVisitAttachments(pk);
+  const created = await postVisitMedia(pk, photo);
+  const createdImage = isDisplayableVisitImage(created) ? created : null;
+
+  let listed: VisitAttachment[] = [];
+  try {
+    listed = await fetchVisitAttachments(pk, { dedupe: false });
+  } catch {
+    listed = [];
+  }
+
+  if (createdImage) {
+    return mergeVisitAttachmentsById(listed, [createdImage]);
+  }
+
+  if (listed.length > 0) {
+    return listed;
+  }
+
+  throw new Error(
+    "Upload may have succeeded, but the photo is not available yet. Pull to refresh and try again."
+  );
 }
 
 export async function removeVisitAttachment(pk: number, attachmentId: number) {

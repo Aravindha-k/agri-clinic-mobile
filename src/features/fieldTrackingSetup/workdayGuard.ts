@@ -5,7 +5,10 @@ import type { SetupStepId } from "./types";
 
 let offeredThisSession = false;
 
-/** After password login — open setup once when permissions incomplete. */
+/**
+ * After password login — open existing FieldTrackingSetup only when OS permission
+ * is actually incomplete. Never navigates when already granted.
+ */
 export async function maybeOfferFieldTrackingSetupAfterLogin(): Promise<void> {
   if (offeredThisSession) return;
   const offer = await shouldOfferFieldTrackingSetup();
@@ -16,7 +19,6 @@ export async function maybeOfferFieldTrackingSetupAfterLogin(): Promise<void> {
   setTimeout(() => {
     const opened = navigateRoot("FieldTrackingSetup", undefined);
     if (!opened) {
-      // Retry once if nav was not ready.
       setTimeout(() => navigateRoot("FieldTrackingSetup", undefined), 600);
     }
   }, 400);

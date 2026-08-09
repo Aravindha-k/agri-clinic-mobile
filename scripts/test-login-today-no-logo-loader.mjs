@@ -33,6 +33,8 @@ test("successful login keeps Login shell — no LoadingState / AppLoadingLogo ga
   assert.match(nav, /sessionValidateUi === "login"/);
   assert.match(nav, /sessionValidateUi === "biometric_lock"/);
   assert.match(nav, /Enter Today immediately/);
+  assert.doesNotMatch(nav, /DeviceSetup/);
+  assert.doesNotMatch(nav, /AppLoadingLogo/);
 });
 
 test("auth bootstrap establishAuthenticatedSession is single-flight per login", () => {

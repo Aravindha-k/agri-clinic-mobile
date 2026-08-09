@@ -149,14 +149,19 @@ export function buildChecklist(probe: FieldTrackingProbe): SetupStepState[] {
 }
 
 /**
- * Offer after password login when required permissions are incomplete
- * or setup was never completed for this version.
+ * Offer after password login only when required OS permissions are incomplete.
+ * If Android already granted location, never navigate to setup (invisible).
  */
 export async function shouldOfferFieldTrackingSetup(): Promise<boolean> {
   if (Platform.OS === "web") return false;
   const health = await getFieldTrackingHealth();
-  if (!health.ready) return true;
-  const record = await readFieldTrackingSetupRecord();
-  if (!record.completedAt || record.lastCompletedVersion == null) return true;
-  return false;
+  if (health.ready) {
+    // Permission already granted — mark setup complete silently; do not show UI.
+    if (!health.setupCompleted) {
+      const { markFieldTrackingSetupCompleted } = await import("./persistence");
+      await markFieldTrackingSetupCompleted();
+    }
+    return false;
+  }
+  return true;
 }

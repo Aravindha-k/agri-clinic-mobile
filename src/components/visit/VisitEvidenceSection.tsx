@@ -20,10 +20,11 @@ import { pickPendingImageUri } from "../../visit/visitEvidencePickers";
 import { buildVisitPhotoWatermarkMeta } from "../../utils/buildVisitPhotoWatermarkMeta";
 import {
   assertFileUnderLimit,
+  assertSupportedVisitAttachment,
   friendlyPickerCancel,
   friendlyUploadError,
-  inferAttachmentType,
-  prepareImageForUpload
+  prepareImageForUpload,
+  VISIT_DOCUMENT_PICKER_MIME_TYPES
 } from "../../utils/visitAttachmentFiles";
 import { readForegroundLocationIfGranted } from "../../utils/location";
 import { ClinicCard } from "../brand/ClinicCard";
@@ -153,13 +154,13 @@ export function VisitEvidenceSection({ visitId, watermarkContext, autoLoad = tru
       const result = await DocumentPicker.getDocumentAsync({
         copyToCacheDirectory: true,
         multiple: false,
-        type: ["application/pdf", "audio/*", "text/*", "application/*", "image/*"]
+        type: [...VISIT_DOCUMENT_PICKER_MIME_TYPES]
       });
       if (result.canceled || !result.assets[0]) return;
       const asset = result.assets[0];
       const name = asset.name || `file-${Date.now()}`;
       const mime = asset.mimeType || "application/octet-stream";
-      const attachmentType = inferAttachmentType(name, mime);
+      const attachmentType = assertSupportedVisitAttachment(name, mime);
       await assertFileUnderLimit(asset.uri, name);
       await uploadFile({
         uri: asset.uri,

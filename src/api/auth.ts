@@ -2,6 +2,7 @@ import { API_BASE_URL, buildApiUrl, getApiHostname } from "./config";
 import { apiClient } from "./client";
 import {
   DEVICE_SESSION_STORAGE_ERROR,
+  clearDeviceSessionId,
   saveDeviceSessionId,
   saveSessionMetadata,
   verifyDeviceSessionSaved
@@ -25,6 +26,8 @@ function devLogLogin(message: string) {
 async function persistLoginSession(normalized: ReturnType<typeof normalizeLoginResponse>, deviceId: string) {
   devLogLogin(`device_session_id present=${Boolean(normalized.deviceSessionId)}`);
   try {
+    // Never keep a revoked DeviceSession alongside a new login response.
+    await clearDeviceSessionId().catch(() => undefined);
     await saveDeviceSessionId(normalized.deviceSessionId);
     await saveSessionMetadata({
       sessionVersion: normalized.sessionVersion,

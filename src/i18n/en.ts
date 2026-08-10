@@ -52,7 +52,6 @@ export const en = {
     subtitle: "Enter your Employee ID and password",
     employeeId: "Employee ID",
     password: "Password",
-    employeeIdPlaceholder: "ARAVINDH01",
     passwordPlaceholder: "Enter your password",
     forgotPassword: "Forgot password? Contact your administrator.",
     submit: "Login",
@@ -68,7 +67,7 @@ export const en = {
       "Sign in with your password once to reconnect fingerprint unlock.",
     sessionExpiredTitle: "Session expired",
     sessionExpired: "Use fingerprint or sign in with your password to continue.",
-    accountDisabled: "Your account is currently disabled. Please contact your administrator.",
+    accountDisabled: "Your account has been deactivated. Please contact your administrator.",
     showPassword: "Show password",
     hidePassword: "Hide password",
     biometrics: "Biometrics"

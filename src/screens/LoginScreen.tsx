@@ -180,12 +180,24 @@ export function LoginScreen() {
       const { maybeOfferFieldTrackingSetupAfterLogin } = await import("../features/fieldTrackingSetup");
       await maybeOfferFieldTrackingSetupAfterLogin();
     } catch (error) {
-      if (error instanceof ApiRequestError && error.code === "INVALID_CREDENTIALS") {
+      if (
+        error instanceof ApiRequestError &&
+        (error.code === "EMPLOYEE_INACTIVE" ||
+          error.code === "ACCOUNT_DISABLED" ||
+          (error.status === 403 &&
+            /deactivat|disabled|inactive/i.test(error.message || "")))
+      ) {
+        setLoginError(t("login.accountDisabled"));
+      } else if (error instanceof ApiRequestError && error.code === "INVALID_CREDENTIALS") {
         setLoginError(error.message || t("login.invalidCredentials"));
-      } else if (isNetworkError(error) || error instanceof ApiRequestError) {
+      } else if (isNetworkError(error)) {
+        setLoginError(getNetworkMessage());
+      } else if (error instanceof ApiRequestError) {
         const category = categorizeLoginNetworkError(error);
         setLoginError(
-          loginErrorMessageForCategory(category, getNetworkMessage())
+          category === "unknown"
+            ? error.message || t("login.invalidCredentials")
+            : loginErrorMessageForCategory(category, getNetworkMessage())
         );
       } else {
         setLoginError(error instanceof Error ? error.message : t("login.invalidCredentials"));
@@ -239,13 +251,16 @@ export function LoginScreen() {
       if (
         error instanceof ApiRequestError &&
         (error.code === "SESSION_EXPIRED" ||
+          error.code === "EMPLOYEE_INACTIVE" ||
           error.code === "ACCOUNT_DISABLED" ||
           error.status === 403)
       ) {
         // Do not clear fingerprint preference — password login reconnects it.
         await refreshBiometricState();
         setLoginError(
-          error.code === "ACCOUNT_DISABLED" || error.status === 403
+          error.code === "EMPLOYEE_INACTIVE" ||
+            error.code === "ACCOUNT_DISABLED" ||
+            error.status === 403
             ? t("login.accountDisabled")
             : t("login.sessionExpired")
         );
@@ -332,7 +347,7 @@ export function LoginScreen() {
                 if (loginError) setLoginError("");
               }}
               onFocus={() => handleFieldFocus("empId")}
-              placeholder={t("login.employeeIdPlaceholder")}
+              placeholder=""
               autoCapitalize="characters"
               autoCorrect={false}
               autoComplete="username"

@@ -5,6 +5,7 @@ import { SESSION_REPLACED_CODES, SESSION_REPLACED_MESSAGE } from "../constants/d
 import { getAccessToken } from "../storage/tokenStorage";
 import { handleDeviceSessionConflict, isDeviceSessionConflict } from "../storage/sessionConflict";
 import { handleSessionExpired } from "../storage/sessionExpired";
+import { handleEmployeeInactive } from "../storage/employeeInactive";
 import {
   ApiRequestError,
   extractApiErrorCode,
@@ -25,6 +26,11 @@ import { unwrapSuccessEnvelope } from "../utils/apiUnwrap";
 import { trackApiCall } from "./apiTelemetry";
 import { dedupeRequest } from "./requestDedupe";
 import { qaLogApiFailure } from "../utils/qaLog";
+import {
+  EMPLOYEE_INACTIVE_MESSAGE,
+  isEmployeeInactiveCode
+} from "../constants/employeeInactive";
+import { getAuthPhase } from "../storage/authPhase";
 
 const NETWORK_RETRY_DELAY_MS = 750;
 const MAX_GET_NETWORK_RETRIES = 1;
@@ -81,11 +87,11 @@ function shouldRethrowWithoutLogout(error: unknown): boolean {
       (error.code === "INVALID_RESPONSE" ||
         error.code === "INVALID_CREDENTIALS" ||
         error.code === "AUTH_UNCERTAIN" ||
-        error.code === "DEVICE_SESSION_REQUIRED"))
+        error.code === "DEVICE_SESSION_REQUIRED" ||
+        isEmployeeInactiveCode(error.code) ||
+        error.code === "EMPLOYEE_INACTIVE"))
   );
 }
-
-import { getAuthPhase } from "../storage/authPhase";
 
 function devLogApi(
   path: string,
@@ -163,6 +169,19 @@ async function parseResponse(response: Response, options?: { auth?: boolean }) {
     }
     if (response.status === 401) {
       throw401Error(data, auth);
+    }
+    if (
+      response.status === 403 &&
+      (isEmployeeInactiveCode(code) ||
+        (auth && !code && /deactivat|disabled|inactive/i.test(formatApiErrorMessage(data, "", 403))))
+    ) {
+      // Authenticated 403 for deactivated employees must tear down — not leave stale tokens.
+      // Login (auth:false) still surfaces the message without requiring a prior session.
+      void handleEmployeeInactive();
+      throw new ApiRequestError(EMPLOYEE_INACTIVE_MESSAGE, {
+        code: code && isEmployeeInactiveCode(code) ? code : "EMPLOYEE_INACTIVE",
+        status: 403
+      });
     }
     if (response.status >= 500) {
       throw serverError(SERVER_MESSAGE, response.status);

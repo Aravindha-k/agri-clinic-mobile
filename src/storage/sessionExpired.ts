@@ -1,10 +1,12 @@
 import { SESSION_EXPIRED_MESSAGE } from "../constants/authMessages";
+import { getAuthTeardownEpoch } from "./employeeInactive";
 
 type TeardownHandler = () => void | Promise<void>;
 
 const teardownHandlers = new Set<TeardownHandler>();
 let handlingExpired = false;
 let scheduled = false;
+let scheduledEpoch = 0;
 /** While > 0, biometric unlock owns refresh failures — do not force logout. */
 let suppressExpiredTeardownDepth = 0;
 
@@ -51,9 +53,12 @@ export function handleSessionExpired(): void {
   }
   if (scheduled) return;
   scheduled = true;
+  scheduledEpoch = getAuthTeardownEpoch();
   setTimeout(() => {
     scheduled = false;
     if (suppressExpiredTeardownDepth > 0) return;
+    // Password login / employee-inactive bumped the epoch — do not wipe a new session.
+    if (scheduledEpoch !== getAuthTeardownEpoch()) return;
     void runTeardownHandlers();
   }, 0);
 }

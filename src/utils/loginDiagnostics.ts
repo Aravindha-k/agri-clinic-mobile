@@ -18,8 +18,10 @@ export function categorizeLoginNetworkError(error: unknown): LoginNetworkErrorCa
   if (error instanceof ApiRequestError) {
     if (error.code === "CONFIG_ERROR") return "configuration";
     if (error.code === "INVALID_CREDENTIALS") return "invalid_credentials";
+    if (error.code === "EMPLOYEE_INACTIVE" || error.code === "ACCOUNT_DISABLED") {
+      return "invalid_credentials";
+    }
     if (error.code === "SERVER_ERROR") return "server_unavailable";
-    if (error.code === "CONFIG_ERROR") return "configuration";
     if (error.code === "NETWORK_TIMEOUT") return "timeout";
     if (error.code === "NETWORK_ERROR") return "unreachable";
   }

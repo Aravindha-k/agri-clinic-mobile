@@ -4,8 +4,10 @@ import { getDeviceSessionId } from "../storage/deviceSessionStorage";
 import { getRefreshToken, updateAccessToken } from "../storage/tokenStorage";
 import { handleDeviceSessionConflict } from "../storage/sessionConflict";
 import { handleSessionExpired } from "../storage/sessionExpired";
+import { handleEmployeeInactive } from "../storage/employeeInactive";
 import {
   ApiRequestError,
+  extractApiErrorCode,
   formatApiErrorMessage,
   isDeviceSessionConflictPayload,
   isNetworkError,
@@ -17,6 +19,10 @@ import {
 import { classify401Response } from "../utils/authFailure";
 import { unwrapSuccessEnvelope } from "../utils/apiUnwrap";
 import { SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
+import {
+  EMPLOYEE_INACTIVE_MESSAGE,
+  isEmployeeInactiveCode
+} from "../constants/employeeInactive";
 
 async function readResponseBody(response: Response): Promise<unknown> {
   const text = await response.text();
@@ -112,15 +118,12 @@ export async function refreshAccessTokenShared(): Promise<string> {
 
   if (response.status === 403) {
     const data = await readResponseBody(response);
-    const code =
-      data && typeof data === "object" && typeof (data as { code?: unknown }).code === "string"
-        ? (data as { code: string }).code
-        : "ACCOUNT_DISABLED";
-    await handleSessionExpired();
-    throw new ApiRequestError(
-      "Your account is currently disabled. Please contact your administrator.",
-      { code, status: 403 }
-    );
+    const code = extractApiErrorCode(data) || "EMPLOYEE_INACTIVE";
+    await handleEmployeeInactive();
+    throw new ApiRequestError(EMPLOYEE_INACTIVE_MESSAGE, {
+      code: isEmployeeInactiveCode(code) ? code : "EMPLOYEE_INACTIVE",
+      status: 403
+    });
   }
 
   if (!response.ok) {

@@ -54,7 +54,6 @@ export const ta: TranslationTree = {
     subtitle: "உங்கள் பணியாளர் ஐடியும் கடவுச்சொல்லும் உள்ளிடவும்",
     employeeId: "பணியாளர் ஐடி",
     password: "கடவுச்சொல்",
-    employeeIdPlaceholder: "ARAVINDH01",
     passwordPlaceholder: "கடவுச்சொல்லை உள்ளிடவும்",
     forgotPassword: "கடவுச்சொல் மறந்துவிட்டதா? நிர்வாகியைத் தொடர்பு கொள்ளவும்.",
     submit: "உள்நுழை",
@@ -70,7 +69,7 @@ export const ta: TranslationTree = {
       "கைரேகை திறப்பை மீண்டும் இணைக்க ஒருமுறை கடவுச்சொல்லுடன் உள்நுழையவும்.",
     sessionExpiredTitle: "அமர்வு காலாவதியானது",
     sessionExpired: "தொடர கைரேகை அல்லது கடவுச்சொல்லுடன் உள்நுழையவும்.",
-    accountDisabled: "உங்கள் கணக்கு தற்போது முடக்கப்பட்டுள்ளது. நிர்வாகியைத் தொடர்பு கொள்ளவும்.",
+    accountDisabled: "உங்கள் கணக்கு செயலிழக்கப்பட்டுள்ளது. நிர்வாகியைத் தொடர்பு கொள்ளவும்.",
     showPassword: "கடவுச்சொல்லைக் காட்டு",
     hidePassword: "கடவுச்சொல்லை மறை",
     biometrics: "பயோமெட்ரிக்ஸ்"

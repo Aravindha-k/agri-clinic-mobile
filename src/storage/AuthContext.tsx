@@ -8,6 +8,11 @@ import { clearMasterDataCache } from "./masterDataCache";
 import { logApiTelemetrySummary, resetApiTelemetry } from "../api/apiTelemetry";
 import { SESSION_EXPIRED_MESSAGE } from "../constants/authMessages";
 import { SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
+import {
+  EMPLOYEE_INACTIVE_MESSAGE,
+  bumpAuthTeardownEpoch,
+  registerEmployeeInactiveTeardown
+} from "./employeeInactive";
 import { registerGoToLogin } from "./authRecovery";
 import { clearDeviceSessionId, DEVICE_SESSION_STORAGE_ERROR, ensureDeviceSessionLoaded, getDeviceSessionId } from "./deviceSessionStorage";
 import { registerSessionExpiredTeardown } from "./sessionExpired";
@@ -100,6 +105,9 @@ function isRetriableAuthError(err: unknown): boolean {
 /** Saved tokens from another backend (e.g. local vs Render) — re-login, not "server down". */
 function shouldForceReLoginOnBootstrap(err: unknown): boolean {
   if (isAuthExpiredError(err)) return true;
+  if (err instanceof ApiRequestError && (err.code === "EMPLOYEE_INACTIVE" || err.code === "ACCOUNT_DISABLED")) {
+    return true;
+  }
   if (err instanceof ApiRequestError && err.status === 401) {
     return (
       err.code === "AUTH_UNCERTAIN" ||
@@ -240,6 +248,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, [performLocalSignOut]);
 
+  const forceEmployeeInactiveLogout = useCallback(async () => {
+    // Admin deactivated this employee: stop field work and drop revoked session material.
+    // Keep biometric ENABLED preference — password login after reactivation reconnects Keystore.
+    // Do NOT keep reauth material (would bypass / loop against revoked session).
+    await runPreSignOutHandlers().catch(() => undefined);
+    setPreferPasswordLoginThisSession(true);
+    resetBiometricUnlockAttemptThisLaunch();
+    clearLocalFieldQueuesOnSessionReplace();
+    await clearBiometricReauthMaterial("employee_inactive").catch(() => undefined);
+    await performLocalSignOut({
+      notice: EMPLOYEE_INACTIVE_MESSAGE,
+      reason: "employee_inactive",
+      phase: "unauthenticated"
+    });
+  }, [performLocalSignOut]);
+
   useEffect(() => {
     return registerSessionTeardown(forceSessionConflictLogout);
   }, [forceSessionConflictLogout]);
@@ -247,6 +271,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     return registerSessionExpiredTeardown(forceSessionExpiredLogout);
   }, [forceSessionExpiredLogout]);
+
+  useEffect(() => {
+    return registerEmployeeInactiveTeardown(forceEmployeeInactiveLogout);
+  }, [forceEmployeeInactiveLogout]);
 
   useEffect(() => {
     return registerGoToLogin(async () => {
@@ -611,9 +639,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = useCallback(
     async (username: string, password: string) => {
+      // Cancel any deferred session-expired teardown so it cannot wipe a fresh login.
+      bumpAuthTeardownEpoch();
       setLoginNotice(null);
       setPreferPasswordLoginThisSession(false);
       applyPhase("authenticating_password", "password_login");
+      // Fresh login after deactivate/reactivate — never reuse revoked refresh/DeviceSession.
+      await clearTokens().catch(() => undefined);
+      await clearDeviceSessionId().catch(() => undefined);
       const tokens = await loginRequest(username, password);
       await saveTokens(tokens);
       await establishAuthenticatedSession({ validateUi: "login" });

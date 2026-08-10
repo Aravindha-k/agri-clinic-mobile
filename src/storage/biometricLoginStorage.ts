@@ -14,6 +14,7 @@ import { refreshAccessTokenOnce } from "../api/tokenRefresh";
 import { STARTUP_TIMEOUTS } from "../bootstrap/startupCoordinator";
 import { withTimeout } from "../utils/withTimeout";
 import { ApiRequestError, isNetworkError, isServerError } from "../utils/apiError";
+import { isEmployeeInactiveCode } from "../constants/employeeInactive";
 import { getRefreshToken, saveTokens } from "./tokenStorage";
 
 const ENABLED_KEY = "biometric_login_enabled";
@@ -507,9 +508,13 @@ async function unlockViaReauthLogin(): Promise<BiometricUnlockResult> {
       await clearBiometricCredentialMaterial(code);
       return { ok: false, outcome: "session_replaced", action: "reauthenticate_expired_session" };
     }
-    if (code === "INVALID_CREDENTIALS" || code === "ACCOUNT_DISABLED") {
+    if (code === "INVALID_CREDENTIALS" || isEmployeeInactiveCode(code)) {
       await clearBiometricReauthMaterial(code || "invalid_credentials");
-      return { ok: false, outcome: "reauth_material_invalid", action: "reauthenticate_expired_session" };
+      return {
+        ok: false,
+        outcome: isEmployeeInactiveCode(code) ? "reauth_material_invalid" : "reauth_material_invalid",
+        action: "reauthenticate_expired_session"
+      };
     }
     return { ok: false, outcome: "token_refresh_failed", action: "reauthenticate_expired_session" };
   }
@@ -532,12 +537,13 @@ function mapRefreshError(err: unknown, action: BiometricAction): BiometricUnlock
     return { ok: false, outcome: "network_error", action };
   }
   if (code === "SESSION_REPLACED" || code === "DEVICE_SESSION_REQUIRED") {
-    void clearBiometricCredentialMaterial(code);
+    void clearBiometricCredentialMaterial(code || "session_replaced");
     return { ok: false, outcome: "session_replaced", action };
   }
-  if (code === "ACCOUNT_DISABLED") {
-    void clearBiometricCredentialMaterial(code);
-    return { ok: false, outcome: "token_refresh_failed", action };
+  if (isEmployeeInactiveCode(code)) {
+    // Preference stays; reauth cleared so fingerprint cannot bypass deactivated account.
+    void clearBiometricReauthMaterial(code || "employee_inactive");
+    return { ok: false, outcome: "reauth_material_invalid", action };
   }
   return { ok: false, outcome: "token_refresh_failed", action };
 }

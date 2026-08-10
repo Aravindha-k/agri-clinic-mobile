@@ -47,7 +47,7 @@ test("5–8. Fresh login clears stale tokens/session; new DeviceSession saved", 
   assert.match(signIn, /clearDeviceSessionId/);
   assert.match(signIn, /loginRequest\(username, password\)/);
   assert.match(signIn, /saveTokens\(tokens\)/);
-  assert.match(signIn, /saveBiometricReauthMaterial/);
+  assert.match(signIn, /reconnectBiometricAfterPasswordLogin/);
   assert.match(signIn, /setLoginNotice\(null\)/);
 
   const authApi = read("src/api/auth.ts");

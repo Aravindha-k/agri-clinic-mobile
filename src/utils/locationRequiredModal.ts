@@ -67,10 +67,7 @@ async function handleReadinessFailure(
     return true;
   }
 
-  if (
-    readiness.status === "permission_denied_permanent" ||
-    readiness.status === "precise_required"
-  ) {
+  if (readiness.status === "permission_denied_permanent") {
     showPermanentSettingsAlert(readiness.message);
     return false;
   }
@@ -82,10 +79,7 @@ async function handleReadinessFailure(
         if (again.status === "ready") {
           return;
         }
-        if (
-          again.status === "permission_denied_permanent" ||
-          again.status === "precise_required"
-        ) {
+        if (again.status === "permission_denied_permanent") {
           showPermanentSettingsAlert(again.message);
           return;
         }

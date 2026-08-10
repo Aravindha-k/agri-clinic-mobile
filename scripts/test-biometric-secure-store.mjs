@@ -68,7 +68,7 @@ assert.ok(bio.includes("reauthenticate_expired_session"), "expired-session re-lo
 
 // 5) AuthContext clears biometric on explicit logout; keeps on session expiry
 const auth = read("src/storage/AuthContext.tsx");
-assert.ok(auth.includes("saveBiometricReauthMaterial"), "password login refreshes Keystore material");
+assert.ok(auth.includes("reconnectBiometricAfterPasswordLogin"), "password login refreshes Keystore material");
 assert.ok(auth.includes('reason: "explicit_logout"'), "explicit logout clears session");
 assert.ok(auth.includes('phase: "session_expired"'), "session expiry phase");
 

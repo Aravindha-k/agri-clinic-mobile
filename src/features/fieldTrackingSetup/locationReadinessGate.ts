@@ -137,20 +137,7 @@ export async function ensureLocationReadyForAction(
             }
           );
         }
-        if (!readPreciseOkFromResponse(current)) {
-          emitPhase(onPhase, "open_settings");
-          return result("precise_required", LOCATION_GATE_MESSAGES.preciseRequired, {
-            permission: {
-              granted: true,
-              permanentlyDenied: false,
-              canAskAgain: true,
-              status: current.status,
-              didRequest: false,
-              preciseOk: false
-            },
-            servicesEnabled: false
-          });
-        }
+        // Foreground granted is enough — approximate must not block Start Work Day / Settings.
         const servicesEnabled = await readServicesEnabled();
         if (!servicesEnabled) {
           emitPhase(onPhase, "try_again");
@@ -159,7 +146,17 @@ export async function ensureLocationReadyForAction(
           });
         }
         emitPhase(onPhase, "idle");
-        return result("ready", "", { servicesEnabled: true });
+        return result("ready", "", {
+          servicesEnabled: true,
+          permission: {
+            granted: true,
+            permanentlyDenied: false,
+            canAskAgain: true,
+            status: current.status,
+            didRequest: false,
+            preciseOk: readPreciseOkFromResponse(current)
+          }
+        });
       }
 
       emitPhase(onPhase, "allow_location");
@@ -209,15 +206,6 @@ export async function ensureLocationReadyForAction(
       const preciseOk = recheck
         ? readPreciseOkFromResponse(recheck)
         : permission.preciseOk !== false;
-      if (!preciseOk) {
-        // Native upgrade already attempted in ensureForegroundLocationPermission.
-        // App Settings is the exceptional recovery when OS keeps approximate only.
-        emitPhase(onPhase, "open_settings");
-        return result("precise_required", LOCATION_GATE_MESSAGES.preciseRequired, {
-          permission: { ...permission, granted: true, preciseOk: false },
-          servicesEnabled: false
-        });
-      }
 
       emitPhase(onPhase, "turn_on_location");
       let servicesEnabled = await readServicesEnabled();
@@ -226,7 +214,7 @@ export async function ensureLocationReadyForAction(
         if (services.status === "cancelled") {
           emitPhase(onPhase, "try_again");
           return result("cancelled", LOCATION_GATE_MESSAGES.servicesCancelled, {
-            permission,
+            permission: { ...permission, preciseOk },
             servicesEnabled: false
           });
         }
@@ -241,16 +229,22 @@ export async function ensureLocationReadyForAction(
             services.status === "error"
               ? LOCATION_GATE_MESSAGES.error
               : LOCATION_GATE_MESSAGES.servicesOff,
-            { permission, servicesEnabled: false }
+            { permission: { ...permission, preciseOk }, servicesEnabled: false }
           );
         }
       }
 
-      // Foreground + device GPS only. Do not request background location —
-      // current product tracking uses FGS with foreground permission.
+      // Foreground + device GPS only. Approximate does not force Settings.
+      // Do not request background location — FGS uses foreground permission.
+      try {
+        const { markFieldTrackingSetupCompleted } = await import("./persistence");
+        await markFieldTrackingSetupCompleted().catch(() => undefined);
+      } catch {
+        // Stale setup flags must never block Start Work Day.
+      }
       emitPhase(onPhase, "idle");
       return result("ready", "", {
-        permission: { ...permission, granted: true, preciseOk: true },
+        permission: { ...permission, granted: true, preciseOk },
         servicesEnabled: true
       });
     } catch {

@@ -100,6 +100,8 @@ type BiometricLogEvent =
   | "biometric_material_cleared"
   | "reauth_material_saved"
   | "reauth_material_cleared"
+  | "reauth_material_save_skipped"
+  | "reauth_reconnect_failed"
   | "reauth_env_mismatch";
 
 export function logBiometric(event: BiometricLogEvent, detail?: Record<string, unknown>) {
@@ -215,17 +217,18 @@ async function hasValidReauthMaterial(): Promise<boolean> {
 
 /**
  * Persist Keystore-backed re-auth material after password login / enable.
- * Never logs the secret.
+ * Never logs the secret. Returns true when material was written.
  */
 export async function saveBiometricReauthMaterial(input: {
   identifier: string;
   secret: string;
   userId: number;
-}): Promise<void> {
+}): Promise<boolean> {
   const identifier = input.identifier.trim();
   const secret = input.secret;
   if (!identifier || !secret || !Number.isFinite(input.userId) || input.userId <= 0) {
-    return;
+    logBiometric("reauth_material_save_skipped", { reason: "invalid_input" });
+    return false;
   }
   await migrateLegacyBiometricPasswords();
   const meta: BiometricReauthMeta = {
@@ -235,7 +238,34 @@ export async function saveBiometricReauthMaterial(input: {
   await SecureStore.setItemAsync(REAUTH_IDENTIFIER_KEY, identifier, SECURE_OPTS);
   await SecureStore.setItemAsync(REAUTH_SECRET_KEY, secret, SECURE_OPTS);
   await SecureStore.setItemAsync(REAUTH_META_KEY, JSON.stringify(meta), SECURE_OPTS);
+  // Heal preference flag so Settings/Login never see a stale cleared ENABLED after reconnect.
+  await SecureStore.setItemAsync(ENABLED_KEY, "1", SECURE_OPTS);
   logBiometric("reauth_material_saved", { userId: input.userId });
+  return true;
+}
+
+/**
+ * After password login: if preference is enabled, recreate reauth material for the new session.
+ * Clears password-first transient flag. Returns live status after reconnect.
+ */
+export async function reconnectBiometricAfterPasswordLogin(input: {
+  identifier: string;
+  secret: string;
+  userId: number;
+}): Promise<BiometricLoginStatus> {
+  setPreferPasswordLoginThisSession(false);
+  const before = await getBiometricLoginStatus();
+  if (!before.hardwareAvailable || !before.enrolled) {
+    return before;
+  }
+  if (!before.enabled) {
+    return before;
+  }
+  const saved = await saveBiometricReauthMaterial(input);
+  if (!saved) {
+    logBiometric("reauth_reconnect_failed", { reason: "save_failed" });
+  }
+  return getBiometricLoginStatus();
 }
 
 export async function clearBiometricReauthMaterial(reason: string): Promise<void> {

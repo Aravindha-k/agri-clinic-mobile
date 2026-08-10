@@ -176,6 +176,9 @@ export function LoginScreen() {
 
     try {
       await signIn(user, password);
+      // Refresh capability + canLogin after reconnect so fingerprint control is interactive
+      // if Login remains mounted through session bootstrap.
+      await refreshBiometricState();
       await offerBiometricEnrollmentIfNeeded(user, password);
       const { maybeOfferFieldTrackingSetupAfterLogin } = await import("../features/fieldTrackingSetup");
       await maybeOfferFieldTrackingSetupAfterLogin();

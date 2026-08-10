@@ -209,22 +209,6 @@ export async function enableLocationForFieldWork(): Promise<EnableLocationFlowRe
 
     const live = recheck ?? null;
     const preciseOk = live ? readPreciseOk(live) : permission.preciseOk;
-    if (!preciseOk) {
-      return {
-        ok: false,
-        permission: {
-          ...permission,
-          granted: true,
-          preciseOk: false,
-          status: live?.status ?? permission.status
-        },
-        servicesEnabled: false,
-        permanentlyDenied: false,
-        servicesDisabled: false,
-        needsPreciseUpgrade: true,
-        message: PRECISE_RETRY_MESSAGE
-      };
-    }
 
     let servicesEnabled = await readServicesEnabled();
     if (!servicesEnabled) {
@@ -236,28 +220,29 @@ export async function enableLocationForFieldWork(): Promise<EnableLocationFlowRe
       if (!servicesEnabled) {
         return {
           ok: false,
-          permission: { ...permission, granted: true, preciseOk: true },
+          permission: { ...permission, granted: true, preciseOk },
           servicesEnabled: false,
           permanentlyDenied: false,
           servicesDisabled: true,
-          needsPreciseUpgrade: false,
+          needsPreciseUpgrade: !preciseOk,
           message: SERVICES_OFF_MESSAGE
         };
       }
     }
 
+    // Foreground granted is enough for field work. Approximate is not a Settings blocker.
     return {
       ok: true,
       permission: {
         ...permission,
         granted: true,
-        preciseOk: true,
+        preciseOk,
         status: live?.status ?? permission.status
       },
       servicesEnabled: true,
       permanentlyDenied: false,
       servicesDisabled: false,
-      needsPreciseUpgrade: false
+      needsPreciseUpgrade: !preciseOk
     };
   })();
 

@@ -31,9 +31,9 @@ test("Biometric success from lock never mounts Password/Fingerprint Login shell"
 
 test("Password login reconnects reauth material using bootstrap user id", () => {
   const auth = read("src/storage/AuthContext.tsx");
+  assert.match(auth, /reconnectBiometricAfterPasswordLogin/);
   assert.match(auth, /employeeIdRef\.current = profile\.id/);
-  assert.match(auth, /session\.userId/);
-  assert.match(auth, /saveBiometricReauthMaterial/);
+  assert.match(read("src/storage/biometricLoginStorage.ts"), /saveBiometricReauthMaterial/);
 });
 
 test("1–6. Fresh install: native FG after login; no FieldTrackingSetup; no auto Settings", () => {

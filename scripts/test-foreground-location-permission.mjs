@@ -36,9 +36,15 @@ assert.doesNotMatch(ensure, /Linking\.openSettings|APPLICATION_DETAILS|openLocat
 assert.match(ensure, /preciseOk/);
 assert.match(ensure, /accuracy === "coarse"/);
 
-// Gate: Settings phase only for permanent / precise exceptional recovery
+// Gate: Settings phase only for permanent denial recovery
 assert.match(gate, /permission_denied_permanent/);
-assert.match(gate, /precise_required/);
+assert.doesNotMatch(
+  gate.slice(
+    gate.indexOf("export async function ensureLocationReadyForAction"),
+    gate.indexOf("export function isPendingStartWorkDay")
+  ),
+  /precise_required/
+);
 assert.match(modal, /Allow Location/);
 assert.match(modal, /Open App Settings/);
 assert.doesNotMatch(modal, /await openSettingsForPendingStartWorkDay\(async \(\) => undefined\);\s*\}\s*if \(result\.permanentlyDenied\)/);

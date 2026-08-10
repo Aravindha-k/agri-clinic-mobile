@@ -180,7 +180,7 @@ test("28–30. Explicit logout requires password; preference kept", () => {
   assert.match(signOut, /clearBiometricReauthMaterial\("explicit_logout"\)/);
   assert.doesNotMatch(signOut, /clearBiometricLogin/);
   assert.match(signOut, /setPreferPasswordLoginThisSession\(true\)/);
-  assert.match(auth, /saveBiometricReauthMaterial/);
+  assert.match(auth, /reconnectBiometricAfterPasswordLogin/);
   assert.match(auth, /biometric_reconnected/);
 });
 

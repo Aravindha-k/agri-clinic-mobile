@@ -147,15 +147,15 @@ export async function probeLocationReadiness(): Promise<LocationReadinessProbe> 
       temporaryForegroundLikely
     }).catch(() => undefined);
 
-    const readyForVisit = servicesEnabled && probe.foregroundGranted && probe.preciseOk;
-    const readyForWorkday = servicesEnabled && probe.foregroundGranted && probe.preciseOk;
+    const readyForVisit = servicesEnabled && probe.foregroundGranted;
+    const readyForWorkday = servicesEnabled && probe.foregroundGranted;
 
     let state: LocationIssueState = "ready";
     if (!readyForWorkday) {
       state = classifyIssue({
         servicesEnabled,
         foregroundGranted: probe.foregroundGranted,
-        preciseOk: probe.preciseOk,
+        preciseOk: true, // Approximate must not block field readiness / Settings.
         backgroundGranted: probe.backgroundGranted,
         expoGoLimited: probe.expoGoLimited,
         notificationsRequired: probe.notificationsRequired,
@@ -274,7 +274,7 @@ export async function ensureLocationReadyForVisit(): Promise<LocationReadyResult
   const visitState = classifyIssue({
     servicesEnabled: readiness.servicesEnabled,
     foregroundGranted: readiness.foregroundGranted,
-    preciseOk: readiness.preciseOk,
+    preciseOk: true, // Approximate is not a visit blocker.
     backgroundGranted: readiness.backgroundGranted,
     expoGoLimited: readiness.probe.expoGoLimited,
     notificationsRequired: false,

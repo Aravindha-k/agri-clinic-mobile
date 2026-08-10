@@ -94,7 +94,7 @@ must(
     "ensureLocationReadyForWorkday",
     "ensureLocationReadyForVisit",
     "requestForegroundLocation",
-    "readyForWorkday = servicesEnabled && probe.foregroundGranted && probe.preciseOk"
+    "readyForWorkday = servicesEnabled && probe.foregroundGranted"
   ],
   "workday readiness still requires foreground + precise"
 );

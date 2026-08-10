@@ -50,8 +50,9 @@ export function SettingsScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      void refreshBiometricStatus();
       void refreshTrackingSetup();
-    }, [refreshTrackingSetup])
+    }, [refreshBiometricStatus, refreshTrackingSetup])
   );
 
   async function testReminderSound() {
@@ -158,7 +159,13 @@ export function SettingsScreen() {
 
         <Text style={styles.sectionLabel}>{t("settings.security")}</Text>
         <FlatCard padded={false}>
-          {!biometricStatus?.hardwareAvailable ? (
+          {biometricStatus == null ? (
+            <SettingRow
+              icon="finger-print-outline"
+              title={t("settings.fingerprintLogin")}
+              subtitle={t("common.loading")}
+            />
+          ) : !biometricStatus.hardwareAvailable ? (
             <SettingRow
               icon="finger-print-outline"
               title={t("settings.fingerprintLogin")}
@@ -189,9 +196,11 @@ export function SettingsScreen() {
               right={
                 <Switch
                   value={biometricStatus.enabled}
+                  disabled={false}
                   onValueChange={() => void toggleFingerprintLogin()}
                   trackColor={{ true: Colors.brand700 }}
                   accessibilityLabel={t("settings.fingerprintLogin")}
+                  accessibilityState={{ checked: biometricStatus.enabled, disabled: false }}
                 />
               }
             />

@@ -24,8 +24,8 @@ import {
   clearBiometricLogin,
   clearBiometricReauthMaterial,
   getBiometricLoginStatus,
+  reconnectBiometricAfterPasswordLogin,
   resetBiometricUnlockAttemptThisLaunch,
-  saveBiometricReauthMaterial,
   setPreferPasswordLoginThisSession,
   unlockSessionWithBiometrics,
   type BiometricUnlockResult
@@ -654,23 +654,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await saveTokens(tokens);
       const session = await establishAuthenticatedSession({ validateUi: "login" });
       // Keep fingerprint preference (A); recreate Keystore reauth material (B) for new DeviceSession.
+      // Clear password-first transient flag and heal ENABLED so Settings/Login controls are live.
       try {
-        const status = await getBiometricLoginStatus();
-        if (status.enabled) {
-          const userId = session.userId ?? employeeIdRef.current;
-          if (userId != null && userId > 0) {
-            await saveBiometricReauthMaterial({
-              identifier: username,
-              secret: password,
-              userId
-            });
+        const userId = session.userId ?? employeeIdRef.current;
+        if (userId != null && userId > 0) {
+          const reconnected = await reconnectBiometricAfterPasswordLogin({
+            identifier: username,
+            secret: password,
+            userId
+          });
+          if (reconnected.enabled && reconnected.reauthMaterialReady) {
             logStartup("biometric_reconnected", "password login refreshed reauth material");
-          } else {
-            logStartup("biometric_reconnect_skipped", "missing_user_id_after_password_login");
+          } else if (reconnected.enabled) {
+            logStartup("biometric_reconnect_skipped", "preference_on_material_not_ready");
           }
+        } else {
+          setPreferPasswordLoginThisSession(false);
+          logStartup("biometric_reconnect_skipped", "missing_user_id_after_password_login");
         }
       } catch {
-        // ignore
+        setPreferPasswordLoginThisSession(false);
       }
     },
     [applyPhase, establishAuthenticatedSession]

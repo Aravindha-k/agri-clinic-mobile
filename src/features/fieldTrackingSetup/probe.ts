@@ -104,7 +104,7 @@ export async function probeFieldTrackingPermissions(): Promise<FieldTrackingProb
 export function listMissingCriticalSteps(probe: FieldTrackingProbe): SetupStepId[] {
   const missing: SetupStepId[] = [];
   if (!probe.foregroundGranted) missing.push("foreground");
-  if (!probe.preciseOk) missing.push("precise");
+  // Precise is preferred but not a critical blocker for Start Work Day / Visit.
   return missing;
 }
 

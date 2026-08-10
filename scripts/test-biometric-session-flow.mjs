@@ -116,7 +116,9 @@ test("Login shows fingerprint + password on session expiry", () => {
 
 test("password login refreshes Keystore reauth material when biometric enabled", () => {
   const auth = read("src/storage/AuthContext.tsx");
-  assert.match(auth, /saveBiometricReauthMaterial/);
+  const bio = read("src/storage/biometricLoginStorage.ts");
+  assert.match(auth, /reconnectBiometricAfterPasswordLogin/);
+  assert.match(bio, /saveBiometricReauthMaterial/);
   assert.match(auth, /biometric_reconnected/);
   assert.match(auth, /session\.userId|employeeIdRef\.current = profile\.id/);
   assert.match(auth, /biometric_reconnect_skipped/);

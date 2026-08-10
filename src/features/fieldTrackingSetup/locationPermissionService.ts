@@ -3,13 +3,13 @@
  *
  * Rules:
  * - Screens may silently probe at any time.
- * - Only Field Tracking Setup Continue / Fix actions may show OS permission dialogs.
- * - Never open Settings without an explicit employee tap.
+ * - Only ensureForegroundLocationPermission may show the OS FG dialog.
+ * - Never open Settings without an explicit employee tap (permanent denial).
  * - Never throw from probes; never crash startup.
+ * - Background location is dormant — not used in normal Work Day/startup/visit flow.
  */
 import { Alert } from "react-native";
 import * as Location from "expo-location";
-import { navigateRoot } from "../../navigation/rootNavigationRef";
 import { readLocationServicesEnabled } from "../../utils/locationServicesProbe";
 import {
   runBackgroundLocationStep,
@@ -285,7 +285,7 @@ export async function ensureLocationReadyForVisit(): Promise<LocationReadyResult
   return failResult({ ...readiness, state: visitState }, visitState);
 }
 
-/** Open app location settings — only call after an explicit tap. */
+/** Open app location settings — only call after an explicit tap (permanent denial). */
 export async function openLocationSettings(): Promise<boolean> {
   logLocationPermission("settings_opened", { target: "location" });
   return openLocationPermissionSettings().catch(() => openAppSettingsPage());
@@ -298,7 +298,7 @@ export async function requestForegroundLocation() {
   return result;
 }
 
-/** Workday-scoped — requests background location after disclosure (not at app launch). */
+/** Soft/dormant — not used by normal Work Day / startup / visit flow. */
 export async function requestBackgroundLocation() {
   logLocationPermission("request_started", { kind: "background" });
   const result = await runBackgroundLocationStep();
@@ -313,9 +313,17 @@ export async function requestPreciseLocationFix() {
   return openPreciseLocationSettings();
 }
 
-export function openFieldTrackingFix(missing: SetupStepId[] = []): boolean {
-  const focusMissing = missing.length ? missing : undefined;
-  return navigateRoot("FieldTrackingSetup", focusMissing ? { focusMissing } : undefined);
+/** Prefer native FG request — do not navigate to FieldTrackingSetup in normal flow. */
+export function openFieldTrackingFix(_missing: SetupStepId[] = []): boolean {
+  void _missing;
+  void (async () => {
+    const result = await runForegroundLocationStep();
+    if (!result.ok) {
+      // Never auto-open Settings; permanent denial uses explicit Open App Settings elsewhere.
+      void result.permanentlyDenied;
+    }
+  })();
+  return true;
 }
 
 async function runRecoveryAction(
@@ -330,7 +338,8 @@ async function runRecoveryAction(
       if (fg.ok) {
         callbacks?.onRetry?.();
       } else if (fg.permanentlyDenied) {
-        await openAppSettingsPage().catch(() => undefined);
+        // Never auto-open Settings — caller / next prompt shows Open App Settings on tap.
+        callbacks?.onRetry?.();
       } else {
         callbacks?.onRetry?.();
       }
@@ -339,7 +348,8 @@ async function runRecoveryAction(
     case "open_settings":
       logLocationPermission("settings_opened", { state: result.state });
       if (result.state === "precise_location_disabled") {
-        await openPreciseLocationSettings().catch(() => openAppSettingsPage());
+        // Precise upgrade exhausted — App Settings is exceptional recovery (explicit tap).
+        await openAppSettingsPage().catch(() => undefined);
       } else if (result.state === "background_permission_missing") {
         await openLocationSettings();
       } else {

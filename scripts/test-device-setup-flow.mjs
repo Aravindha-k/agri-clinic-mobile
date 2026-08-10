@@ -96,9 +96,19 @@ test("logout remains mobile/auth/logout/; refresh SESSION_REPLACED teardown inta
   assert.match(read("src/api/tokenRefresh.ts"), /device_session_id/);
 });
 
-test("FieldTrackingSetup screen remains the existing recovery UI", () => {
-  assert.ok(fs.existsSync(path.join(root, "src/screens/FieldTrackingSetupScreen.tsx")));
+test("post-login location uses native enableLocation — never setup-screen navigation", () => {
+  const guard = read("src/features/fieldTrackingSetup/workdayGuard.ts");
+  assert.match(guard, /enableLocationForFieldWork/);
+  assert.doesNotMatch(guard, /navigateRoot/);
+  assert.doesNotMatch(guard, /FieldTrackingSetupScreen|name=["']FieldTrackingSetup["']/);
+  const login = read("src/screens/LoginScreen.tsx");
+  assert.match(login, /maybeOfferFieldTrackingSetupAfterLogin/);
+});
+
+test("FieldTrackingSetup route removed from normal navigation", () => {
   const nav = read("src/navigation/RootNavigator.tsx");
-  assert.match(nav, /FieldTrackingSetup/);
-  assert.match(nav, /FieldTrackingSetupScreen/);
+  assert.doesNotMatch(nav, /FieldTrackingSetup/);
+  const settings = read("src/screens/SettingsScreen.tsx");
+  assert.doesNotMatch(settings, /navigateRoot\([\"']FieldTrackingSetup/);
+  assert.match(settings, /enableLocationForFieldWork/);
 });

@@ -249,7 +249,10 @@ export default function TodayTabScreen() {
 
       if (!outcome.ok) {
         setGateError(outcome.readiness.message || t("workdayUx.permissionBody"));
-        if (outcome.readiness.status === "permission_denied_permanent") {
+        if (
+          outcome.readiness.status === "permission_denied_permanent" ||
+          outcome.readiness.status === "precise_required"
+        ) {
           setStartPhase("open_settings");
         } else {
           setStartPhase("try_again");

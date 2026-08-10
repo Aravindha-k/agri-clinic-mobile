@@ -191,9 +191,9 @@ test("31–32. First image + farmer optimistic photo preserved", () => {
   assert.match(avatar, /setLocalUrl\(picked\.uri\)/);
 });
 
-test("Background location remains optional soft path for FGS", () => {
+test("Background location helper stays dormant — normal gate never invokes it", () => {
   const gate = read("src/features/fieldTrackingSetup/locationReadinessGate.ts");
-  assert.match(gate, /ensureBackgroundLocation|Background/);
-  // Declining BG still allows start — FGS uses FG permission.
-  assert.match(gate, /Declining BG|still allows|FGS|foreground/i);
+  assert.doesNotMatch(gate, /ensureBackgroundLocationForWorkday/);
+  assert.doesNotMatch(gate, /requestBackgroundPermissionsAsync/);
+  assert.match(gate, /Do NOT request ACCESS_BACKGROUND_LOCATION|Foreground \+ device GPS only/i);
 });

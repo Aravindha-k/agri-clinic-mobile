@@ -71,7 +71,11 @@ export function BiometricUnlockScreen() {
         setLastOutcome(result.outcome);
         return;
       }
-      await completeBiometricUnlock();
+      // Re-login already bootstrapped inside attemptBiometricUnlock with biometric_lock UI.
+      // App-lock refresh path still needs completeBiometricUnlock.
+      if (result.action !== "reauthenticate_expired_session") {
+        await completeBiometricUnlock();
+      }
     } catch (err) {
       setLastOutcome("token_refresh_failed");
       // eslint-disable-next-line no-console

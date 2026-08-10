@@ -118,6 +118,26 @@ test("password login refreshes Keystore reauth material when biometric enabled",
   const auth = read("src/storage/AuthContext.tsx");
   assert.match(auth, /saveBiometricReauthMaterial/);
   assert.match(auth, /biometric_reconnected/);
+  assert.match(auth, /session\.userId|employeeIdRef\.current = profile\.id/);
+  assert.match(auth, /biometric_reconnect_skipped/);
+});
+
+test("lock-gate biometric reauth stays on biometric_lock — never Login choice shell", () => {
+  const auth = read("src/storage/AuthContext.tsx");
+  const unlock = read("src/screens/BiometricUnlockScreen.tsx");
+  const nav = read("src/navigation/RootNavigator.tsx");
+  assert.match(auth, /validateUi: fromLockGate \? "biometric_lock" : "login"/);
+  assert.match(unlock, /action !== "reauthenticate_expired_session"/);
+  assert.match(nav, /sessionValidateUi === "biometric_lock"/);
+  assert.match(nav, /sessionValidateUi === "login"/);
+});
+
+test("explicit logout clears reauth material B and preserves preference A", () => {
+  const auth = read("src/storage/AuthContext.tsx");
+  const signOut = auth.slice(auth.indexOf("const signOut = useCallback"), auth.indexOf("const value = useMemo"));
+  assert.match(signOut, /clearBiometricReauthMaterial\("explicit_logout"\)/);
+  assert.doesNotMatch(signOut, /clearBiometricLogin/);
+  assert.match(signOut, /setPreferPasswordLoginThisSession\(true\)/);
 });
 
 test("no secret fields in biometric logs", () => {

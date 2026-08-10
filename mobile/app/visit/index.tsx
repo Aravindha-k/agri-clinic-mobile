@@ -9,10 +9,7 @@ import { useMasterData } from "../../../src/storage/MasterDataContext";
 import { useTracking } from "../../../src/storage/TrackingContext";
 import { useDuty } from "../../../src/features/duty/store/DutyContext";
 import { loadRevisitPrefill } from "../../../src/utils/farmerPrefill";
-import {
-  ensureLocationReadyForVisit,
-  promptFixLocationAccess
-} from "../../../src/features/fieldTrackingSetup";
+import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal";
 import {
   WorkdayRequiredSheet,
   type WorkdayRequiredSheetRef
@@ -105,11 +102,10 @@ export default function VisitFlowShell() {
           }
         }
 
-        const ready = await ensureLocationReadyForVisit();
-        if (!ready.ok) {
+        const ready = await requestGpsForFieldWork();
+        if (!ready) {
           fastRevisitStarted.current = false;
           navigation.setParams({ fastRevisit: undefined });
-          promptFixLocationAccess(ready, { title: t("visitFlow.revisitGpsTitle") });
           return;
         }
 

@@ -11,7 +11,8 @@ const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
 
 const ensure = read("src/features/fieldTrackingSetup/ensureForegroundLocation.ts");
 const actions = read("src/features/fieldTrackingSetup/actions.ts");
-const screen = read("src/screens/FieldTrackingSetupScreen.tsx");
+const gate = read("src/features/fieldTrackingSetup/locationReadinessGate.ts");
+const modal = read("src/utils/locationRequiredModal.ts");
 
 // Live OS read — never trust persisted permanentlyDenied / setup flags for the dialog.
 assert.match(ensure, /getForegroundPermissionsAsync/);
@@ -31,12 +32,16 @@ assert.match(ensure, /requestForegroundPermissionsAsync/);
 assert.match(ensure, /RETRY_PERMISSION_MESSAGE/);
 assert.doesNotMatch(ensure, /Linking\.openSettings|APPLICATION_DETAILS|openLocationPermissionSettings/);
 
-// UI: Open Settings only when permanentlyDenied
-assert.match(screen, /permanentlyDenied \? \(/);
-assert.match(screen, /Open Settings/);
-assert.match(screen, /Try Again/);
-assert.match(screen, /Turn On Location/);
-assert.match(screen, /SERVICES_OFF_MESSAGE/);
+// Precise upgrade stays inside the single request owner
+assert.match(ensure, /preciseOk/);
+assert.match(ensure, /accuracy === "coarse"/);
+
+// Gate: Settings phase only for permanent / precise exceptional recovery
+assert.match(gate, /permission_denied_permanent/);
+assert.match(gate, /precise_required/);
+assert.match(modal, /Allow Location/);
+assert.match(modal, /Open App Settings/);
+assert.doesNotMatch(modal, /await openSettingsForPendingStartWorkDay\(async \(\) => undefined\);\s*\}\s*if \(result\.permanentlyDenied\)/);
 
 // Never fall back to Settings message for every !ok
 assert.match(actions, /RETRY_PERMISSION_MESSAGE/);
@@ -52,7 +57,6 @@ assert.match(ensure, /if \(enableFlowInFlight\)/);
 // No background request
 assert.doesNotMatch(ensure, /requestBackgroundPermissionsAsync/);
 assert.doesNotMatch(actions, /requestBackgroundPermissionsAsync/);
-assert.doesNotMatch(screen, /requestBackgroundPermissionsAsync/);
 
 console.log("Foreground location permission contract checks passed.");
 process.exit(0);

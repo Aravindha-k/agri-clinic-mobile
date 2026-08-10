@@ -18,6 +18,7 @@ export type LocationReadinessStatus =
   | "ready"
   | "permission_denied_retryable"
   | "permission_denied_permanent"
+  | "precise_required"
   | "services_disabled"
   | "cancelled"
   | "error";
@@ -41,11 +42,21 @@ export type LocationGatePhase =
 
 export const LOCATION_GATE_MESSAGES = {
   permissionRetry: "Location permission is required to start your workday.",
-  permissionPermanent: "Location permission is disabled for this app.",
+  permissionPermanent: "Location permission is disabled for Kavya Agri Clinic.",
+  preciseRequired: "Precise location is needed to record the correct field location.",
   servicesOff: "Turn on device location to start your workday.",
   servicesCancelled: "Location was not enabled. Try again.",
   error: "Could not check location. Please try again."
 } as const;
+
+function readPreciseOkFromResponse(response: Location.LocationPermissionResponse): boolean {
+  if (!(response.granted === true || response.status === "granted")) return false;
+  if (typeof response !== "object") return true;
+  const androidMeta = (response as { android?: { accuracy?: string } }).android;
+  if (androidMeta?.accuracy === "coarse") return false;
+  if (androidMeta?.accuracy === "fine") return true;
+  return true;
+}
 
 type GateOptions = {
   onPhase?: (phase: LocationGatePhase) => void;
@@ -119,11 +130,26 @@ export async function ensureLocationReadyForAction(
                 permanentlyDenied: permanent,
                 canAskAgain: !permanent,
                 status: current.status,
-                didRequest: false
+                didRequest: false,
+                preciseOk: false
               },
               servicesEnabled: false
             }
           );
+        }
+        if (!readPreciseOkFromResponse(current)) {
+          emitPhase(onPhase, "open_settings");
+          return result("precise_required", LOCATION_GATE_MESSAGES.preciseRequired, {
+            permission: {
+              granted: true,
+              permanentlyDenied: false,
+              canAskAgain: true,
+              status: current.status,
+              didRequest: false,
+              preciseOk: false
+            },
+            servicesEnabled: false
+          });
         }
         const servicesEnabled = await readServicesEnabled();
         if (!servicesEnabled) {
@@ -172,11 +198,25 @@ export async function ensureLocationReadyForAction(
               permanentlyDenied: permanent,
               canAskAgain: !permanent,
               status: recheck.status,
-              didRequest: permission.didRequest
+              didRequest: permission.didRequest,
+              preciseOk: false
             },
             servicesEnabled: false
           }
         );
+      }
+
+      const preciseOk = recheck
+        ? readPreciseOkFromResponse(recheck)
+        : permission.preciseOk !== false;
+      if (!preciseOk) {
+        // Native upgrade already attempted in ensureForegroundLocationPermission.
+        // App Settings is the exceptional recovery when OS keeps approximate only.
+        emitPhase(onPhase, "open_settings");
+        return result("precise_required", LOCATION_GATE_MESSAGES.preciseRequired, {
+          permission: { ...permission, granted: true, preciseOk: false },
+          servicesEnabled: false
+        });
       }
 
       emitPhase(onPhase, "turn_on_location");
@@ -206,14 +246,11 @@ export async function ensureLocationReadyForAction(
         }
       }
 
-      // Background ("all the time") + tracking notification — only at workday start,
-      // after clear disclosure. Declining BG still allows start; FGS uses FG permission.
-      const { ensureBackgroundLocationForWorkday } = await import("./ensureBackgroundLocation");
-      await ensureBackgroundLocationForWorkday().catch(() => undefined);
-
+      // Foreground + device GPS only. Do not request background location —
+      // current product tracking uses FGS with foreground permission.
       emitPhase(onPhase, "idle");
       return result("ready", "", {
-        permission: { ...permission, granted: true },
+        permission: { ...permission, granted: true, preciseOk: true },
         servicesEnabled: true
       });
     } catch {

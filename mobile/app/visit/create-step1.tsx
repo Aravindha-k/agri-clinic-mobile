@@ -14,10 +14,7 @@ import { getOptionLabel } from "../../../src/api/masters";
 import { useConnectivityOnline } from "../../../src/hooks/useConnectivityOnline";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useMasterData } from "../../../src/storage/MasterDataContext";
-import {
-  ensureLocationReadyForVisit,
-  promptFixLocationAccess
-} from "../../../src/features/fieldTrackingSetup";
+import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal";
 import { FlatCard } from "../../components/layout/FlatCard";
 import { PrimaryButton, SearchBar, StatusChip } from "../../components/ui";
 import { FarmerPickCard } from "../../components/visit/FarmerPickCard";
@@ -242,9 +239,8 @@ export default function VisitCreateStep1({ onClose }: Props) {
 
   async function selectFarmer(farmer: MobileFarmer) {
     if (selectingFarmer) return;
-    const ready = await ensureLocationReadyForVisit();
-    if (!ready.ok) {
-      promptFixLocationAccess(ready);
+    const ready = await requestGpsForFieldWork();
+    if (!ready) {
       return;
     }
     setSelectingFarmer(true);
@@ -282,9 +278,8 @@ export default function VisitCreateStep1({ onClose }: Props) {
       return;
     }
 
-    const ready = await ensureLocationReadyForVisit();
-    if (!ready.ok) {
-      promptFixLocationAccess(ready);
+    const ready = await requestGpsForFieldWork();
+    if (!ready) {
       return;
     }
 

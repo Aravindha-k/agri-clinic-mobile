@@ -505,7 +505,7 @@ export const en = {
     syncIssueTitle: "Sync issue",
     locationTimeout: "We could not get your location. Move to an open area and try again.",
     permissionBody: "Location permission is required to start your workday.",
-    permissionBlockedBody: "Location permission is disabled for this app.",
+    permissionBlockedBody: "Location permission is disabled for Kavya Agri Clinic.",
     servicesOffBody: "Turn on device location to start your workday.",
     servicesResolutionUnavailable:
       "We couldn’t open the quick location prompt. Turn on Location in phone settings.",

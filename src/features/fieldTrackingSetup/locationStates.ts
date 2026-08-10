@@ -71,8 +71,8 @@ export function recoveryCopyForState(state: LocationIssueState): LocationRecover
         state,
         title: "Turn on Precise Location",
         message: "Precise location is needed to record the correct field location.",
-        primary: { label: "Open Settings", action: "open_settings" },
-        secondary: { label: "Cancel", action: "cancel" }
+        primary: { label: "Allow Location", action: "allow_location" },
+        secondary: { label: "Not Now", action: "not_now" }
       };
     case "location_services_disabled":
       return {

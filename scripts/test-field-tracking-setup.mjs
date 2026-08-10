@@ -1,5 +1,6 @@
 /**
- * Field Tracking setup — foreground at setup; background only at Start Work Day.
+ * Field Tracking — foreground at field actions; background dormant in normal flow.
+ * Custom Enable Location screen is not registered in normal navigation.
  */
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -37,7 +38,8 @@ must(
     "hasServicesEnabledAsync",
     "isPermanentlyDenied",
     'status === "denied" && response.canAskAgain === false',
-    "Location permission is disabled for Kavya Agri Clinic."
+    "Location permission is disabled for Kavya Agri Clinic.",
+    "preciseOk"
   ],
   "single-flight foreground permission service"
 );
@@ -53,16 +55,15 @@ must(
   [
     "ensureBackgroundLocationForWorkday",
     "requestBackgroundPermissionsAsync",
-    "WORKDAY_LOCATION_DISCLOSURE",
-    "Location is used during your active workday so the office can view your latest field location."
+    "WORKDAY_LOCATION_DISCLOSURE"
   ],
-  "workday-scoped background permission with disclosure"
+  "dormant background helper retained for compatibility"
 );
 
 must(
   "src/features/fieldTrackingSetup/actions.ts",
   ["enableLocationForFieldWork", "ensureBackgroundLocationForWorkday", "openedSettings: false"],
-  "actions use enable flow; background via workday helper"
+  "actions use enable flow; background helper remains available"
 );
 
 must(
@@ -77,31 +78,14 @@ mustNot(
   "background/notifications not critical for setup screen"
 );
 
-must(
-  "src/screens/FieldTrackingSetupScreen.tsx",
-  [
-    "Enable Location",
-    "runForegroundLocationStep",
-    "permanentlyDenied",
-    "Open Settings",
-    "Try Again",
-    "Turn On Location",
-    "PERMANENTLY_DENIED_MESSAGE"
-  ],
-  "simple setup screen"
+// Legacy setup screen may remain on disk but must not be navigable.
+mustNot(
+  "src/navigation/RootNavigator.tsx",
+  ["FieldTrackingSetup", "FieldTrackingSetupScreen"],
+  "FieldTrackingSetup removed from normal navigation"
 );
 
-mustNot(
-  "src/screens/FieldTrackingSetupScreen.tsx",
-  [
-    "Allow Background Location",
-    "Open Battery Settings",
-    "Open Location Settings",
-    "runBackgroundLocationStep",
-    "Allow all the time"
-  ],
-  "no multi-step background/battery flow on setup screen"
-);
+mustNot("src/navigation/types.ts", ["FieldTrackingSetup"], "no FieldTrackingSetup route type");
 
 must(
   "src/features/fieldTrackingSetup/locationPermissionService.ts",
@@ -119,12 +103,13 @@ must(
   "src/features/fieldTrackingSetup/locationStates.ts",
   [
     "Location permission is disabled for Kavya Agri Clinic.",
-    'action: "open_app_settings"'
+    'action: "open_app_settings"',
+    'primary: { label: "Allow Location", action: "allow_location" }'
   ],
-  "permanently denied copy + explicit settings action"
+  "permanently denied copy + precise uses Allow Location first"
 );
 
-// Expo / Android config — FGS + background for active workday tracking
+// Expo / Android config — FGS + background declared; runtime BG request is dormant
 must(
   "app.config.js",
   [
@@ -132,10 +117,9 @@ must(
     "ACCESS_COARSE_LOCATION",
     "ACCESS_BACKGROUND_LOCATION",
     "FOREGROUND_SERVICE_LOCATION",
-    "isAndroidBackgroundLocationEnabled: true",
     "isAndroidForegroundServiceEnabled: true"
   ],
-  "release config enables FGS + background location"
+  "release config enables FGS"
 );
 
 must(
@@ -143,10 +127,9 @@ must(
   [
     "ACCESS_FINE_LOCATION",
     "ACCESS_COARSE_LOCATION",
-    "ACCESS_BACKGROUND_LOCATION",
     "FOREGROUND_SERVICE_LOCATION"
   ],
-  "manifest declares FGS + background location"
+  "manifest declares FGS + location"
 );
 
 // requestBackgroundPermissionsAsync only in ensureBackgroundLocation (+ tests)
@@ -192,22 +175,28 @@ for (const file of noRequestSurfaces) {
   );
 }
 
-must(
-  "src/navigation/RootNavigator.tsx",
-  ["FieldTrackingSetup", "FieldTrackingSetupScreen"],
-  "nav registration"
-);
-
 mustNot(
   "App.tsx",
   ["requestForegroundPermissionsAsync", "requestBackgroundPermissionsAsync", "FieldTrackingSetup"],
   "no splash permission spam"
 );
 
-must(
+mustNot(
   "src/features/fieldTrackingSetup/locationReadinessGate.ts",
-  ["ensureBackgroundLocationForWorkday"],
-  "Start Work Day gate requests background after disclosure"
+  ["ensureBackgroundLocationForWorkday", "requestBackgroundPermissionsAsync"],
+  "Start Work Day gate never requests background location"
+);
+
+must(
+  "src/features/fieldTrackingSetup/workdayGuard.ts",
+  ["enableLocationForFieldWork"],
+  "post-login uses native enable flow"
+);
+
+mustNot(
+  "src/features/fieldTrackingSetup/workdayGuard.ts",
+  ["navigateRoot", 'name="FieldTrackingSetup"', "FieldTrackingSetupScreen"],
+  "post-login never navigates to setup screen"
 );
 
 console.log("Field tracking setup + workday FGS permission checks passed.");

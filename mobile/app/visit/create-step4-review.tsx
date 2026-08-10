@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AppState, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, AppState, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useConnectivityOnline } from "../../../src/hooks/useConnectivityOnline";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
@@ -168,7 +168,43 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
     if (enabled.permanentlyDenied) {
       setGpsUi("permission_missing");
       setGpsMessage(enabled.message || "Location permission is disabled for Kavya Agri Clinic.");
-      await openSettingsForMissing("foreground");
+      Alert.alert(
+        "Location Required",
+        enabled.message || "Location permission is disabled for Kavya Agri Clinic.",
+        [
+          { text: "Not now", style: "cancel" },
+          {
+            text: "Open App Settings",
+            onPress: () => {
+              void openSettingsForMissing("foreground");
+            }
+          }
+        ]
+      );
+      return;
+    }
+    if (enabled.needsPreciseUpgrade) {
+      setGpsUi("permission_missing");
+      setGpsMessage(enabled.message || "Precise location is needed to record the correct field location.");
+      Alert.alert(
+        "Location Required",
+        enabled.message || "Precise location is needed to record the correct field location.",
+        [
+          { text: "Not now", style: "cancel" },
+          {
+            text: "Allow Location",
+            onPress: () => {
+              void requestVisitLocationPermission();
+            }
+          },
+          {
+            text: "Open App Settings",
+            onPress: () => {
+              void openSettingsForMissing("precise");
+            }
+          }
+        ]
+      );
       return;
     }
     if (enabled.servicesDisabled) {
@@ -177,7 +213,16 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
       return;
     }
     setGpsUi("permission_missing");
-    setGpsMessage(enabled.message || "Location permission is required.");
+    setGpsMessage(enabled.message || "Location is required to record field work.");
+    Alert.alert("Location Required", "Location is required to record field work.", [
+      { text: "Not now", style: "cancel" },
+      {
+        text: "Allow Location",
+        onPress: () => {
+          void requestVisitLocationPermission();
+        }
+      }
+    ]);
   }, [runGpsCapture]);
 
   useEffect(() => {

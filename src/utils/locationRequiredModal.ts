@@ -7,6 +7,7 @@ import {
 } from "../features/fieldTrackingSetup";
 
 const TITLE = "Location Required";
+const FIELD_WORK_MESSAGE = "Location is required to record field work.";
 
 export type FieldGpsRequestOptions = {
   /** When workday is active and tracking already has a fix, skip re-probing. */
@@ -35,6 +36,69 @@ function showInlineAlert(message: string) {
   Alert.alert(TITLE, message, [{ text: "OK", style: "default" }]);
 }
 
+function showRetryablePermissionAlert(onRetry: () => void) {
+  Alert.alert(TITLE, FIELD_WORK_MESSAGE, [
+    { text: "Not now", style: "cancel" },
+    {
+      text: "Allow Location",
+      onPress: () => {
+        onRetry();
+      }
+    }
+  ]);
+}
+
+function showPermanentSettingsAlert(message: string) {
+  Alert.alert(TITLE, message || LOCATION_GATE_MESSAGES.permissionPermanent, [
+    { text: "Not now", style: "cancel" },
+    {
+      text: "Open App Settings",
+      onPress: () => {
+        void openSettingsForPendingStartWorkDay(async () => undefined);
+      }
+    }
+  ]);
+}
+
+async function handleReadinessFailure(
+  readiness: Awaited<ReturnType<typeof ensureLocationReadyForAction>>
+): Promise<boolean> {
+  if (readiness.status === "ready") {
+    return true;
+  }
+
+  if (
+    readiness.status === "permission_denied_permanent" ||
+    readiness.status === "precise_required"
+  ) {
+    showPermanentSettingsAlert(readiness.message);
+    return false;
+  }
+
+  if (readiness.status === "permission_denied_retryable") {
+    showRetryablePermissionAlert(() => {
+      void (async () => {
+        const again = await ensureLocationReadyForAction();
+        if (again.status === "ready") {
+          return;
+        }
+        if (
+          again.status === "permission_denied_permanent" ||
+          again.status === "precise_required"
+        ) {
+          showPermanentSettingsAlert(again.message);
+          return;
+        }
+        showInlineAlert(again.message || LOCATION_GATE_MESSAGES.error);
+      })();
+    });
+    return false;
+  }
+
+  showInlineAlert(readiness.message || LOCATION_GATE_MESSAGES.error);
+  return false;
+}
+
 /**
  * Location readiness for Start Workday / field actions.
  * Uses the canonical gate (permission request + GPS prompt). Never auto-opens Settings.
@@ -55,24 +119,7 @@ export async function requestGpsForFieldWork(
     if (readiness.status === "ready") {
       return true;
     }
-
-    if (readiness.status === "permission_denied_permanent") {
-      Alert.alert(TITLE, readiness.message || LOCATION_GATE_MESSAGES.permissionPermanent, [
-        { text: "Not now", style: "cancel" },
-        {
-          text: "Open Settings",
-          onPress: () => {
-            void openSettingsForPendingStartWorkDay(async () => {
-              // Permission restored — caller may tap Start again or resume via pending Home flow.
-            });
-          }
-        }
-      ]);
-      return false;
-    }
-
-    showInlineAlert(readiness.message || LOCATION_GATE_MESSAGES.error);
-    return false;
+    return handleReadinessFailure(readiness);
   } finally {
     fieldWorkGateInFlight = false;
   }
@@ -103,22 +150,7 @@ export async function requestVisitLocationAccess(
     if (readiness.status === "ready") {
       return true;
     }
-
-    if (readiness.status === "permission_denied_permanent") {
-      Alert.alert(TITLE, readiness.message || LOCATION_GATE_MESSAGES.permissionPermanent, [
-        { text: "Not now", style: "cancel" },
-        {
-          text: "Open Settings",
-          onPress: () => {
-            void openSettingsForPendingStartWorkDay(async () => undefined);
-          }
-        }
-      ]);
-      return false;
-    }
-
-    showInlineAlert(readiness.message || LOCATION_GATE_MESSAGES.error);
-    return false;
+    return handleReadinessFailure(readiness);
   } finally {
     visitGateInFlight = false;
   }
@@ -127,16 +159,11 @@ export async function requestVisitLocationAccess(
 /** @deprecated Use requestVisitLocationAccess or requestGpsForFieldWork. */
 export function showLocationRequiredModal(onEnable?: () => void) {
   void (async () => {
-    const { enableLocationForFieldWork } = await import(
-      "../features/fieldTrackingSetup/ensureForegroundLocation"
-    );
-    const result = await enableLocationForFieldWork();
-    if (result.ok) {
+    const readiness = await ensureLocationReadyForAction();
+    if (readiness.status === "ready") {
       onEnable?.();
       return;
     }
-    if (result.permanentlyDenied) {
-      await openSettingsForPendingStartWorkDay(async () => undefined);
-    }
+    await handleReadinessFailure(readiness);
   })();
 }

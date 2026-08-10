@@ -1,27 +1,25 @@
+/**
+ * Post-login location readiness — native OS dialog only.
+ * Never navigates to a custom Enable Location instruction screen.
+ */
 import { Alert } from "react-native";
-import { navigateRoot } from "../../navigation/rootNavigationRef";
-import { shouldOfferFieldTrackingSetup } from "./probe";
+import { enableLocationForFieldWork } from "./ensureForegroundLocation";
 import type { SetupStepId } from "./types";
 
 let offeredThisSession = false;
 
 /**
- * After password login — open existing FieldTrackingSetup only when OS permission
- * is actually incomplete. Never navigates when already granted.
+ * After password login — if foreground location is missing and requestable,
+ * show the Android native permission dialog immediately. No custom setup UI.
  */
 export async function maybeOfferFieldTrackingSetupAfterLogin(): Promise<void> {
   if (offeredThisSession) return;
-  const offer = await shouldOfferFieldTrackingSetup();
-  if (!offer) return;
   offeredThisSession = true;
-
-  // Wait briefly so RootNavigator can mount Main after auth phase flips.
-  setTimeout(() => {
-    const opened = navigateRoot("FieldTrackingSetup", undefined);
-    if (!opened) {
-      setTimeout(() => navigateRoot("FieldTrackingSetup", undefined), 600);
-    }
-  }, 400);
+  try {
+    await enableLocationForFieldWork();
+  } catch {
+    // Never block login → Today on permission errors.
+  }
 }
 
 export function resetFieldTrackingSetupOfferSession(): void {
@@ -45,24 +43,23 @@ export async function ensureFieldTrackingReadyForWorkday(): Promise<{
 }
 
 export function showFieldTrackingNeedsAttentionAlert(
-  missing: SetupStepId[],
+  _missing: SetupStepId[],
   onFix: () => void
 ): void {
-  const labels: Record<SetupStepId, string> = {
-    foreground: "Location access",
-    background: "Allow all the time location",
-    precise: "Precise location",
-    battery: "Background battery access",
-    oem: "Phone battery settings",
-    notifications: "Tracking notification"
-  };
-  const list = missing.map((id) => `• ${labels[id] ?? id}`).join("\n");
   Alert.alert(
-    "Tracking setup needs attention",
-    list || "Field tracking permissions need a quick check.",
+    "Location needed",
+    "Allow location when asked so Kavya Agri Clinic can record field work.",
     [
       { text: "Not now", style: "cancel" },
-      { text: "Fix Now", onPress: onFix }
+      {
+        text: "Allow Location",
+        onPress: () => {
+          void (async () => {
+            await enableLocationForFieldWork().catch(() => undefined);
+            onFix();
+          })();
+        }
+      }
     ]
   );
 }

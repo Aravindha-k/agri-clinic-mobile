@@ -585,7 +585,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const establishAuthenticatedSession = useCallback(
-    async (options?: { validateUi?: SessionValidateUi }) => {
+    async (options?: { validateUi?: SessionValidateUi }): Promise<{ userId: number | null }> => {
       const validateUi = options?.validateUi ?? sessionValidateUiRef.current ?? "none";
       sessionValidateUiRef.current = validateUi;
       setSessionValidateUi(validateUi);
@@ -612,6 +612,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           throw new Error(FIELD_EMPLOYEE_ONLY_MESSAGE);
         }
+        // Sync ref immediately — React setState is async; password reconnect must not wait a render.
+        employeeIdRef.current = profile.id;
         setEmployee(profile);
         setActiveSyncUserId(profile.id);
         await hydrateDutyFromBootstrap({ bootstrap, userId: profile.id });
@@ -619,6 +621,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         autoValidateStartedRef.current = true;
         applyPhase("authenticated", `employee=${profile.id}`);
         markBootstrapSuccess(`employee=${profile.id}`);
+        return { userId: profile.id };
       } catch (err) {
         if (isRetriableAuthError(err)) {
           await hydrateDutyFromBootstrap({
@@ -629,7 +632,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           autoValidateStartedRef.current = true;
           applyPhase("authenticated", "offline_retriable");
           setBootstrapIssue(isNetworkError(err) ? "network" : "server");
-          return;
+          return { userId: employeeIdRef.current };
         }
         throw err;
       }
@@ -649,20 +652,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await clearDeviceSessionId().catch(() => undefined);
       const tokens = await loginRequest(username, password);
       await saveTokens(tokens);
-      await establishAuthenticatedSession({ validateUi: "login" });
-      // Keep fingerprint eligibility; refresh Keystore re-auth material when already enabled.
+      const session = await establishAuthenticatedSession({ validateUi: "login" });
+      // Keep fingerprint preference (A); recreate Keystore reauth material (B) for new DeviceSession.
       try {
         const status = await getBiometricLoginStatus();
         if (status.enabled) {
-          const userId = employeeIdRef.current;
+          const userId = session.userId ?? employeeIdRef.current;
           if (userId != null && userId > 0) {
             await saveBiometricReauthMaterial({
               identifier: username,
               secret: password,
               userId
             });
+            logStartup("biometric_reconnected", "password login refreshed reauth material");
+          } else {
+            logStartup("biometric_reconnect_skipped", "missing_user_id_after_password_login");
           }
-          logStartup("biometric_reconnected", "password login refreshed reauth material");
         }
       } catch {
         // ignore
@@ -766,13 +771,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         );
       }
     } else if (result.action === "reauthenticate_expired_session") {
-      // Fresh login already stored tokens — bootstrap into the app (stay on Login).
+      // Tokens already stored by Keystore re-login. Keep unlock gate when started from lock;
+      // only use Login shell when biometric was started from Login / session_expired.
+      const fromLockGate =
+        startedPhase === "locked" || startedPhase === "authenticating_biometric";
       try {
-        await establishAuthenticatedSession({ validateUi: "login" });
+        await establishAuthenticatedSession({
+          validateUi: fromLockGate ? "biometric_lock" : "login"
+        });
       } catch (err) {
-        applyPhase("locked", "reauth_bootstrap_failed");
+        applyPhase(fromLockGate ? "locked" : "unauthenticated", "reauth_bootstrap_failed");
         logStartup(
-          "session_locked",
+          fromLockGate ? "session_locked" : "session_cleared",
           err instanceof Error ? `reauth_bootstrap_failed:${err.message}` : "reauth_bootstrap_failed"
         );
         return {

@@ -53,6 +53,7 @@ export type StartupPhase =
   | "session_cleared"
   | "session_locked"
   | "biometric_reconnected"
+  | "biometric_reconnect_skipped"
   | "password_login_chosen"
   | "splash_replay"
   | "splash_start"

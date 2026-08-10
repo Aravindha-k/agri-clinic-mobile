@@ -15,10 +15,7 @@ import {
   buildEmployeeDayMapMarkers
 } from "../../../src/features/duty/map/employeeDayMapMarkers";
 import { useDuty } from "../../../src/features/duty/store/DutyContext";
-import {
-  ensureLocationReadyForVisit,
-  promptFixLocationAccess
-} from "../../../src/features/fieldTrackingSetup";
+import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useTracking } from "../../../src/storage/TrackingContext";
 import {
@@ -158,17 +155,11 @@ export function DutyMapCard({
 
   const handleFixLocation = useCallback(() => {
     void (async () => {
-      const result = await ensureLocationReadyForVisit().catch(() => null);
-      if (!result || result.ok) {
+      const ready = await requestGpsForFieldWork();
+      if (ready) {
         void refreshTrackingState().catch(() => undefined);
-        return;
+        void refreshDutyMap({ force: true }).catch(() => undefined);
       }
-      promptFixLocationAccess(result, {
-        onRetry: () => {
-          void refreshTrackingState().catch(() => undefined);
-          void refreshDutyMap({ force: true }).catch(() => undefined);
-        }
-      });
     })();
   }, [refreshDutyMap, refreshTrackingState]);
 

@@ -15,8 +15,7 @@ import {
   getBiometricLoginStatus,
   type BiometricLoginStatus
 } from "../storage/biometricLoginStorage";
-import { getFieldTrackingHealth } from "../features/fieldTrackingSetup";
-import { navigateRoot } from "../navigation/rootNavigationRef";
+import { getFieldTrackingHealth, enableLocationForFieldWork, openSettingsForMissing } from "../features/fieldTrackingSetup";
 import type { AppLanguage } from "../i18n";
 import { FlatCard, ScreenCanvas, StackScreenHeader } from "../../mobile/components/layout";
 import { Colors, FontSize, FontWeight, Layout, Radius, Spacing } from "../../mobile/lib/theme";
@@ -202,7 +201,35 @@ export function SettingsScreen() {
         <Text style={styles.sectionLabel}>{t("settings.tracking")}</Text>
         <FlatCard padded={false}>
           <Pressable
-            onPress={() => navigateRoot("FieldTrackingSetup", undefined)}
+            onPress={() => {
+              void (async () => {
+                const result = await enableLocationForFieldWork();
+                await refreshTrackingSetup();
+                if (result.ok) {
+                  Alert.alert(t("settings.fieldTrackingSetup"), t("settings.fieldTrackingReady"));
+                  return;
+                }
+                if (result.permanentlyDenied) {
+                  Alert.alert(
+                    t("settings.fieldTrackingSetup"),
+                    "Location permission is disabled for Kavya Agri Clinic.",
+                    [
+                      { text: t("common.cancel"), style: "cancel" },
+                      {
+                        text: t("settings.fingerprintOpenSettings"),
+                        onPress: () => {
+                          void openSettingsForMissing("foreground");
+                        }
+                      }
+                    ]
+                  );
+                  return;
+                }
+                if (result.servicesDisabled) {
+                  Alert.alert(t("settings.fieldTrackingSetup"), result.message || "Turn on phone location.");
+                }
+              })();
+            }}
             accessibilityRole="button"
             accessibilityLabel={t("settings.fieldTrackingSetup")}
             style={({ pressed }) => [pressed && { opacity: 0.92 }]}

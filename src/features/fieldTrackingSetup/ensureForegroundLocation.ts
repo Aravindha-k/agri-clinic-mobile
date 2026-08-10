@@ -2,7 +2,9 @@
  * Canonical single-flight foreground location permission.
  * Always reads live Android/iOS permission state — never trusts persisted flags.
  * Never opens Settings automatically.
+ * Sole owner of Location.requestForegroundPermissionsAsync().
  */
+import { Platform } from "react-native";
 import * as Location from "expo-location";
 import { ensureAndroidLocationServicesEnabled } from "../../utils/ensureAndroidLocationServices";
 
@@ -13,6 +15,8 @@ export type ForegroundLocationPermissionResult = {
   status: string;
   /** True when this call showed the OS permission dialog. */
   didRequest: boolean;
+  /** Android precise (fine) when granted; true on iOS / unknown APIs. */
+  preciseOk: boolean;
 };
 
 export type EnableLocationFlowResult = {
@@ -22,6 +26,8 @@ export type EnableLocationFlowResult = {
   permanentlyDenied: boolean;
   /** Services off after permission grant — distinct from permission denial. */
   servicesDisabled: boolean;
+  /** Approximate-only after upgrade attempt — Settings only if OS cannot upgrade. */
+  needsPreciseUpgrade: boolean;
   message?: string;
 };
 
@@ -29,7 +35,10 @@ export const PERMANENTLY_DENIED_MESSAGE =
   "Location permission is disabled for Kavya Agri Clinic.";
 
 export const RETRY_PERMISSION_MESSAGE =
-  "Choose “While using the app” and allow Precise location when asked.";
+  "Location is required to record field work.";
+
+export const PRECISE_RETRY_MESSAGE =
+  "Precise location is needed to record the correct field location.";
 
 export const SERVICES_OFF_MESSAGE = "Turn on phone location to continue field tracking.";
 
@@ -48,9 +57,45 @@ function isPermanentlyDenied(response: Location.LocationPermissionResponse): boo
   return response.granted !== true && response.status === "denied" && response.canAskAgain === false;
 }
 
+function readPreciseOk(response: Location.LocationPermissionResponse): boolean {
+  if (!isGranted(response)) return false;
+  if (Platform.OS !== "android") return true;
+  const androidMeta = (response as { android?: { accuracy?: string } }).android;
+  if (androidMeta?.accuracy === "coarse") return false;
+  if (androidMeta?.accuracy === "fine") return true;
+  // Older APIs / Expo Go — treat granted FG as sufficient.
+  return true;
+}
+
+function toResult(
+  response: Location.LocationPermissionResponse,
+  didRequest: boolean
+): ForegroundLocationPermissionResult {
+  if (isGranted(response)) {
+    return {
+      granted: true,
+      permanentlyDenied: false,
+      canAskAgain: true,
+      status: response.status,
+      didRequest,
+      preciseOk: readPreciseOk(response)
+    };
+  }
+  const permanentlyDenied = isPermanentlyDenied(response);
+  return {
+    granted: false,
+    permanentlyDenied,
+    canAskAgain: response.canAskAgain !== false && !permanentlyDenied,
+    status: response.status,
+    didRequest,
+    preciseOk: false
+  };
+}
+
 /**
  * Check / request foreground location only.
  * Concurrent callers share one OS dialog.
+ * When already granted approximate-only, re-requests once for Android precise upgrade.
  */
 export async function ensureForegroundLocationPermission(): Promise<ForegroundLocationPermissionResult> {
   if (permissionInFlight) {
@@ -62,53 +107,40 @@ export async function ensureForegroundLocationPermission(): Promise<ForegroundLo
       const current = await Location.getForegroundPermissionsAsync();
 
       if (isGranted(current)) {
-        return {
-          granted: true,
-          permanentlyDenied: false,
-          canAskAgain: true,
-          status: current.status,
-          didRequest: false
-        };
+        if (readPreciseOk(current)) {
+          return toResult(current, false);
+        }
+        // Approximate only — Android may still allow a precise upgrade dialog.
+        const upgraded = await Location.requestForegroundPermissionsAsync();
+        return toResult(upgraded, true);
       }
 
       // Only block the system dialog when Android truly cannot ask again.
       if (isPermanentlyDenied(current)) {
-        return {
-          granted: false,
-          permanentlyDenied: true,
-          canAskAgain: false,
-          status: current.status,
-          didRequest: false
-        };
+        return toResult(current, false);
       }
 
       // undetermined OR denied with canAskAgain true/undefined → always request.
       const requested = await Location.requestForegroundPermissionsAsync();
-      if (isGranted(requested)) {
-        return {
-          granted: true,
-          permanentlyDenied: false,
-          canAskAgain: true,
-          status: requested.status,
-          didRequest: true
-        };
+      if (!isGranted(requested)) {
+        return toResult(requested, true);
       }
 
-      const permanentlyDenied = isPermanentlyDenied(requested);
-      return {
-        granted: false,
-        permanentlyDenied,
-        canAskAgain: requested.canAskAgain !== false && !permanentlyDenied,
-        status: requested.status,
-        didRequest: true
-      };
+      if (readPreciseOk(requested)) {
+        return toResult(requested, true);
+      }
+
+      // Granted approximate — try one upgrade pass (same request API).
+      const upgraded = await Location.requestForegroundPermissionsAsync();
+      return toResult(upgraded, true);
     } catch {
       return {
         granted: false,
         permanentlyDenied: false,
         canAskAgain: true,
         status: "error",
-        didRequest: false
+        didRequest: false,
+        preciseOk: false
       };
     }
   })();
@@ -155,6 +187,7 @@ export async function enableLocationForFieldWork(): Promise<EnableLocationFlowRe
         servicesEnabled: false,
         permanentlyDenied: permission.permanentlyDenied,
         servicesDisabled: false,
+        needsPreciseUpgrade: false,
         message: permission.permanentlyDenied ? PERMANENTLY_DENIED_MESSAGE : RETRY_PERMISSION_MESSAGE
       };
     }
@@ -165,17 +198,31 @@ export async function enableLocationForFieldWork(): Promise<EnableLocationFlowRe
       const permanentlyDenied = isPermanentlyDenied(recheck);
       return {
         ok: false,
-        permission: {
-          granted: false,
-          permanentlyDenied,
-          canAskAgain: !permanentlyDenied,
-          status: recheck.status,
-          didRequest: permission.didRequest
-        },
+        permission: toResult(recheck, permission.didRequest),
         servicesEnabled: false,
         permanentlyDenied,
         servicesDisabled: false,
+        needsPreciseUpgrade: false,
         message: permanentlyDenied ? PERMANENTLY_DENIED_MESSAGE : RETRY_PERMISSION_MESSAGE
+      };
+    }
+
+    const live = recheck ?? null;
+    const preciseOk = live ? readPreciseOk(live) : permission.preciseOk;
+    if (!preciseOk) {
+      return {
+        ok: false,
+        permission: {
+          ...permission,
+          granted: true,
+          preciseOk: false,
+          status: live?.status ?? permission.status
+        },
+        servicesEnabled: false,
+        permanentlyDenied: false,
+        servicesDisabled: false,
+        needsPreciseUpgrade: true,
+        message: PRECISE_RETRY_MESSAGE
       };
     }
 
@@ -189,10 +236,11 @@ export async function enableLocationForFieldWork(): Promise<EnableLocationFlowRe
       if (!servicesEnabled) {
         return {
           ok: false,
-          permission: { ...permission, granted: true },
+          permission: { ...permission, granted: true, preciseOk: true },
           servicesEnabled: false,
           permanentlyDenied: false,
           servicesDisabled: true,
+          needsPreciseUpgrade: false,
           message: SERVICES_OFF_MESSAGE
         };
       }
@@ -203,11 +251,13 @@ export async function enableLocationForFieldWork(): Promise<EnableLocationFlowRe
       permission: {
         ...permission,
         granted: true,
-        status: recheck?.status ?? permission.status
+        preciseOk: true,
+        status: live?.status ?? permission.status
       },
       servicesEnabled: true,
       permanentlyDenied: false,
-      servicesDisabled: false
+      servicesDisabled: false,
+      needsPreciseUpgrade: false
     };
   })();
 

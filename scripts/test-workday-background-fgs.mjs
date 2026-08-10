@@ -131,23 +131,16 @@ test("15. client_point_id used for idempotent GPS uploads", () => {
   assert.match(queue, /client_point_id/);
 });
 
-test("Permissions: FGS + background declared; disclosure at workday start only", () => {
+test("Permissions: FGS declared; normal flow does not request background location", () => {
   const app = read("app.config.js");
-  assert.match(app, /isAndroidBackgroundLocationEnabled:\s*true/);
   assert.match(app, /isAndroidForegroundServiceEnabled:\s*true/);
-  assert.match(app, /ACCESS_BACKGROUND_LOCATION/);
   assert.match(app, /FOREGROUND_SERVICE_LOCATION/);
   const manifest = read("android/app/src/main/AndroidManifest.xml");
-  assert.match(manifest, /ACCESS_BACKGROUND_LOCATION/);
   assert.match(manifest, /FOREGROUND_SERVICE_LOCATION/);
   const gate = read("src/features/fieldTrackingSetup/locationReadinessGate.ts");
-  assert.match(gate, /ensureBackgroundLocationForWorkday/);
+  assert.doesNotMatch(gate, /ensureBackgroundLocationForWorkday/);
+  assert.doesNotMatch(gate, /requestBackgroundPermissionsAsync/);
   const bg = read("src/features/fieldTrackingSetup/ensureBackgroundLocation.ts");
-  assert.match(bg, /WORKDAY_LOCATION_DISCLOSURE/);
-  assert.match(
-    bg,
-    /Location is used during your active workday so the office can view your latest field location/
-  );
   assert.match(bg, /requestBackgroundPermissionsAsync/);
   assert.doesNotMatch(read("App.tsx"), /requestBackgroundPermissionsAsync/);
 });

@@ -199,6 +199,22 @@ mustInclude(
   "session expiry surfaces Login with preserved biometric eligibility"
 );
 
+mustInclude(
+  "src/storage/AuthContext.tsx",
+  [
+    'validateUi: fromLockGate ? "biometric_lock" : "login"',
+    "employeeIdRef.current = profile.id",
+    "biometric_reconnect_skipped"
+  ],
+  "J lock-gate reauth stays on unlock; password reconnect uses profile id"
+);
+
+mustInclude(
+  "src/screens/BiometricUnlockScreen.tsx",
+  ['action !== "reauthenticate_expired_session"'],
+  "J unlock screen skips second bootstrap after Keystore reauth"
+);
+
 // H — single bootstrap
 mustInclude(
   "src/storage/AuthContext.tsx",

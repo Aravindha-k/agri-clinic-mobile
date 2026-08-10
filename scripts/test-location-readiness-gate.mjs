@@ -42,7 +42,7 @@ must(
     "cancelled",
     "LOCATION_GATE_MESSAGES",
     "Location permission is required to start your workday.",
-    "Location permission is disabled for this app.",
+    "Location permission is disabled for Kavya Agri Clinic.",
     "Turn on device location to start your workday.",
     "Location was not enabled. Try again.",
     "Could not check location. Please try again.",
@@ -70,14 +70,8 @@ must(
 
 mustNot(
   gate,
-  ["requestBackgroundPermissionsAsync", "ACCESS_BACKGROUND_LOCATION"],
-  "gate delegates background request (no inline OS call)"
-);
-
-must(
-  gate,
-  ["ensureBackgroundLocationForWorkday"],
-  "Start Work Day discloses + requests background via helper"
+  ["requestBackgroundPermissionsAsync", "ensureBackgroundLocationForWorkday"],
+  "normal readiness gate never requests background location"
 );
 
 // 3. Settings never open automatically inside the readiness sequence
@@ -213,7 +207,7 @@ must(
     'turnOnDeviceLocation: "Turn On Location"',
     'startingWorkday: "Starting Work Day…"',
     'permissionBody: "Location permission is required to start your workday."',
-    'permissionBlockedBody: "Location permission is disabled for this app."',
+    'permissionBlockedBody: "Location permission is disabled for Kavya Agri Clinic."',
     'locationNotEnabled: "Location was not enabled. Try again."'
   ],
   "professional Start Work Day copy"

@@ -16,7 +16,7 @@ import {
   type PendingVisitAttachment
 } from "../../../src/visit/pendingAttachments";
 import type { WorkdayStatus } from "../../../src/api/tracking";
-import { ensureLocationReadyForVisit } from "../../../src/features/fieldTrackingSetup";
+import { ensureLocationReadyForAction } from "../../../src/features/fieldTrackingSetup";
 import { normalizeVisitSubmitUserMessage } from "../../../src/utils/visitSubmitErrors";
 
 export type VisitSubmitProgress =
@@ -76,9 +76,13 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
         }
       }
 
-      const allowed = await ensureLocationReadyForVisit();
-      if (!allowed.ok) {
-        return { ok: false, message: allowed.message, cancelled: true };
+      const readiness = await ensureLocationReadyForAction();
+      if (readiness.status !== "ready") {
+        return {
+          ok: false,
+          message: readiness.message || t("visitFlow.gpsNotCaptured"),
+          cancelled: true
+        };
       }
 
       const draft = useVisitFormStore.getState();
@@ -89,7 +93,7 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
 
       onProgress?.("capturing_location");
       // Hard timeout — OEM GPS can hang indefinitely and freeze the submit spinner.
-      // Never requests OS permission — Field Tracking Setup owns requests.
+      // Permission already resolved via canonical location gate above.
       const { captureVisitGps, visitGpsIsUsable } = await import("./visitGpsCapture");
       const gpsCapture = await captureVisitGps({ requestPermission: false });
       if (!gpsCapture.ok) {

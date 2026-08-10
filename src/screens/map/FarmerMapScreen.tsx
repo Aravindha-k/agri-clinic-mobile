@@ -73,7 +73,7 @@ export function FarmerMapScreen({ navigation, route }: Props) {
       } else {
         setYou(null);
         setLocationGranted(false);
-        setLocLabel("Location is off. Enable once in Field Tracking Setup (Settings).");
+        setLocLabel("Location is off. Tap Allow when asked, or turn on phone Location.");
       }
 
       const visitList = asArray<Record<string, unknown>>(visits);

@@ -28,7 +28,6 @@ import DiagnosticsScreen from "../../mobile/app/me/diagnostics";
 import NotificationsScreen from "../../mobile/app/notifications";
 import { SettingsScreen } from "../screens/SettingsScreen";
 import { HelpScreen } from "../screens/HelpScreen";
-import { FieldTrackingSetupScreen } from "../screens/FieldTrackingSetupScreen";
 import TrackingWorkspaceScreen from "../../mobile/app/tracking";
 import VisitDetailScreen from "../../mobile/app/visit/[id]";
 import { VisitFlowNavigator } from "./VisitFlowNavigator";
@@ -271,11 +270,6 @@ function AppRoutes() {
             <RootStack.Screen
               name="Notifications"
               component={SafeNotificationsScreen}
-              options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }}
-            />
-            <RootStack.Screen
-              name="FieldTrackingSetup"
-              component={FieldTrackingSetupScreen}
               options={{ contentStyle: { flex: 1 }, ...stackScreenOptionsPush }}
             />
           </RootStack.Navigator>

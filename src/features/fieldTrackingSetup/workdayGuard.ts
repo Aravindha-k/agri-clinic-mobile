@@ -1,62 +1,89 @@
 /**
- * Post-login location readiness — native OS dialog only.
+ * Post-login location: silent OS probe, then one native foreground request if needed.
  * Never navigates to a custom Enable Location instruction screen.
+ * Never opens App Settings. Never prompts GPS services at login.
+ * Already-granted OS permission (including approximate) is reused with zero request.
  */
+import * as Location from "expo-location";
 import { Alert } from "react-native";
-import { enableLocationForFieldWork } from "./ensureForegroundLocation";
-import type { SetupStepId } from "./types";
+import { ensureForegroundLocationPermission } from "./ensureForegroundLocation";
 
 let offeredThisSession = false;
 
-/**
- * After password login — if foreground location is missing and requestable,
- * show the Android native permission dialog immediately. No custom setup UI.
- */
-export async function maybeOfferFieldTrackingSetupAfterLogin(): Promise<void> {
-  if (offeredThisSession) return;
-  offeredThisSession = true;
+async function healSetupIfOsGranted(): Promise<void> {
   try {
-    await enableLocationForFieldWork();
+    const { markFieldTrackingSetupCompleted } = await import("./persistence");
+    await markFieldTrackingSetupCompleted().catch(() => undefined);
   } catch {
-    // Never block login → Today on permission errors.
+    // Stale setup flags must never block login.
   }
 }
 
+function isForegroundGranted(response: Location.LocationPermissionResponse): boolean {
+  return response.granted === true || response.status === Location.PermissionStatus.GRANTED;
+}
+
+/**
+ * Password login only. Biometric reopen must not call this.
+ * Probe silently; request native FG only when missing and canAskAgain.
+ */
+export async function maybeOfferFieldTrackingSetupAfterLogin(): Promise<void> {
+  if (offeredThisSession) {
+    return;
+  }
+  offeredThisSession = true;
+  try {
+    const current = await Location.getForegroundPermissionsAsync();
+    if (isForegroundGranted(current)) {
+      await healSetupIfOsGranted();
+      return;
+    }
+    if (current.status === Location.PermissionStatus.DENIED && current.canAskAgain === false) {
+      return;
+    }
+    const result = await ensureForegroundLocationPermission();
+    if (result.granted) {
+      await healSetupIfOsGranted();
+    }
+  } catch {
+    // Login must never be blocked by location.
+  }
+}
+
+/** Kept for API compatibility. Logout must not reset OS permission or force a re-prompt. */
 export function resetFieldTrackingSetupOfferSession(): void {
   offeredThisSession = false;
 }
 
-/**
- * Start Workday health check (silent probe only).
- * Interactive Start Work Day uses startWorkDayWithLocationGate instead.
- */
-export async function ensureFieldTrackingReadyForWorkday(): Promise<{
-  ok: boolean;
-  missing: SetupStepId[];
-}> {
-  const { ensureLocationReadyForAction } = await import("./locationReadinessGate");
-  const result = await ensureLocationReadyForAction({ probeOnly: true });
-  if (result.status === "ready") {
-    return { ok: true, missing: [] };
+/** Work Day / visit callers should prefer startWorkDayWithLocationGate. */
+export async function ensureFieldTrackingReadyForWorkday(): Promise<boolean> {
+  try {
+    const result = await ensureForegroundLocationPermission();
+    return result.granted;
+  } catch {
+    return false;
   }
-  return { ok: false, missing: ["foreground"] };
 }
 
+/**
+ * Unused in normal routing. Exceptional recovery helper — not called after login.
+ */
 export function showFieldTrackingNeedsAttentionAlert(
-  _missing: SetupStepId[],
-  onFix: () => void
+  onPrimary?: () => void
 ): void {
   Alert.alert(
-    "Location needed",
-    "Allow location when asked so Kavya Agri Clinic can record field work.",
+    "Location Required",
+    "Location is required to record field work.",
     [
-      { text: "Not now", style: "cancel" },
+      { text: "Cancel", style: "cancel" },
       {
         text: "Allow Location",
         onPress: () => {
           void (async () => {
-            await enableLocationForFieldWork().catch(() => undefined);
-            onFix();
+            const result = await ensureForegroundLocationPermission().catch(() => undefined);
+            if (result?.granted) {
+              onPrimary?.();
+            }
           })();
         }
       }

@@ -36,22 +36,137 @@ test("Password login reconnects reauth material using bootstrap user id", () => 
   assert.match(read("src/storage/biometricLoginStorage.ts"), /saveBiometricReauthMaterial/);
 });
 
-test("1–6. Fresh install: native FG after login; no FieldTrackingSetup; no auto Settings", () => {
+test("1. Login + missing + canAskAgain → native FG request directly", () => {
+  const guard = read("src/features/fieldTrackingSetup/workdayGuard.ts");
+  const login = read("src/screens/LoginScreen.tsx");
+  assert.match(login, /maybeOfferFieldTrackingSetupAfterLogin/);
+  assert.match(guard, /getForegroundPermissionsAsync/);
+  assert.match(guard, /ensureForegroundLocationPermission/);
+  assert.match(guard, /canAskAgain === false/);
+  assert.doesNotMatch(guard, /enableLocationForFieldWork/);
+  assert.doesNotMatch(guard, /ensureAndroidLocationServicesEnabled/);
+});
+
+test("2. No FieldTrackingSetup navigation after login", () => {
   const guard = read("src/features/fieldTrackingSetup/workdayGuard.ts");
   const login = read("src/screens/LoginScreen.tsx");
   const nav = read("src/navigation/RootNavigator.tsx");
-  assert.match(login, /maybeOfferFieldTrackingSetupAfterLogin/);
-  assert.match(guard, /enableLocationForFieldWork/);
   assert.doesNotMatch(guard, /navigateRoot/);
   assert.doesNotMatch(guard, /FieldTrackingSetupScreen|name=["']FieldTrackingSetup["']/);
+  assert.doesNotMatch(login, /FieldTrackingSetupScreen|navigateRoot\(["']FieldTrackingSetup/);
   assert.doesNotMatch(nav, /FieldTrackingSetup/);
-  assert.doesNotMatch(guard, /Linking\.openSettings|openAppSettingsPage/);
 });
 
-test("7–11. Already granted: ensureForeground short-circuits without request", () => {
+test("3. No Open Settings on normal first request", () => {
+  const guard = read("src/features/fieldTrackingSetup/workdayGuard.ts");
   const fg = read("src/features/fieldTrackingSetup/ensureForegroundLocation.ts");
-  assert.match(fg, /if \(isGranted\(current\)\)/);
-  assert.match(fg, /didRequest:\s*false|toResult\(current,\s*false\)/);
+  assert.doesNotMatch(guard, /Linking\.openSettings|openAppSettingsPage|openSettingsForMissing/);
+  assert.doesNotMatch(fg, /Linking\.openSettings|openAppSettingsPage/);
+});
+
+test("4. Native grant auto-continues — no Continue / Done after OS dialog", () => {
+  const guard = read("src/features/fieldTrackingSetup/workdayGuard.ts");
+  assert.match(guard, /if \(result\.granted\)/);
+  assert.match(guard, /healSetupIfOsGranted|markFieldTrackingSetupCompleted/);
+  assert.doesNotMatch(guard, /Continue|Done|Try again/);
+});
+
+test("5. Already granted on login → zero permission request", () => {
+  const guard = read("src/features/fieldTrackingSetup/workdayGuard.ts");
+  const grantedBranch = guard.slice(
+    guard.indexOf("if (isForegroundGranted(current))"),
+    guard.indexOf("if (current.status === Location.PermissionStatus.DENIED")
+  );
+  assert.match(grantedBranch, /healSetupIfOsGranted|markFieldTrackingSetupCompleted/);
+  assert.doesNotMatch(grantedBranch, /ensureForegroundLocationPermission/);
+});
+
+test("6. Fingerprint reopen + granted → zero location request", () => {
+  const auth = read("src/storage/AuthContext.tsx");
+  const unlock = auth.slice(
+    auth.indexOf("const completeBiometricUnlock"),
+    auth.indexOf("const choosePasswordLogin")
+  );
+  assert.doesNotMatch(unlock, /maybeOfferFieldTrackingSetupAfterLogin|ensureForegroundLocationPermission|enableLocationForFieldWork/);
+  assert.doesNotMatch(read("src/screens/BiometricUnlockScreen.tsx"), /maybeOfferFieldTrackingSetupAfterLogin|ensureForegroundLocationPermission/);
+});
+
+test("7. Logout → password relogin + granted → zero request", () => {
+  const auth = read("src/storage/AuthContext.tsx");
+  const signOut = auth.slice(auth.indexOf("const signOut = useCallback"), auth.indexOf("const value = useMemo"));
+  assert.doesNotMatch(signOut, /clearFieldTrackingSetupCompletion|resetFieldTrackingSetupOfferSession/);
+  const guard = read("src/features/fieldTrackingSetup/workdayGuard.ts");
+  assert.match(guard, /isForegroundGranted\(current\)/);
+  assert.match(guard, /Already-granted OS permission/);
+});
+
+test("8–9. Start Work Day: requestable → native; granted → no permission UI", () => {
+  const home = read("mobile/app/(tabs)/index.tsx");
+  const gate = read("src/features/fieldTrackingSetup/locationReadinessGate.ts");
+  assert.match(home, /startWorkDayWithLocationGate/);
+  assert.match(home, /handleStartWorkday/);
+  assert.doesNotMatch(home, /precise_required/);
+  assert.match(gate, /ensureForegroundLocationPermission/);
+  assert.match(gate, /if \(!alreadyGranted\)/);
+  assert.match(gate, /if \(!permission \|\| !permission\.granted\)/);
+});
+
+test("10. Approximate foreground does not force Settings", () => {
+  const fg = read("src/features/fieldTrackingSetup/ensureForegroundLocation.ts");
+  const gate = read("src/features/fieldTrackingSetup/locationReadinessGate.ts");
+  const visit = read("mobile/app/visit/create-step4-review.tsx");
+  assert.match(fg, /approximate is not a missing-permission case/i);
+  assert.doesNotMatch(
+    fg.slice(
+      fg.indexOf("export async function ensureForegroundLocationPermission"),
+      fg.indexOf("export async function enableLocationForFieldWork")
+    ),
+    /requestForegroundPermissionsAsync[\s\S]*requestForegroundPermissionsAsync/
+  );
+  assert.match(gate, /Approximate does not force Settings/);
+  assert.doesNotMatch(visit, /openSettingsForMissing\("precise"\)/);
+});
+
+test("11. Background permission absent is not a blocker", () => {
+  const gate = read("src/features/fieldTrackingSetup/locationReadinessGate.ts");
+  const guard = read("src/features/fieldTrackingSetup/workdayGuard.ts");
+  assert.doesNotMatch(gate, /ensureBackgroundLocationForWorkday|requestBackgroundPermissionsAsync/);
+  assert.doesNotMatch(guard, /requestBackgroundPermissionsAsync|ensureBackgroundLocation/);
+});
+
+test("12. Permanently denied → App Settings recovery available", () => {
+  const gate = read("src/features/fieldTrackingSetup/locationReadinessGate.ts");
+  const home = read("mobile/app/(tabs)/index.tsx");
+  assert.match(gate, /permission_denied_permanent/);
+  assert.match(gate, /openSettingsForPendingStartWorkDay/);
+  assert.match(home, /permission_denied_permanent/);
+});
+
+test("13. GPS OFF + permission granted → Location service flow, no permission request", () => {
+  const gate = read("src/features/fieldTrackingSetup/locationReadinessGate.ts");
+  const services = read("src/utils/ensureAndroidLocationServices.ts");
+  const permThenServices = gate.slice(
+    gate.indexOf('emitPhase(onPhase, "turn_on_location")'),
+    gate.indexOf("export function isPendingStartWorkDay")
+  );
+  assert.match(permThenServices, /ensureAndroidLocationServicesEnabled/);
+  assert.doesNotMatch(permThenServices, /ensureForegroundLocationPermission/);
+  assert.match(services, /enableNetworkProviderAsync/);
+  assert.match(gate, /turn_on_location/);
+});
+
+test("14. Stale setup flag + actual permission granted → auto-heal", () => {
+  const gate = read("src/features/fieldTrackingSetup/locationReadinessGate.ts");
+  const guard = read("src/features/fieldTrackingSetup/workdayGuard.ts");
+  assert.match(gate, /markFieldTrackingSetupCompleted/);
+  assert.match(guard, /healSetupIfOsGranted|markFieldTrackingSetupCompleted/);
+});
+
+test("15. Employee reactivate + permission already granted → no re-prompt", () => {
+  const inactive = read("src/storage/employeeInactive.ts");
+  const auth = read("src/storage/AuthContext.tsx");
+  assert.doesNotMatch(inactive, /clearFieldTrackingSetupCompletion/);
+  assert.doesNotMatch(auth, /clearFieldTrackingSetupCompletion/);
 });
 
 test("12–14. Deny: no auto Settings; retry Allow Location; permanent Open App Settings", () => {

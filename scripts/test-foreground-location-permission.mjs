@@ -32,9 +32,10 @@ assert.match(ensure, /requestForegroundPermissionsAsync/);
 assert.match(ensure, /RETRY_PERMISSION_MESSAGE/);
 assert.doesNotMatch(ensure, /Linking\.openSettings|APPLICATION_DETAILS|openLocationPermissionSettings/);
 
-// Precise upgrade stays inside the single request owner
+// Approximate grant is reused — no automatic precise upgrade request
 assert.match(ensure, /preciseOk/);
 assert.match(ensure, /accuracy === "coarse"/);
+assert.match(ensure, /approximate is not a missing-permission case/i);
 
 // Gate: Settings phase only for permanent denial recovery
 assert.match(gate, /permission_denied_permanent/);

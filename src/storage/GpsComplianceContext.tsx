@@ -43,7 +43,7 @@ function promptOpenSettings() {
     "Location permission",
     "Location permission is disabled for Kavya Agri Clinic. Enable it from App Settings to continue field work.",
     [
-      { text: "Not now", style: "cancel" },
+      { text: "Cancel", style: "cancel" },
       {
         text: "Open Settings",
         onPress: () => {

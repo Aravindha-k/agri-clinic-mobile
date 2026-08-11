@@ -38,7 +38,7 @@ function showInlineAlert(message: string) {
 
 function showRetryablePermissionAlert(onRetry: () => void) {
   Alert.alert(TITLE, FIELD_WORK_MESSAGE, [
-    { text: "Not now", style: "cancel" },
+    { text: "Cancel", style: "cancel" },
     {
       text: "Allow Location",
       onPress: () => {
@@ -50,7 +50,7 @@ function showRetryablePermissionAlert(onRetry: () => void) {
 
 function showPermanentSettingsAlert(message: string) {
   Alert.alert(TITLE, message || LOCATION_GATE_MESSAGES.permissionPermanent, [
-    { text: "Not now", style: "cancel" },
+    { text: "Cancel", style: "cancel" },
     {
       text: "Open App Settings",
       onPress: () => {

@@ -96,9 +96,11 @@ test("logout remains mobile/auth/logout/; refresh SESSION_REPLACED teardown inta
   assert.match(read("src/api/tokenRefresh.ts"), /device_session_id/);
 });
 
-test("post-login location uses native enableLocation — never setup-screen navigation", () => {
+test("post-login location uses native FG request — never setup-screen navigation", () => {
   const guard = read("src/features/fieldTrackingSetup/workdayGuard.ts");
-  assert.match(guard, /enableLocationForFieldWork/);
+  assert.match(guard, /ensureForegroundLocationPermission/);
+  assert.match(guard, /getForegroundPermissionsAsync/);
+  assert.doesNotMatch(guard, /enableLocationForFieldWork/);
   assert.doesNotMatch(guard, /navigateRoot/);
   assert.doesNotMatch(guard, /FieldTrackingSetupScreen|name=["']FieldTrackingSetup["']/);
   const login = read("src/screens/LoginScreen.tsx");

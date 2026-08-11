@@ -159,11 +159,45 @@ export async function ensureLocationReadyForAction(
         });
       }
 
-      emitPhase(onPhase, "allow_location");
-      const permission = await ensureForegroundLocationPermission();
+      const current = await Location.getForegroundPermissionsAsync();
+      const alreadyGranted = current.granted === true || current.status === "granted";
+      let permission: ForegroundLocationPermissionResult | null = alreadyGranted
+        ? {
+            granted: true,
+            permanentlyDenied: false,
+            canAskAgain: true,
+            status: current.status,
+            didRequest: false,
+            preciseOk: readPreciseOkFromResponse(current)
+          }
+        : null;
 
-      if (!permission.granted) {
-        if (permission.permanentlyDenied) {
+      if (!alreadyGranted) {
+        const permanent = current.status === "denied" && current.canAskAgain === false;
+        if (permanent) {
+          emitPhase(onPhase, "open_settings");
+          return result(
+            "permission_denied_permanent",
+            LOCATION_GATE_MESSAGES.permissionPermanent,
+            {
+              permission: {
+                granted: false,
+                permanentlyDenied: true,
+                canAskAgain: false,
+                status: current.status,
+                didRequest: false,
+                preciseOk: false
+              },
+              servicesEnabled: false
+            }
+          );
+        }
+        emitPhase(onPhase, "allow_location");
+        permission = await ensureForegroundLocationPermission();
+      }
+
+      if (!permission || !permission.granted) {
+        if (permission?.permanentlyDenied) {
           emitPhase(onPhase, "open_settings");
           return result(
             "permission_denied_permanent",
@@ -175,7 +209,7 @@ export async function ensureLocationReadyForAction(
         return result(
           "permission_denied_retryable",
           LOCATION_GATE_MESSAGES.permissionRetry,
-          { permission, servicesEnabled: false }
+          { permission: permission ?? undefined, servicesEnabled: false }
         );
       }
 

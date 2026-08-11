@@ -165,6 +165,11 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
       await runGpsCapture();
       return;
     }
+    if (enabled.servicesDisabled) {
+      setGpsUi("services_disabled");
+      setGpsMessage(enabled.message || "Turn on phone location to record this visit.");
+      return;
+    }
     if (enabled.permanentlyDenied) {
       setGpsUi("permission_missing");
       setGpsMessage(enabled.message || "Location permission is disabled for Kavya Agri Clinic.");
@@ -172,7 +177,7 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
         "Location Required",
         enabled.message || "Location permission is disabled for Kavya Agri Clinic.",
         [
-          { text: "Not now", style: "cancel" },
+          { text: "Cancel", style: "cancel" },
           {
             text: "Open App Settings",
             onPress: () => {
@@ -183,39 +188,10 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
       );
       return;
     }
-    if (enabled.needsPreciseUpgrade) {
-      setGpsUi("permission_missing");
-      setGpsMessage(enabled.message || "Precise location is needed to record the correct field location.");
-      Alert.alert(
-        "Location Required",
-        enabled.message || "Precise location is needed to record the correct field location.",
-        [
-          { text: "Not now", style: "cancel" },
-          {
-            text: "Allow Location",
-            onPress: () => {
-              void requestVisitLocationPermission();
-            }
-          },
-          {
-            text: "Open App Settings",
-            onPress: () => {
-              void openSettingsForMissing("precise");
-            }
-          }
-        ]
-      );
-      return;
-    }
-    if (enabled.servicesDisabled) {
-      setGpsUi("services_disabled");
-      setGpsMessage(enabled.message || "Turn on phone location to record this visit.");
-      return;
-    }
     setGpsUi("permission_missing");
     setGpsMessage(enabled.message || "Location is required to record field work.");
     Alert.alert("Location Required", "Location is required to record field work.", [
-      { text: "Not now", style: "cancel" },
+      { text: "Cancel", style: "cancel" },
       {
         text: "Allow Location",
         onPress: () => {

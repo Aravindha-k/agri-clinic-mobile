@@ -31,8 +31,10 @@ import {
 } from "../features/fieldTrackingSetup/ensureForegroundLocation";
 
 /**
- * Simple Enable Location — live OS permission only.
- * Open Settings appears only when canAskAgain === false.
+ * LEGACY — not registered in RootNavigator or route types.
+ * Normal login / Start Work Day / visit flow must never navigate here.
+ * Kept only so an exceptional recovery screen can be remounted if a future
+ * Android restriction blocks the in-app runtime request entirely.
  */
 export function FieldTrackingSetupScreen() {
   useSecureScreen();

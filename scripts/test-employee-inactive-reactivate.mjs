@@ -116,6 +116,19 @@ test("Deferred session-expired teardown cannot wipe post-login session", () => {
   assert.match(expired, /scheduledEpoch !== getAuthTeardownEpoch/);
 });
 
+test("Reactivate + OS location already granted must not reset or re-prompt", () => {
+  const inactive = read("src/storage/employeeInactive.ts");
+  const auth = read("src/storage/AuthContext.tsx");
+  const guard = read("src/features/fieldTrackingSetup/workdayGuard.ts");
+  assert.doesNotMatch(inactive, /clearFieldTrackingSetupCompletion|resetFieldTrackingSetupOfferSession/);
+  assert.doesNotMatch(auth, /clearFieldTrackingSetupCompletion/);
+  assert.match(guard, /isForegroundGranted\(current\)/);
+  assert.doesNotMatch(
+    guard.slice(guard.indexOf("if (isForegroundGranted(current))"), guard.indexOf("if (current.status === Location.PermissionStatus.DENIED")),
+    /ensureForegroundLocationPermission/
+  );
+});
+
 test("API client + refresh route EMPLOYEE_INACTIVE to dedicated handler", () => {
   const client = read("src/api/client.ts");
   assert.match(client, /handleEmployeeInactive/);

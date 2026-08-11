@@ -93,9 +93,8 @@ function toResult(
 }
 
 /**
- * Check / request foreground location only.
- * Concurrent callers share one OS dialog.
- * When already granted approximate-only, re-requests once for Android precise upgrade.
+ * Sole OS foreground permission requester.
+ * Already granted (including Android approximate) is reused — no second dialog, no Settings.
  */
 export async function ensureForegroundLocationPermission(): Promise<ForegroundLocationPermissionResult> {
   if (permissionInFlight) {
@@ -106,33 +105,19 @@ export async function ensureForegroundLocationPermission(): Promise<ForegroundLo
     try {
       const current = await Location.getForegroundPermissionsAsync();
 
+      // OS grant is source of truth — approximate is not a missing-permission case.
       if (isGranted(current)) {
-        if (readPreciseOk(current)) {
-          return toResult(current, false);
-        }
-        // Approximate only — Android may still allow a precise upgrade dialog.
-        const upgraded = await Location.requestForegroundPermissionsAsync();
-        return toResult(upgraded, true);
+        return toResult(current, false);
       }
 
-      // Only block the system dialog when Android truly cannot ask again.
+      // Only skip the system dialog when Android truly cannot ask again.
       if (isPermanentlyDenied(current)) {
         return toResult(current, false);
       }
 
-      // undetermined OR denied with canAskAgain true/undefined → always request.
+      // undetermined OR denied with canAskAgain true/undefined → native dialog.
       const requested = await Location.requestForegroundPermissionsAsync();
-      if (!isGranted(requested)) {
-        return toResult(requested, true);
-      }
-
-      if (readPreciseOk(requested)) {
-        return toResult(requested, true);
-      }
-
-      // Granted approximate — try one upgrade pass (same request API).
-      const upgraded = await Location.requestForegroundPermissionsAsync();
-      return toResult(upgraded, true);
+      return toResult(requested, true);
     } catch {
       return {
         granted: false,

@@ -189,8 +189,8 @@ mustNot(
 
 must(
   "src/features/fieldTrackingSetup/workdayGuard.ts",
-  ["enableLocationForFieldWork"],
-  "post-login uses native enable flow"
+  ["ensureForegroundLocationPermission", "getForegroundPermissionsAsync"],
+  "post-login probes then requests native FG only when missing"
 );
 
 mustNot(

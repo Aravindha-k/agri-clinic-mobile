@@ -7,9 +7,11 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
+const require = createRequire(import.meta.url);
 
 function asRecord(value) {
   return value && typeof value === "object" ? value : null;
@@ -145,8 +147,10 @@ test("uploadVisitPhoto / Visit Detail wiring uses create merge + dedupe:false", 
   const detail = read("mobile/lib/visitDetailApi.ts");
   assert.match(detail, /mergeVisitAttachmentsById/);
   assert.match(detail, /isDisplayableVisitImage/);
-  assert.match(detail, /fetchVisitAttachments\(pk,\s*\{\s*dedupe:\s*false\s*\}\)/);
+  assert.match(detail, /fetchVisitGallery/);
   assert.match(detail, /createdImage/);
+  assert.match(detail, /mobile\/visits\/\$\{visitId\}\/media\//);
+  assert.doesNotMatch(detail, /admin\/visits\/\$\{/);
   // Must not blind-replace UI solely from filtered refetch after discarding create body.
   assert.doesNotMatch(
     detail,
@@ -156,7 +160,37 @@ test("uploadVisitPhoto / Visit Detail wiring uses create merge + dedupe:false", 
   const screen = read("mobile/app/visit/[id].tsx");
   assert.match(screen, /uploadVisitPhoto\(visit\.id, photo\)/);
   assert.match(screen, /setAttachments\(\[\.\.\.next\]\)/);
-  assert.match(screen, /fetchVisitAttachments\(visit\.id,\s*\{\s*dedupe:\s*false\s*\}\)/);
+  assert.match(screen, /fetchVisitGallery/);
+  assert.doesNotMatch(screen, /admin\/visits\//);
+});
+
+test("Visit Detail gallery reads media_files / media.images, not admin attachments", () => {
+  const gallery = require("../src/utils/visitGalleryMedia.js");
+  const fromFiles = gallery.extractVisitGalleryMedia({
+    media_files: [{ id: 7, file_url: "/media/visit_media/one.jpg" }]
+  });
+  assert.equal(fromFiles.length, 1);
+  assert.equal(fromFiles[0].file_url, "/media/visit_media/one.jpg");
+
+  const fromNested = gallery.extractVisitGalleryMedia({
+    media: { images: ["/media/visit_media/two.jpg"] }
+  });
+  assert.equal(fromNested.length, 1);
+  assert.equal(fromNested[0].file_url, "/media/visit_media/two.jpg");
+
+  const both = gallery.extractVisitGalleryMedia({
+    media_files: [{ id: 1, url: "/media/visit_media/a.jpg" }],
+    media: { images: [{ id: 1, file: "/media/visit_media/a.jpg" }] }
+  });
+  assert.equal(both.length, 1);
+
+  assert.equal(gallery.visitHasCanonicalGallery({ media_files: [] }), true);
+  assert.equal(gallery.visitHasCanonicalGallery({ observation: "x" }), false);
+
+  const api = read("mobile/lib/visitDetailApi.ts");
+  assert.match(api, /extractVisitGalleryMedia/);
+  assert.match(api, /visitHasCanonicalGallery/);
+  assert.doesNotMatch(api, /["'`]admin\/visits\//);
 });
 
 test("useVisitAttachments prepends create response immediately", () => {

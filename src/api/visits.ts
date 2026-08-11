@@ -69,6 +69,12 @@ export type Visit = {
   action_taken?: string | null;
   follow_up_date?: string | null;
   recommendation?: string | null;
+  /** Mobile gallery — Visit Media files (not admin attachments). */
+  media_files?: unknown;
+  media?: {
+    images?: unknown;
+    files?: unknown;
+  } | null;
 };
 
 export type VisitFormValues = {

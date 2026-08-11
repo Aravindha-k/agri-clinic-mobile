@@ -171,6 +171,6 @@ test("17. postVisitMedia carries DeviceSession when still used", () => {
   assert.match(detail, /uploadVisitPhoto/);
   assert.match(detail, /postVisitMedia/);
   assert.match(detail, /getDeviceSessionHeaderEntries/);
-  assert.match(detail, /uploadVisitAttachmentFile/);
+  assert.match(detail, /mobile\/visits\/\$\{visitId\}\/media\//);
   assert.match(detail, /X-Device-Session|sessionHeaders/);
 });

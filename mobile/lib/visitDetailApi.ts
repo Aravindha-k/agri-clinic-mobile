@@ -8,7 +8,6 @@ import {
   listVisitAttachments,
   mergeVisitAttachmentsById,
   normalizeVisitAttachment,
-  uploadVisitAttachmentFile,
   type VisitAttachment
 } from "../../src/api/visitAttachments";
 import { getMobileVisit, type Visit } from "../../src/api/visits";
@@ -85,8 +84,13 @@ export function visitFieldNotesText(visit: Visit): string {
 }
 
 import { resolveMediaUrl } from "../../src/utils/resolveMediaUrl";
+import {
+  extractVisitGalleryMedia,
+  visitHasCanonicalGallery
+} from "../../src/utils/visitGalleryMedia.js";
 
 export { resolveMediaUrl } from "../../src/utils/resolveMediaUrl";
+export { extractVisitGalleryMedia, visitHasCanonicalGallery };
 
 export function severityVariant(level: VisitSeverity): "green" | "amber" | "red" {
   if (level === "low") return "green";
@@ -138,6 +142,15 @@ export async function fetchVisitAttachments(
   return rows.filter(isDisplayableVisitImage);
 }
 
+/** Gallery for Visit Detail: media_files / media.images, then legacy mobile attachments only if those keys are absent. */
+export async function fetchVisitGallery(pk: number, visit?: Visit | null): Promise<VisitAttachment[]> {
+  const row = visit ?? (await fetchVisitDetail(pk));
+  if (visitHasCanonicalGallery(row)) {
+    return extractVisitGalleryMedia(row);
+  }
+  return fetchVisitAttachments(pk, { dedupe: false }).catch(() => []);
+}
+
 export async function patchMobileVisit(pk: number, body: VisitPatchBody): Promise<Visit> {
   const payload: Record<string, unknown> = { ...body };
   if (body.next_visit_date !== undefined) {
@@ -154,18 +167,7 @@ async function postVisitMedia(
   visitId: number,
   photo: VisitPhotoAsset
 ): Promise<VisitAttachment | null> {
-  // Canonical attachments upload already sends Bearer + X-Device-Session.
-  try {
-    return await uploadVisitAttachmentFile(visitId, {
-      uri: photo.uri,
-      name: photo.name,
-      mimeType: photo.mimeType,
-      attachmentType: "image"
-    });
-  } catch {
-    /* fall through to legacy media path with the same session context */
-  }
-
+  // Mobile gallery upload — POST media/ first. Do not use the Admin attachments API.
   const paths = [`mobile/visits/${visitId}/media/`, `mobile/visits/${visitId}/attachments/`];
   let lastError: Error | null = null;
   for (const path of paths) {
@@ -225,7 +227,7 @@ export async function uploadVisitPhoto(pk: number, photo: VisitPhotoAsset) {
 
   let listed: VisitAttachment[] = [];
   try {
-    listed = await fetchVisitAttachments(pk, { dedupe: false });
+    listed = await fetchVisitGallery(pk);
   } catch {
     listed = [];
   }

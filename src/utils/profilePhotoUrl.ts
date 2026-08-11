@@ -58,6 +58,9 @@ export function initialsFromName(name?: string | null, fallback = "?") {
 export function cacheBustPhotoUrl(url: string, version?: string | number | null) {
   const resolved = resolveMediaUrl(url) ?? url;
   if (!resolved) return resolved;
+  if (/^(file|content|data|blob|ph|assets?):/i.test(resolved)) {
+    return resolved;
+  }
   if (version == null || version === "") return resolved;
   const sep = resolved.includes("?") ? "&" : "?";
   return `${resolved}${sep}v=${encodeURIComponent(String(version))}`;

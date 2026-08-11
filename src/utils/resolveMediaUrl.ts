@@ -1,23 +1,14 @@
 import {
   API_BASE_URL,
-  PRODUCTION_API_HOST,
   PRODUCTION_API_ORIGIN,
   buildApiUrl,
   getApiOrigin,
   getProductionApiEndpoints
 } from "../api/config";
-
-const DEV_OR_KNOWN_HOST_PATTERN =
-  /^(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2[0-9]|3[01])\.\d+\.\d+|.*\.onrender\.com|13\.207\.17\.117)$/i;
+import { canonicalizeMediaUrl } from "./canonicalizeMediaUrl.js";
 
 /** Log each rewrite once per session — ProfileAvatar remounts spam otherwise. */
 const loggedRewrites = new Set<string>();
-
-function joinOriginPath(origin: string, path: string): string {
-  const base = origin.replace(/\/+$/, "");
-  const suffix = path.startsWith("/") ? path : `/${path}`;
-  return `${base}${suffix}`;
-}
 
 /**
  * Media files live on the API server root (not under /api/v1/).
@@ -52,64 +43,25 @@ function logRewriteOnce(from: string, to: string) {
 
 /**
  * Resolve backend media/file URLs for images and attachments.
- * - Absolute URL on the active API host → use as-is
- * - Absolute URL on another known API/LAN host → rewrite path onto active media origin
+ * - Absolute URL on the active API host → sanitize path, keep active origin
+ * - Absolute URL on another known API/LAN host → rewrite onto active media origin
  * - /media/… /uploads/… → prefix active media origin
+ * - file:// / content:// optimistic URIs pass through
  * - Never attach /api/v1/ to media paths
  */
 export function resolveMediaUrl(url: string | null | undefined): string | null {
-  if (!url?.trim()) return null;
-
-  let trimmed = url.trim();
   const mediaOrigin = getMediaOrigin();
-
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-    try {
-      const parsed = new URL(trimmed);
-      let activeHost = "";
-      try {
-        activeHost = new URL(mediaOrigin).hostname;
-      } catch {
-        activeHost = PRODUCTION_API_HOST;
-      }
-
-      if (parsed.hostname === activeHost) {
-        return trimmed;
-      }
-
-      if (DEV_OR_KNOWN_HOST_PATTERN.test(parsed.hostname)) {
-        const rewritten = joinOriginPath(mediaOrigin, parsed.pathname + parsed.search);
-        if (rewritten !== trimmed) {
-          logRewriteOnce(trimmed, rewritten);
-        }
-        return rewritten;
-      }
-
-      return trimmed;
-    } catch {
-      return null;
-    }
+  const resolved = canonicalizeMediaUrl(url, mediaOrigin);
+  if (
+    __DEV__ &&
+    resolved &&
+    url &&
+    resolved !== url.trim() &&
+    (url.includes("http") || url.includes("/api/"))
+  ) {
+    logRewriteOnce(url.trim(), resolved);
   }
-
-  if (trimmed.startsWith("//")) {
-    return resolveMediaUrl(`http:${trimmed}`);
-  }
-
-  trimmed = trimmed.replace(/^\/api\/v1\//i, "/");
-
-  if (trimmed.startsWith("/media/") || trimmed.startsWith("/uploads/") || trimmed.startsWith("/static/")) {
-    return joinOriginPath(mediaOrigin, trimmed);
-  }
-
-  if (trimmed.startsWith("/")) {
-    return joinOriginPath(mediaOrigin, trimmed);
-  }
-
-  if (/^(media|uploads|static)\//i.test(trimmed)) {
-    return joinOriginPath(mediaOrigin, `/${trimmed}`);
-  }
-
-  return joinOriginPath(mediaOrigin, `/${trimmed.replace(/^\/+/, "")}`);
+  return resolved;
 }
 
 export function logFailedMediaUrl(url: string | null | undefined, context: string) {

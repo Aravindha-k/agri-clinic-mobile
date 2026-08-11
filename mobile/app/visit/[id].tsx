@@ -39,8 +39,8 @@ import {
 import { pickVisitPhotoFromCamera } from "../../lib/visitPhotos";
 import {
   categoryTone,
-  fetchVisitAttachments,
   fetchVisitDetail,
+  fetchVisitGallery,
   inferSeverity,
   parseFieldNotes,
   patchMobileVisit,
@@ -122,10 +122,8 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
     async (isRefresh = false) => {
       try {
         setError("");
-        const [row, atts] = await Promise.all([
-          fetchVisitDetail(visitId),
-          fetchVisitAttachments(visitId).catch(() => [] as VisitAttachment[])
-        ]);
+        const row = await fetchVisitDetail(visitId);
+        const atts = await fetchVisitGallery(visitId, row);
         setVisit(row);
         const parsed = parseFieldNotes(row.field_notes);
         const combined = visitFieldNotesText(row) || parsed.fieldNotes;
@@ -210,7 +208,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
       Alert.alert("Upload failed", err instanceof Error ? err.message : "Please try again.");
       // Recover visible state if the server accepted the file but UI sync failed.
       try {
-        const recovered = await fetchVisitAttachments(visit.id, { dedupe: false });
+        const recovered = await fetchVisitGallery(visit.id);
         if (recovered.length > 0) {
           setAttachments([...recovered]);
         }

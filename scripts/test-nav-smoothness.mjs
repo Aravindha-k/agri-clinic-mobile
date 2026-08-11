@@ -67,9 +67,11 @@ test("day/visits focus work is deferred or TTL soft-refreshed", () => {
   assert.match(visits, /InteractionManager\.runAfterInteractions/);
 });
 
-test("visit detail loads visit + attachments in parallel", () => {
+test("visit detail loads gallery from visit media_files / media.images", () => {
   const visit = read("mobile/app/visit/[id].tsx");
-  assert.match(visit, /Promise\.all\(\[\s*fetchVisitDetail\(visitId\),\s*fetchVisitAttachments/);
+  assert.match(visit, /fetchVisitDetail\(visitId\)/);
+  assert.match(visit, /fetchVisitGallery\(visitId, row\)/);
+  assert.doesNotMatch(visit, /admin\/visits\//);
 });
 
 test("farmer photo does not cache-bust with Date.now on every mount", () => {

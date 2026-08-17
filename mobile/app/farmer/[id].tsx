@@ -25,6 +25,7 @@ import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
 import { getVisitDisplayDateTime } from "../../../src/utils/format";
 import { prefillFromFarmer } from "../../../src/utils/farmerPrefill";
+import { formatTalukLabel } from "../../../src/utils/locationCascade";
 import type { WorkStackParamList } from "../../../src/navigation/types";
 import { ScreenErrorBoundary } from "../../../src/components/ScreenErrorBoundary";
 import { qaLogNavParamsMissing, qaLogScreenOpen } from "../../../src/utils/qaLog";
@@ -444,6 +445,15 @@ function FarmerProfileScreenInner() {
                   </Pressable>
                 ) : null}
               </View>
+              <Text style={styles.placeText} numberOfLines={3}>
+                {[
+                  farmer.village_name || farmer.village,
+                  `${t("farmerDetail.taluk")}: ${formatTalukLabel(farmer, t("farmerDetail.notAssigned"))}`,
+                  farmer.district_name || farmer.district
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </Text>
             </View>
           </View>
           <View style={styles.heroStats}>
@@ -704,6 +714,11 @@ const styles = StyleSheet.create({
     color: Colors.brand100,
     flex: 1,
     fontSize: FontSize.md
+  },
+  placeText: {
+    color: Colors.brand100,
+    fontSize: FontSize.sm,
+    marginTop: 4
   },
   callCircle: {
     alignItems: "center",

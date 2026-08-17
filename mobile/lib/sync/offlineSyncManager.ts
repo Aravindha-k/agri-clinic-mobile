@@ -8,7 +8,7 @@ import {
 } from "../../../src/visit/pendingAttachments";
 import type { VisitFormValues } from "../../../src/api/visits";
 import { api, isNetworkError, unwrapApiData } from "../api";
-import { flattenVisitPayloadForMultipart } from "../visitSubmitApi";
+import { appendVisitMultipartFields, flattenVisitPayloadForMultipart } from "../visitSubmitApi";
 import { isDuplicateVisitResponse } from "../visitDuplicate";
 import { prepareVisitForSubmit } from "../../../src/visit/prepareVisitSubmit";
 import { validateVisitSubmitValues } from "../../../src/visit/visitValidation";
@@ -252,9 +252,7 @@ function buildVisitFormData(payload: Record<string, unknown>, localSyncId: strin
   const formData = new FormData();
   const { __pending_attachments: _attachments, ...values } = payload;
   const flat = flattenVisitPayloadForMultipart(values as VisitFormValues, localSyncId);
-  for (const [key, value] of Object.entries(flat)) {
-    if (value !== "") formData.append(key, value);
-  }
+  appendVisitMultipartFields(formData, flat);
   return formData;
 }
 

@@ -1,5 +1,9 @@
 import type { ProblemCategory, ProblemItem } from "../../src/api/problems";
-import { filterProblemItems, normalizeCategoryCode } from "../../src/utils/problemItemFilter";
+import {
+  categoryCodeFromValue,
+  filterProblemItems,
+  normalizeCategoryCode
+} from "../../src/utils/problemItemFilter";
 
 export const OTHER_CATEGORY_CODE = "other";
 
@@ -22,8 +26,8 @@ export function isOtherCategory(code?: string | null): boolean {
   return normalizeCategoryCode(code) === OTHER_CATEGORY_CODE;
 }
 
-export function categoryCodesMatch(itemCategory: string, cellCode: string): boolean {
-  const item = normalizeCategoryCode(itemCategory);
+export function categoryCodesMatch(itemCategory: unknown, cellCode: string): boolean {
+  const item = categoryCodeFromValue(itemCategory);
   const cell = normalizeCategoryCode(cellCode);
   if (!item || !cell) return false;
   if (item === cell) return true;
@@ -161,10 +165,40 @@ export function resolveCategoryMeta(
   return { id: categoryCode, code: categoryCode };
 }
 
-export function farmerLocationLine(farmer: { village_name?: string; village?: string | number; district_name?: string; district?: string | number } | null): string {
-  if (!farmer) return "";
-  const village = String(farmer.village_name || farmer.village || "").trim();
-  const district = String(farmer.district_name || farmer.district || "").trim();
-  if (village && district) return `${village} • ${district}`;
-  return village || district;
+export function groupProblemsByCategory(
+  items: ProblemItem[],
+  language: "en" | "ta" = "en"
+): Array<{ code: string; label: string; items: ProblemItem[] }> {
+  const assigned = new Set<number>();
+  const ordered: Array<{ code: string; label: string; items: ProblemItem[] }> = [];
+  const active = filterActiveProblemItems(items);
+
+  for (const cell of MASTER_CATEGORY_CELLS) {
+    const group = active.filter((item) => categoryCodesMatch(item.category, cell.code));
+    if (!group.length) continue;
+    for (const item of group) assigned.add(item.id);
+    ordered.push({
+      code: cell.code,
+      label: language === "ta" ? cell.tamil : cell.english,
+      items: group
+    });
+  }
+
+  const leftoverBuckets = new Map<string, ProblemItem[]>();
+  for (const item of active) {
+    if (assigned.has(item.id)) continue;
+    const code = categoryCodeFromValue(item.category) || "other";
+    const list = leftoverBuckets.get(code) ?? [];
+    list.push(item);
+    leftoverBuckets.set(code, list);
+  }
+  for (const [code, group] of leftoverBuckets) {
+    if (!group.length) continue;
+    ordered.push({
+      code,
+      label: formatCategoryBadgeLocalized(code, undefined, language),
+      items: group
+    });
+  }
+  return ordered;
 }

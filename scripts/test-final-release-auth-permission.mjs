@@ -11,6 +11,16 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
 
 const MOBILE_LOGIN_PREFIX = "KAC-";
+const CANONICAL_EMPLOYEE_ID = /^KAC-\d+$/i;
+const LETTERS_HYPHEN_DIGITS = /^[A-Za-z]+-\d+$/;
+
+function usesEmployeeIdPayload(identifier) {
+  return LETTERS_HYPHEN_DIGITS.test(String(identifier ?? "").trim());
+}
+
+function isUnprefixedLegacyNumericId(value) {
+  return LETTERS_HYPHEN_DIGITS.test(value) && !value.toUpperCase().startsWith(MOBILE_LOGIN_PREFIX);
+}
 
 function normalizeMobileLoginSuffix(raw) {
   let value = String(raw ?? "")
@@ -19,24 +29,31 @@ function normalizeMobileLoginSuffix(raw) {
   while (value.startsWith(MOBILE_LOGIN_PREFIX)) {
     value = value.slice(MOBILE_LOGIN_PREFIX.length).trim();
   }
-  value = value.replace(/[^A-Z0-9-]/g, "").replace(/-+/g, "-");
-  if (isLegacyEmployeeIdIdentifier(value)) {
+  if (isUnprefixedLegacyNumericId(value)) {
     return value;
   }
-  return value.replace(/[^A-Z0-9]/g, "");
+  return value.replace(/[^0-9]/g, "");
 }
 
 function toMobileLoginIdentifier(suffixOrFull) {
   const suffix = normalizeMobileLoginSuffix(suffixOrFull);
   if (!suffix) return "";
-  if (isLegacyEmployeeIdIdentifier(suffix)) {
+  if (isUnprefixedLegacyNumericId(suffix)) {
     return suffix;
   }
   return `${MOBILE_LOGIN_PREFIX}${suffix}`;
 }
 
 function isLegacyEmployeeIdIdentifier(identifier) {
-  return /^[A-Za-z]+-\d+$/i.test(String(identifier ?? "").trim());
+  return usesEmployeeIdPayload(identifier);
+}
+
+function buildMobileLoginBody(identifier, password) {
+  const trimmed = identifier.trim();
+  if (usesEmployeeIdPayload(trimmed)) {
+    return { employee_id: trimmed, password };
+  }
+  return { username: trimmed, password };
 }
 
 test("1–3. Native splash background is sky #D8ECF8; colorPrimaryDark does not flash green", () => {
@@ -68,35 +85,43 @@ test("1–3. Native splash background is sky #D8ECF8; colorPrimaryDark does not 
   assert.doesNotMatch(app, /backgroundColor:\s*["']#004D17["']/);
 });
 
-test("4–7. KAC- username normalization and Login wiring", () => {
-  assert.equal(toMobileLoginIdentifier("aravindh01"), "KAC-ARAVINDH01");
-  assert.equal(toMobileLoginIdentifier("ARAVINDH01"), "KAC-ARAVINDH01");
-  assert.equal(toMobileLoginIdentifier("KAC-ARAVINDH01"), "KAC-ARAVINDH01");
-  assert.equal(toMobileLoginIdentifier("kac-aravindh01"), "KAC-ARAVINDH01");
-  assert.equal(toMobileLoginIdentifier("KAC-KAC-ARAVINDH01"), "KAC-ARAVINDH01");
-  assert.equal(normalizeMobileLoginSuffix(" ara vindh "), "ARAVINDH");
+test("4–7. KAC- Employee ID normalization and Login wiring", () => {
+  assert.equal(toMobileLoginIdentifier("0001"), "KAC-0001");
+  assert.equal(toMobileLoginIdentifier("KAC-0001"), "KAC-0001");
+  assert.equal(toMobileLoginIdentifier("kac-0001"), "KAC-0001");
+  assert.equal(toMobileLoginIdentifier(" 0001 "), "KAC-0001");
+  assert.equal(toMobileLoginIdentifier("KAC-KAC-0001"), "KAC-0001");
+  assert.equal(normalizeMobileLoginSuffix("KAC-0001"), "0001");
   assert.equal(toMobileLoginIdentifier("AG-8821"), "AG-8821");
   assert.equal(toMobileLoginIdentifier("ag-8821"), "AG-8821");
   assert.equal(isLegacyEmployeeIdIdentifier("AG-8821"), true);
+  assert.equal(isLegacyEmployeeIdIdentifier("KAC-0001"), true);
   assert.equal(isLegacyEmployeeIdIdentifier("KAC-ARAVINDH01"), false);
+  assert.deepEqual(buildMobileLoginBody("KAC-0001", "Secret"), {
+    employee_id: "KAC-0001",
+    password: "Secret"
+  });
+  assert.deepEqual(buildMobileLoginBody("KAC-ARAVINDH01", "Secret"), {
+    username: "KAC-ARAVINDH01",
+    password: "Secret"
+  });
 
   const util = read("src/utils/mobileLoginUsername.ts");
   assert.match(util, /MOBILE_LOGIN_PREFIX/);
   assert.match(util, /normalizeMobileLoginSuffix/);
   assert.match(util, /toMobileLoginIdentifier/);
-  assert.match(util, /isLegacyEmployeeIdIdentifier/);
+  assert.match(util, /usesEmployeeIdPayload/);
 
   const login = read("src/screens/LoginScreen.tsx");
   assert.match(login, /prefixText=\{/);
   assert.match(login, /MOBILE_LOGIN_PREFIX/);
   assert.match(login, /normalizeMobileLoginSuffix/);
   assert.match(login, /toMobileLoginIdentifier\(empId\)/);
-  assert.match(login, /isLegacyEmployeeIdIdentifier/);
+  assert.match(login, /login\.employeeId/);
+  assert.doesNotMatch(login, /ARAVINDH01|KAVYA01/);
 
   const authApi = read("src/api/auth.ts");
-  assert.match(authApi, /isLegacyEmployeeIdIdentifier/);
-  assert.match(authApi, /username:\s*trimmed/);
-  assert.match(authApi, /employee_id:\s*trimmed/);
+  assert.match(authApi, /buildMobileLoginBody\(trimmed, password\)/);
 });
 
 test("8–13. Foreground permission requests only from canonical helper; Settings is recovery", () => {

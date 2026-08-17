@@ -9,6 +9,7 @@ import {
   OTHER_CATEGORY_CODE,
   resolveCategoryMeta
 } from "../lib/problemCatalog";
+import { revalidateProblemSelection } from "../../src/utils/visitProblems";
 import {
   buildAdviceSuggestionsFromPrefill,
   EMPTY_ADVICE_SUGGESTIONS,
@@ -25,6 +26,8 @@ import {
 import { storage } from "../lib/storage";
 import { generateLocalSyncId } from "../lib/sync/queueIds";
 
+const VISIT_DRAFT_KEY = "visit_form_draft_v2";
+
 export type VisitGpsCoords = {
   latitude: number;
   longitude: number;
@@ -35,6 +38,7 @@ export type NewFarmerDraft = {
   name: string;
   phone: string;
   district_id: string;
+  taluk_id: string;
   village_id: string;
 };
 
@@ -60,6 +64,8 @@ type VisitFormState = {
   problemMasterId: string;
   pendingProblemMasterId: string;
   selectedProblem: ProblemItem | null;
+  selectedProblems: ProblemItem[];
+  problemsRemovedNotice: string;
   otherProblemDescription: string;
   severity: VisitSeverity;
   pestIssue: boolean;
@@ -92,8 +98,10 @@ type VisitFormState = {
   setProblemCategory: (id: string, code: string) => void;
   setProblemMaster: (item: ProblemItem | null) => void;
   selectProblemItem: (item: ProblemItem, categories: ProblemCategory[]) => void;
+  toggleProblemItem: (item: ProblemItem, categories: ProblemCategory[]) => void;
   selectManualOther: () => void;
   clearProblemSelection: () => void;
+  clearProblemsRemovedNotice: () => void;
   setVisitKind: (kind: VisitKind) => void;
   setOtherProblemDescription: (value: string) => void;
   setSeverity: (severity: VisitSeverity) => void;
@@ -127,6 +135,7 @@ const emptyNewFarmer = (): NewFarmerDraft => ({
   name: "",
   phone: "",
   district_id: "",
+  taluk_id: "",
   village_id: ""
 });
 
@@ -138,6 +147,8 @@ const initialStep2 = {
   problemMasterId: "",
   pendingProblemMasterId: "",
   selectedProblem: null as ProblemItem | null,
+  selectedProblems: [] as ProblemItem[],
+  problemsRemovedNotice: "",
   otherProblemDescription: "",
   severity: "medium" as VisitSeverity,
   pestIssue: false,
@@ -160,7 +171,16 @@ const initialStep2 = {
   nextVisitDate: null as string | null
 };
 
-const VISIT_DRAFT_KEY = "visit_form_draft_v2";
+function flagsFromProblems(items: ProblemItem[]) {
+  return {
+    pestIssue: items.some((item) => issueFlagsForCategory(String(item.category)).pestIssue),
+    diseaseIssue: items.some((item) => issueFlagsForCategory(String(item.category)).diseaseIssue)
+  };
+}
+
+function primaryProblem(items: ProblemItem[]): ProblemItem | null {
+  return items[0] ?? null;
+}
 
 function scopedDraftKey(name: string): string | null {
   const userId = getActiveSyncUserId();
@@ -208,17 +228,24 @@ export const useVisitFormStore = create<VisitFormState>()(
   clearNewFarmer: () => set({ newFarmer: null }),
   setGpsCoords: (coords) => set({ gpsCoords: coords }),
   setCrop: (cropId, cropName) =>
-    set({
-      cropId,
-      cropName,
-      problemCategoryId: "",
-      problemCategoryCode: "",
-      problemMasterId: "",
-      pendingProblemMasterId: "",
-      selectedProblem: null,
-      otherProblemDescription: "",
-      pestIssue: false,
-      diseaseIssue: false
+    set((state) => {
+      if (state.cropId === cropId) {
+        return { cropName };
+      }
+      const { kept, removed } = revalidateProblemSelection(state.selectedProblems, cropId);
+      const primary = primaryProblem(kept);
+      return {
+        cropId,
+        cropName,
+        selectedProblems: kept,
+        selectedProblem: primary,
+        problemMasterId: primary ? String(primary.id) : "",
+        pendingProblemMasterId: primary ? String(primary.id) : "",
+        problemCategoryId: primary ? state.problemCategoryId : "",
+        problemCategoryCode: primary ? state.problemCategoryCode : "",
+        problemsRemovedNotice: removed.length ? String(removed.length) : "",
+        ...flagsFromProblems(kept)
+      };
     }),
   setProblemCategory: (problemCategoryId, problemCategoryCode) => {
     const flags = isOtherCategory(problemCategoryCode)
@@ -237,20 +264,48 @@ export const useVisitFormStore = create<VisitFormState>()(
   setProblemMaster: (item) =>
     set({
       selectedProblem: item,
+      selectedProblems: item ? [item] : [],
       problemMasterId: item ? String(item.id) : "",
       pendingProblemMasterId: item ? String(item.id) : ""
     }),
   selectProblemItem: (item, categories) => {
-    const meta = resolveCategoryMeta(item.category, categories);
+    const meta = resolveCategoryMeta(String(item.category), categories);
     const flags = issueFlagsForCategory(meta.code);
-    set({
-      selectedProblem: item,
-      problemMasterId: String(item.id),
-      pendingProblemMasterId: String(item.id),
-      problemCategoryId: meta.id,
-      problemCategoryCode: meta.code,
-      otherProblemDescription: "",
-      ...flags
+    set((state) => {
+      const exists = state.selectedProblems.some((row) => row.id === item.id);
+      const selectedProblems = exists
+        ? state.selectedProblems
+        : [...state.selectedProblems, item];
+      return {
+        selectedProblems,
+        selectedProblem: item,
+        problemMasterId: String(item.id),
+        pendingProblemMasterId: String(item.id),
+        problemCategoryId: meta.id,
+        problemCategoryCode: meta.code,
+        otherProblemDescription: "",
+        ...flagsFromProblems(selectedProblems),
+        ...(!exists ? flags : {})
+      };
+    });
+  },
+  toggleProblemItem: (item, categories) => {
+    const meta = resolveCategoryMeta(String(item.category), categories);
+    set((state) => {
+      const exists = state.selectedProblems.some((row) => row.id === item.id);
+      const selectedProblems = exists
+        ? state.selectedProblems.filter((row) => row.id !== item.id)
+        : [...state.selectedProblems, item];
+      const primary = primaryProblem(selectedProblems);
+      return {
+        selectedProblems,
+        selectedProblem: primary,
+        problemMasterId: primary ? String(primary.id) : "",
+        pendingProblemMasterId: primary ? String(primary.id) : "",
+        problemCategoryId: primary ? meta.id : "",
+        problemCategoryCode: primary ? meta.code : "",
+        ...flagsFromProblems(selectedProblems)
+      };
     });
   },
   selectManualOther: () =>
@@ -270,10 +325,12 @@ export const useVisitFormStore = create<VisitFormState>()(
       problemMasterId: "",
       pendingProblemMasterId: "",
       selectedProblem: null,
+      selectedProblems: [],
       otherProblemDescription: "",
       pestIssue: false,
       diseaseIssue: false
     }),
+  clearProblemsRemovedNotice: () => set({ problemsRemovedNotice: "" }),
   setVisitKind: (visitKind) => set({ visitKind }),
   setOtherProblemDescription: (otherProblemDescription) => set({ otherProblemDescription }),
   setSeverity: (severity) => set({ severity }),
@@ -345,6 +402,7 @@ export const useVisitFormStore = create<VisitFormState>()(
       problemMasterId,
       pendingProblemMasterId: problemMasterId,
       selectedProblem: null,
+      selectedProblems: [],
       otherProblemDescription: "",
       ...flags,
       followUpRequired: false,
@@ -371,9 +429,15 @@ export const useVisitFormStore = create<VisitFormState>()(
     if (state.farmer) return true;
     if (state.newFarmer) {
       const nf = state.newFarmer;
-      if (nf.name.trim() || nf.phone.trim() || nf.district_id || nf.village_id) return true;
+      if (nf.name.trim() || nf.phone.trim() || nf.district_id || nf.taluk_id || nf.village_id) return true;
     }
-    if (state.cropId || state.problemCategoryId || state.problemMasterId || state.otherProblemDescription.trim()) {
+    if (
+      state.cropId ||
+      state.problemCategoryId ||
+      state.problemMasterId ||
+      state.selectedProblems.length ||
+      state.otherProblemDescription.trim()
+    ) {
       return true;
     }
     if (state.observation.trim() || state.fieldNotes.trim() || state.photos.length || state.extraAttachments.length) {
@@ -412,6 +476,8 @@ export const useVisitFormStore = create<VisitFormState>()(
         problemMasterId: state.problemMasterId,
         pendingProblemMasterId: state.pendingProblemMasterId,
         selectedProblem: state.selectedProblem,
+        selectedProblems: state.selectedProblems,
+        problemsRemovedNotice: state.problemsRemovedNotice,
         otherProblemDescription: state.otherProblemDescription,
         severity: state.severity,
         pestIssue: state.pestIssue,

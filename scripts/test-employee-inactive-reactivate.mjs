@@ -102,12 +102,14 @@ test("13. Network errors are not mapped to EMPLOYEE_INACTIVE", () => {
   assert.equal(isEmployeeInactiveCode("NETWORK_ERROR"), false);
 });
 
-test("14. KAC- username helpers remain correct", () => {
+test("14. KAC- Employee ID helpers remain correct", () => {
   const util = read("src/utils/mobileLoginUsername.ts");
   assert.match(util, /MOBILE_LOGIN_PREFIX = "KAC-"/);
   assert.match(util, /toMobileLoginIdentifier/);
+  assert.match(util, /usesEmployeeIdPayload/);
   const login = read("src/screens/LoginScreen.tsx");
   assert.match(login, /toMobileLoginIdentifier\(empId\)/);
+  assert.match(login, /login\.employeeId/);
 });
 
 test("Deferred session-expired teardown cannot wipe post-login session", () => {

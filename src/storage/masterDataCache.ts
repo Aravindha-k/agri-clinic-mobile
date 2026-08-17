@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Farmer, fetchFarmersPage, getAllFarmers } from "../api/farmers";
-import { getCrops, getDistricts, getVillages, MasterOption } from "../api/masters";
+import { getCrops, getDistricts, MasterOption } from "../api/masters";
 import { getProblemCategories, ProblemCategory } from "../api/problems";
 import { isNetworkError } from "../utils/apiError";
 
@@ -62,9 +62,8 @@ export async function syncMasterDataFromApi(options?: { force?: boolean }): Prom
   }
 
   try {
-    const [districts, villages, crops, problemCategories, farmerPage] = await Promise.all([
+    const [districts, crops, problemCategories, farmerPage] = await Promise.all([
       getDistricts(),
-      getVillages(),
       getCrops(),
       getProblemCategories(),
       fetchFarmersPage({ page: 1, pageSize: OFFLINE_FARMERS_PAGE_SIZE, source: "masterDataCache" })
@@ -72,7 +71,7 @@ export async function syncMasterDataFromApi(options?: { force?: boolean }): Prom
     const snapshot: MasterDataSnapshot = {
       syncedAt: new Date().toISOString(),
       districts,
-      villages,
+      villages: cached?.villages ?? [],
       crops,
       problemCategories,
       offlineFarmers: farmerPage.results.filter((f) => f.is_active !== false),

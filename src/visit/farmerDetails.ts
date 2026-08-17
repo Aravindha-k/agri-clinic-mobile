@@ -30,6 +30,7 @@ export function hasCompleteNewFarmerDetails(values: VisitFormValues): boolean {
     name.length >= 2 &&
     phoneDigitCount(values.farmer_phone) >= 10 &&
     /^\d+$/.test(coerceStr(values.district)) &&
+    /^\d+$/.test(coerceStr(values.taluk)) &&
     /^\d+$/.test(coerceStr(values.village))
   );
 }

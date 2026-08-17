@@ -13,7 +13,7 @@ import {
 import { getAccessToken } from "../../src/storage/tokenStorage";
 import { prepareVisitForSubmit } from "../../src/visit/prepareVisitSubmit";
 import { validateVisitSubmitValues } from "../../src/visit/visitValidation";
-import type { VisitPhotoAsset } from "./visitPhotos";
+import { problemItemIdsFromSelection } from "../../src/utils/visitProblems";
 import { useVisitFormStore, type VisitSeverity } from "../store/visitFormStore";
 import {
   getVisitDutyFields,
@@ -22,6 +22,7 @@ import {
 } from "./visitDutyContext";
 import { isDuplicateVisitResponse } from "./visitDuplicate";
 import type { PickedProfileImage } from "../../src/utils/profileImagePick";
+import type { VisitPhotoAsset } from "./visitPhotos";
 
 function severityNote(severity: VisitSeverity) {
   if (severity === "low") return "Severity: Low";
@@ -45,10 +46,19 @@ export function buildVisitFormValuesFromStore(
   const farmer = state.farmer;
   const nf = state.newFarmer;
   const problem = state.selectedProblem;
+  const selectedProblems = state.selectedProblems?.length
+    ? state.selectedProblems
+    : problem
+      ? [problem]
+      : [];
   const isOther = state.problemCategoryCode === "other";
   const problemText = isOther
     ? state.otherProblemDescription.trim()
-    : problem?.tamil_name || problem?.name || "";
+    : selectedProblems
+        .map((item) => item.tamil_name || item.name)
+        .filter(Boolean)
+        .join(", ");
+  const problemItemIds = problemItemIdsFromSelection(selectedProblems);
 
   const visitNotes = state.fieldNotes.trim() || state.observation.trim();
   // Temporary compatibility adapter: employee enters Field Notes only.
@@ -63,6 +73,7 @@ export function buildVisitFormValuesFromStore(
     farmer_name: farmer?.name || nf?.name || "",
     farmer_phone: farmer?.phone || nf?.phone || "",
     district: nf?.district_id || (farmer?.district != null ? String(farmer.district) : ""),
+    taluk: nf?.taluk_id || (farmer?.taluk != null ? String(farmer.taluk) : ""),
     village: nf?.village_id || (farmer?.village != null ? String(farmer.village) : ""),
     crop: state.cropId,
     crop_name: state.cropName,
@@ -81,6 +92,7 @@ export function buildVisitFormValuesFromStore(
     field_notes: [visitNotes, severityNote(state.severity)].filter(Boolean).join("\n"),
     problem_category_id: isOther ? undefined : state.problemCategoryId || undefined,
     problem_master_id: isOther ? undefined : state.problemMasterId || undefined,
+    problem_item_ids: isOther ? [] : problemItemIds,
     problem_seen: problemText,
     problem_description: problemText,
     pest_issue: state.pestIssue,
@@ -96,13 +108,13 @@ export function buildVisitFormValuesFromStore(
   };
 }
 
-async function postVisitMultipart(fields: Record<string, string>): Promise<{ visit_id: number; visit: Visit }> {
+async function postVisitMultipart(
+  fields: Record<string, string | string[]>
+): Promise<{ visit_id: number; visit: Visit }> {
   const token = await getAccessToken();
   const url = `${API_BASE_URL}mobile/visits/`;
   const formData = new FormData();
-  for (const [key, value] of Object.entries(fields)) {
-    if (value !== "") formData.append(key, value);
-  }
+  appendVisitMultipartFields(formData, fields);
 
   return new Promise((resolve, reject) => {
     const attempt = async (accessToken: string | null) => {
@@ -170,11 +182,15 @@ async function postVisitMultipart(fields: Record<string, string>): Promise<{ vis
   });
 }
 
-function flattenPayload(values: VisitFormValues, localSyncId: string): Record<string, string> {
+function flattenPayload(values: VisitFormValues, localSyncId: string): Record<string, string | string[]> {
   const payload = normalizeMobileVisitSubmitPayload(values as Record<string, unknown>, { localSyncId });
-  const flat: Record<string, string> = {};
+  const flat: Record<string, string | string[]> = {};
   for (const [key, value] of Object.entries(payload)) {
     if (value == null) continue;
+    if (Array.isArray(value)) {
+      flat[key] = value.map(String);
+      continue;
+    }
     if (typeof value === "boolean") flat[key] = value ? "true" : "false";
     else flat[key] = String(value);
   }
@@ -185,8 +201,23 @@ function flattenPayload(values: VisitFormValues, localSyncId: string): Record<st
 export function flattenVisitPayloadForMultipart(
   values: VisitFormValues,
   localSyncId: string
-): Record<string, string> {
+): Record<string, string | string[]> {
   return flattenPayload(values, localSyncId);
+}
+
+export function appendVisitMultipartFields(
+  formData: FormData,
+  fields: Record<string, string | string[]>
+) {
+  for (const [key, value] of Object.entries(fields)) {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (item !== "") formData.append(key, item);
+      }
+      continue;
+    }
+    if (value !== "") formData.append(key, value);
+  }
 }
 
 async function uploadVisitMedia(visitId: number, photo: VisitPhotoAsset) {

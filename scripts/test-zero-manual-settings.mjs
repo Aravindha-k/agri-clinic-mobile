@@ -218,8 +218,10 @@ test("Single foreground request owner", () => {
 
 test("33–35. KAC login field: blank suffix, no example placeholder", () => {
   const login = read("src/screens/LoginScreen.tsx");
-  assert.doesNotMatch(login, /ARAVINDH01/);
-  assert.match(login, /KAC-|normalizeUsername|username/i);
+  assert.doesNotMatch(login, /ARAVINDH01|KAVYA01|DIVYA01/);
+  assert.match(login, /MOBILE_LOGIN_PREFIX/);
+  assert.match(login, /placeholder=""/);
+  assert.match(login, /login\.employeeId/);
 });
 
 test("36. Splash green-frame fix preserved", () => {

@@ -174,6 +174,17 @@ export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
 
   const ListEmptyComponent = useMemo(() => {
     if (directory.isInitialLoading || directory.sourceCount > 0) return null;
+    if (directory.loadError) {
+      return (
+        <ListStateView
+          kind="error"
+          title={t("farmers.loadFailed")}
+          action={t("common.retry")}
+          onAction={directory.onRefresh}
+          compact
+        />
+      );
+    }
     return (
       <ListStateView
         kind={directory.searchQuery.trim() || directory.villageLabel ? "noResults" : "empty"}
@@ -185,7 +196,15 @@ export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
         compact
       />
     );
-  }, [directory.isInitialLoading, directory.searchQuery, directory.sourceCount, directory.villageLabel, t]);
+  }, [
+    directory.isInitialLoading,
+    directory.loadError,
+    directory.onRefresh,
+    directory.searchQuery,
+    directory.sourceCount,
+    directory.villageLabel,
+    t
+  ]);
 
   const ListFooterComponent = useMemo(
     () =>

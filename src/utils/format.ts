@@ -175,7 +175,7 @@ export function normalizeMobileVisitSubmitPayload(
   delete payload.employee_id;
   delete payload.employee;
 
-  applyFkIds(payload, ["district", "village", "crop", "farmer", "farmer_id", "crop_id"]);
+  applyFkIds(payload, ["district", "taluk", "village", "crop", "farmer", "farmer_id", "crop_id"]);
 
   applyObservationPayload(payload, values);
 
@@ -186,6 +186,12 @@ export function normalizeMobileVisitSubmitPayload(
   const problemMasterId = normalizeId(values.problem_master_id);
   if (problemMasterId !== null && problemMasterId !== undefined && problemMasterId !== "") {
     payload.problem_master_id = problemMasterId;
+  }
+  const problemItemIds = Array.isArray(values.problem_item_ids)
+    ? values.problem_item_ids.map((id) => Number(id)).filter((id) => Number.isFinite(id))
+    : [];
+  if (problemItemIds.length) {
+    payload.problem_item_ids = problemItemIds;
   }
   const problemDescription = String(values.problem_description ?? values.problem_seen ?? "").trim();
   if (problemDescription) {

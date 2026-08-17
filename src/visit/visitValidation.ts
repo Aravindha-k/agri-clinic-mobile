@@ -1,6 +1,6 @@
 import type { VisitFormValues } from "../api/visits";
 import { normalizeMobileVisitSubmitPayload } from "../utils/format";
-import { canProceedFarmerStep, hasCompleteNewFarmerDetails } from "./farmerDetails";
+import { canProceedFarmerStep, hasCompleteNewFarmerDetails, isNewFarmerDraft } from "./farmerDetails";
 import { resolveFarmerPk } from "./resolveFarmerPk";
 
 export type VisitValidationField = "farmer" | "district" | "village" | "crop" | "gps" | "observation";
@@ -114,6 +114,9 @@ export function getFarmerStepIssues(values: VisitFormValues): VisitValidationIss
   }
   if (!isNumericId(values.district)) {
     issues.push({ field: "district", message: "District is required", step: "farmer" });
+  }
+  if (isNewFarmerDraft(values) && !isNumericId(values.taluk)) {
+    issues.push({ field: "district", message: "Taluk is required", step: "farmer" });
   }
   if (!isNumericId(values.village)) {
     issues.push({ field: "village", message: "Village is required", step: "farmer" });

@@ -27,7 +27,7 @@ import {
 
 dayjs.extend(relativeTime);
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 30;
 const SEARCH_DEBOUNCE_MS = 300;
 const SYNC_SUCCESS_MS = 3000;
 const OFFLINE_TOAST_MS = 3000;
@@ -108,6 +108,7 @@ export function useFarmersDirectory(
   const [nextUrl, setNextUrl] = useState<string | null>(null);
   const [cacheWindow, setCacheWindow] = useState(PAGE_SIZE);
   const [isInitialLoading, setIsInitialLoading] = useState(() => getCachedFarmers().length === 0);
+  const [loadError, setLoadError] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [syncingAll, setSyncingAll] = useState(false);
@@ -192,8 +193,10 @@ export function useFarmersDirectory(
         setNextUrl(response.next);
         setHasNextPage(Boolean(response.next));
         setTotalCount(response.count ?? rows.length);
+        setLoadError(false);
       } catch {
         if (seq !== requestSeqRef.current) return;
+        setLoadError(true);
         const cached = getCachedFarmers() as MobileFarmer[];
         if (cached.length > 0) {
           const filtered = cached.filter((farmer) => {
@@ -256,11 +259,8 @@ export function useFarmersDirectory(
 
   const sourceFarmers = useMemo(() => {
     if (useApiList) {
-      return farmers.filter((farmer) => {
-        if (!matchesSearch(farmer, debouncedSearch)) return false;
-        if (!matchesVillage(farmer, selectedVillageId, villageLabel)) return false;
-        return true;
-      });
+      // Server already applied search/village. Re-filtering by name/id mismatch empties the list.
+      return farmers;
     }
     return cachedFarmers.filter((farmer) => {
       if (!matchesSearch(farmer, debouncedSearch)) return false;
@@ -400,6 +400,7 @@ export function useFarmersDirectory(
     isInitialLoading,
     isRefreshing,
     isLoadingMore,
+    loadError,
     syncingAll,
     syncProgress,
     syncCompleteMessage,

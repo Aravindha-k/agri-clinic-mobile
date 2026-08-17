@@ -7,6 +7,13 @@ export type VisitPhotoAsset = {
   uri: string;
   name: string;
   mimeType: string;
+  source?: "camera" | "gallery";
+  locationKind?: "captured" | "uploaded";
+  latitude?: number | null;
+  longitude?: number | null;
+  capturedAt?: string;
+  address?: string;
+  stampFailed?: boolean;
 };
 
 export function createPhotoId() {

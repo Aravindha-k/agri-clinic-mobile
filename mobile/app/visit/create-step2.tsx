@@ -14,7 +14,6 @@ import {
 } from "../../components/visit/step2/OtherProblemSection";
 import { ProblemCategoryChips } from "../../components/visit/step2/ProblemCategoryChips";
 import { ProblemSelectCard } from "../../components/visit/step2/ProblemSelectCard";
-import { SelectedProblemSummary } from "../../components/visit/step2/SelectedProblemSummary";
 import { StepIndicator } from "../../components/visit/StepIndicator";
 import { PrimaryButton, SearchBar } from "../../components/ui";
 import { VisitFlowHeader } from "../../components/visit/VisitFlowHeader";
@@ -28,6 +27,7 @@ import {
   findProblemItemById,
   formatCategoryBadge,
   getVisibleCategoryCells,
+  groupProblemsByCategory,
   isOtherCategory,
   pickSuggestedProblems
 } from "../../lib/problemCatalog";
@@ -53,7 +53,7 @@ type Props = {
 };
 
 export function VisitCreateStep2({ onBack }: Props) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const replayKey = useVisitEntranceKey();
   const farmer = useVisitFormStore((s) => s.farmer);
   const newFarmer = useVisitFormStore((s) => s.newFarmer);
@@ -62,6 +62,8 @@ export function VisitCreateStep2({ onBack }: Props) {
   const problemCategoryId = useVisitFormStore((s) => s.problemCategoryId);
   const problemCategoryCode = useVisitFormStore((s) => s.problemCategoryCode);
   const selectedProblem = useVisitFormStore((s) => s.selectedProblem);
+  const selectedProblems = useVisitFormStore((s) => s.selectedProblems);
+  const problemsRemovedNotice = useVisitFormStore((s) => s.problemsRemovedNotice);
   const pendingProblemMasterId = useVisitFormStore((s) => s.pendingProblemMasterId);
   const otherProblemDescription = useVisitFormStore((s) => s.otherProblemDescription);
   const revisitContext = useVisitFormStore((s) => s.revisitContext);
@@ -69,8 +71,10 @@ export function VisitCreateStep2({ onBack }: Props) {
   const setCrop = useVisitFormStore((s) => s.setCrop);
   const setProblemCategory = useVisitFormStore((s) => s.setProblemCategory);
   const selectProblemItem = useVisitFormStore((s) => s.selectProblemItem);
+  const toggleProblemItem = useVisitFormStore((s) => s.toggleProblemItem);
   const selectManualOther = useVisitFormStore((s) => s.selectManualOther);
   const clearProblemSelection = useVisitFormStore((s) => s.clearProblemSelection);
+  const clearProblemsRemovedNotice = useVisitFormStore((s) => s.clearProblemsRemovedNotice);
   const setOtherProblemDescription = useVisitFormStore((s) => s.setOtherProblemDescription);
 
   const [formOptions, setFormOptions] = useState<VisitFormOptions | null>(null);
@@ -223,13 +227,23 @@ export function VisitCreateStep2({ onBack }: Props) {
     }
   }, [formOptions, problemCategoryCode, problemCategoryId, setProblemCategory]);
 
+  const selectedIds = useMemo(
+    () => new Set((selectedProblems ?? []).map((item) => item.id)),
+    [selectedProblems]
+  );
+
+  const groupedItems = useMemo(
+    () => groupProblemsByCategory(listItems, language),
+    [language, listItems]
+  );
+
   useEffect(() => {
     if (!pendingProblemMasterId || selectedProblem || !cropId) return;
     const item = findProblemItemById(prefillPool, pendingProblemMasterId);
     if (item) {
       selectProblemItem(item, formOptions?.problem_categories ?? []);
       setPrefillWarning("");
-      setShowProblemPicker(false);
+      setShowProblemPicker(true);
       return;
     }
     if (prefillPool.length > 0 && !cropItemsLoading) {
@@ -242,27 +256,29 @@ export function VisitCreateStep2({ onBack }: Props) {
     pendingProblemMasterId,
     prefillPool,
     selectProblemItem,
-    selectedProblem
+    selectedProblem,
+    t
   ]);
 
   const canContinue = useMemo(() => {
     if (!cropId) return false;
+    if ((selectedProblems ?? []).length > 0) return true;
     if (manualOtherActive) return otherProblemDescription.trim().length > 0;
-    return Boolean(selectedProblem);
-  }, [cropId, manualOtherActive, otherProblemDescription, selectedProblem]);
+    return false;
+  }, [cropId, manualOtherActive, otherProblemDescription, selectedProblems]);
 
   const continueHint = useMemo(() => {
     if (!cropId) return t("visitFlow.hintSelectCrop");
+    if ((selectedProblems ?? []).length > 0) return "";
     if (manualOtherActive && !otherProblemDescription.trim()) return t("visitFlow.hintDescribeManual");
-    if (!selectedProblem && !manualOtherActive) return t("visitFlow.hintSelectOrDescribe");
-    return "";
-  }, [cropId, manualOtherActive, otherProblemDescription, selectedProblem, t]);
+    return t("visitFlow.hintSelectOrDescribe");
+  }, [cropId, manualOtherActive, otherProblemDescription, selectedProblems, t]);
 
   const cropInlineHint = !cropId ? t("visitFlow.errSelectCrop") : "";
   const problemInlineHint =
-    cropId && !canContinue && !manualOtherActive && !selectedProblem
+    cropId && !canContinue && !manualOtherActive && !(selectedProblems ?? []).length
       ? t("visitFlow.errSelectProblem")
-      : manualOtherActive && !otherProblemDescription.trim()
+      : manualOtherActive && !otherProblemDescription.trim() && !(selectedProblems ?? []).length
         ? t("visitFlow.errDescribeProblem")
         : "";
 
@@ -277,23 +293,16 @@ export function VisitCreateStep2({ onBack }: Props) {
 
   function handleSelectProblem(item: ProblemItem) {
     setPrefillWarning("");
-    selectProblemItem(item, formOptions?.problem_categories ?? []);
-    setShowProblemPicker(false);
-    scrollToRegisteredSection(scrollRef, sectionOffsets, "continue", 8, 200);
+    toggleProblemItem(item, formOptions?.problem_categories ?? []);
+    setShowProblemPicker(true);
   }
 
   function handleManualOther() {
     setPrefillWarning("");
-    setShowProblemPicker(false);
+    setShowProblemPicker(true);
     selectManualOther();
     scrollToRegisteredSection(scrollRef, sectionOffsets, "other", 16, 180);
     setTimeout(() => otherSectionControlRef.current?.focusInput(), 320);
-  }
-
-  function handleChangeProblem() {
-    clearProblemSelection();
-    setShowProblemPicker(true);
-    scrollToRegisteredSection(scrollRef, sectionOffsets, "problem", 16, 120);
   }
 
   function handleSearchAllProblems() {
@@ -314,7 +323,7 @@ export function VisitCreateStep2({ onBack }: Props) {
         key={item.id}
         item={item}
         cropName={cropName}
-        selected={selectedProblem?.id === item.id}
+        selected={selectedIds.has(item.id)}
         onPress={() => handleSelectProblem(item)}
       />
     ));
@@ -379,13 +388,33 @@ export function VisitCreateStep2({ onBack }: Props) {
             <Text style={styles.hint}>{t("visitFlow.loadingProblemsFor", { crop: cropName })}</Text>
           ) : (
             <>
-              <Text style={styles.sectionLabel}>{t("visitFlow.problemsFor", { crop: cropName })}</Text>
+              <View style={styles.problemHead}>
+                <Text style={styles.sectionLabel}>{t("visitFlow.problemsObserved")}</Text>
+                {(selectedProblems ?? []).length > 0 ? (
+                  <View style={styles.countRow}>
+                    <Text style={styles.countText}>
+                      {t("visitFlow.selectedCount", { count: selectedProblems.length })}
+                    </Text>
+                    <Pressable onPress={clearProblemSelection} hitSlop={8}>
+                      <Text style={styles.clearText}>{t("visitFlow.clearSelected")}</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </View>
 
-              {selectedProblem && !manualOtherActive && !showProblemPicker ? (
-                <SelectedProblemSummary problem={selectedProblem} onChange={handleChangeProblem} />
+              {problemsRemovedNotice ? (
+                <View style={styles.warningBanner}>
+                  <Ionicons name="alert-circle-outline" size={16} color={Colors.amberText} />
+                  <Text style={styles.warningText}>
+                    {t("visitFlow.problemsRemoved", { count: problemsRemovedNotice })}
+                  </Text>
+                  <Pressable onPress={clearProblemsRemovedNotice} hitSlop={8}>
+                    <Ionicons name="close" size={16} color={Colors.amberText} />
+                  </Pressable>
+                </View>
               ) : null}
 
-              {showProblemPicker && !manualOtherActive ? (
+              {showProblemPicker ? (
                 <>
                   {!hasMappedProblems ? (
                     <View style={styles.emptyBanner}>
@@ -438,7 +467,16 @@ export function VisitCreateStep2({ onBack }: Props) {
                   ) : null}
 
                   {listItems.length > 0 ? (
-                    <View style={styles.list}>{renderProblemList(listItems)}</View>
+                    <View style={styles.list}>
+                      {categoryFilter
+                        ? renderProblemList(listItems)
+                        : groupedItems.map((group) => (
+                            <View key={group.code} style={styles.group}>
+                              <Text style={styles.groupLabel}>{group.label}</Text>
+                              {renderProblemList(group.items)}
+                            </View>
+                          ))}
+                    </View>
                   ) : showEmptyPool ? (
                     <Text style={styles.hint}>
                       {problemQuery.trim()
@@ -523,6 +561,34 @@ const styles = StyleSheet.create({
     color: Colors.text1,
     fontSize: FontSize.md,
     fontWeight: FontWeight.bold
+  },
+  problemHead: {
+    gap: 6
+  },
+  countRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  countText: {
+    color: Colors.text2,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semibold
+  },
+  clearText: {
+    color: Colors.brand700,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semibold
+  },
+  group: {
+    gap: 8,
+    marginTop: 8
+  },
+  groupLabel: {
+    color: Colors.text3,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+    textTransform: "uppercase"
   },
   waitCard: {
     backgroundColor: Colors.surface,

@@ -75,6 +75,7 @@ export function prefillFromFarmer(farmer: Farmer): VisitFormPrefill {
     farmer_name: farmer.name || "",
     farmer_phone: farmer.phone || "",
     district: masterPkToString(farmer.district),
+    taluk: masterPkToString(farmer.taluk),
     village: masterPkToString(farmer.village),
     land_name: "",
     land_area: farmer.land_area?.toString() || farmer.total_land_area?.toString() || ""

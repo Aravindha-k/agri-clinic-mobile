@@ -83,6 +83,7 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
   const cropName = useVisitFormStore((s) => s.cropName);
   const problemCategoryCode = useVisitFormStore((s) => s.problemCategoryCode);
   const selectedProblem = useVisitFormStore((s) => s.selectedProblem);
+  const selectedProblems = useVisitFormStore((s) => s.selectedProblems);
   const otherProblemDescription = useVisitFormStore((s) => s.otherProblemDescription);
   const gpsCoords = useVisitFormStore((s) => s.gpsCoords);
   const visitedAt = useVisitFormStore((s) => s.visitedAt);
@@ -102,9 +103,15 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
   const captureInFlight = useRef(false);
 
   const isOtherProblem = problemCategoryCode === "other";
-  const problemLabel = isOtherProblem
-    ? otherProblemDescription.trim() || t("visitFlow.other")
-    : selectedProblem?.tamil_name || selectedProblem?.name || problemCategoryCode || "—";
+  const problemNames = [
+    ...(selectedProblems?.length
+      ? selectedProblems
+      : selectedProblem
+        ? [selectedProblem]
+        : []
+    ).map((item) => item.tamil_name || item.name || ""),
+    ...(isOtherProblem && otherProblemDescription.trim() ? [otherProblemDescription.trim()] : [])
+  ].filter(Boolean);
 
   const farmerName = farmerDisplayName(farmer, newFarmer);
   const reviewFarmer = resolveVisitReviewFarmer(farmer, newFarmer, districts, villages, "—");
@@ -313,7 +320,9 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
 
         <FlatCard style={styles.reviewCard}>
           <View style={styles.reviewHead}>
-            <Text style={styles.reviewLabel}>{t("visitFlow.cropProblem")}</Text>
+            <Text style={styles.reviewLabel}>
+              {t("visitFlow.problemsObservedCount", { count: problemNames.length })}
+            </Text>
             <Pressable
               onPress={onEditStep2}
               accessibilityRole="button"
@@ -326,8 +335,12 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
           </View>
           <View style={styles.chipRow}>
             {cropName ? <StatusChip label={cropName} variant="gray" /> : null}
-            {problemLabel ? <StatusChip label={problemLabel} variant="blue" /> : null}
           </View>
+          {problemNames.map((name) => (
+            <Text key={name} style={styles.problemLine}>
+              {name}
+            </Text>
+          ))}
         </FlatCard>
 
         <FlatCard style={styles.reviewCard}>
@@ -510,6 +523,12 @@ const styles = StyleSheet.create({
     ...TextStyles.label,
     color: Colors.text4,
     textTransform: "uppercase"
+  },
+  problemLine: {
+    color: Colors.text1,
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.semibold,
+    marginTop: 6
   },
   editChip: {
     ...minTouchStyle,

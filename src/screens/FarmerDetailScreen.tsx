@@ -21,6 +21,7 @@ import { useRefreshControlProps } from "../hooks/useRefreshControlProps";
 import { asArray, getVisitDisplayDateTime } from "../utils/format";
 import { navigateFarmerMap } from "../navigation/navigateFarmerMap";
 import { prefillFromFarmer } from "../utils/farmerPrefill";
+import { formatTalukLabel } from "../utils/locationCascade";
 import {
   buildFarmerTimeline,
   countOpenIssues,
@@ -130,8 +131,13 @@ export function FarmerDetailScreen({ route, navigation }: Props) {
   if (!farmer) return null;
 
   const place =
-    [farmer.village_name || farmer.village, farmer.district_name || farmer.district].filter(Boolean).join(", ") ||
-    "Location not set";
+    [
+      farmer.village_name || farmer.village,
+      `${formatTalukLabel(farmer, "Not assigned")}`,
+      farmer.district_name || farmer.district
+    ]
+      .filter(Boolean)
+      .join(", ") || "Location not set";
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>

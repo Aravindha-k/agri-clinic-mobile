@@ -11,6 +11,19 @@ export function normalizeCategoryCode(code?: string | null): string {
   return (code || "").trim().toLowerCase();
 }
 
+/** ProblemItem.category may be a code string or a nested { code, name } object. */
+export function categoryCodeFromValue(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string" || typeof value === "number") {
+    return normalizeCategoryCode(String(value));
+  }
+  if (typeof value === "object") {
+    const row = value as { code?: unknown; name?: unknown };
+    return normalizeCategoryCode(String(row.code || row.name || ""));
+  }
+  return "";
+}
+
 export function filterProblemItems(
   items: ProblemItem[],
   options: {
@@ -24,7 +37,7 @@ export function filterProblemItems(
   const q = (options.search || "").trim().toLowerCase();
 
   return items.filter((item) => {
-    if (category && normalizeCategoryCode(item.category) !== category) {
+    if (category && categoryCodeFromValue(item.category) !== category) {
       return false;
     }
     if (!options.searchAll && options.cropId && !problemItemMatchesCrop(item, options.cropId)) {

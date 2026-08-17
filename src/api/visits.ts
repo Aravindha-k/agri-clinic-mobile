@@ -60,6 +60,13 @@ export type Visit = {
   problem_description?: string | null;
   problem_category_id?: number | null;
   problem_master_id?: number | null;
+  problem_item_ids?: number[];
+  problems?: Array<{
+    id?: number;
+    name?: string;
+    tamil_name?: string | null;
+    category?: { id?: number; name?: string; code?: string } | null;
+  }>;
   field_visit?: {
     problem_category?: { id?: number; code?: string; name?: string };
     problem_master?: { id?: number; name?: string; tamil_name?: string };
@@ -114,7 +121,9 @@ export type VisitFormValues = {
   problem_seen?: string;
   problem_category_id?: string;
   problem_master_id?: string;
+  problem_item_ids?: number[];
   problem_description?: string;
+  taluk?: string;
   action_taken?: string;
   follow_up_date?: string;
   crop_name?: string;

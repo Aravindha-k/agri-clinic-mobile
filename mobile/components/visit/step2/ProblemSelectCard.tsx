@@ -48,8 +48,10 @@ export function ProblemSelectCard({ item, cropName, selected, onPress }: Props) 
         </View>
       </View>
       {selected ? (
-        <Ionicons name="checkmark-circle" size={22} color={Colors.green} />
-      ) : null}
+        <Ionicons name="checkbox" size={22} color={Colors.green} />
+      ) : (
+        <Ionicons name="square-outline" size={22} color={Colors.text4} />
+      )}
     </Pressable>
   );
 }

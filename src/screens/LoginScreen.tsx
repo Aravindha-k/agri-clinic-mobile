@@ -39,6 +39,7 @@ import { ApiRequestError, getNetworkMessage, isNetworkError } from "../utils/api
 import {
   MOBILE_LOGIN_PREFIX,
   isLegacyEmployeeIdIdentifier,
+  isValidMobileLoginIdentifier,
   normalizeMobileLoginSuffix,
   toMobileLoginIdentifier
 } from "../utils/mobileLoginUsername";
@@ -168,6 +169,10 @@ export function LoginScreen() {
     const user = toMobileLoginIdentifier(empId);
     if (!user || !password.trim()) {
       setLoginError(t("login.missingCredentials"));
+      return;
+    }
+    if (!isValidMobileLoginIdentifier(user)) {
+      setLoginError(t("login.invalidEmployeeId"));
       return;
     }
 

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -28,6 +28,8 @@ import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContex
 import { formatDisplayDateTime, visitDisplayIso } from "../../../src/utils/format";
 import { formatVisitPlaceLine } from "../../../src/utils/visitStatus";
 import { resolveVisitFarmer } from "../../../src/utils/visitFarmer";
+import { collectVisitProblems } from "../../../src/utils/visitProblems";
+import { useEmployee } from "../../../src/storage/EmployeeContext";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { ScreenLoader } from "../../components/layout/ScreenLoader";
 import { ScreenEntranceShell } from "../../components/layout";
@@ -36,7 +38,13 @@ import {
   cropFromVisit,
   problemCategoryFromVisit
 } from "../../lib/farmerProfileApi";
-import { pickVisitPhotoFromCamera } from "../../lib/visitPhotos";
+import { EvidenceStampBurner, type EvidenceStampJob } from "../../components/visit/EvidenceStampBurner";
+import {
+  deleteTempUri,
+  prepareCameraEvidence,
+  toVisitPhotoAsset,
+  type PreparedEvidencePhoto
+} from "../../lib/visitEvidenceCapture";
 import {
   categoryTone,
   fetchVisitDetail,
@@ -80,6 +88,7 @@ function openMaps(lat: string | number, lng: string | number) {
 export default function VisitDetailScreen({ route, navigation }: Props) {
   useSecureScreen();
   const { t } = useI18n();
+  const { employee } = useEmployee();
   const visitId = route.params.id;
   const fromSubmit = route.params.fromSubmit === true;
   const { width } = useWindowDimensions();
@@ -106,6 +115,8 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [lastEditedAt, setLastEditedAt] = useState<string | null>(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [stampJob, setStampJob] = useState<EvidenceStampJob | null>(null);
+  const pendingStampRef = useRef<PreparedEvidencePhoto | null>(null);
 
   const [draftFieldNotes, setDraftFieldNotes] = useState("");
 
@@ -146,21 +157,16 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
   const farmer = useMemo(() => (visit ? resolveVisitFarmer(visit) : null), [visit]);
   const parsedNotes = useMemo(() => parseFieldNotes(visit?.field_notes), [visit?.field_notes]);
   const severity = visit ? inferSeverity(visit, parsedNotes) : "medium";
+  const visitProblems = useMemo(() => collectVisitProblems(visit), [visit]);
   const categoryCode =
+    visitProblems[0]?.categoryCode ||
     visit?.field_visit?.problem_category?.code ||
     (visit ? problemCategoryFromVisit(visit) : "");
-  const categoryName = visit?.field_visit?.problem_category?.name || categoryCode || "Problem";
-  const tamilName =
-    visit?.field_visit?.problem_master?.tamil_name ||
-    visit?.field_visit?.problem_subcategory?.tamil_name ||
-    visit?.problem_seen ||
-    "—";
-  const englishName =
-    visit?.field_visit?.problem_master?.name ||
-    visit?.field_visit?.problem_subcategory?.name ||
-    visit?.problem_description ||
-    visit?.problem_seen ||
-    "—";
+  const categoryName =
+    visitProblems[0]?.categoryName ||
+    visit?.field_visit?.problem_category?.name ||
+    categoryCode ||
+    "Problem";
   const tone = categoryTone(categoryCode);
   const address = visit ? formatVisitPlaceLine(visit, "Location not recorded") : "";
   const hasGps = visit?.latitude != null && visit?.longitude != null && String(visit.latitude) !== "";
@@ -196,17 +202,26 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
 
   async function handleAddPhoto() {
     if (!visit) return;
-    const photo = await pickVisitPhotoFromCamera();
-    if (!photo) return;
+    const prepared = await prepareCameraEvidence({
+      employee,
+      visitId: String(visit.id),
+      farmerName: farmer?.name
+    });
+    if (!prepared) return;
+    pendingStampRef.current = prepared;
+    setStampJob({ id: prepared.tempId, sourceUri: prepared.sourceUri, meta: prepared.meta });
+  }
+
+  async function uploadStampedPhoto(prepared: PreparedEvidencePhoto, stampedUri: string) {
+    if (!visit) return;
     setUploadingPhoto(true);
     try {
+      const photo = toVisitPhotoAsset(prepared, stampedUri);
       const next = await uploadVisitPhoto(visit.id, photo);
-      // Always replace with a new array reference from the upload helper.
       setAttachments([...next]);
       bumpAfterVisitChange();
     } catch (err) {
       Alert.alert("Upload failed", err instanceof Error ? err.message : "Please try again.");
-      // Recover visible state if the server accepted the file but UI sync failed.
       try {
         const recovered = await fetchVisitGallery(visit.id);
         if (recovered.length > 0) {
@@ -217,6 +232,10 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
       }
     } finally {
       setUploadingPhoto(false);
+      if (prepared.sourceUri !== stampedUri) void deleteTempUri(prepared.sourceUri);
+      if (prepared.originalUri !== prepared.sourceUri && prepared.originalUri !== stampedUri) {
+        void deleteTempUri(prepared.originalUri);
+      }
     }
   }
 
@@ -407,8 +426,18 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
           <View style={styles.problemArrowRow}>
             <Ionicons name="arrow-forward" size={16} color={Colors.text4} />
             <View style={styles.problemNames}>
-              <Text style={styles.tamilName}>{tamilName}</Text>
-              <Text style={styles.englishName}>{englishName}</Text>
+              {visitProblems.length === 0 ? (
+                <Text style={styles.tamilName}>—</Text>
+              ) : (
+                visitProblems.map((problem) => (
+                  <View key={String(problem.id)} style={styles.problemItem}>
+                    <Text style={styles.tamilName}>{problem.tamil_name || problem.name}</Text>
+                    {problem.tamil_name && problem.name && problem.tamil_name !== problem.name ? (
+                      <Text style={styles.englishName}>{problem.name}</Text>
+                    ) : null}
+                  </View>
+                ))
+              )}
             </View>
           </View>
           <View style={styles.problemMeta}>
@@ -545,6 +574,22 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
           </Pressable>
         </Pressable>
       </Modal>
+      <EvidenceStampBurner
+        job={stampJob}
+        onComplete={(id, stampedUri) => {
+          const prepared = pendingStampRef.current;
+          pendingStampRef.current = null;
+          setStampJob(null);
+          if (prepared && prepared.tempId === id) {
+            void uploadStampedPhoto(prepared, stampedUri);
+          }
+        }}
+        onError={(_id, message) => {
+          pendingStampRef.current = null;
+          setStampJob(null);
+          Alert.alert("Could not stamp photo", message);
+        }}
+      />
         </KeyboardAvoidingView>
       )}
     </ScreenEntranceShell>
@@ -714,7 +759,10 @@ const styles = StyleSheet.create({
   },
   problemNames: {
     flex: 1,
-    gap: 4
+    gap: 8
+  },
+  problemItem: {
+    gap: 2
   },
   tamilName: {
     color: Colors.text1,

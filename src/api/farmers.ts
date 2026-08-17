@@ -11,6 +11,8 @@ export type Farmer = {
   phone?: string;
   district?: string | number;
   district_name?: string;
+  taluk?: string | number | null;
+  taluk_name?: string | null;
   village?: string | number;
   village_name?: string;
   crop_name?: string;
@@ -155,6 +157,7 @@ export type CreateFarmerPayload = {
   name: string;
   phone: string;
   district: number;
+  taluk?: number;
   village: number;
   address?: string;
   total_land_area?: number;

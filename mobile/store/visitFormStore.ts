@@ -4,6 +4,7 @@ import type { Farmer } from "../../src/api/farmers";
 import type { ProblemCategory, ProblemItem } from "../../src/api/problems";
 import type { LoadedRevisitPrefill } from "../../src/utils/farmerPrefill";
 import {
+  attachResolvedCategory,
   issueFlagsForCategory,
   isOtherCategory,
   OTHER_CATEGORY_CODE,
@@ -99,6 +100,7 @@ type VisitFormState = {
   setProblemMaster: (item: ProblemItem | null) => void;
   selectProblemItem: (item: ProblemItem, categories: ProblemCategory[]) => void;
   toggleProblemItem: (item: ProblemItem, categories: ProblemCategory[]) => void;
+  syncProblemCategoryFromMasters: (categories: ProblemCategory[]) => void;
   selectManualOther: () => void;
   clearProblemSelection: () => void;
   clearProblemsRemovedNotice: () => void;
@@ -269,18 +271,19 @@ export const useVisitFormStore = create<VisitFormState>()(
       pendingProblemMasterId: item ? String(item.id) : ""
     }),
   selectProblemItem: (item, categories) => {
-    const meta = resolveCategoryMeta(String(item.category), categories);
+    const resolved = attachResolvedCategory(item, categories);
+    const meta = resolveCategoryMeta(resolved, categories);
     const flags = issueFlagsForCategory(meta.code);
     set((state) => {
-      const exists = state.selectedProblems.some((row) => row.id === item.id);
+      const exists = state.selectedProblems.some((row) => row.id === resolved.id);
       const selectedProblems = exists
-        ? state.selectedProblems
-        : [...state.selectedProblems, item];
+        ? state.selectedProblems.map((row) => (row.id === resolved.id ? resolved : row))
+        : [...state.selectedProblems, resolved];
       return {
         selectedProblems,
-        selectedProblem: item,
-        problemMasterId: String(item.id),
-        pendingProblemMasterId: String(item.id),
+        selectedProblem: resolved,
+        problemMasterId: String(resolved.id),
+        pendingProblemMasterId: String(resolved.id),
         problemCategoryId: meta.id,
         problemCategoryCode: meta.code,
         otherProblemDescription: "",
@@ -290,13 +293,13 @@ export const useVisitFormStore = create<VisitFormState>()(
     });
   },
   toggleProblemItem: (item, categories) => {
-    const meta = resolveCategoryMeta(String(item.category), categories);
     set((state) => {
       const exists = state.selectedProblems.some((row) => row.id === item.id);
       const selectedProblems = exists
         ? state.selectedProblems.filter((row) => row.id !== item.id)
-        : [...state.selectedProblems, item];
+        : [...state.selectedProblems, attachResolvedCategory(item, categories)];
       const primary = primaryProblem(selectedProblems);
+      const meta = primary ? resolveCategoryMeta(primary, categories) : { id: "", code: "" };
       return {
         selectedProblems,
         selectedProblem: primary,
@@ -305,6 +308,36 @@ export const useVisitFormStore = create<VisitFormState>()(
         problemCategoryId: primary ? meta.id : "",
         problemCategoryCode: primary ? meta.code : "",
         ...flagsFromProblems(selectedProblems)
+      };
+    });
+  },
+  syncProblemCategoryFromMasters: (categories) => {
+    if (!categories?.length) return;
+    set((state) => {
+      if (!state.selectedProblems.length) {
+        if (isOtherCategory(state.problemCategoryCode) || isOtherCategory(state.problemCategoryId)) {
+          const other = categories.find((c) => isOtherCategory(c.code));
+          if (other?.id != null) {
+            return {
+              problemCategoryId: String(other.id),
+              problemCategoryCode: other.code || OTHER_CATEGORY_CODE
+            };
+          }
+        }
+        return {};
+      }
+      const selectedProblems = state.selectedProblems.map((item) =>
+        attachResolvedCategory(item, categories)
+      );
+      const primary = primaryProblem(selectedProblems);
+      const meta = primary ? resolveCategoryMeta(primary, categories) : { id: "", code: "" };
+      return {
+        selectedProblems,
+        selectedProblem: primary,
+        problemCategoryId: meta.id,
+        problemCategoryCode: meta.code || state.problemCategoryCode,
+        problemMasterId: primary ? String(primary.id) : state.problemMasterId,
+        pendingProblemMasterId: primary ? String(primary.id) : state.pendingProblemMasterId
       };
     });
   },

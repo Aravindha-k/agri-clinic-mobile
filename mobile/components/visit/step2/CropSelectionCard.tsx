@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { extractMasterPk } from "../../../../src/utils/masterId";
 import { useI18n } from "../../../../src/i18n/I18nContext";
 import type { FarmerFieldCropChip } from "../../../lib/visitFormOptionsApi";
 import { Colors, FontSize, FontWeight, Radius } from "../../../lib/theme";
@@ -36,17 +37,21 @@ export function CropSelectionCard({
           <>
             <Text style={styles.quickLabel}>{t("visitFlow.farmersCrops")}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow}>
-              {fieldCrops.map((chip) => (
-                <Pressable
-                  key={chip.id}
-                  onPress={() => onQuickCrop(chip.crop_id || chip.id, chip.crop_name)}
-                  style={styles.quickChip}
-                >
-                  <Text style={styles.quickChipText} numberOfLines={1}>
-                    {chip.crop_name}
-                  </Text>
-                </Pressable>
-              ))}
+              {fieldCrops.map((chip) => {
+                const cropPk = extractMasterPk(chip.crop_id);
+                if (cropPk == null) return null;
+                return (
+                  <Pressable
+                    key={chip.id}
+                    onPress={() => onQuickCrop(String(cropPk), chip.crop_name)}
+                    style={styles.quickChip}
+                  >
+                    <Text style={styles.quickChipText} numberOfLines={1}>
+                      {chip.crop_name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </ScrollView>
           </>
         ) : null}

@@ -55,10 +55,6 @@ function mergeFarmerRows(current: MobileFarmer[], rows: MobileFarmer[]) {
   return Array.from(byId.values());
 }
 
-function requestKey(search: string, village: string, page: number) {
-  return `${search}|${village}|${page}`;
-}
-
 function matchesSearch(farmer: MobileFarmer, query: string) {
   if (!query) return true;
   const needle = query.toLowerCase();
@@ -86,8 +82,8 @@ export function useFarmersDirectory(
     [language, t]
   );
 
-  const isFetchingRef = useRef(false);
-  const lastRequestKeyRef = useRef("");
+  const farmersCountRef = useRef(0);
+  const loadMoreInFlightRef = useRef(false);
   const endReachedCooldownRef = useRef(false);
   const requestSeqRef = useRef(0);
   const syncInFlightRef = useRef(false);
@@ -111,6 +107,7 @@ export function useFarmersDirectory(
   const [loadError, setLoadError] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState(false);
   const [syncingAll, setSyncingAll] = useState(false);
   const [syncProgress, setSyncProgress] = useState<FarmersSyncProgress | null>(null);
   const [syncCompleteMessage, setSyncCompleteMessage] = useState<string | null>(null);
@@ -124,6 +121,7 @@ export function useFarmersDirectory(
   const isOffline = !online;
   const hasFullCache = cachedFarmers.length > 0;
   const useApiList = !isOffline;
+  farmersCountRef.current = farmers.length;
 
   const villageLabel = useMemo(() => {
     if (selectedVillageName) return selectedVillageName;
@@ -140,14 +138,18 @@ export function useFarmersDirectory(
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(searchQuery.trim()), SEARCH_DEBOUNCE_MS);
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      setDebouncedSearch("");
+      return;
+    }
+    const timer = setTimeout(() => setDebouncedSearch(trimmed), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
   useEffect(() => {
     setPage(1);
     setCacheWindow(PAGE_SIZE);
-    lastRequestKeyRef.current = "";
   }, [selectedVillageId, selectedVillageName, debouncedSearch, isOffline]);
 
   const refreshLastSyncedLabel = useCallback(() => {
@@ -162,21 +164,12 @@ export function useFarmersDirectory(
         return;
       }
 
-      const key = requestKey(debouncedSearch, villageLabel, 1);
-      if (mode !== "refresh" && lastRequestKeyRef.current === key && farmers.length > 0) {
-        setIsInitialLoading(false);
-        setIsRefreshing(false);
-        return;
-      }
-
-      if (isFetchingRef.current) return;
-
       const seq = ++requestSeqRef.current;
-      isFetchingRef.current = true;
-      lastRequestKeyRef.current = key;
-
-      if (mode === "initial" && farmers.length === 0) setIsInitialLoading(true);
+      const empty = farmersCountRef.current === 0;
       if (mode === "refresh") setIsRefreshing(true);
+      if (empty && mode !== "silent") setIsInitialLoading(true);
+      setLoadError(false);
+      setLoadMoreError(false);
 
       try {
         const response = await fetchMobileFarmersPage({
@@ -213,26 +206,26 @@ export function useFarmersDirectory(
         }
       } finally {
         if (seq === requestSeqRef.current) {
-          isFetchingRef.current = false;
           setIsInitialLoading(false);
           setIsRefreshing(false);
         }
       }
     },
-    [debouncedSearch, farmers.length, selectedVillageId, useApiList, villageLabel]
+    [debouncedSearch, selectedVillageId, useApiList, villageLabel]
   );
 
   const loadMore = useCallback(async () => {
-    if (!useApiList || isLoadingMore || isFetchingRef.current || !hasNextPage || !nextUrl) return;
+    if (!useApiList || loadMoreInFlightRef.current || !hasNextPage || !nextUrl) return;
 
-    isFetchingRef.current = true;
+    loadMoreInFlightRef.current = true;
     setIsLoadingMore(true);
-    const seq = ++requestSeqRef.current;
+    setLoadMoreError(false);
+    const startedSeq = requestSeqRef.current;
     const nextPage = page + 1;
 
     try {
       const response = await fetchMobileFarmersPage({ nextUrl, pageSize: PAGE_SIZE });
-      if (seq !== requestSeqRef.current) return;
+      if (startedSeq !== requestSeqRef.current) return;
 
       const rows = response.results as MobileFarmer[];
       setFarmers((current) => mergeFarmerRows(current, rows));
@@ -241,13 +234,13 @@ export function useFarmersDirectory(
       setHasNextPage(Boolean(response.next));
       if (response.count != null) setTotalCount(response.count);
     } catch {
-      setHasNextPage(false);
-      setNextUrl(null);
+      if (startedSeq !== requestSeqRef.current) return;
+      setLoadMoreError(true);
     } finally {
-      isFetchingRef.current = false;
+      loadMoreInFlightRef.current = false;
       setIsLoadingMore(false);
     }
-  }, [hasNextPage, isLoadingMore, nextUrl, page, useApiList]);
+  }, [hasNextPage, nextUrl, page, useApiList]);
 
   useEffect(() => {
     if (!useApiList) {
@@ -287,14 +280,11 @@ export function useFarmersDirectory(
   }, [farmersVersion, fetchPageOne, useApiList]);
 
   const listData = useMemo(
-    () => paginateWorkQueueRows(workQueueRows, cacheWindow),
-    [cacheWindow, workQueueRows]
+    () => (useApiList ? workQueueRows : paginateWorkQueueRows(workQueueRows, cacheWindow)),
+    [cacheWindow, useApiList, workQueueRows]
   );
 
-  const hasMore =
-    useApiList && hasNextPage
-      ? true
-      : cacheWindow < countWorkQueueFarmers(workQueueRows);
+  const hasMore = useApiList ? hasNextPage : cacheWindow < countWorkQueueFarmers(workQueueRows);
 
   const displayTotal = countWorkQueueFarmers(workQueueRows);
 
@@ -322,7 +312,6 @@ export function useFarmersDirectory(
       successTimerRef.current = setTimeout(() => setSyncCompleteMessage(null), SYNC_SUCCESS_MS);
 
       if (useApiList && !debouncedSearch && !villageLabel) {
-        lastRequestKeyRef.current = "";
         await fetchPageOne("silent");
       }
     } finally {
@@ -339,7 +328,6 @@ export function useFarmersDirectory(
       refreshLastSyncedLabel();
       return;
     }
-    lastRequestKeyRef.current = "";
     void fetchPageOne("refresh");
   }, [fetchPageOne, refreshLastSyncedLabel, useApiList]);
 
@@ -350,8 +338,9 @@ export function useFarmersDirectory(
       endReachedCooldownRef.current = false;
     }, END_REACHED_COOLDOWN_MS);
 
-    if (useApiList && hasNextPage) {
-      void loadMore();
+    if (useApiList) {
+      if (hasNextPage) void loadMore();
+      return;
     }
     if (cacheWindow < countWorkQueueFarmers(workQueueRows)) {
       setCacheWindow((size) => size + PAGE_SIZE);
@@ -400,6 +389,7 @@ export function useFarmersDirectory(
     isInitialLoading,
     isRefreshing,
     isLoadingMore,
+    loadMoreError,
     loadError,
     syncingAll,
     syncProgress,
@@ -422,6 +412,7 @@ export function useFarmersDirectory(
     hasMore,
     onRefresh,
     onEndReached,
+    retryLoadMore: loadMore,
     handleSyncAll: runFullSync,
     refreshLastSyncedLabel
   };

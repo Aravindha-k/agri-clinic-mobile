@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ProblemItem } from "../../../../src/api/problems";
 import { useI18n } from "../../../../src/i18n/I18nContext";
+import { categoryCodeFromValue } from "../../../../src/utils/problemItemFilter";
 import { formatCategoryBadgeLocalized } from "../../../lib/problemCatalog";
 import { Colors, FontSize, FontWeight, Radius } from "../../../lib/theme";
 
@@ -14,7 +15,11 @@ type Props = {
 
 export function ProblemSelectCard({ item, cropName, selected, onPress }: Props) {
   const { t, language } = useI18n();
-  const categoryLabel = formatCategoryBadgeLocalized(item.category, undefined, language);
+  const categoryLabel = formatCategoryBadgeLocalized(
+    categoryCodeFromValue(item.category) || item.category_code,
+    item.category_name,
+    language
+  );
   const displayCrop = item.crop_name || cropName;
 
   return (

@@ -44,6 +44,17 @@ function normalizePage(data: unknown): FarmerListPage {
 }
 
 export async function fetchMobileFarmersPage(options: FarmersPageQuery = {}): Promise<FarmerListPage> {
+  const pageSize = options.pageSize ?? 50;
+  // mobile/farmers/ supports search only. Village filter lives on GET /farmers/.
+  if (options.village?.trim() && !options.nextUrl) {
+    return fetchFarmersPage({
+      page: options.page,
+      pageSize,
+      search: options.search,
+      village: options.village,
+      source: "FarmersDirectory"
+    });
+  }
   const path = buildMobileFarmersPath(options);
   try {
     const data = await apiClient<unknown>(path, { source: "FarmersDirectory" });
@@ -51,7 +62,7 @@ export async function fetchMobileFarmersPage(options: FarmersPageQuery = {}): Pr
   } catch {
     return fetchFarmersPage({
       page: options.page,
-      pageSize: options.pageSize ?? 50,
+      pageSize,
       search: options.search,
       village: options.village,
       nextUrl: options.nextUrl,

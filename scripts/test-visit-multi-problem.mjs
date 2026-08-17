@@ -82,8 +82,11 @@ test("crop-aware multi-select problems are grouped from backend items", () => {
   assert.match(step2, /groupProblemsByCategory/);
   assert.match(step2, /selectedCount/);
   assert.match(step2, /clearSelected/);
+  assert.match(step2, /selectedSummary/);
+  assert.match(step2, /syncProblemCategoryFromMasters/);
   assert.match(catalog, /groupProblemsByCategory/);
   assert.match(filter, /problemItemMatchesCrop/);
+  assert.match(filter, /nutrient_issue/);
   assert.doesNotMatch(step2, /Sathupatrakurai|சத்துப்பற்றாக்குறை/);
   assert.doesNotMatch(catalog, /Sathupatrakurai|சத்துப்பற்றாக்குறை/);
 });
@@ -140,6 +143,9 @@ test("offline queue preserves problem_item_ids as a number array, never a CSV st
   assert.match(format, /payload\.problem_item_ids = problemItemIds/);
   assert.match(flattenSrc, /if \(Array\.isArray\(value\)\)/);
   assert.match(flattenSrc, /formData\.append\(key, item\)/);
+  assert.match(submitApi, /problemCategoryPkFromSelection/);
+  assert.match(submitApi, /problemMasterPkFromSelection/);
+  assert.match(format, /extractMasterPk\(values\.problem_category_id\)/);
   assert.match(queue, /\.\.\.record\.values/);
   const queued = {
     farmer: 1,

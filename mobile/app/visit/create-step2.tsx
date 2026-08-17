@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { getOptionLabel } from "../../../src/api/masters";
 import type { ProblemItem } from "../../../src/api/problems";
+import { extractMasterPk } from "../../../src/utils/masterId";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { VisitFarmerSummaryCard } from "../../components/visit/VisitFarmerSummaryCard";
 import { VisitRevisitContextCard } from "../../components/visit/VisitRevisitContextCard";
@@ -59,7 +60,6 @@ export function VisitCreateStep2({ onBack }: Props) {
   const newFarmer = useVisitFormStore((s) => s.newFarmer);
   const cropId = useVisitFormStore((s) => s.cropId);
   const cropName = useVisitFormStore((s) => s.cropName);
-  const problemCategoryId = useVisitFormStore((s) => s.problemCategoryId);
   const problemCategoryCode = useVisitFormStore((s) => s.problemCategoryCode);
   const selectedProblem = useVisitFormStore((s) => s.selectedProblem);
   const selectedProblems = useVisitFormStore((s) => s.selectedProblems);
@@ -69,9 +69,9 @@ export function VisitCreateStep2({ onBack }: Props) {
   const revisitContext = useVisitFormStore((s) => s.revisitContext);
   const setStep = useVisitFormStore((s) => s.setStep);
   const setCrop = useVisitFormStore((s) => s.setCrop);
-  const setProblemCategory = useVisitFormStore((s) => s.setProblemCategory);
   const selectProblemItem = useVisitFormStore((s) => s.selectProblemItem);
   const toggleProblemItem = useVisitFormStore((s) => s.toggleProblemItem);
+  const syncProblemCategoryFromMasters = useVisitFormStore((s) => s.syncProblemCategoryFromMasters);
   const selectManualOther = useVisitFormStore((s) => s.selectManualOther);
   const clearProblemSelection = useVisitFormStore((s) => s.clearProblemSelection);
   const clearProblemsRemovedNotice = useVisitFormStore((s) => s.clearProblemsRemovedNotice);
@@ -220,12 +220,9 @@ export function VisitCreateStep2({ onBack }: Props) {
   );
 
   useEffect(() => {
-    if (!formOptions || !problemCategoryId || problemCategoryCode) return;
-    const match = formOptions.problem_categories.find((c) => String(c.id) === problemCategoryId);
-    if (match) {
-      setProblemCategory(String(match.id), match.code || problemCategoryId);
-    }
-  }, [formOptions, problemCategoryCode, problemCategoryId, setProblemCategory]);
+    if (!formOptions?.problem_categories?.length) return;
+    syncProblemCategoryFromMasters(formOptions.problem_categories);
+  }, [formOptions?.problem_categories, syncProblemCategoryFromMasters]);
 
   const selectedIds = useMemo(
     () => new Set((selectedProblems ?? []).map((item) => item.id)),
@@ -283,12 +280,14 @@ export function VisitCreateStep2({ onBack }: Props) {
         : "";
 
   function handleCropSelect(nextCropId: string, nextCropName: string) {
+    const cropPk = extractMasterPk(nextCropId);
+    if (cropPk == null) return;
     setSearchAllMode(false);
     setPrefillWarning("");
     setProblemQuery("");
     setCategoryFilter(null);
     setShowProblemPicker(true);
-    setCrop(nextCropId, nextCropName);
+    setCrop(String(cropPk), nextCropName);
   }
 
   function handleSelectProblem(item: ProblemItem) {
@@ -401,6 +400,16 @@ export function VisitCreateStep2({ onBack }: Props) {
                   </View>
                 ) : null}
               </View>
+
+              {(selectedProblems ?? []).length > 0 ? (
+                <View style={styles.selectedSummary}>
+                  {(selectedProblems ?? []).map((item) => (
+                    <Text key={item.id} style={styles.selectedSummaryLine} numberOfLines={1}>
+                      {item.tamil_name?.trim() || item.name}
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
 
               {problemsRemovedNotice ? (
                 <View style={styles.warningBanner}>
@@ -577,6 +586,20 @@ const styles = StyleSheet.create({
   },
   clearText: {
     color: Colors.brand700,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semibold
+  },
+  selectedSummary: {
+    backgroundColor: Colors.greenBg,
+    borderColor: Colors.green,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  selectedSummaryLine: {
+    color: Colors.text1,
     fontSize: FontSize.sm,
     fontWeight: FontWeight.semibold
   },

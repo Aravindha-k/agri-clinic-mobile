@@ -10,11 +10,22 @@ export type ProblemCategory = {
   requires_problem_master?: boolean;
 };
 
+export type ProblemCategoryRef = {
+  id?: number | null;
+  code?: string;
+  name?: string;
+};
+
 export type ProblemItem = {
   id: number;
   name: string;
   tamil_name?: string | null;
-  category: string;
+  /** API code string (e.g. nutrient_issue) or nested { id, code, name }. */
+  category: string | ProblemCategoryRef;
+  /** Backend ProblemCategory PK — required on submit, not the display label. */
+  category_id?: number | null;
+  category_code?: string | null;
+  category_name?: string | null;
   crop?: number | null;
   crop_name?: string | null;
   is_active?: boolean;

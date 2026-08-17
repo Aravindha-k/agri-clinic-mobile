@@ -246,6 +246,8 @@ export const en = {
     neverVisited: "Never visited",
     startVisit: "Start Visit",
     loadingMore: "Loading more farmers…",
+    endOfFarmers: "All farmers loaded",
+    retryLoadMore: "Couldn’t load more. Tap to retry",
     queueSubtitle: "Priority work for today — not the full farmer directory",
     farmersListSubtitle: "Search and visit farmers in your villages",
     sectionToday: "TODAY",

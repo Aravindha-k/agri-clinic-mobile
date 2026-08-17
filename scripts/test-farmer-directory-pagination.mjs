@@ -20,9 +20,11 @@ test("farmer list uses server pagination and does not fetch-all before first ren
   assert.match(directory, /loadError/);
   assert.match(directory, /mergeFarmerRows/);
   assert.match(directory, /Server already applied search\/village/);
+  assert.match(directory, /useApiList \? workQueueRows/);
   assert.match(farmersApi, /page_size/);
   assert.match(farmersApi, /params\.set\("page"/);
   assert.doesNotMatch(directory, /getAllFarmers\(/);
+  assert.doesNotMatch(directory, /isFetchingRef\.current\) return/);
 });
 
 test("farmer list first page, next page, search, refresh, retry, and no duplicates", () => {
@@ -32,8 +34,16 @@ test("farmer list first page, next page, search, refresh, retry, and no duplicat
   assert.match(directory, /loadMore/);
   assert.match(directory, /nextUrl/);
   assert.match(directory, /byId\.set\(row\.id, row\)/);
+  assert.match(directory, /seq !== requestSeqRef\.current/);
+  assert.match(directory, /startedSeq !== requestSeqRef\.current/);
+  assert.match(directory, /if \(!trimmed\) \{\s*setDebouncedSearch\(""\)/);
+  assert.match(directory, /loadMoreInFlightRef/);
   assert.match(workPanel, /farmers\.loadFailed/);
   assert.match(workPanel, /onAction=\{directory\.onRefresh\}/);
+  assert.match(workPanel, /directory\.isInitialLoading \|\| directory\.sourceCount > 0/);
+  assert.match(workPanel, /work\.endOfFarmers/);
+  assert.match(workPanel, /retryLoadMore/);
+  assert.match(farmersApi, /Village filter lives on GET \/farmers\//);
 
   function mergeFarmerRows(current, rows) {
     const byId = new Map(current.map((farmer) => [farmer.id, farmer]));

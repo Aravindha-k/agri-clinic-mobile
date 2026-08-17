@@ -72,8 +72,8 @@ export async function prepareVisitForSubmit(
     field_notes: coerceStr(values.field_notes),
     problem_seen: coerceStr(values.problem_seen),
     problem_description: coerceStr(values.problem_description),
-    problem_category_id: coerceStr(values.problem_category_id),
-    problem_master_id: coerceStr(values.problem_master_id),
+    problem_category_id: masterPkToString(values.problem_category_id) || undefined,
+    problem_master_id: masterPkToString(values.problem_master_id) || undefined,
     problem_item_ids: Array.isArray(values.problem_item_ids)
       ? values.problem_item_ids.map(Number).filter((id) => Number.isFinite(id))
       : values.problem_item_ids,

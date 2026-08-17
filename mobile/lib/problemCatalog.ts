@@ -1,9 +1,16 @@
 import type { ProblemCategory, ProblemItem } from "../../src/api/problems";
 import {
   categoryCodeFromValue,
+  categoryCodesAreEquivalent,
   filterProblemItems,
   normalizeCategoryCode
 } from "../../src/utils/problemItemFilter";
+import {
+  attachResolvedCategory,
+  resolveCategoryMeta
+} from "../../src/utils/problemCategoryMeta";
+
+export { attachResolvedCategory, resolveCategoryMeta };
 
 export const OTHER_CATEGORY_CODE = "other";
 
@@ -23,17 +30,12 @@ export const MASTER_CATEGORY_CELLS: CategoryCellDef[] = [
 ];
 
 export function isOtherCategory(code?: string | null): boolean {
-  return normalizeCategoryCode(code) === OTHER_CATEGORY_CODE;
+  const normalized = normalizeCategoryCode(code);
+  return normalized === OTHER_CATEGORY_CODE || normalized === "others";
 }
 
 export function categoryCodesMatch(itemCategory: unknown, cellCode: string): boolean {
-  const item = categoryCodeFromValue(itemCategory);
-  const cell = normalizeCategoryCode(cellCode);
-  if (!item || !cell) return false;
-  if (item === cell) return true;
-  if (item.includes(cell) || cell.includes(item)) return true;
-  if (cell === "nutrient" && item.includes("nutrient")) return true;
-  return false;
+  return categoryCodesAreEquivalent(itemCategory, cellCode);
 }
 
 export function isActiveProblemItem(item: ProblemItem): boolean {
@@ -108,15 +110,15 @@ export function formatCategoryBadge(code?: string | null, name?: string | null):
 }
 
 export function formatCategoryBadgeLocalized(
-  code?: string | null,
+  code?: unknown,
   name?: string | null,
   language: "en" | "ta" = "en"
 ): string {
   if (name?.trim()) return name.trim();
-  const normalized = normalizeCategoryCode(code);
-  const cell = MASTER_CATEGORY_CELLS.find((c) => normalizeCategoryCode(c.code) === normalized);
+  const normalized = categoryCodeFromValue(code);
+  const cell = MASTER_CATEGORY_CELLS.find((c) => categoryCodesMatch(normalized, c.code));
   if (cell) return language === "ta" ? cell.tamil : cell.english;
-  return formatCategoryBadge(code, name);
+  return formatCategoryBadge(normalized, name);
 }
 
 function problemItemFrequency(item: ProblemItem & { frequency?: number; visit_count?: number }) {
@@ -150,20 +152,6 @@ export function pickSuggestedProblems(items: ProblemItem[], limit = 3): ProblemI
     .slice(0, limit);
 }
 
-export function resolveCategoryMeta(
-  categoryCode: string,
-  categories: ProblemCategory[]
-): { id: string; code: string } {
-  const normalized = normalizeCategoryCode(categoryCode);
-  const match =
-    categories.find((c) => normalizeCategoryCode(c.code) === normalized) ??
-    categories.find((c) => c.name?.toLowerCase().includes(normalized)) ??
-    null;
-  if (match) {
-    return { id: String(match.id), code: match.code || categoryCode };
-  }
-  return { id: categoryCode, code: categoryCode };
-}
 
 export function groupProblemsByCategory(
   items: ProblemItem[],

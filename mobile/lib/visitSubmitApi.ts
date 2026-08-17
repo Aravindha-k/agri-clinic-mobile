@@ -13,7 +13,12 @@ import {
 import { getAccessToken } from "../../src/storage/tokenStorage";
 import { prepareVisitForSubmit } from "../../src/visit/prepareVisitSubmit";
 import { validateVisitSubmitValues } from "../../src/visit/visitValidation";
+import { extractMasterPk } from "../../src/utils/masterId";
 import { problemItemIdsFromSelection } from "../../src/utils/visitProblems";
+import {
+  problemCategoryPkFromSelection,
+  problemMasterPkFromSelection
+} from "../../src/utils/problemCategoryMeta";
 import { useVisitFormStore, type VisitSeverity } from "../store/visitFormStore";
 import {
   getVisitDutyFields,
@@ -59,6 +64,13 @@ export function buildVisitFormValuesFromStore(
         .filter(Boolean)
         .join(", ");
   const problemItemIds = problemItemIdsFromSelection(selectedProblems);
+  const categoryPk = isOther
+    ? extractMasterPk(state.problemCategoryId)
+    : problemCategoryPkFromSelection(selectedProblems, state.problemCategoryId);
+  const masterPk = isOther
+    ? null
+    : problemMasterPkFromSelection(selectedProblems, state.problemMasterId);
+  const cropPk = extractMasterPk(state.cropId);
 
   const visitNotes = state.fieldNotes.trim() || state.observation.trim();
   // Temporary compatibility adapter: employee enters Field Notes only.
@@ -75,7 +87,7 @@ export function buildVisitFormValuesFromStore(
     district: nf?.district_id || (farmer?.district != null ? String(farmer.district) : ""),
     taluk: nf?.taluk_id || (farmer?.taluk != null ? String(farmer.taluk) : ""),
     village: nf?.village_id || (farmer?.village != null ? String(farmer.village) : ""),
-    crop: state.cropId,
+    crop: cropPk != null ? String(cropPk) : "",
     crop_name: state.cropName,
     land_name: "",
     land_area: "",
@@ -90,8 +102,8 @@ export function buildVisitFormValuesFromStore(
     visit_time: capture.visit_time,
     observation: visitNotes,
     field_notes: [visitNotes, severityNote(state.severity)].filter(Boolean).join("\n"),
-    problem_category_id: isOther ? undefined : state.problemCategoryId || undefined,
-    problem_master_id: isOther ? undefined : state.problemMasterId || undefined,
+    problem_category_id: categoryPk != null ? String(categoryPk) : undefined,
+    problem_master_id: masterPk != null ? String(masterPk) : undefined,
     problem_item_ids: isOther ? [] : problemItemIds,
     problem_seen: problemText,
     problem_description: problemText,

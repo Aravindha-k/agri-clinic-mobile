@@ -12,7 +12,11 @@ type Props = {
 
 export function SelectedProblemSummary({ problem, onChange }: Props) {
   const { t, language } = useI18n();
-  const categoryLabel = formatCategoryBadgeLocalized(problem.category, undefined, language);
+  const categoryLabel = formatCategoryBadgeLocalized(
+    problem.category_code || problem.category,
+    problem.category_name,
+    language
+  );
 
   return (
     <View style={styles.card}>

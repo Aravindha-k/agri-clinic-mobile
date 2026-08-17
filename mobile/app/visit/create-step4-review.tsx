@@ -336,8 +336,8 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
           <View style={styles.chipRow}>
             {cropName ? <StatusChip label={cropName} variant="gray" /> : null}
           </View>
-          {problemNames.map((name) => (
-            <Text key={name} style={styles.problemLine}>
+          {problemNames.map((name, index) => (
+            <Text key={`${index}-${name}`} style={styles.problemLine}>
               {name}
             </Text>
           ))}

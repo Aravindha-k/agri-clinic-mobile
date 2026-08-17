@@ -179,12 +179,12 @@ export function normalizeMobileVisitSubmitPayload(
 
   applyObservationPayload(payload, values);
 
-  const problemCategoryId = normalizeId(values.problem_category_id);
-  if (problemCategoryId !== null && problemCategoryId !== undefined && problemCategoryId !== "") {
+  const problemCategoryId = extractMasterPk(values.problem_category_id);
+  if (problemCategoryId != null) {
     payload.problem_category_id = problemCategoryId;
   }
-  const problemMasterId = normalizeId(values.problem_master_id);
-  if (problemMasterId !== null && problemMasterId !== undefined && problemMasterId !== "") {
+  const problemMasterId = extractMasterPk(values.problem_master_id);
+  if (problemMasterId != null) {
     payload.problem_master_id = problemMasterId;
   }
   const problemItemIds = Array.isArray(values.problem_item_ids)

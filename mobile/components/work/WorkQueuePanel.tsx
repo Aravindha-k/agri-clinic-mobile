@@ -206,13 +206,34 @@ export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
     t
   ]);
 
-  const ListFooterComponent = useMemo(
-    () =>
-      directory.isLoadingMore ? (
-        <InlineSeedLoader label={t("work.loadingMore")} />
-      ) : null,
-    [directory.isLoadingMore, t]
-  );
+  const ListFooterComponent = useMemo(() => {
+    if (directory.isLoadingMore) {
+      return <InlineSeedLoader label={t("work.loadingMore")} />;
+    }
+    if (directory.loadMoreError) {
+      return (
+        <Pressable onPress={directory.retryLoadMore} style={styles.footerLoader}>
+          <Text style={styles.footerRetry}>{t("work.retryLoadMore")}</Text>
+        </Pressable>
+      );
+    }
+    if (!directory.hasMore && directory.sourceCount > 0 && !directory.isInitialLoading) {
+      return (
+        <View style={styles.footerLoader}>
+          <Text style={styles.footerLoaderText}>{t("work.endOfFarmers")}</Text>
+        </View>
+      );
+    }
+    return null;
+  }, [
+    directory.hasMore,
+    directory.isInitialLoading,
+    directory.isLoadingMore,
+    directory.loadMoreError,
+    directory.retryLoadMore,
+    directory.sourceCount,
+    t
+  ]);
 
   const stickyIndices = useMemo(() => {
     const indices: number[] = [];
@@ -566,5 +587,10 @@ const styles = StyleSheet.create({
   footerLoaderText: {
     color: Colors.text3,
     fontSize: FontSize.sm
+  },
+  footerRetry: {
+    color: Colors.brand700,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semibold
   }
 });

@@ -248,6 +248,8 @@ export const ta: TranslationTree = {
     neverVisited: "வருகை இல்லை",
     startVisit: "வருகை தொடங்கு",
     loadingMore: "மேலும் விவசாயிகள் ஏற்றுகிறது…",
+    endOfFarmers: "அனைத்து விவசாயிகளும் ஏற்றப்பட்டனர்",
+    retryLoadMore: "மேலும் ஏற்ற முடியவில்லை. மீண்டும் முயலவும்",
     queueSubtitle: "இன்றைய முன்னுரிமை வேலை — முழு விவசாயி பட்டியல் அல்ல",
     farmersListSubtitle: "உங்கள் ஊர்களில் விவசாயிகளைத் தேடி வருகை பதிவு செய்யுங்கள்",
     sectionToday: "இன்று",

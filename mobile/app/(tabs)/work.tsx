@@ -49,11 +49,12 @@ export default function WorkTabScreen({ route }: Props) {
       />
 
       <View style={styles.panel}>
-        {segment === "queue" ? (
+        <View style={[styles.segmentPanel, segment !== "queue" && styles.segmentHidden]}>
           <WorkQueuePanel entranceTick={`${entranceTick}-queue`} entranceStep={2} />
-        ) : (
-          <WorkVisitsPanel active entranceTick={`${entranceTick}-visits`} entranceStep={2} />
-        )}
+        </View>
+        <View style={[styles.segmentPanel, segment !== "visits" && styles.segmentHidden]}>
+          <WorkVisitsPanel active={segment === "visits"} entranceTick={`${entranceTick}-visits`} entranceStep={2} />
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -67,5 +68,12 @@ const styles = StyleSheet.create({
   panel: {
     flex: 1,
     minHeight: 0
+  },
+  segmentPanel: {
+    flex: 1,
+    minHeight: 0
+  },
+  segmentHidden: {
+    display: "none"
   }
 });

@@ -24,6 +24,29 @@ export function categoryCodeFromValue(value: unknown): string {
   return "";
 }
 
+/**
+ * API codes vs DB codes for the same ProblemCategory row.
+ * Not IDs — only stable aliases from masters.problem_item_utils.
+ */
+const CATEGORY_CODE_FAMILIES: string[][] = [
+  ["pest"],
+  ["disease"],
+  ["nutrient", "nutrient_issue", "nutrient_deficiency"],
+  ["water"],
+  ["weed"],
+  ["other", "others"]
+];
+
+/** True when two category codes refer to the same backend category family. */
+export function categoryCodesAreEquivalent(a: unknown, b: unknown): boolean {
+  const left = categoryCodeFromValue(a);
+  const right = categoryCodeFromValue(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  if (left.includes(right) || right.includes(left)) return true;
+  return CATEGORY_CODE_FAMILIES.some((family) => family.includes(left) && family.includes(right));
+}
+
 export function filterProblemItems(
   items: ProblemItem[],
   options: {
@@ -37,7 +60,7 @@ export function filterProblemItems(
   const q = (options.search || "").trim().toLowerCase();
 
   return items.filter((item) => {
-    if (category && categoryCodeFromValue(item.category) !== category) {
+    if (category && !categoryCodesAreEquivalent(item.category, category)) {
       return false;
     }
     if (!options.searchAll && options.cropId && !problemItemMatchesCrop(item, options.cropId)) {

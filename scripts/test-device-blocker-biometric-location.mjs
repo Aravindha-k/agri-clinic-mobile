@@ -28,7 +28,7 @@ test("1–10. Password login reconnects biometric and refreshes interactive UI",
     /clearBiometricLogin/
   );
   assert.match(login, /await signIn\(user, password\)/);
-  assert.match(login, /await refreshBiometricState\(\)/);
+  assert.match(login, /refreshBiometricState\(\)/);
   assert.match(section, /canLogin \? \(/);
   assert.match(section, /TouchableOpacity/);
   assert.match(settings, /refreshBiometricStatus/);

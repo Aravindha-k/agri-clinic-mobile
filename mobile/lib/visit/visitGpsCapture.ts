@@ -6,6 +6,7 @@ import * as Location from "expo-location";
 import { hasValidMapCoords } from "../../../src/utils/mapCoords";
 import { readLocationServicesEnabled } from "../../../src/utils/locationServicesProbe";
 import { checkForegroundPermission } from "../../../src/utils/location";
+import { rememberFreshLocation } from "../../../src/utils/locationFreshness";
 
 const FRESH_TIMEOUT_MS = 12_000;
 const CACHED_MAX_AGE_MS = 90_000;
@@ -113,6 +114,7 @@ export async function captureVisitGps(_options?: {
         age: 0,
         source: "fresh"
       });
+      rememberFreshLocation(fresh);
       return { ok: true, coords };
     }
   } else {
@@ -132,6 +134,7 @@ export async function captureVisitGps(_options?: {
         source: "cached"
       };
       logVisitGps("cached_fix_used", { accuracy: coords.accuracy, age });
+      rememberFreshLocation(cached);
       return { ok: true, coords };
     }
   }

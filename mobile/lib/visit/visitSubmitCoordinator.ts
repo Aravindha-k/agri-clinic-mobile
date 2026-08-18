@@ -9,6 +9,7 @@ import {
 } from "../visitSubmitApi";
 import { getVisitDutyFields } from "../visitDutyContext";
 import { hasValidGps } from "../../../src/visit/visitValidation";
+import { visitGpsIsUsable } from "./visitGpsCapture";
 import { buildSubmittedVisitSummary, type SubmittedVisitSummary } from "../../../src/types/submittedVisitSummary";
 import {
   pendingAttachmentLabel,
@@ -17,6 +18,7 @@ import {
 } from "../../../src/visit/pendingAttachments";
 import type { WorkdayStatus } from "../../../src/api/tracking";
 import { ensureLocationReadyForAction } from "../../../src/features/fieldTrackingSetup";
+import { peekFreshLocation, VISIT_LOCATION_REUSE_MS } from "../../../src/utils/locationFreshness";
 import { normalizeVisitSubmitUserMessage } from "../../../src/utils/visitSubmitErrors";
 
 export type VisitSubmitProgress =
@@ -76,13 +78,30 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
         }
       }
 
-      const readiness = await ensureLocationReadyForAction();
+      const draftGps = useVisitFormStore.getState().gpsCoords;
+      const reuseVisitGps =
+        visitGpsIsUsable(draftGps) && peekFreshLocation(VISIT_LOCATION_REUSE_MS) != null;
+
+      const readiness = await ensureLocationReadyForAction({
+        probeOnly: reuseVisitGps
+      });
       if (readiness.status !== "ready") {
-        return {
-          ok: false,
-          message: readiness.message || t("visitFlow.gpsNotCaptured"),
-          cancelled: true
-        };
+        if (reuseVisitGps) {
+          const retry = await ensureLocationReadyForAction();
+          if (retry.status !== "ready") {
+            return {
+              ok: false,
+              message: retry.message || t("visitFlow.gpsNotCaptured"),
+              cancelled: true
+            };
+          }
+        } else {
+          return {
+            ok: false,
+            message: readiness.message || t("visitFlow.gpsNotCaptured"),
+            cancelled: true
+          };
+        }
       }
 
       const draft = useVisitFormStore.getState();
@@ -92,18 +111,31 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
       }
 
       onProgress?.("capturing_location");
-      // Hard timeout — OEM GPS can hang indefinitely and freeze the submit spinner.
-      // Permission already resolved via canonical location gate above.
-      const { captureVisitGps, visitGpsIsUsable } = await import("./visitGpsCapture");
-      const gpsCapture = await captureVisitGps({ requestPermission: false });
-      if (!gpsCapture.ok) {
-        return {
-          ok: false,
-          message: gpsCapture.message || t("visitFlow.gpsNotCaptured")
-        };
-      }
+      const { captureVisitGps } = await import("./visitGpsCapture");
+      let latitude: number;
+      let longitude: number;
+      let accuracy: number | null;
+      let capturedIso: string;
 
-      const { latitude, longitude, accuracy, capturedAt: capturedIso } = gpsCapture.coords;
+      const existing = useVisitFormStore.getState().gpsCoords;
+      if (reuseVisitGps && existing && visitGpsIsUsable(existing)) {
+        latitude = Number(existing.latitude);
+        longitude = Number(existing.longitude);
+        accuracy = existing.accuracy ?? null;
+        capturedIso = new Date().toISOString();
+      } else {
+        const gpsCapture = await captureVisitGps({ requestPermission: false });
+        if (!gpsCapture.ok) {
+          return {
+            ok: false,
+            message: gpsCapture.message || t("visitFlow.gpsNotCaptured")
+          };
+        }
+        latitude = gpsCapture.coords.latitude;
+        longitude = gpsCapture.coords.longitude;
+        accuracy = gpsCapture.coords.accuracy ?? null;
+        capturedIso = gpsCapture.coords.capturedAt;
+      }
       const capturedAt = new Date(capturedIso);
       const duty = await getVisitDutyFields();
       const capturedExtras = {
@@ -209,10 +241,9 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
           });
         }
 
-        await Promise.all([
-          refreshCurrentDuty().catch(() => undefined)
-        ]);
         bumpAfterVisitChange();
+        void refreshCurrentDuty().catch(() => undefined);
+        void deps.refreshDutyMap().catch(() => undefined);
 
         const summary = buildSubmittedVisitSummary({
           visitId: visit.id,

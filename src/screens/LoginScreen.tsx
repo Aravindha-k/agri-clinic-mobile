@@ -181,12 +181,14 @@ export function LoginScreen() {
 
     try {
       await signIn(user, password);
-      // Refresh capability + canLogin after reconnect so fingerprint control is interactive
-      // if Login remains mounted through session bootstrap.
-      await refreshBiometricState();
-      await offerBiometricEnrollmentIfNeeded(user, password);
-      const { maybeOfferFieldTrackingSetupAfterLogin } = await import("../features/fieldTrackingSetup");
-      await maybeOfferFieldTrackingSetupAfterLogin();
+      setLoading(false);
+      void refreshBiometricState().catch(() => undefined);
+      void offerBiometricEnrollmentIfNeeded(user, password).catch(() => undefined);
+      void import("../features/fieldTrackingSetup")
+        .then(({ maybeOfferFieldTrackingSetupAfterLogin }) =>
+          maybeOfferFieldTrackingSetupAfterLogin()
+        )
+        .catch(() => undefined);
     } catch (error) {
       if (
         error instanceof ApiRequestError &&

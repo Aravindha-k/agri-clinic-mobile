@@ -9,7 +9,7 @@ import {
 } from "../../../api/tracking";
 import { ApiRequestError, isNetworkError } from "../../../utils/apiError";
 import { setConnectivityOnline } from "../../../utils/connectivityBus";
-import { readForegroundLocationIfGranted } from "../../../utils/location";
+import { readForegroundLocationIfGrantedWithTimeout } from "../../../utils/location";
 import { isWorkdayAlreadyActiveMessage } from "../../../utils/workdayStatus";
 import { registerSessionTeardown } from "../../../storage/sessionConflict";
 import {
@@ -42,6 +42,7 @@ import {
   reconcileDutyForCanonicalDay,
   resolveDutyWorkDate
 } from "../../../utils/workdayCalendar";
+import { markLocationReadyNow, wasLocationReadyRecently } from "../../../utils/locationFreshness";
 
 type BootstrapHydrationInput = {
   bootstrap: MobileBootstrap | null;
@@ -100,17 +101,9 @@ function sameSessionMap(map: DutyMapSummary | null | undefined, dutySessionId: n
 }
 
 async function captureDutyActionLocation(timeoutMs = 12_000) {
-  const timeout = new Promise<Awaited<ReturnType<typeof readForegroundLocationIfGranted>>>((resolve) => {
-    setTimeout(() => {
-      resolve({
-        granted: false,
-        message: "Unable to get location. Check GPS and try again."
-      });
-    }, timeoutMs);
-  });
   // Check-only — never prompts. Start Workday must have passed Field Tracking readiness first.
   try {
-    return await Promise.race([readForegroundLocationIfGranted(), timeout]);
+    return await readForegroundLocationIfGrantedWithTimeout(timeoutMs);
   } catch {
     return {
       granted: false as const,
@@ -194,16 +187,16 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (reconciled?.is_active) {
-        await saveDutySessionFromWorkday(reconciled, {
+        void saveDutySessionFromWorkday(reconciled, {
           userId,
           serverTimeAtStart: reconciled.server_time ?? reconciled.started_at ?? null
-        });
+        }).catch(() => undefined);
       } else {
-        await clearCachedActiveWorkday(userId).catch(() => undefined);
+        void clearCachedActiveWorkday(userId).catch(() => undefined);
       }
 
       if (userId != null && Number.isFinite(userId) && userId > 0) {
-        await writeCachedDutyBootstrap(userId, {
+        void writeCachedDutyBootstrap(userId, {
           currentDuty: reconciled,
           dutyMap: dutyMap ?? null,
           serverTimeOffsetMs,
@@ -212,6 +205,8 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
         }).catch(() => undefined);
       }
 
+      dutyRef.current = reconciled;
+      dutyMapRef.current = dutyMap ?? null;
       setState((prev) => ({
         ...prev,
         hydrationStatus: options?.hydrationStatus ?? "ready",
@@ -513,15 +508,18 @@ export function DutyProvider({ children }: { children: React.ReactNode }) {
       try {
         // Callers (Today / FAB) own the interactive location gate. Here we only
         // silently verify OS readiness — never request permission, never Alert/Settings.
-        const { ensureLocationReadyForAction } = await import("../../fieldTrackingSetup");
-        const ready = await ensureLocationReadyForAction({ probeOnly: true });
-        if (ready.status !== "ready") {
-          setState((prev) => ({
-            ...prev,
-            syncStatus: "idle",
-            bootstrapError: ready.message || null
-          }));
-          return null;
+        if (!wasLocationReadyRecently()) {
+          const { ensureLocationReadyForAction } = await import("../../fieldTrackingSetup");
+          const ready = await ensureLocationReadyForAction({ probeOnly: true });
+          if (ready.status !== "ready") {
+            setState((prev) => ({
+              ...prev,
+              syncStatus: "idle",
+              bootstrapError: ready.message || null
+            }));
+            return null;
+          }
+          markLocationReadyNow();
         }
 
         const locationResult = await captureDutyActionLocation();

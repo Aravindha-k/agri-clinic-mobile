@@ -74,6 +74,7 @@ test("tracking bridge GPS fix is timed out; start does not await pollOnce", () =
   assert.match(src, /setBusy\(false\);/);
   assert.match(src, /void pollOnce\(\);/);
   assert.doesNotMatch(src, /await pollOnce\(\);/);
+  assert.match(src, /peekFreshLocation\(TRACKING_LOCATION_REUSE_MS\)/);
 });
 
 test("tracking health grants start grace instead of immediate tracking_stopped block", () => {

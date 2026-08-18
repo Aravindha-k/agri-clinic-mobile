@@ -3,6 +3,7 @@ import type { LocationPushPayload } from "../api/tracking";
 import { hasValidMapCoords } from "./mapCoords";
 import { readLocationServicesEnabled } from "./locationServicesProbe";
 import { getForegroundTrackingAccuracy } from "../tracking/trackingSession";
+import { rememberFreshLocation } from "./locationFreshness";
 
 export type ForegroundLocationResult =
   | {
@@ -102,12 +103,50 @@ export async function readForegroundLocationIfGranted(): Promise<ForegroundLocat
       };
     }
 
+    rememberFreshLocation(location);
     return { granted: true, location };
   } catch {
     return {
       granted: false,
       message: "Unable to get location. Check GPS and try again."
     };
+  }
+}
+
+/**
+ * Same as readForegroundLocationIfGranted, with an OEM hang timeout.
+ * On timeout, last-known is used when coordinates are valid.
+ */
+export async function readForegroundLocationIfGrantedWithTimeout(
+  timeoutMs = 12_000
+): Promise<ForegroundLocationResult> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<ForegroundLocationResult>((resolve) => {
+    timer = setTimeout(() => {
+      resolve({
+        granted: false,
+        message: "Unable to get location. Check GPS and try again."
+      });
+    }, timeoutMs);
+  });
+
+  try {
+    const raced = await Promise.race([readForegroundLocationIfGranted(), timeout]);
+    if (raced.granted) return raced;
+
+    const last = await Location.getLastKnownPositionAsync().catch(() => null);
+    if (last && hasValidMapCoords(last.coords.latitude, last.coords.longitude)) {
+      rememberFreshLocation(last);
+      return { granted: true, location: last };
+    }
+    return raced;
+  } catch {
+    return {
+      granted: false,
+      message: "Unable to get location. Check GPS and try again."
+    };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

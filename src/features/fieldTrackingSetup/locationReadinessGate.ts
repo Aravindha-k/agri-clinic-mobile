@@ -13,6 +13,7 @@ import {
   type ForegroundLocationPermissionResult
 } from "./ensureForegroundLocation";
 import { openAppSettingsPage } from "./settingsIntents";
+import { markLocationReadyNow } from "../../utils/locationFreshness";
 
 export type LocationReadinessStatus =
   | "ready"
@@ -146,6 +147,7 @@ export async function ensureLocationReadyForAction(
           });
         }
         emitPhase(onPhase, "idle");
+        markLocationReadyNow();
         return result("ready", "", {
           servicesEnabled: true,
           permission: {
@@ -213,8 +215,10 @@ export async function ensureLocationReadyForAction(
         );
       }
 
-      // Re-read live permission after any dialog.
-      const recheck = await Location.getForegroundPermissionsAsync().catch(() => null);
+      // Re-read live permission only after this call showed a dialog.
+      const recheck = permission.didRequest
+        ? await Location.getForegroundPermissionsAsync().catch(() => null)
+        : null;
       if (recheck && !(recheck.granted === true || recheck.status === "granted")) {
         const permanent = recheck.status === "denied" && recheck.canAskAgain === false;
         emitPhase(onPhase, permanent ? "open_settings" : "try_again");
@@ -270,13 +274,11 @@ export async function ensureLocationReadyForAction(
 
       // Foreground + device GPS only. Approximate does not force Settings.
       // Do not request background location — FGS uses foreground permission.
-      try {
-        const { markFieldTrackingSetupCompleted } = await import("./persistence");
-        await markFieldTrackingSetupCompleted().catch(() => undefined);
-      } catch {
-        // Stale setup flags must never block Start Work Day.
-      }
+      void import("./persistence")
+        .then(({ markFieldTrackingSetupCompleted }) => markFieldTrackingSetupCompleted())
+        .catch(() => undefined);
       emitPhase(onPhase, "idle");
+      markLocationReadyNow();
       return result("ready", "", {
         permission: { ...permission, granted: true, preciseOk },
         servicesEnabled: true

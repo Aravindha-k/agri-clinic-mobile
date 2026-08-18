@@ -27,6 +27,11 @@ import { registerSessionTeardown } from "./sessionConflict";
 import { useAppPreferences } from "./AppPreferencesContext";
 import { readLocationServicesEnabled } from "../utils/locationServicesProbe";
 import { trackingDevLog } from "../tracking/trackingDevLog";
+import {
+  peekFreshLocation,
+  rememberFreshLocation,
+  TRACKING_LOCATION_REUSE_MS
+} from "../utils/locationFreshness";
 
 type GpsState = "unknown" | "granted" | "denied";
 
@@ -106,6 +111,9 @@ function normalizeLocation(location: Location.LocationObject | null): CurrentLoc
 const CURRENT_FIX_TIMEOUT_MS = 10_000;
 
 async function readCurrentFix(timeoutMs = CURRENT_FIX_TIMEOUT_MS) {
+  const reused = peekFreshLocation(TRACKING_LOCATION_REUSE_MS);
+  if (reused) return reused;
+
   const timeout = new Promise<null>((resolve) => {
     setTimeout(() => resolve(null), timeoutMs);
   });
@@ -117,12 +125,17 @@ async function readCurrentFix(timeoutMs = CURRENT_FIX_TIMEOUT_MS) {
       }),
       timeout
     ]);
-    if (fix) return fix;
+    if (fix) {
+      rememberFreshLocation(fix);
+      return fix;
+    }
   } catch {
     /* fall through to last-known */
   }
   try {
-    return await Location.getLastKnownPositionAsync();
+    const last = await Location.getLastKnownPositionAsync();
+    if (last) rememberFreshLocation(last);
+    return last;
   } catch {
     return null;
   }
@@ -210,12 +223,15 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const location = await readCurrentFix();
+      const reusedStartFix = peekFreshLocation(TRACKING_LOCATION_REUSE_MS);
+      const location = reusedStartFix ?? (await readCurrentFix());
       if (location) {
         setCurrentLocation(normalizeLocation(location));
         const moving = isLocationMoving(location.coords.speed ?? null);
         setTrackingMotionState(moving);
-        await handleLocationUpdate(location).catch(() => undefined);
+        if (!reusedStartFix) {
+          await handleLocationUpdate(location).catch(() => undefined);
+        }
         syncPendingGpsCount();
         const nextDelay = getForegroundPollIntervalMs(moving);
         markForegroundPollActive(true);
@@ -285,18 +301,20 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const firstFix = await readCurrentFix();
+      const reusedStartFix = peekFreshLocation(TRACKING_LOCATION_REUSE_MS);
+      const firstFix = reusedStartFix ?? (await readCurrentFix());
       if (firstFix) {
         setCurrentLocation(normalizeLocation(firstFix));
         setTrackingMotionState(isLocationMoving(firstFix.coords.speed ?? null));
-        // Force after long gap / process restart so recovery is not discarded as jitter.
         // Same-session Start Work Day confirmation already uploaded — skip duplicate when fresh.
-        const { getLastSentRoutePoint } = await import("../storage/lastSentRouteStorage");
-        const previous = await getLastSentRoutePoint().catch(() => null);
-        const staleMs = 5 * 60 * 1000;
-        const forceRecovery =
-          !previous || Date.now() - previous.timestamp > staleMs;
-        await handleLocationUpdate(firstFix, { force: forceRecovery }).catch(() => undefined);
+        if (!reusedStartFix) {
+          const { getLastSentRoutePoint } = await import("../storage/lastSentRouteStorage");
+          const previous = await getLastSentRoutePoint().catch(() => null);
+          const staleMs = 5 * 60 * 1000;
+          const forceRecovery =
+            !previous || Date.now() - previous.timestamp > staleMs;
+          await handleLocationUpdate(firstFix, { force: forceRecovery }).catch(() => undefined);
+        }
       }
 
       const backgroundResult = await startBackgroundLocationTracking({

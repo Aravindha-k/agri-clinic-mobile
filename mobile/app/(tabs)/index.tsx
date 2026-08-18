@@ -135,11 +135,14 @@ export default function TodayTabScreen() {
     });
   }, []);
 
-  const loadAll = useCallback(async (isRefresh = false) => {
-    if (isRefresh) {
-      setRefreshing(true);
-    } else if (!dashboardRef.current) {
-      setLoading(true);
+  const loadAll = useCallback(async (isRefresh = false, options?: { silent?: boolean }) => {
+    const silent = options?.silent === true;
+    if (!silent) {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else if (!dashboardRef.current) {
+        setLoading(true);
+      }
     }
     try {
       const dash = await fetchDashboard({ force: isRefresh });
@@ -149,8 +152,10 @@ export default function TodayTabScreen() {
       const cachedDash = await readDashboardCache();
       if (cachedDash) setDashboard(cachedDash);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (!silent) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
@@ -164,7 +169,7 @@ export default function TodayTabScreen() {
     void autoFlushPendingGps();
     void refreshTrackingState().catch(() => undefined);
     if (dutyPresentation.isActive || dutyPresentation.isCompleted) {
-      void loadAll(false);
+      void loadAll(false, { silent: Boolean(dashboardRef.current) || dutyPresentation.isActive });
     }
   }, [dutyPresentation.isActive, dutyPresentation.isCompleted, loadAll, refreshTrackingState]);
 
@@ -196,11 +201,11 @@ export default function TodayTabScreen() {
 
   async function continueAfterDutyStarted() {
     announceA11y(t("a11y.workdayStarted"));
-    await Promise.all([
+    void Promise.all([
       refreshTrackingState().catch(() => undefined),
       refreshBootstrap({ force: true }).catch(() => undefined),
       refreshDutyMap().catch(() => undefined),
-      loadAll(true)
+      loadAll(false, { silent: true })
     ]);
   }
 
@@ -231,7 +236,8 @@ export default function TodayTabScreen() {
               return;
             }
             setStartPhase("idle");
-            await continueAfterDutyStarted();
+            setStarting(false);
+            continueAfterDutyStarted();
           } finally {
             setStarting(false);
           }
@@ -259,7 +265,8 @@ export default function TodayTabScreen() {
       }
 
       setStartPhase("idle");
-      await continueAfterDutyStarted();
+      setStarting(false);
+      continueAfterDutyStarted();
     } catch (error) {
       setGateError(error instanceof Error ? error.message : t("workdayUx.permissionBody"));
       setStartPhase("try_again");

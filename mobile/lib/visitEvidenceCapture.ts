@@ -104,7 +104,7 @@ export async function prepareCameraEvidence(options: {
     tempId: createPhotoId(),
     sourceUri,
     originalUri,
-    name: `visit-${Date.now()}.jpg`,
+    name: `visit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.jpg`,
     mimeType: "image/jpeg",
     meta: buildMeta({
       source: "camera",
@@ -160,7 +160,7 @@ export async function prepareGalleryEvidence(options: {
       tempId: createPhotoId(),
       sourceUri,
       originalUri: asset.uri,
-      name: `visit-${Date.now()}-${prepared.length}.jpg`,
+      name: `visit-${Date.now()}-${prepared.length}-${Math.random().toString(36).slice(2, 7)}.jpg`,
       mimeType: "image/jpeg",
       meta: buildMeta({
         source: "gallery",

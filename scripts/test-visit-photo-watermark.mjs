@@ -112,6 +112,8 @@ test("orientation is flattened before stamp; reverse-geocode and GPS failure do 
   });
   assert.ok(noFix.some((line) => line.includes("Location unavailable")));
   assert.match(step3, /stampFailed/);
+  assert.match(burner, /onLoad/);
+  assert.match(burner, /fitWatermarkCaptureSize|WATERMARK_CAPTURE_MAX_EDGE/);
 });
 
 test("no second location permission owner, no map-tile dependency, farmer profile photos stay unstamped", () => {

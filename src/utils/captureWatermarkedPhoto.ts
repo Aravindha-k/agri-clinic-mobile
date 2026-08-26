@@ -1,9 +1,10 @@
 import * as ImageManipulator from "expo-image-manipulator";
-import { Image, PixelRatio } from "react-native";
+import { Image } from "react-native";
 import type { RefObject } from "react";
 import type { View } from "react-native";
-import { assertFileUnderLimit, prepareImageForUpload } from "./visitAttachmentFiles";
+import { assertFileUnderLimit, getLocalFileSize, prepareImageForUpload } from "./visitAttachmentFiles";
 import { isExpoGo } from "./expoRuntime";
+import { fitWatermarkCaptureSize, type CaptureLayoutSize } from "./watermarkCaptureLayout";
 
 export type WatermarkCaptureTarget = {
   viewRef: RefObject<View | null>;
@@ -11,7 +12,15 @@ export type WatermarkCaptureTarget = {
   imageHeight: number;
   /** Required for Expo Go fallback (no react-native-view-shot). */
   sourceUri?: string;
+  /**
+   * Precomputed layout/output size. When omitted, derived from imageWidth/Height
+   * with a long-edge cap (no PixelRatio multiply).
+   */
+  captureSize?: CaptureLayoutSize;
 };
+
+/** Suspicious near-empty JPEG after a failed/black view-shot (bytes, not content). */
+const MIN_STAMPED_JPEG_BYTES = 8_192;
 
 export function getImageDimensions(uri: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
@@ -23,7 +32,22 @@ export function getImageDimensions(uri: string): Promise<{ width: number; height
   });
 }
 
-/** Capture composed photo + watermark overlay from an off-screen preview view. */
+async function assertStampedFileLooksValid(uri: string) {
+  const size = await getLocalFileSize(uri);
+  if (size != null && size < MIN_STAMPED_JPEG_BYTES) {
+    throw new Error("Watermarked photo looks empty. Please retake the photo.");
+  }
+  await assertFileUnderLimit(uri, "Photo");
+  if (__DEV__ && size != null) {
+    // Size only — never log bytes/coords/tokens. SHA-256 requires a later byte-integrity pass.
+    console.info("[PERF][VisitPhoto] stamped_jpeg_bytes", size);
+  }
+}
+
+/**
+ * Capture composed photo + watermark overlay from a prepared preview view.
+ * Output size matches the View layout (capped) — do not multiply by PixelRatio.
+ */
 export async function captureWatermarkedPhoto(target: WatermarkCaptureTarget): Promise<string> {
   if (isExpoGo()) {
     if (!target.sourceUri) {
@@ -45,20 +69,24 @@ export async function captureWatermarkedPhoto(target: WatermarkCaptureTarget): P
     throw new Error("Watermark preview is not ready.");
   }
 
-  const scale = PixelRatio.get();
+  const size =
+    target.captureSize ??
+    fitWatermarkCaptureSize(target.imageWidth, target.imageHeight);
+
   const uri = await captureRef(ref, {
     format: "jpg",
     quality: 0.88,
-    width: Math.round(target.imageWidth * scale),
-    height: Math.round(target.imageHeight * scale)
+    width: size.outputWidth,
+    height: size.outputHeight,
+    result: "tmpfile"
   });
 
   const compressed = await ImageManipulator.manipulateAsync(
     uri,
-    [{ resize: { width: 1920 } }],
+    [{ resize: { width: Math.min(1920, size.outputWidth) } }],
     { compress: 0.78, format: ImageManipulator.SaveFormat.JPEG }
   );
 
-  await assertFileUnderLimit(compressed.uri, "Photo");
+  await assertStampedFileLooksValid(compressed.uri);
   return compressed.uri;
 }

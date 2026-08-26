@@ -17,6 +17,7 @@ import {
   buildVisitPhotoWatermarkLines,
   type VisitPhotoWatermarkMeta
 } from "../../utils/visitPhotoWatermark";
+import { fitWatermarkCaptureSize } from "../../utils/watermarkCaptureLayout";
 import { useTheme } from "../../theme";
 
 export type WatermarkPreviewResult = {
@@ -39,31 +40,40 @@ export function VisitPhotoWatermarkPreview({ visible, imageUri, meta, onCancel, 
   const c = theme.colors;
   const captureRefView = useRef<View>(null);
   const [dims, setDims] = useState<{ width: number; height: number } | null>(null);
+  const [captureImageReady, setCaptureImageReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const lines = buildVisitPhotoWatermarkLines(meta);
   const previewHeight = dims ? Math.round((PREVIEW_WIDTH * dims.height) / dims.width) : 220;
-  const captureHeight = dims?.height ?? 1200;
-  const captureWidth = dims?.width ?? 900;
+  const captureSize = dims ? fitWatermarkCaptureSize(dims.width, dims.height) : null;
 
   useEffect(() => {
     if (!visible || !imageUri) return;
     setError("");
     setDims(null);
+    setCaptureImageReady(false);
     void getImageDimensions(imageUri)
       .then(setDims)
       .catch(() => setDims({ width: 1200, height: 1600 }));
   }, [imageUri, visible]);
 
   const handleConfirm = useCallback(async () => {
+    if (!dims || !captureSize || !captureImageReady) {
+      setError("Photo is still loading. Please wait a moment.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
       const watermarkedUri = await captureWatermarkedPhoto({
         viewRef: captureRefView,
-        imageWidth: captureWidth,
-        imageHeight: captureHeight,
+        imageWidth: dims.width,
+        imageHeight: dims.height,
+        captureSize,
         sourceUri: imageUri
       });
       onConfirm({ watermarkedUri, originalUri: imageUri });
@@ -72,7 +82,7 @@ export function VisitPhotoWatermarkPreview({ visible, imageUri, meta, onCancel, 
     } finally {
       setBusy(false);
     }
-  }, [captureHeight, captureWidth, imageUri, onConfirm]);
+  }, [captureImageReady, captureSize, dims, imageUri, onConfirm]);
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onCancel}>
@@ -114,8 +124,14 @@ export function VisitPhotoWatermarkPreview({ visible, imageUri, meta, onCancel, 
             <Pressable
               accessibilityRole="button"
               onPress={() => void handleConfirm()}
-              disabled={busy || !dims}
-              style={[styles.btnPrimary, { backgroundColor: c.primary, opacity: busy || !dims ? 0.6 : 1 }]}
+              disabled={busy || !dims || !captureImageReady}
+              style={[
+                styles.btnPrimary,
+                {
+                  backgroundColor: c.primary,
+                  opacity: busy || !dims || !captureImageReady ? 0.6 : 1
+                }
+              ]}
             >
               {busy ? (
                 <ActivityIndicator color="#FFFFFF" />
@@ -129,18 +145,27 @@ export function VisitPhotoWatermarkPreview({ visible, imageUri, meta, onCancel, 
           </View>
         </View>
 
-        {/* Off-screen capture target — full resolution */}
-        {dims ? (
-          <View style={styles.offscreen} pointerEvents="none">
+        {/* Capture target: opacity 0 on-screen so Android composites the Image */}
+        {dims && captureSize ? (
+          <View style={styles.captureHost} pointerEvents="none" accessibilityElementsHidden>
             <View
               ref={captureRefView}
               collapsable={false}
-              style={{ width: captureWidth, height: captureHeight, backgroundColor: "#000" }}
+              style={{
+                width: captureSize.layoutWidth,
+                height: captureSize.layoutHeight,
+                backgroundColor: "#111111"
+              }}
             >
               <Image
                 source={{ uri: imageUri }}
-                style={{ width: captureWidth, height: captureHeight }}
+                style={{ width: captureSize.layoutWidth, height: captureSize.layoutHeight }}
                 resizeMode="cover"
+                onLoad={() => setCaptureImageReady(true)}
+                onError={() => {
+                  setCaptureImageReady(false);
+                  setError("Could not load photo for watermark.");
+                }}
               />
               <View style={[styles.watermarkStrip, styles.watermarkStripCapture]}>
                 {lines.map((line) => (
@@ -229,9 +254,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12
   },
   btnPrimaryText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
-  offscreen: {
-    left: -9999,
+  captureHost: {
+    left: 0,
+    opacity: 0,
     position: "absolute",
-    top: 0
+    top: 0,
+    zIndex: -1
   }
 });

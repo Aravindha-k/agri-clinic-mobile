@@ -69,7 +69,11 @@ export async function assertFileUnderLimit(uri: string, displayName?: string) {
   }
 }
 
-/** Compress images before upload when possible. */
+function uniqueJpegUploadName(prefix = "visit-photo") {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}.jpg`;
+}
+
+/** Compress images before upload when possible. Always emit JPEG bytes + .jpg + image/jpeg. */
 export async function prepareImageForUpload(uri: string): Promise<{ uri: string; name: string; mimeType: string }> {
   try {
     const manipulated = await ImageManipulator.manipulateAsync(
@@ -80,14 +84,14 @@ export async function prepareImageForUpload(uri: string): Promise<{ uri: string;
     await assertFileUnderLimit(manipulated.uri, "Photo");
     return {
       uri: manipulated.uri,
-      name: `visit-photo-${Date.now()}.jpg`,
+      name: uniqueJpegUploadName(),
       mimeType: "image/jpeg"
     };
   } catch {
     await assertFileUnderLimit(uri, "Photo");
     return {
       uri,
-      name: `visit-photo-${Date.now()}.jpg`,
+      name: uniqueJpegUploadName(),
       mimeType: "image/jpeg"
     };
   }

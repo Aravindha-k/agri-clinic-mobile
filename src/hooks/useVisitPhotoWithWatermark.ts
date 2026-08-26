@@ -22,7 +22,7 @@ export function useVisitPhotoWithWatermark() {
     async (result: WatermarkPreviewResult): Promise<PendingVisitAttachment> => {
       const originalPrepared = await prepareImageForUpload(result.originalUri);
       const proofPrepared = await prepareImageForUpload(result.watermarkedUri);
-      const stamp = Date.now();
+      const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       return {
         id: createPendingAttachmentId(),
         attachmentType: "image",

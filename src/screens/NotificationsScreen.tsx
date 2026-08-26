@@ -6,17 +6,15 @@ import { AppHeader, PrimaryButton } from "../components/ui";
 import { StatusChip } from "../components/ui/StatusChip";
 import { iconForType, useNotifications, type AppNotification, type AppNotificationType } from "../storage/NotificationsContext";
 import { useDesignSystem } from "../hooks/useDesignSystem";
+import { formatIndiaShortDateTime, indiaCalendarDate } from "../utils/indiaDateTime";
 
 function formatWhen(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const formatted = formatIndiaShortDateTime(iso);
+  return formatted === "—" ? "" : formatted;
 }
 
 function isToday(iso: string) {
-  const d = new Date(iso);
-  const now = new Date();
-  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  return indiaCalendarDate(iso) === indiaCalendarDate(new Date());
 }
 
 function chipForType(type: AppNotificationType): "warning" | "offline" | "pending" | "online" | "completed" {

@@ -31,6 +31,7 @@ import { resolveVisitReviewFarmer } from "../../lib/visitReviewFarmer";
 import { EntranceBlocks } from "../../components/ui/EntranceBlocks";
 import { useVisitEntranceKey } from "../../context/VisitEntranceContext";
 import { openDeviceLocationSettings } from "../../../src/utils/workdayLocationGate";
+import { formatIndiaTime } from "../../../src/utils/indiaDateTime";
 import { Colors, FontSize, FontWeight, Layout, Radius, Spacing, TextStyles, minTouchStyle } from "../../lib/theme";
 
 type Props = {
@@ -61,11 +62,8 @@ function progressHint(phase: VisitSubmitProgress, t: (k: string) => string): str
 
 function formatCapturedAt(iso: string | undefined): string {
   if (!iso) return "";
-  try {
-    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  } catch {
-    return "";
-  }
+  const formatted = formatIndiaTime(iso);
+  return formatted === "—" ? "" : formatted;
 }
 
 export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3 }: Props) {

@@ -26,6 +26,7 @@ import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
 import { WorkStackParamList } from "../../../src/navigation/types";
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
 import { formatDisplayDateTime, visitDisplayIso } from "../../../src/utils/format";
+import { formatIndiaDateLong } from "../../../src/utils/indiaDateTime";
 import { formatVisitPlaceLine } from "../../../src/utils/visitStatus";
 import { resolveVisitFarmer } from "../../../src/utils/visitFarmer";
 import { collectVisitProblems } from "../../../src/utils/visitProblems";
@@ -68,9 +69,8 @@ type Props = NativeStackScreenProps<WorkStackParamList, "VisitDetail">;
 function visitHeaderDate(visit: Visit) {
   const iso = visitDisplayIso(visit);
   if (!iso) return "Visit";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "Visit";
-  return date.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+  const formatted = formatIndiaDateLong(iso);
+  return formatted === "—" ? "Visit" : formatted;
 }
 
 function openMaps(lat: string | number, lng: string | number) {

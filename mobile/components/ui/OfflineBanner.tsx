@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useConnectivityOnline } from "../../../src/hooks/useConnectivityOnline";
 import { LAN_OFFLINE_BANNER_MESSAGE } from "../../lib/api";
+import { formatIndiaDate } from "../../../src/utils/indiaDateTime";
 import { Colors, FontSize, FontWeight, Radius } from "../../lib/theme";
 
 type Props = {
@@ -23,7 +24,7 @@ function formatLastSync(date: Date | null): string {
   if (min < 60) return `${min}m ago`;
   const hr = Math.floor(min / 60);
   if (hr < 24) return `${hr}h ago`;
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return formatIndiaDate(date);
 }
 
 export function OfflineBanner({

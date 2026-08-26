@@ -6,6 +6,7 @@ import {
   isFollowUpDueToday,
   isFollowUpOverdue
 } from "./farmerStatus";
+import { formatIndiaDate, indiaCalendarDate, parseServerInstant } from "../../src/utils/indiaDateTime";
 
 export type VisitPriorityLabel = "Overdue" | "Today" | "Routine";
 
@@ -58,21 +59,23 @@ export const WORK_SECTION_I18N: Record<FarmerWorkSectionId, string> = {
 const RECENTLY_VISITED_DAYS = 14;
 
 function parseDate(iso: string): Date | null {
-  const d = new Date(iso.includes("T") ? iso : `${iso}T12:00:00`);
-  return Number.isNaN(d.getTime()) ? null : d;
+  return parseServerInstant(iso.includes("T") ? iso : iso);
 }
 
-function startOfLocalDay(d: Date) {
-  const copy = new Date(d);
-  copy.setHours(0, 0, 0, 0);
-  return copy;
+function calendarDayDiff(a: Date, b: Date): number {
+  const aKey = indiaCalendarDate(a);
+  const bKey = indiaCalendarDate(b);
+  if (!aKey || !bKey) return 0;
+  const aMs = Date.parse(`${aKey}T12:00:00Z`);
+  const bMs = Date.parse(`${bKey}T12:00:00Z`);
+  if (!Number.isFinite(aMs) || !Number.isFinite(bMs)) return 0;
+  return Math.floor((bMs - aMs) / 86_400_000);
 }
 
 function daysSince(iso: string, ref = new Date()): number {
   const then = parseDate(iso);
   if (!then) return 0;
-  const ms = startOfLocalDay(ref).getTime() - startOfLocalDay(then).getTime();
-  return Math.max(0, Math.floor(ms / 86_400_000));
+  return Math.max(0, calendarDayDiff(then, ref));
 }
 
 function followUpOverdueDays(farmer: MobileFarmer, ref = new Date()): number {
@@ -80,8 +83,7 @@ function followUpOverdueDays(farmer: MobileFarmer, ref = new Date()): number {
   if (!raw) return isFollowUpOverdue(farmer, ref) ? 1 : 0;
   const due = parseDate(raw);
   if (!due) return 0;
-  const ms = startOfLocalDay(ref).getTime() - startOfLocalDay(due).getTime();
-  return ms > 0 ? Math.floor(ms / 86_400_000) : 0;
+  return Math.max(0, calendarDayDiff(due, ref));
 }
 
 export function formatLastVisitDateLabel(
@@ -92,9 +94,9 @@ export function formatLastVisitDateLabel(
   if (visits === 0) return options?.neverLabel ?? "Never visited";
   const raw = farmerLastVisitDate(farmer);
   if (!raw) return null;
-  const d = parseDate(raw);
-  if (!d) return null;
-  return d.toLocaleDateString(options?.locale, { day: "numeric", month: "short", year: "numeric" });
+  void options?.locale;
+  const label = formatIndiaDate(raw);
+  return label === "—" ? null : label;
 }
 
 export function computePriorityScore(farmer: MobileFarmer, ref = new Date()): number {

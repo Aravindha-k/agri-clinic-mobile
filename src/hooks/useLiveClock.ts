@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
 import { workdayRestoreLog } from "../utils/workdayRestoreLog";
+import {
+  formatIndiaTime,
+  formatIndiaWeekdayDate,
+  formatIndiaWeekdayDateShort,
+  parseServerInstant
+} from "../utils/indiaDateTime";
 
 export function useLiveClock(tickMs = 1000) {
   const [now, setNow] = useState(() => new Date());
@@ -11,21 +17,9 @@ export function useLiveClock(tickMs = 1000) {
   }, [tickMs]);
 
   return useMemo(() => {
-    const time = now.toLocaleTimeString(undefined, {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true
-    });
-    const date = now.toLocaleDateString(undefined, {
-      weekday: "long",
-      day: "numeric",
-      month: "short"
-    });
-    const dateShort = now.toLocaleDateString(undefined, {
-      weekday: "short",
-      day: "numeric",
-      month: "short"
-    });
+    const time = formatIndiaTime(now);
+    const date = formatIndiaWeekdayDate(now);
+    const dateShort = formatIndiaWeekdayDateShort(now);
     return { now, time, date, dateShort };
   }, [now]);
 }
@@ -53,8 +47,8 @@ export function useWorkdayTimer(startedAt: string | null, active: boolean) {
   useEffect(() => {
     if (!active || !startedAt) return;
     if (loggedStartRef.current === startedAt) return;
-    const start = new Date(startedAt).getTime();
-    if (Number.isNaN(start)) {
+    const start = parseServerInstant(startedAt)?.getTime();
+    if (start == null) {
       workdayRestoreLog("workday_timer_started", "invalid_started_at");
       return;
     }
@@ -69,8 +63,8 @@ export function useWorkdayTimer(startedAt: string | null, active: boolean) {
     if (!startedAt) {
       return { elapsedMs: 0, h: 0, m: 0, s: 0, display: "00:00:00", compact: "0h 0m" };
     }
-    const start = new Date(startedAt).getTime();
-    if (Number.isNaN(start)) {
+    const start = parseServerInstant(startedAt)?.getTime();
+    if (start == null) {
       return { elapsedMs: 0, h: 0, m: 0, s: 0, display: "--:--:--", compact: "0h 0m" };
     }
     const elapsedMs = Math.max(0, now - start);

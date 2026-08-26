@@ -1,18 +1,18 @@
 import type { Visit } from "../../src/api/visits";
 import type { AppLanguage } from "../../src/i18n";
 import { isSameLocalDay, visitDisplayIso } from "../../src/utils/format";
+import {
+  formatIndiaWeekdayDateShort,
+  indiaCalendarDate
+} from "../../src/utils/indiaDateTime";
 import type { PendingVisitRecord } from "./pendingVisitsQueue";
 
 function sectionTitleForDate(date: Date, ref: Date, language: AppLanguage, labels: VisitListLabels) {
-  const yesterday = new Date(ref);
-  yesterday.setDate(ref.getDate() - 1);
+  const yesterday = new Date(ref.getTime() - 24 * 60 * 60 * 1000);
   if (isSameLocalDay(date.toISOString(), ref)) return labels.today;
   if (isSameLocalDay(date.toISOString(), yesterday)) return labels.yesterday;
-  const locale = language === "ta" ? "ta-IN" : "en-IN";
-  return date
-    .toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short" })
-    .toUpperCase()
-    .replace(/\./g, "");
+  void language;
+  return formatIndiaWeekdayDateShort(date).toUpperCase().replace(/\./g, "");
 }
 
 export type VisitListLabels = {
@@ -24,10 +24,9 @@ export type VisitListLabels = {
 
 function dayKey(iso: string | null) {
   if (!iso) return "unknown";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso.slice(0, 10);
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+  return indiaCalendarDate(iso) ?? iso.slice(0, 10);
 }
+
 
 export function pendingMatchesSearch(pending: PendingVisitRecord, query: string) {
   if (!query.trim()) return true;

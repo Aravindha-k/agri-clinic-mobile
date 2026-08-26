@@ -2,6 +2,13 @@ import { extractMasterPk } from "./masterId";
 import { resolveFarmerPk } from "../visit/resolveFarmerPk";
 import { parsePaginatedList } from "./apiUnwrap";
 import { applyObservationPayload } from "./visitFieldNotes";
+import {
+  formatIndiaDateTime,
+  formatIndiaShortDateTime,
+  indiaCalendarDate,
+  legacyVisitDateTimeToIso,
+  parseServerInstant
+} from "./indiaDateTime";
 
 export function normalizeNullable(value: unknown) {
   if (value === "") {
@@ -213,22 +220,19 @@ export type VisitDateFields = {
   updated_at?: string | null;
 };
 
-/** ISO string for display/sorting: visit_date+visit_time → created_at → updated_at. */
+/**
+ * Offset-aware ISO for display/sorting: visit_date+visit_time (legacy UTC slices) → created_at → updated_at.
+ * Combined visit_date+visit_time always returns a Z-suffixed instant (legacy UTC contract).
+ */
 export function visitDisplayIso(visit: VisitDateFields): string | null {
   if (visit.visit_date) {
-    const datePart = String(visit.visit_date).trim();
-    const dateOnly = datePart.includes("T") ? datePart.split("T")[0] : datePart.slice(0, 10);
-    if (visit.visit_time) {
-      const timeRaw = String(visit.visit_time).trim();
-      if (timeRaw.includes("T")) {
-        return timeRaw;
-      }
-      const timePart = timeRaw.length <= 5 ? `${timeRaw}:00` : timeRaw;
-      return `${dateOnly}T${timePart}`;
-    }
-    return datePart.includes("T") ? datePart : `${dateOnly}T12:00:00`;
+    const legacy = legacyVisitDateTimeToIso(visit.visit_date, visit.visit_time);
+    if (legacy) return legacy;
   }
-  return visit.created_at ?? visit.updated_at ?? null;
+  const fallback = visit.created_at ?? visit.updated_at ?? null;
+  if (!fallback) return null;
+  const parsed = parseServerInstant(fallback);
+  return parsed ? parsed.toISOString() : fallback;
 }
 
 export function getVisitDisplayDateTime(visit: VisitDateFields): string {
@@ -252,38 +256,26 @@ export function formatDisplayDateTime(iso?: string | null) {
   if (!iso) {
     return "Not recorded";
   }
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
+  const formatted = formatIndiaDateTime(iso);
+  if (formatted === "Not recorded" && iso) {
     return iso;
   }
-  return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  return formatted;
 }
 
 /** Compact timestamp for dense rows (e.g. tracking). */
 export function formatShortDateTime(iso?: string | null) {
-  if (!iso) {
-    return "—";
-  }
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return iso;
-  }
-  return date.toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
+  return formatIndiaShortDateTime(iso);
 }
 
+/** Same Asia/Kolkata calendar day as ref. */
 export function isSameLocalDay(iso: string | undefined | null, ref: Date) {
   if (!iso) {
     return false;
   }
-  const date = new Date(iso);
-  if (!Number.isNaN(date.getTime())) {
-    return date.getFullYear() === ref.getFullYear() && date.getMonth() === ref.getMonth() && date.getDate() === ref.getDate();
-  }
-  const dayPart = iso.slice(0, 10);
-  const y = ref.getFullYear();
-  const m = String(ref.getMonth() + 1).padStart(2, "0");
-  const d = String(ref.getDate()).padStart(2, "0");
-  return dayPart === `${y}-${m}-${d}`;
+  const left = indiaCalendarDate(iso);
+  const right = indiaCalendarDate(ref);
+  return Boolean(left && right && left === right);
 }
 
 /** Visits in the last `withinDays` calendar days, excluding today (for "Recent" filter). */
@@ -294,8 +286,8 @@ export function isRecentVisitNotToday(iso: string | undefined | null, ref: Date,
   if (isSameLocalDay(iso, ref)) {
     return false;
   }
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) {
+  const t = parseServerInstant(iso)?.getTime();
+  if (t == null) {
     return false;
   }
   const diff = ref.getTime() - t;

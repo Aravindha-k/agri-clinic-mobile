@@ -4,6 +4,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Visit } from "../../../src/api/visits";
 import { resolveVisitFarmer } from "../../../src/utils/visitFarmer";
 import { visitDisplayIso } from "../../../src/utils/format";
+import { formatIndiaTime } from "../../../src/utils/indiaDateTime";
 import type { PendingVisitRecord } from "../../lib/pendingVisitsQueue";
 import { avatarInitials, getAvatarColors } from "../../lib/avatarColor";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
@@ -27,10 +28,7 @@ type Props = {
 };
 
 function formatCardTime(iso: string | null) {
-  if (!iso) return "—";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return formatIndiaTime(iso);
 }
 
 function hasGps(lat?: string | number | null, lng?: string | number | null) {

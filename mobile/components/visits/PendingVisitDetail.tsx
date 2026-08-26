@@ -8,6 +8,7 @@ import { removePendingVisit } from "../../lib/pendingVisitsQueue";
 import { runAutomaticSync } from "../../lib/sync/automaticSyncCoordinator";
 import { retryVisitFromQueue } from "../../lib/sync/offlineSyncManager";
 import { emitVisitDataRefresh } from "../../lib/visit/visitDataRefresh";
+import { formatIndiaDateTime } from "../../../src/utils/indiaDateTime";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 import { GhostButton, PrimaryButton } from "../ui";
 import { VisitFlowHeader } from "../visit/VisitFlowHeader";
@@ -99,7 +100,7 @@ export function PendingVisitDetail({
             />
             <Detail
               label={t("visitFlow.savedAt")}
-              value={new Date(visit.createdAt).toLocaleString()}
+              value={formatIndiaDateTime(visit.createdAt)}
             />
           </View>
 

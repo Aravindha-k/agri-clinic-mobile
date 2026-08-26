@@ -1,5 +1,6 @@
 import { en, type TranslationTree } from "./en";
 import { ta } from "./ta";
+import { formatIndiaDate, parseServerInstant } from "../utils/indiaDateTime";
 
 export type AppLanguage = "en" | "ta";
 
@@ -41,9 +42,9 @@ export function formatRelativeTimeLocalized(
   iso?: string | null
 ): string {
   if (!iso) return translate(language, "common.never");
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return translate(language, "common.unknown");
-  const diffMs = Date.now() - then;
+  const then = parseServerInstant(iso);
+  if (!then) return translate(language, "common.unknown");
+  const diffMs = Date.now() - then.getTime();
   if (diffMs < 0) return translate(language, "common.justNow");
   const sec = Math.floor(diffMs / 1000);
   if (sec < 45) return translate(language, "common.justNow");
@@ -61,6 +62,6 @@ export function formatRelativeTimeLocalized(
   if (day < 7) {
     return translate(language, day === 1 ? "common.daysAgo" : "common.daysAgo_plural", { count: day });
   }
-  const locale = language === "ta" ? "ta-IN" : "en-IN";
-  return new Date(iso).toLocaleDateString(locale, { month: "short", day: "numeric" });
+  void language;
+  return formatIndiaDate(then);
 }

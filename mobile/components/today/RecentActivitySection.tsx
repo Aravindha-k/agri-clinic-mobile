@@ -1,6 +1,7 @@
 import { ChevronRight, Clock } from "lucide-react-native";
 import { StyleSheet, Text, View } from "react-native";
 import type { DashboardRecentVisit } from "../../lib/types";
+import { formatIndiaTime } from "../../../src/utils/indiaDateTime";
 import { Grid, Harvest, IconSize, PremiumShadow, Typography } from "../../lib/designSystem";
 import { TODAY_CARD_RADIUS, TODAY_PAGE_PAD } from "../../lib/todayLayout";
 import { TodaySurfaces } from "../../lib/todaySurfaces";
@@ -84,12 +85,7 @@ export function RecentActivitySection({
                         <Text style={styles.statusText}>Completed</Text>
                       </View>
                       <Text style={styles.time}>
-                        {item.visited_at
-                          ? new Date(item.visited_at).toLocaleTimeString(undefined, {
-                              hour: "2-digit",
-                              minute: "2-digit"
-                            })
-                          : "—"}
+                        {item.visited_at ? formatIndiaTime(item.visited_at) : "—"}
                       </Text>
                       <LucideGlyph icon={ChevronRight} size={IconSize.sm} color={Harvest.textMuted} />
                     </View>

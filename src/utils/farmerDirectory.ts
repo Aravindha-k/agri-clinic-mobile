@@ -1,4 +1,5 @@
 import { Farmer } from "../api/farmers";
+import { formatIndiaDate } from "./indiaDateTime";
 
 export type FarmerQuickFilter = "all" | "recent" | "not_visited";
 
@@ -9,10 +10,7 @@ export function farmerVisitCount(farmer: Farmer) {
 export function formatFarmerLastVisit(farmer: Farmer): string {
   const raw = farmer.latest_visit_date;
   if (!raw) return "—";
-  const iso = raw.includes("T") ? raw : `${raw}T12:00:00`;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return raw;
-  return date.toLocaleDateString(undefined, { dateStyle: "medium" });
+  return formatIndiaDate(raw);
 }
 
 export function matchesFarmerQuickFilter(farmer: Farmer, filter: FarmerQuickFilter, withinDays = 90) {

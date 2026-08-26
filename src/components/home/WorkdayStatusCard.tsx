@@ -4,6 +4,7 @@ import { useWorkdayTimer } from "../../hooks/useLiveClock";
 import { useTheme } from "../../theme";
 import { FONTS } from "../../theme/fonts";
 import { space } from "../../theme/layout";
+import { formatIndiaTime } from "../../utils/indiaDateTime";
 import { PrimaryButton } from "../ui/PrimaryButton";
 import { ClinicCard } from "../brand/ClinicCard";
 
@@ -19,10 +20,7 @@ type Props = {
 };
 
 function formatSyncTime(iso: string | null) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", hour12: true });
+  return formatIndiaTime(iso);
 }
 
 export function WorkdayStatusCard({

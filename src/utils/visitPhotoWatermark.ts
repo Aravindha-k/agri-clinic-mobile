@@ -1,4 +1,5 @@
 import { BRAND } from "../brand/constants";
+import { formatIndiaDateTime } from "./indiaDateTime";
 
 export type EvidencePhotoSource = "camera" | "gallery";
 export type EvidenceLocationKind = "captured" | "uploaded";
@@ -24,9 +25,7 @@ export function formatEvidenceCoordinates(lat: number | null, lng: number | null
 }
 
 export function formatEvidenceDateTime(when: Date): string {
-  const date = when.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-  const time = when.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-  return `${date} · ${time}`;
+  return formatIndiaDateTime(when);
 }
 
 function locationHeadline(meta: EvidenceStampMeta, coords: string | null): string {

@@ -3,6 +3,7 @@ import { Farmer, fetchFarmersPage, getAllFarmers } from "../api/farmers";
 import { getCrops, getDistricts, MasterOption } from "../api/masters";
 import { getProblemCategories, ProblemCategory } from "../api/problems";
 import { isNetworkError } from "../utils/apiError";
+import { formatIndiaDateTime } from "../utils/indiaDateTime";
 
 const CACHE_KEY = "@agri/master_data_v2";
 export const MASTER_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -107,9 +108,8 @@ export async function syncAllFarmersForOffline(): Promise<{ farmers: Farmer[]; s
 
 export function formatMasterSyncWarning(syncedAt: string | null | undefined): string | null {
   if (!syncedAt) return null;
-  const date = new Date(syncedAt);
-  if (Number.isNaN(date.getTime())) return null;
-  const when = date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  const when = formatIndiaDateTime(syncedAt);
+  if (when === "Not recorded") return null;
   return `Master lists cached · last updated ${when}. Tap to refresh.`;
 }
 

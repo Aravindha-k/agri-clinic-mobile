@@ -3,6 +3,7 @@ import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/dat
 import { useMemo, useState } from "react";
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useDesignSystem } from "../../hooks/useDesignSystem";
+import { formatIndiaDate } from "../../utils/indiaDateTime";
 
 type Props = {
   label: string;
@@ -20,8 +21,7 @@ function parseDate(value: string): Date {
 
 function formatDate(value: string) {
   if (!value.trim()) return "";
-  const d = parseDate(value);
-  return d.toLocaleDateString(undefined, { dateStyle: "medium" });
+  return formatIndiaDate(value);
 }
 
 export function DatePickerField({ label, value, onChange, minimumDate }: Props) {

@@ -20,7 +20,10 @@ export type WatermarkCaptureTarget = {
 };
 
 /** Suspicious near-empty JPEG after a failed/black view-shot (bytes, not content). */
-const MIN_STAMPED_JPEG_BYTES = 8_192;
+export const MIN_STAMPED_JPEG_BYTES = 8_192;
+
+const VIEW_SHOT_JPEG_QUALITY = 0.88;
+const UPLOAD_MAX_EDGE = 1920;
 
 export function getImageDimensions(uri: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
@@ -45,8 +48,9 @@ async function assertStampedFileLooksValid(uri: string) {
 }
 
 /**
- * Capture composed photo + watermark overlay from a prepared preview view.
+ * Capture composed photo + footer from a prepared view.
  * Output size matches the View layout (capped) — do not multiply by PixelRatio.
+ * Skips a second JPEG pass when view-shot output is already within upload bounds.
  */
 export async function captureWatermarkedPhoto(target: WatermarkCaptureTarget): Promise<string> {
   if (isExpoGo()) {
@@ -75,18 +79,22 @@ export async function captureWatermarkedPhoto(target: WatermarkCaptureTarget): P
 
   const uri = await captureRef(ref, {
     format: "jpg",
-    quality: 0.88,
+    quality: VIEW_SHOT_JPEG_QUALITY,
     width: size.outputWidth,
     height: size.outputHeight,
     result: "tmpfile"
   });
 
-  const compressed = await ImageManipulator.manipulateAsync(
-    uri,
-    [{ resize: { width: Math.min(1920, size.outputWidth) } }],
-    { compress: 0.78, format: ImageManipulator.SaveFormat.JPEG }
-  );
+  if (size.outputWidth > UPLOAD_MAX_EDGE) {
+    const resized = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: UPLOAD_MAX_EDGE } }],
+      { compress: VIEW_SHOT_JPEG_QUALITY, format: ImageManipulator.SaveFormat.JPEG }
+    );
+    await assertStampedFileLooksValid(resized.uri);
+    return resized.uri;
+  }
 
-  await assertStampedFileLooksValid(compressed.uri);
-  return compressed.uri;
+  await assertStampedFileLooksValid(uri);
+  return uri;
 }

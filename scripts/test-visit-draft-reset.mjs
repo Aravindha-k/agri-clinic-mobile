@@ -26,6 +26,7 @@ assert.match(store, /fieldNotes:\s*""/);
 assert.match(store, /recommendation:\s*""/);
 assert.match(store, /observation:\s*""/);
 assert.match(beginNewVisit, /export function beginNewVisit/);
+assert.match(beginNewVisit, /export async function startRevisitDraft/);
 assert.match(beginNewVisit, /store\.reset\(\)/);
 assert.doesNotMatch(
   step1,

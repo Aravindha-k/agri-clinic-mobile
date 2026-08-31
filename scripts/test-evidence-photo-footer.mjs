@@ -166,13 +166,12 @@ test("EvidenceStampBurner stacks footer below photo with no overlay panel", () =
   const burner = read("mobile/components/visit/EvidenceStampBurner.tsx");
   assert.match(burner, /EvidencePhotoFooter/);
   assert.match(burner, /fitEvidencePhotoCaptureSize/);
-  assert.match(burner, /photoLayoutHeight/);
-  assert.match(burner, /footerLayoutHeight/);
+  assert.match(burner, /evidenceCaptureHostStyle/);
   assert.doesNotMatch(burner, /bottom:\s*0/);
   assert.doesNotMatch(burner, /rgba\(11,\s*20,\s*16/);
   assert.match(burner, /backgroundColor:\s*"#FFFFFF"/);
   assert.match(burner, /onLoad=\{\(\) => \{/);
-  assert.match(burner, /opacity:\s*0/);
+  assert.match(burner, /opacity:\s*1/);
 });
 
 test("EvidencePhotoFooter uses official CompanyLogo asset", () => {

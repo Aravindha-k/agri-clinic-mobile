@@ -50,13 +50,15 @@ test("captureWatermarkedPhoto does not multiply Image.getSize by PixelRatio", ()
   assert.match(src, /MIN_STAMPED_JPEG_BYTES/);
   assert.match(src, /width:\s*size\.outputWidth/);
   assert.match(src, /height:\s*size\.outputHeight/);
+  assert.match(src, /if \(size\.outputWidth > UPLOAD_MAX_EDGE\)/);
 });
 
 test("EvidenceStampBurner waits for Image onLoad and stays in compositor", () => {
   const burner = read("mobile/components/visit/EvidenceStampBurner.tsx");
   assert.match(burner, /onLoad=\{\(\) => \{/);
   assert.match(burner, /imageLoadedRef\.current = true/);
-  assert.match(burner, /opacity:\s*0/);
+  assert.match(burner, /evidenceCaptureHostStyle/);
+  assert.match(burner, /opacity:\s*1/);
   assert.doesNotMatch(burner, /left:\s*-4000/);
   assert.doesNotMatch(burner, /setTimeout\(resolve,\s*80\)/);
   assert.match(burner, /fitEvidencePhotoCaptureSize/);
@@ -70,9 +72,11 @@ test("VisitPhotoWatermarkPreview uses capped capture size and onLoad gate", () =
   assert.match(preview, /captureImageReady/);
   assert.match(preview, /onLoad=\{\(\) => setCaptureImageReady\(true\)\}/);
   assert.doesNotMatch(preview, /left:\s*-9999/);
-  assert.match(preview, /opacity:\s*0/);
+  assert.match(preview, /evidenceCaptureHostStyle/);
+  assert.match(preview, /opacity:\s*1/);
   assert.doesNotMatch(preview, /PixelRatio/);
   assert.match(preview, /EvidencePhotoFooter/);
+  assert.match(preview, /stampedPreviewUri/);
 });
 
 test("upload FormData uses processed uri with matching JPEG name and MIME", () => {

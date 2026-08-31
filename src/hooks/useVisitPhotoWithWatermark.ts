@@ -21,14 +21,13 @@ export function useVisitPhotoWithWatermark() {
   const buildAttachment = useCallback(
     async (result: WatermarkPreviewResult): Promise<PendingVisitAttachment> => {
       const originalPrepared = await prepareImageForUpload(result.originalUri);
-      const proofPrepared = await prepareImageForUpload(result.watermarkedUri);
       const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       return {
         id: createPendingAttachmentId(),
         attachmentType: "image",
-        uri: proofPrepared.uri,
+        uri: result.watermarkedUri,
         name: `visit-photo-proof-${stamp}.jpg`,
-        mimeType: proofPrepared.mimeType,
+        mimeType: "image/jpeg",
         originalUri: originalPrepared.uri,
         originalName: `visit-photo-original-${stamp}.jpg`,
         originalMimeType: originalPrepared.mimeType,

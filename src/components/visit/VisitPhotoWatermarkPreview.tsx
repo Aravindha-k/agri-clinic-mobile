@@ -12,6 +12,10 @@ import {
 } from "react-native";
 import { EvidencePhotoFooter } from "./EvidencePhotoFooter";
 import { captureWatermarkedPhoto, getImageDimensions } from "../../utils/captureWatermarkedPhoto";
+import {
+  EVIDENCE_PHOTO_RESIZE_MODE,
+  evidenceCaptureHostStyle
+} from "../../utils/evidenceCaptureHostLayout";
 import { isExpoGo } from "../../utils/expoRuntime";
 import { fitEvidencePhotoCaptureSize } from "../../utils/evidencePhotoFooter";
 import {
@@ -58,36 +62,33 @@ export function VisitPhotoWatermarkPreview({ visible, imageUri, meta, onCancel, 
   const captureRefView = useRef<View>(null);
   const [dims, setDims] = useState<{ width: number; height: number } | null>(null);
   const [captureImageReady, setCaptureImageReady] = useState(false);
+  const [stampedPreviewUri, setStampedPreviewUri] = useState<string | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const burnInFlight = useRef(false);
 
   const stampMeta = toEvidenceStampMeta(meta);
   const captureSize = dims ? fitEvidencePhotoCaptureSize(dims.width, dims.height, stampMeta) : null;
   const previewScale = captureSize ? PREVIEW_WIDTH / captureSize.layoutWidth : 1;
   const previewHeight = captureSize ? Math.round(captureSize.layoutHeight * previewScale) : 220;
-  const previewPhotoHeight = captureSize
-    ? Math.round(captureSize.photoLayoutHeight * previewScale)
-    : previewHeight;
-  const previewFooterHeight = captureSize
-    ? Math.round(captureSize.footerLayoutHeight * previewScale)
-    : 0;
 
   useEffect(() => {
     if (!visible || !imageUri) return;
     setError("");
     setDims(null);
     setCaptureImageReady(false);
+    setStampedPreviewUri(null);
+    burnInFlight.current = false;
     void getImageDimensions(imageUri)
       .then(setDims)
       .catch(() => setDims({ width: 1200, height: 1600 }));
   }, [imageUri, visible]);
 
-  const handleConfirm = useCallback(async () => {
-    if (!dims || !captureSize || !captureImageReady) {
-      setError("Photo is still loading. Please wait a moment.");
-      return;
-    }
-    setBusy(true);
+  const burnPreview = useCallback(async () => {
+    if (!dims || !captureSize || !captureImageReady || burnInFlight.current) return;
+    burnInFlight.current = true;
+    setPreviewBusy(true);
     setError("");
     try {
       await new Promise<void>((resolve) => {
@@ -100,13 +101,31 @@ export function VisitPhotoWatermarkPreview({ visible, imageUri, meta, onCancel, 
         captureSize,
         sourceUri: imageUri
       });
-      onConfirm({ watermarkedUri, originalUri: imageUri });
+      setStampedPreviewUri(watermarkedUri);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not apply watermark.");
+      setStampedPreviewUri(null);
     } finally {
-      setBusy(false);
+      setPreviewBusy(false);
+      burnInFlight.current = false;
     }
-  }, [captureImageReady, captureSize, dims, imageUri, onConfirm]);
+  }, [captureImageReady, captureSize, dims, imageUri]);
+
+  useEffect(() => {
+    if (visible && dims && captureSize && captureImageReady && !stampedPreviewUri) {
+      void burnPreview();
+    }
+  }, [burnPreview, captureImageReady, captureSize, dims, stampedPreviewUri, visible]);
+
+  const handleConfirm = useCallback(() => {
+    if (!stampedPreviewUri) {
+      setError("Photo is still processing. Please wait a moment.");
+      return;
+    }
+    setBusy(true);
+    onConfirm({ watermarkedUri: stampedPreviewUri, originalUri: imageUri });
+    setBusy(false);
+  }, [imageUri, onConfirm, stampedPreviewUri]);
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onCancel}>
@@ -116,27 +135,29 @@ export function VisitPhotoWatermarkPreview({ visible, imageUri, meta, onCancel, 
           <Text style={[styles.sub, { color: c.muted }]}>
             {isExpoGo()
               ? "Expo Go: preview only — footer is burned in on the APK/dev build. Photo will still upload."
-              : "Confirm the evidence footer before upload. Preview matches the JPEG that will be uploaded."}
+              : "Preview shows the exact JPEG that will be uploaded."}
           </Text>
 
           <ScrollView style={styles.previewScroll} showsVerticalScrollIndicator={false}>
             <View style={[styles.previewFrame, { borderColor: c.border }]}>
-              {dims && captureSize ? (
-                <View style={{ width: PREVIEW_WIDTH, height: previewHeight, backgroundColor: "#FFFFFF" }}>
-                  <Image
-                    source={{ uri: imageUri }}
-                    style={{ width: PREVIEW_WIDTH, height: previewPhotoHeight }}
-                    resizeMode="cover"
-                  />
-                  <EvidencePhotoFooter
-                    width={PREVIEW_WIDTH}
-                    height={previewFooterHeight}
-                    meta={stampMeta}
-                    scale={previewScale}
-                  />
-                </View>
+              {stampedPreviewUri ? (
+                <Image
+                  source={{ uri: stampedPreviewUri }}
+                  style={{ width: PREVIEW_WIDTH, height: previewHeight }}
+                  resizeMode={EVIDENCE_PHOTO_RESIZE_MODE}
+                />
               ) : (
-                <View style={{ width: PREVIEW_WIDTH, height: previewHeight, backgroundColor: "#F3F4F6" }} />
+                <View
+                  style={{
+                    width: PREVIEW_WIDTH,
+                    height: previewHeight,
+                    backgroundColor: "#F3F4F6",
+                    alignItems: "center",
+                    justifyContent: "center"
+                  }}
+                >
+                  <ActivityIndicator color={c.primary} />
+                </View>
               )}
             </View>
           </ScrollView>
@@ -147,24 +168,24 @@ export function VisitPhotoWatermarkPreview({ visible, imageUri, meta, onCancel, 
             <Pressable
               accessibilityRole="button"
               onPress={onCancel}
-              disabled={busy}
+              disabled={busy || previewBusy}
               style={[styles.btnGhost, { borderColor: c.border }]}
             >
               <Text style={{ color: c.text, fontWeight: "700" }}>Retake</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              onPress={() => void handleConfirm()}
-              disabled={busy || !dims || !captureImageReady}
+              onPress={handleConfirm}
+              disabled={busy || previewBusy || !stampedPreviewUri}
               style={[
                 styles.btnPrimary,
                 {
                   backgroundColor: c.primary,
-                  opacity: busy || !dims || !captureImageReady ? 0.6 : 1
+                  opacity: busy || previewBusy || !stampedPreviewUri ? 0.6 : 1
                 }
               ]}
             >
-              {busy ? (
+              {busy || previewBusy ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <>
@@ -177,23 +198,29 @@ export function VisitPhotoWatermarkPreview({ visible, imageUri, meta, onCancel, 
         </View>
 
         {dims && captureSize ? (
-          <View style={styles.captureHost} pointerEvents="none" accessibilityElementsHidden>
+          <View
+            style={[styles.captureHost, evidenceCaptureHostStyle()]}
+            pointerEvents="none"
+            accessibilityElementsHidden
+          >
             <View
               ref={captureRefView}
               collapsable={false}
               style={{
                 width: captureSize.layoutWidth,
                 height: captureSize.layoutHeight,
-                backgroundColor: "#FFFFFF"
+                backgroundColor: "#FFFFFF",
+                opacity: 1
               }}
             >
               <Image
                 source={{ uri: imageUri }}
                 style={{
                   width: captureSize.layoutWidth,
-                  height: captureSize.photoLayoutHeight
+                  height: captureSize.photoLayoutHeight,
+                  opacity: 1
                 }}
-                resizeMode="cover"
+                resizeMode={EVIDENCE_PHOTO_RESIZE_MODE}
                 onLoad={() => setCaptureImageReady(true)}
                 onError={() => {
                   setCaptureImageReady(false);
@@ -260,10 +287,6 @@ const styles = StyleSheet.create({
   },
   btnPrimaryText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
   captureHost: {
-    left: 0,
-    opacity: 0,
-    position: "absolute",
-    top: 0,
-    zIndex: -1
+    pointerEvents: "none"
   }
 });

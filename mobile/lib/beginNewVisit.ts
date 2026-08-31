@@ -1,5 +1,5 @@
 import type { Farmer } from "../../src/api/farmers";
-import type { VisitFormPrefill } from "../../src/utils/farmerPrefill";
+import type { LoadedRevisitPrefill, VisitFormPrefill } from "../../src/utils/farmerPrefill";
 import { useVisitFormStore } from "../store/visitFormStore";
 import { deletePersistedPhoto } from "./media/persistentVisitPhotos";
 
@@ -53,4 +53,17 @@ export function beginNewVisit(options?: BeginNewVisitOptions) {
   if (options?.step) {
     store.setStep(options.step);
   }
+}
+
+/**
+ * Canonical revisit entry: discard prior visit-scoped draft, apply revisit context only,
+ * then mint a fresh submissionLocalSyncId for the new logical visit.
+ */
+export async function startRevisitDraft(loaded: LoadedRevisitPrefill) {
+  await cleanupDraftMedia();
+  const store = useVisitFormStore.getState();
+  store.reset();
+  store.applyRevisitPrefill(loaded);
+  store.ensureLocalSyncId();
+  store.setStep(2);
 }

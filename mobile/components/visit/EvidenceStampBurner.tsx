@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Image, StyleSheet, View } from "react-native";
 import { EvidencePhotoFooter } from "../../../src/components/visit/EvidencePhotoFooter";
 import { captureWatermarkedPhoto, getImageDimensions } from "../../../src/utils/captureWatermarkedPhoto";
+import {
+  EVIDENCE_PHOTO_RESIZE_MODE,
+  evidenceCaptureHostStyle
+} from "../../../src/utils/evidenceCaptureHostLayout";
 import { fitEvidencePhotoCaptureSize } from "../../../src/utils/evidencePhotoFooter";
 import type { EvidenceStampMeta } from "../../../src/utils/visitPhotoWatermark";
 
@@ -19,8 +23,8 @@ type Props = {
 
 /**
  * Off-screen burner: photo + footer below (no overlay on photo), captured into JPEG via view-shot.
- * Waits for Image onLoad before capture. Keeps the view on-screen (opacity 0) so
- * Android composites the bitmap — far off-screen + black bg was producing black JPEGs.
+ * Waits for Image onLoad before capture. Capture tree stays composited below the viewport at
+ * opacity 1 — never opacity:0 (washed-out JPEG) or far off-screen (black JPEG).
  */
 export function EvidenceStampBurner({ job, onComplete, onError }: Props) {
   const viewRef = useRef<View>(null);
@@ -94,16 +98,20 @@ export function EvidenceStampBurner({ job, onComplete, onError }: Props) {
     captureSize;
 
   return (
-    <View style={styles.captureHost} pointerEvents="none" accessibilityElementsHidden>
+    <View
+      style={[styles.captureHost, evidenceCaptureHostStyle()]}
+      pointerEvents="none"
+      accessibilityElementsHidden
+    >
       <View
         ref={viewRef}
         collapsable={false}
-        style={{ width, height, backgroundColor: "#FFFFFF" }}
+        style={{ width, height, backgroundColor: "#FFFFFF", opacity: 1 }}
       >
         <Image
           source={{ uri: job.sourceUri }}
-          style={{ width, height: photoLayoutHeight }}
-          resizeMode="cover"
+          style={{ width, height: photoLayoutHeight, opacity: 1 }}
+          resizeMode={EVIDENCE_PHOTO_RESIZE_MODE}
           onLoad={() => {
             imageLoadedRef.current = true;
             setImageReady(true);
@@ -126,15 +134,7 @@ export function EvidenceStampBurner({ job, onComplete, onError }: Props) {
 }
 
 const styles = StyleSheet.create({
-  /**
-   * Must remain in the compositor (opacity 0, not translated far off-screen).
-   * Android often skips drawing Images that are thousands of px off-screen → black JPEG.
-   */
   captureHost: {
-    opacity: 0,
-    position: "absolute",
-    left: 0,
-    top: 0,
-    zIndex: -1
+    pointerEvents: "none"
   }
 });

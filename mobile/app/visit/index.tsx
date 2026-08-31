@@ -17,7 +17,7 @@ import {
 import { ScreenCanvas, ScreenEntranceBloom } from "../../components/layout";
 import { VisitEntranceProvider } from "../../context/VisitEntranceContext";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
-import { beginNewVisit } from "../../lib/beginNewVisit";
+import { beginNewVisit, startRevisitDraft } from "../../lib/beginNewVisit";
 import { isVisitSubmitInFlight } from "../../lib/visit/visitSubmitCoordinator";
 import { useVisitFormStore } from "../../store/visitFormStore";
 import VisitCreateStep, { VisitCreateStep2, VisitCreateStep3, VisitCreateStep4 } from "./create";
@@ -35,7 +35,6 @@ export default function VisitFlowShell() {
   const dutyGateShown = useRef(false);
   const step = useVisitFormStore((s) => s.step);
   const setStep = useVisitFormStore((s) => s.setStep);
-  const applyRevisitPrefill = useVisitFormStore((s) => s.applyRevisitPrefill);
   const fastRevisitStarted = useRef(false);
   const guardDialogOpen = useRef(false);
   const allowRemoval = useRef(false);
@@ -111,8 +110,7 @@ export default function VisitFlowShell() {
 
         try {
           const loaded = await loadRevisitPrefill(stub, { districts, villages });
-          applyRevisitPrefill(loaded);
-          setStep(2);
+          await startRevisitDraft(loaded);
           navigation.setParams({ fastRevisit: undefined });
         } catch {
           fastRevisitStarted.current = false;
@@ -133,12 +131,10 @@ export default function VisitFlowShell() {
       }
     })();
   }, [
-    applyRevisitPrefill,
     districts,
     navigation,
     route.params?.fastRevisit,
     route.params?.prefill,
-    setStep,
     t,
     villages,
     currentDuty?.is_active,

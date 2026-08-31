@@ -10,14 +10,14 @@ import {
   Text,
   View
 } from "react-native";
-import { BRAND_COLORS } from "../../brand/constants";
+import { EvidencePhotoFooter } from "./EvidencePhotoFooter";
 import { captureWatermarkedPhoto, getImageDimensions } from "../../utils/captureWatermarkedPhoto";
 import { isExpoGo } from "../../utils/expoRuntime";
+import { fitEvidencePhotoCaptureSize } from "../../utils/evidencePhotoFooter";
 import {
-  buildVisitPhotoWatermarkLines,
+  type EvidenceStampMeta,
   type VisitPhotoWatermarkMeta
 } from "../../utils/visitPhotoWatermark";
-import { fitWatermarkCaptureSize } from "../../utils/watermarkCaptureLayout";
 import { useTheme } from "../../theme";
 
 export type WatermarkPreviewResult = {
@@ -35,6 +35,23 @@ type Props = {
 
 const PREVIEW_WIDTH = 320;
 
+function toEvidenceStampMeta(meta: VisitPhotoWatermarkMeta): EvidenceStampMeta {
+  const visitId = meta.visitId?.trim().replace(/^#/, "") || undefined;
+  return {
+    source: "camera",
+    locationKind: "captured",
+    evidenceTime: meta.capturedAt ?? new Date(),
+    latitude: meta.latitude,
+    longitude: meta.longitude,
+    accuracy: null,
+    address: meta.address,
+    employeeName: meta.employeeName,
+    employeeCode: "",
+    employeeDisplayId: meta.employeeName,
+    visitId
+  };
+}
+
 export function VisitPhotoWatermarkPreview({ visible, imageUri, meta, onCancel, onConfirm }: Props) {
   const { theme } = useTheme();
   const c = theme.colors;
@@ -44,9 +61,16 @@ export function VisitPhotoWatermarkPreview({ visible, imageUri, meta, onCancel, 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const lines = buildVisitPhotoWatermarkLines(meta);
-  const previewHeight = dims ? Math.round((PREVIEW_WIDTH * dims.height) / dims.width) : 220;
-  const captureSize = dims ? fitWatermarkCaptureSize(dims.width, dims.height) : null;
+  const stampMeta = toEvidenceStampMeta(meta);
+  const captureSize = dims ? fitEvidencePhotoCaptureSize(dims.width, dims.height, stampMeta) : null;
+  const previewScale = captureSize ? PREVIEW_WIDTH / captureSize.layoutWidth : 1;
+  const previewHeight = captureSize ? Math.round(captureSize.layoutHeight * previewScale) : 220;
+  const previewPhotoHeight = captureSize
+    ? Math.round(captureSize.photoLayoutHeight * previewScale)
+    : previewHeight;
+  const previewFooterHeight = captureSize
+    ? Math.round(captureSize.footerLayoutHeight * previewScale)
+    : 0;
 
   useEffect(() => {
     if (!visible || !imageUri) return;
@@ -91,22 +115,29 @@ export function VisitPhotoWatermarkPreview({ visible, imageUri, meta, onCancel, 
           <Text style={[styles.title, { color: c.text }]}>Proof photo preview</Text>
           <Text style={[styles.sub, { color: c.muted }]}>
             {isExpoGo()
-              ? "Expo Go: preview only — watermark is burned in on the APK/dev build. Photo will still upload."
-              : "Confirm the GPS watermark before upload. Original and proof copies are saved for admin review."}
+              ? "Expo Go: preview only — footer is burned in on the APK/dev build. Photo will still upload."
+              : "Confirm the evidence footer before upload. Preview matches the JPEG that will be uploaded."}
           </Text>
 
           <ScrollView style={styles.previewScroll} showsVerticalScrollIndicator={false}>
             <View style={[styles.previewFrame, { borderColor: c.border }]}>
-              <View style={{ width: PREVIEW_WIDTH, height: previewHeight }}>
-                <Image source={{ uri: imageUri }} style={{ width: PREVIEW_WIDTH, height: previewHeight }} resizeMode="cover" />
-                <View style={styles.watermarkStrip}>
-                  {lines.map((line) => (
-                    <Text key={line} style={styles.watermarkLine} numberOfLines={2}>
-                      {line}
-                    </Text>
-                  ))}
+              {dims && captureSize ? (
+                <View style={{ width: PREVIEW_WIDTH, height: previewHeight, backgroundColor: "#FFFFFF" }}>
+                  <Image
+                    source={{ uri: imageUri }}
+                    style={{ width: PREVIEW_WIDTH, height: previewPhotoHeight }}
+                    resizeMode="cover"
+                  />
+                  <EvidencePhotoFooter
+                    width={PREVIEW_WIDTH}
+                    height={previewFooterHeight}
+                    meta={stampMeta}
+                    scale={previewScale}
+                  />
                 </View>
-              </View>
+              ) : (
+                <View style={{ width: PREVIEW_WIDTH, height: previewHeight, backgroundColor: "#F3F4F6" }} />
+              )}
             </View>
           </ScrollView>
 
@@ -145,7 +176,6 @@ export function VisitPhotoWatermarkPreview({ visible, imageUri, meta, onCancel, 
           </View>
         </View>
 
-        {/* Capture target: opacity 0 on-screen so Android composites the Image */}
         {dims && captureSize ? (
           <View style={styles.captureHost} pointerEvents="none" accessibilityElementsHidden>
             <View
@@ -154,12 +184,15 @@ export function VisitPhotoWatermarkPreview({ visible, imageUri, meta, onCancel, 
               style={{
                 width: captureSize.layoutWidth,
                 height: captureSize.layoutHeight,
-                backgroundColor: "#111111"
+                backgroundColor: "#FFFFFF"
               }}
             >
               <Image
                 source={{ uri: imageUri }}
-                style={{ width: captureSize.layoutWidth, height: captureSize.layoutHeight }}
+                style={{
+                  width: captureSize.layoutWidth,
+                  height: captureSize.photoLayoutHeight
+                }}
                 resizeMode="cover"
                 onLoad={() => setCaptureImageReady(true)}
                 onError={() => {
@@ -167,13 +200,12 @@ export function VisitPhotoWatermarkPreview({ visible, imageUri, meta, onCancel, 
                   setError("Could not load photo for watermark.");
                 }}
               />
-              <View style={[styles.watermarkStrip, styles.watermarkStripCapture]}>
-                {lines.map((line) => (
-                  <Text key={`cap-${line}`} style={styles.watermarkLineCapture} numberOfLines={3}>
-                    {line}
-                  </Text>
-                ))}
-              </View>
+              <EvidencePhotoFooter
+                width={captureSize.layoutWidth}
+                height={captureSize.footerLayoutHeight}
+                meta={stampMeta}
+                scale={1}
+              />
             </View>
           </View>
         ) : null}
@@ -204,33 +236,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     overflow: "hidden"
-  },
-  watermarkStrip: {
-    backgroundColor: "rgba(11, 90, 56, 0.88)",
-    bottom: 0,
-    left: 0,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    position: "absolute",
-    right: 0
-  },
-  watermarkStripCapture: {
-    paddingHorizontal: 24,
-    paddingVertical: 20
-  },
-  watermarkLine: {
-    color: BRAND_COLORS.accent,
-    fontSize: 10,
-    fontWeight: "700",
-    lineHeight: 14,
-    marginTop: 2
-  },
-  watermarkLineCapture: {
-    color: BRAND_COLORS.accent,
-    fontSize: 22,
-    fontWeight: "800",
-    lineHeight: 28,
-    marginTop: 4
   },
   error: { fontSize: 13, fontWeight: "600", marginTop: 8 },
   actions: { flexDirection: "row", gap: 10, marginTop: 16 },

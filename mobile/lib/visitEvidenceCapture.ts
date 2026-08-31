@@ -7,6 +7,7 @@ import { readGalleryExifLocation } from "../../src/utils/galleryPhotoExif";
 import { reverseGeocodeAddress } from "../../src/utils/reverseGeocode";
 import {
   employeeWatermarkId,
+  employeeWatermarkParts,
   type EvidenceLocationKind,
   type EvidenceStampMeta
 } from "../../src/utils/visitPhotoWatermark";
@@ -61,6 +62,7 @@ function buildMeta(input: {
   visitId?: string;
   farmerName?: string;
 }): EvidenceStampMeta {
+  const employeeParts = employeeWatermarkParts(input.employee);
   return {
     source: input.source,
     locationKind: input.locationKind,
@@ -69,6 +71,8 @@ function buildMeta(input: {
     longitude: input.longitude,
     accuracy: input.accuracy,
     address: input.address,
+    employeeName: employeeParts.name,
+    employeeCode: employeeParts.code,
     employeeDisplayId: employeeWatermarkId(input.employee),
     visitId: input.visitId,
     farmerName: input.farmerName

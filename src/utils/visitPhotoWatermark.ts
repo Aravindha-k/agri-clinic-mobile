@@ -12,6 +12,11 @@ export type EvidenceStampMeta = {
   longitude: number | null;
   accuracy: number | null;
   address: string;
+  /** Display name for footer, e.g. "Jeyabaskar". */
+  employeeName?: string;
+  /** Employee code / ID for footer, e.g. "KAC-0003". */
+  employeeCode?: string;
+  /** @deprecated Prefer employeeName + employeeCode in footer. */
   employeeDisplayId: string;
   visitId?: string;
   farmerName?: string;
@@ -76,6 +81,18 @@ export function employeeWatermarkId(employee: {
     String(employee.username || "").trim() ||
     String(employee.full_name || employee.name || "").trim()
   );
+}
+
+export function employeeWatermarkParts(employee: {
+  employee_id?: string | null;
+  username?: string | null;
+  full_name?: string | null;
+  name?: string | null;
+} | null): { name: string; code: string } {
+  if (!employee) return { name: "", code: "" };
+  const name = String(employee.full_name || employee.name || "").trim();
+  const code = String(employee.employee_id || employee.username || "").trim();
+  return { name, code };
 }
 
 /** @deprecated Use buildEvidenceStampLines */

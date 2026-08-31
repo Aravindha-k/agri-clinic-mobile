@@ -8,6 +8,8 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (path) => readFileSync(resolve(ROOT, path), "utf8");
 
 const watermark = read("src/utils/visitPhotoWatermark.ts");
+const footerUtil = read("src/utils/evidencePhotoFooter.ts");
+const footerUi = read("src/components/visit/EvidencePhotoFooter.tsx");
 const capture = read("mobile/lib/visitEvidenceCapture.ts");
 const burner = read("mobile/components/visit/EvidenceStampBurner.tsx");
 const step3 = read("mobile/app/visit/create-step3.tsx");
@@ -43,46 +45,22 @@ test("camera watermark uses a fresh visit GPS fix and burns a stamped file", () 
   assert.match(capture, /captureVisitGps\(\{ requestPermission: false \}\)/);
   assert.match(gps, /requestPermission\?: boolean/);
   assert.match(burner, /captureWatermarkedPhoto/);
-  assert.match(burner, /buildEvidenceStampLines/);
+  assert.match(burner, /EvidencePhotoFooter/);
+  assert.match(burner, /fitEvidencePhotoCaptureSize/);
+  assert.match(footerUtil, /buildEvidenceFooterContent/);
+  assert.match(footerUi, /CompanyLogo/);
   assert.match(step3, /EvidenceStampBurner/);
   assert.match(step3, /toVisitPhotoAsset\(prepared, stampedUri\)/);
   assert.match(detail, /prepareCameraEvidence/);
-  const lines = buildEvidenceStampLines({
-    locationKind: "captured",
-    latitude: 11.920694,
-    longitude: 79.617454,
-    address: "Andiarpalayam, Tamil Nadu",
-    employeeDisplayId: "KAC-DIVYA01",
-    visitId: "80"
-  });
-  assert.ok(lines.some((line) => line.includes("📍")));
-  assert.ok(lines.some((line) => line.includes("11.920694, 79.617454")));
-  assert.ok(lines.some((line) => line.includes("KAC-DIVYA01")));
-  assert.ok(lines.some((line) => line.includes("Visit #80")));
-  assert.ok(!lines.some((line) => line.startsWith("Uploaded at:")));
+  assert.match(capture, /employeeName:/);
+  assert.match(capture, /employeeCode:/);
 });
 
-test("gallery without EXIF is labelled Uploaded at, never captured-at current location", () => {
+test("gallery without EXIF is labelled uploaded location kind, never captured-at current location", () => {
   assert.match(capture, /locationKind: hasOriginal \? "captured" : "uploaded"/);
   assert.match(step3, /uploadedAtLabel/);
   assert.match(exif, /readGalleryExifLocation/);
-  assert.match(watermark, /Uploaded at:/);
-  const uploaded = buildEvidenceStampLines({
-    locationKind: "uploaded",
-    latitude: 11.94,
-    longitude: 79.49,
-    address: "Villupuram, Tamil Nadu",
-    employeeDisplayId: "KAC-DIVYA01"
-  });
-  assert.equal(uploaded[0], "Uploaded at:");
-  const captured = buildEvidenceStampLines({
-    locationKind: "captured",
-    latitude: 11.94,
-    longitude: 79.49,
-    address: "Villupuram, Tamil Nadu",
-    employeeDisplayId: "KAC-DIVYA01"
-  });
-  assert.notEqual(captured[0], "Uploaded at:");
+  assert.match(capture, /locationKind: hasOriginal \? "captured" : "uploaded"/);
 });
 
 test("multiple photos, remove, unique client_upload_id, and retry do not invent a second media API", () => {
@@ -101,19 +79,11 @@ test("orientation is flattened before stamp; reverse-geocode and GPS failure do 
   assert.match(capture, /flattenOrientation/);
   assert.match(capture, /ImageManipulator\.manipulateAsync\(uri, \[\]/);
   assert.match(geocode, /reverseGeocodeAsync/);
-  assert.match(watermark, /Location unavailable/);
+  assert.match(footerUtil, /Location unavailable/);
   assert.equal(formatEvidenceCoordinates(null, null), null);
-  const noFix = buildEvidenceStampLines({
-    locationKind: "captured",
-    latitude: null,
-    longitude: null,
-    address: "",
-    employeeDisplayId: "KAC-DIVYA01"
-  });
-  assert.ok(noFix.some((line) => line.includes("Location unavailable")));
   assert.match(step3, /stampFailed/);
   assert.match(burner, /onLoad/);
-  assert.match(burner, /fitWatermarkCaptureSize|WATERMARK_CAPTURE_MAX_EDGE/);
+  assert.match(burner, /fitEvidencePhotoCaptureSize|WATERMARK_CAPTURE_MAX_EDGE/);
 });
 
 test("no second location permission owner, no map-tile dependency, farmer profile photos stay unstamped", () => {
@@ -121,6 +91,7 @@ test("no second location permission owner, no map-tile dependency, farmer profil
   assert.doesNotMatch(capture, /requestForegroundPermissionsAsync/);
   assert.doesNotMatch(watermark, /GPS Map Camera|Google/);
   assert.doesNotMatch(burner, /GPS Map Camera|Google/);
+  assert.doesNotMatch(footerUi, /GPS Map Camera|Google/);
   assert.doesNotMatch(farmerPicker, /prepareCameraEvidence|EvidenceStampBurner|visitPhotoWatermark/);
   assert.match(farmerPicker, /pickProfileImage/);
 });

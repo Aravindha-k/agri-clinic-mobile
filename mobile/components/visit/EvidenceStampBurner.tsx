@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, View } from "react-native";
+import { EvidencePhotoFooter } from "../../../src/components/visit/EvidencePhotoFooter";
 import { captureWatermarkedPhoto, getImageDimensions } from "../../../src/utils/captureWatermarkedPhoto";
-import {
-  buildEvidenceStampLines,
-  type EvidenceStampMeta
-} from "../../../src/utils/visitPhotoWatermark";
-import { fitWatermarkCaptureSize } from "../../../src/utils/watermarkCaptureLayout";
-import { BRAND_COLORS } from "../../../src/config/brand";
+import { fitEvidencePhotoCaptureSize } from "../../../src/utils/evidencePhotoFooter";
+import type { EvidenceStampMeta } from "../../../src/utils/visitPhotoWatermark";
 
 export type EvidenceStampJob = {
   id: string;
@@ -21,7 +18,7 @@ type Props = {
 };
 
 /**
- * Off-screen burner: same overlay as preview, captured into a JPEG via view-shot.
+ * Off-screen burner: photo + footer below (no overlay on photo), captured into JPEG via view-shot.
  * Waits for Image onLoad before capture. Keeps the view on-screen (opacity 0) so
  * Android composites the bitmap — far off-screen + black bg was producing black JPEGs.
  */
@@ -65,8 +62,7 @@ export function EvidenceStampBurner({ job, onComplete, onError }: Props) {
     if (!job || !dims || !imageReady || inFlight.current === job.id) return;
     inFlight.current = job.id;
     try {
-      const captureSize = fitWatermarkCaptureSize(dims.width, dims.height);
-      // One frame after onLoad so layout/paint settle before view-shot.
+      const captureSize = fitEvidencePhotoCaptureSize(dims.width, dims.height, job.meta);
       await new Promise<void>((resolve) => {
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
       });
@@ -93,21 +89,20 @@ export function EvidenceStampBurner({ job, onComplete, onError }: Props) {
 
   if (!job || !dims) return null;
 
-  const captureSize = fitWatermarkCaptureSize(dims.width, dims.height);
-  const { layoutWidth: width, layoutHeight: height } = captureSize;
-  const lines = buildEvidenceStampLines(job.meta);
-  const fontSize = Math.max(18, Math.round(width / 42));
+  const captureSize = fitEvidencePhotoCaptureSize(dims.width, dims.height, job.meta);
+  const { layoutWidth: width, layoutHeight: height, photoLayoutHeight, footerLayoutHeight } =
+    captureSize;
 
   return (
     <View style={styles.captureHost} pointerEvents="none" accessibilityElementsHidden>
       <View
         ref={viewRef}
         collapsable={false}
-        style={{ width, height, backgroundColor: "#111111" }}
+        style={{ width, height, backgroundColor: "#FFFFFF" }}
       >
         <Image
           source={{ uri: job.sourceUri }}
-          style={{ width, height }}
+          style={{ width, height: photoLayoutHeight }}
           resizeMode="cover"
           onLoad={() => {
             imageLoadedRef.current = true;
@@ -119,17 +114,12 @@ export function EvidenceStampBurner({ job, onComplete, onError }: Props) {
             onError(job.id, "Could not load photo for watermark.");
           }}
         />
-        <View style={styles.panel}>
-          {lines.map((line, index) => (
-            <Text
-              key={`${job.id}-${index}`}
-              style={[styles.line, { fontSize, lineHeight: fontSize + 6 }]}
-              numberOfLines={3}
-            >
-              {line}
-            </Text>
-          ))}
-        </View>
+        <EvidencePhotoFooter
+          width={width}
+          height={footerLayoutHeight}
+          meta={job.meta}
+          scale={1}
+        />
       </View>
     </View>
   );
@@ -146,22 +136,5 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     zIndex: -1
-  },
-  panel: {
-    backgroundColor: "rgba(11, 20, 16, 0.72)",
-    bottom: 0,
-    left: 0,
-    paddingHorizontal: 28,
-    paddingVertical: 22,
-    position: "absolute",
-    right: 0
-  },
-  line: {
-    color: BRAND_COLORS.accent,
-    fontWeight: "800",
-    marginTop: 3,
-    textShadowColor: "rgba(0,0,0,0.65)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2
   }
 });

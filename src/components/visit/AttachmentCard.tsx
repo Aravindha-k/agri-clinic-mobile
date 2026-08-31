@@ -3,6 +3,7 @@ import { Audio } from "expo-av";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { useEffect, useRef, useState } from "react";
 import { VisitAttachment } from "../../api/visitAttachments";
+import { EvidenceImageViewer } from "./EvidenceImageViewer";
 import { useTheme } from "../../theme";
 import { listCardType } from "../../theme/listCard";
 import { formatBytes } from "../../utils/visitAttachmentFiles";
@@ -19,6 +20,7 @@ export function AttachmentCard({ attachment, deleting, onDelete }: Props) {
   const { theme } = useTheme();
   const c = theme.colors;
   const [playing, setPlaying] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const soundRef = useRef<Audio.Sound | null>(null);
 
   useEffect(() => {
@@ -60,12 +62,18 @@ export function AttachmentCard({ attachment, deleting, onDelete }: Props) {
   return (
     <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
       {type === "image" && mediaUri ? (
-        <Image
-          source={{ uri: mediaUri }}
-          style={styles.thumb}
-          resizeMode="cover"
-          onError={() => logFailedMediaUrl(attachment.file_url, "AttachmentCard")}
-        />
+        <Pressable
+          accessibilityRole="imagebutton"
+          accessibilityLabel="View photo"
+          onPress={() => setViewerOpen(true)}
+        >
+          <Image
+            source={{ uri: mediaUri }}
+            style={styles.thumb}
+            resizeMode="cover"
+            onError={() => logFailedMediaUrl(attachment.file_url, "AttachmentCard")}
+          />
+        </Pressable>
       ) : (
         <View style={[styles.iconBox, { backgroundColor: c.primarySoft }]}>
           <Ionicons
@@ -131,6 +139,14 @@ export function AttachmentCard({ attachment, deleting, onDelete }: Props) {
             <Ionicons name="trash-outline" size={20} color={c.danger} />
           )}
         </Pressable>
+      ) : null}
+
+      {type === "image" && mediaUri ? (
+        <EvidenceImageViewer
+          visible={viewerOpen}
+          images={[{ uri: mediaUri, id: String(attachment.id) }]}
+          onClose={() => setViewerOpen(false)}
+        />
       ) : null}
     </View>
   );

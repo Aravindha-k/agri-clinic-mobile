@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -10,6 +10,7 @@ import {
   TextInput,
   View
 } from "react-native";
+import { EvidenceImageViewer } from "../../../src/components/visit/EvidenceImageViewer";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useEmployee } from "../../../src/storage/EmployeeContext";
 import { PrimaryButton } from "../../components/ui";
@@ -57,7 +58,14 @@ export function VisitCreateStep3({ onBack }: Props) {
   const [hint, setHint] = useState("");
   const [busy, setBusy] = useState("");
   const [stampJob, setStampJob] = useState<EvidenceStampJob | null>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
   const pendingRef = useRef<PreparedEvidencePhoto[]>([]);
+
+  const viewerImages = useMemo(
+    () => photos.map((photo) => ({ uri: photo.uri, id: photo.id })),
+    [photos]
+  );
 
   const farmerName = farmer?.name || newFarmer?.name || undefined;
 
@@ -211,9 +219,18 @@ export function VisitCreateStep3({ onBack }: Props) {
         ) : null}
 
         <View style={styles.attachmentList}>
-          {photos.map((photo) => (
+          {photos.map((photo, photoIndex) => (
             <View key={photo.id} style={styles.attachmentCard}>
-              <Image source={{ uri: photo.uri }} style={styles.attachmentThumb} />
+              <Pressable
+                accessibilityRole="imagebutton"
+                accessibilityLabel={t("visitFlow.photo")}
+                onPress={() => {
+                  setViewerIndex(photoIndex);
+                  setViewerOpen(true);
+                }}
+              >
+                <Image source={{ uri: photo.uri }} style={styles.attachmentThumb} />
+              </Pressable>
               <View style={styles.attachmentCopy}>
                 <Text style={styles.attachmentName} numberOfLines={1}>
                   {photo.locationKind === "uploaded"
@@ -250,6 +267,12 @@ export function VisitCreateStep3({ onBack }: Props) {
       </VisitBottomFooter>
 
       <EvidenceStampBurner job={stampJob} onComplete={onStampComplete} onError={onStampError} />
+      <EvidenceImageViewer
+        visible={viewerOpen}
+        images={viewerImages}
+        initialIndex={viewerIndex}
+        onClose={() => setViewerOpen(false)}
+      />
     </View>
   );
 }

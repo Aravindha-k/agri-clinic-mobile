@@ -10,25 +10,42 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (path) => readFileSync(resolve(ROOT, path), "utf8");
 
-test("capture host hides below viewport at opacity 1 — never opacity 0 on ancestor", () => {
+test("capture host hides below viewport at opacity 1 — never opacity 0 or negative z-index", () => {
   const layout = read("src/utils/evidenceCaptureHostLayout.ts");
   assert.match(layout, /opacity:\s*1/);
   assert.match(layout, /windowHeight \+ 8/);
+  assert.match(layout, /overflow:\s*"hidden"/);
   assert.doesNotMatch(layout, /opacity:\s*0/);
+  assert.doesNotMatch(layout, /zIndex:\s*-1/);
 
   const burner = read("mobile/components/visit/EvidenceStampBurner.tsx");
   assert.match(burner, /evidenceCaptureHostStyle/);
+  assert.match(burner, /from "expo-image"/);
+  assert.match(burner, /contentFit=\{EVIDENCE_PHOTO_CONTENT_FIT\}/);
   assert.doesNotMatch(burner, /captureHost:[\s\S]*opacity:\s*0/);
   assert.doesNotMatch(burner, /left:\s*-4000/);
   assert.doesNotMatch(burner, /left:\s*-9999/);
-  assert.match(burner, /resizeMode=\{EVIDENCE_PHOTO_RESIZE_MODE\}/);
   assert.match(burner, /opacity:\s*1/);
 
   const preview = read("src/components/visit/VisitPhotoWatermarkPreview.tsx");
   assert.match(preview, /evidenceCaptureHostStyle/);
+  assert.match(preview, /from "expo-image"/);
+  assert.match(preview, /contentFit=\{EVIDENCE_PHOTO_CONTENT_FIT\}/);
   assert.doesNotMatch(preview, /captureHost:[\s\S]*opacity:\s*0/);
   assert.match(preview, /stampedPreviewUri/);
   assert.match(preview, /watermarkedUri: stampedPreviewUri/);
+});
+
+test("evidence picker skips pre-capture JPEG re-encode; view-shot is single lossy pass", () => {
+  const evidence = read("mobile/lib/visitEvidenceCapture.ts");
+  assert.doesNotMatch(evidence, /flattenOrientation/);
+  assert.doesNotMatch(evidence, /ImageManipulator/);
+
+  const capture = read("src/utils/captureWatermarkedPhoto.ts");
+  assert.match(capture, /VIEW_SHOT_JPEG_QUALITY = 0\.92/);
+  assert.doesNotMatch(capture, /width:\s*size\.outputWidth/);
+  assert.doesNotMatch(capture, /height:\s*size\.outputHeight/);
+  assert.match(capture, /if \(size\.outputWidth > UPLOAD_MAX_EDGE\)/);
 });
 
 test("captureWatermarkedPhoto skips second JPEG when already within upload bounds", () => {

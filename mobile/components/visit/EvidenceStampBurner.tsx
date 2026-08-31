@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Image, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
+import { StyleSheet, View } from "react-native";
 import { EvidencePhotoFooter } from "../../../src/components/visit/EvidencePhotoFooter";
 import { captureWatermarkedPhoto, getImageDimensions } from "../../../src/utils/captureWatermarkedPhoto";
 import {
-  EVIDENCE_PHOTO_RESIZE_MODE,
+  EVIDENCE_PHOTO_CONTENT_FIT,
   evidenceCaptureHostStyle
 } from "../../../src/utils/evidenceCaptureHostLayout";
 import { fitEvidencePhotoCaptureSize } from "../../../src/utils/evidencePhotoFooter";
@@ -111,7 +112,7 @@ export function EvidenceStampBurner({ job, onComplete, onError }: Props) {
         <Image
           source={{ uri: job.sourceUri }}
           style={{ width, height: photoLayoutHeight, opacity: 1 }}
-          resizeMode={EVIDENCE_PHOTO_RESIZE_MODE}
+          contentFit={EVIDENCE_PHOTO_CONTENT_FIT}
           onLoad={() => {
             imageLoadedRef.current = true;
             setImageReady(true);

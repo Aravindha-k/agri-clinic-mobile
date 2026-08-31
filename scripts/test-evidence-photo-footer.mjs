@@ -204,6 +204,12 @@ test("capture pipeline keeps JPEG contract and black-image guards", () => {
   assert.match(evidence, /mimeType:\s*"image\/jpeg"/);
 });
 
+test("footer height is capped relative to photo area", () => {
+  const footerUtil = read("src/utils/evidencePhotoFooter.ts");
+  assert.match(footerUtil, /FOOTER_MAX_HEIGHT_RATIO/);
+  assert.match(footerUtil, /photoLayoutHeight/);
+});
+
 test("VisitPhotoWatermarkPreview shows composed footer below photo", () => {
   const preview = read("src/components/visit/VisitPhotoWatermarkPreview.tsx");
   assert.match(preview, /EvidencePhotoFooter/);

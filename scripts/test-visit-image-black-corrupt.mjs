@@ -48,8 +48,8 @@ test("captureWatermarkedPhoto does not multiply Image.getSize by PixelRatio", ()
   assert.match(src, /fitWatermarkCaptureSize/);
   assert.match(src, /result:\s*"tmpfile"/);
   assert.match(src, /MIN_STAMPED_JPEG_BYTES/);
-  assert.match(src, /width:\s*size\.outputWidth/);
-  assert.match(src, /height:\s*size\.outputHeight/);
+  assert.doesNotMatch(src, /width:\s*size\.outputWidth/);
+  assert.doesNotMatch(src, /height:\s*size\.outputHeight/);
   assert.match(src, /if \(size\.outputWidth > UPLOAD_MAX_EDGE\)/);
 });
 
@@ -63,7 +63,9 @@ test("EvidenceStampBurner waits for Image onLoad and stays in compositor", () =>
   assert.doesNotMatch(burner, /setTimeout\(resolve,\s*80\)/);
   assert.match(burner, /fitEvidencePhotoCaptureSize/);
   assert.match(burner, /requestAnimationFrame/);
+  assert.match(burner, /from "expo-image"/);
   assert.match(burner, /EvidencePhotoFooter/);
+  assert.match(burner, /contentFit=\{EVIDENCE_PHOTO_CONTENT_FIT\}/);
 });
 
 test("VisitPhotoWatermarkPreview uses capped capture size and onLoad gate", () => {
@@ -88,8 +90,8 @@ test("upload FormData uses processed uri with matching JPEG name and MIME", () =
 
   const capture = read("mobile/lib/visitEvidenceCapture.ts");
   assert.match(capture, /mimeType:\s*"image\/jpeg"/);
-  assert.match(capture, /SaveFormat\.JPEG/);
   assert.match(capture, /Math\.random\(\)/);
+  assert.doesNotMatch(capture, /ImageManipulator/);
 
   const files = read("src/utils/visitAttachmentFiles.ts");
   assert.match(files, /uniqueJpegUploadName/);

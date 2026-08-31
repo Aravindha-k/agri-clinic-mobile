@@ -75,9 +75,11 @@ test("multiple photos, remove, unique client_upload_id, and retry do not invent 
   assert.equal(new Set(ids).size, ids.length);
 });
 
-test("orientation is flattened before stamp; reverse-geocode and GPS failure do not fake coordinates", () => {
-  assert.match(capture, /flattenOrientation/);
-  assert.match(capture, /ImageManipulator\.manipulateAsync\(uri, \[\]/);
+test("expo-image handles orientation in capture tree; reverse-geocode and GPS failure do not fake coordinates", () => {
+  assert.doesNotMatch(capture, /flattenOrientation/);
+  assert.doesNotMatch(capture, /ImageManipulator/);
+  assert.match(burner, /from "expo-image"/);
+  assert.match(burner, /contentFit=\{EVIDENCE_PHOTO_CONTENT_FIT\}/);
   assert.match(geocode, /reverseGeocodeAsync/);
   assert.match(footerUtil, /Location unavailable/);
   assert.equal(formatEvidenceCoordinates(null, null), null);

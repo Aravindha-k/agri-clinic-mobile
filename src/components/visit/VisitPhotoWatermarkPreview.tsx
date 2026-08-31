@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -13,7 +13,7 @@ import {
 import { EvidencePhotoFooter } from "./EvidencePhotoFooter";
 import { captureWatermarkedPhoto, getImageDimensions } from "../../utils/captureWatermarkedPhoto";
 import {
-  EVIDENCE_PHOTO_RESIZE_MODE,
+  EVIDENCE_PHOTO_CONTENT_FIT,
   evidenceCaptureHostStyle
 } from "../../utils/evidenceCaptureHostLayout";
 import { isExpoGo } from "../../utils/expoRuntime";
@@ -144,7 +144,7 @@ export function VisitPhotoWatermarkPreview({ visible, imageUri, meta, onCancel, 
                 <Image
                   source={{ uri: stampedPreviewUri }}
                   style={{ width: PREVIEW_WIDTH, height: previewHeight }}
-                  resizeMode={EVIDENCE_PHOTO_RESIZE_MODE}
+                  contentFit={EVIDENCE_PHOTO_CONTENT_FIT}
                 />
               ) : (
                 <View
@@ -220,7 +220,7 @@ export function VisitPhotoWatermarkPreview({ visible, imageUri, meta, onCancel, 
                   height: captureSize.photoLayoutHeight,
                   opacity: 1
                 }}
-                resizeMode={EVIDENCE_PHOTO_RESIZE_MODE}
+                contentFit={EVIDENCE_PHOTO_CONTENT_FIT}
                 onLoad={() => setCaptureImageReady(true)}
                 onError={() => {
                   setCaptureImageReady(false);

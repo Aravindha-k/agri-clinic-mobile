@@ -70,9 +70,15 @@ export function buildEvidenceFooterContent(meta: EvidenceStampMeta): EvidenceFoo
 
 const FOOTER_MIN_HEIGHT = 148;
 const FOOTER_MAX_HEIGHT = 360;
+/** Cap footer so it never dominates the composed frame. */
+export const FOOTER_MAX_HEIGHT_RATIO = 0.22;
 
 /** Estimate footer block height at the scaled capture width (same units as layout). */
-export function estimateEvidenceFooterHeight(layoutWidth: number, meta: EvidenceStampMeta): number {
+export function estimateEvidenceFooterHeight(
+  layoutWidth: number,
+  meta: EvidenceStampMeta,
+  photoLayoutHeight?: number
+): number {
   const width = Math.max(1, Math.round(layoutWidth));
   const content = buildEvidenceFooterContent(meta);
   const pad = Math.max(14, Math.round(width * 0.028));
@@ -84,7 +90,12 @@ export function estimateEvidenceFooterHeight(layoutWidth: number, meta: Evidence
   const separator = 3;
   const estimated =
     separator + pad * 2 + Math.max(brandBlock, dateBlock + locationBlock + employeeBlock);
-  return Math.min(FOOTER_MAX_HEIGHT, Math.max(FOOTER_MIN_HEIGHT, estimated));
+  let height = Math.min(FOOTER_MAX_HEIGHT, Math.max(FOOTER_MIN_HEIGHT, estimated));
+  if (photoLayoutHeight != null && photoLayoutHeight > 0) {
+    const ratioCap = Math.round(photoLayoutHeight * FOOTER_MAX_HEIGHT_RATIO);
+    height = Math.min(height, Math.max(FOOTER_MIN_HEIGHT, ratioCap));
+  }
+  return height;
 }
 
 export type EvidencePhotoCaptureSize = CaptureLayoutSize & {
@@ -100,7 +111,11 @@ export function fitEvidencePhotoCaptureSize(
   maxEdge = WATERMARK_CAPTURE_MAX_EDGE
 ): EvidencePhotoCaptureSize {
   const photo = fitWatermarkCaptureSize(imageWidth, imageHeight, maxEdge);
-  const footerLayoutHeight = estimateEvidenceFooterHeight(photo.layoutWidth, meta);
+  const footerLayoutHeight = estimateEvidenceFooterHeight(
+    photo.layoutWidth,
+    meta,
+    photo.layoutHeight
+  );
   const totalHeight = photo.layoutHeight + footerLayoutHeight;
   return {
     layoutWidth: photo.layoutWidth,

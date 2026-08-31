@@ -2,7 +2,8 @@ import { Dimensions, type ViewStyle } from "react-native";
 
 /**
  * Positions the evidence capture tree just below the visible viewport at opacity 1.
- * Avoids zero-opacity ancestors (washed-out Android view-shot) and far off-screen -4000 (black JPEG).
+ * Avoids zero-opacity ancestors (washed-out Android view-shot), negative z-index compositing,
+ * and far off-screen coordinates (black JPEG).
  */
 export function evidenceCaptureHostStyle(): ViewStyle {
   const { height: windowHeight, width: windowWidth } = Dimensions.get("window");
@@ -12,9 +13,9 @@ export function evidenceCaptureHostStyle(): ViewStyle {
     top: windowHeight + 8,
     width: windowWidth,
     opacity: 1,
-    zIndex: -1
+    overflow: "hidden"
   };
 }
 
-/** resizeMode for evidence photo — full frame, no crop. */
-export const EVIDENCE_PHOTO_RESIZE_MODE = "contain" as const;
+/** contentFit for evidence photo — full frame, no crop. */
+export const EVIDENCE_PHOTO_CONTENT_FIT = "contain" as const;

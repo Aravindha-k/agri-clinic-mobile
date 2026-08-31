@@ -1,5 +1,4 @@
 import * as FileSystem from "expo-file-system";
-import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { Alert } from "react-native";
 import { captureVisitGps } from "./visit/visitGpsCapture";
@@ -30,14 +29,6 @@ export type PreparedEvidencePhoto = {
   name: string;
   mimeType: string;
 };
-
-async function flattenOrientation(uri: string): Promise<string> {
-  const result = await ImageManipulator.manipulateAsync(uri, [], {
-    compress: 0.92,
-    format: ImageManipulator.SaveFormat.JPEG
-  });
-  return result.uri;
-}
 
 async function currentFix() {
   const result = await captureVisitGps({ requestPermission: false });
@@ -97,7 +88,7 @@ export async function prepareCameraEvidence(options: {
   if (picked.canceled || !picked.assets[0]?.uri) return null;
 
   const originalUri = picked.assets[0].uri;
-  const sourceUri = await flattenOrientation(originalUri);
+  const sourceUri = originalUri;
   const fix = await currentFix();
   const latitude = fix?.latitude ?? null;
   const longitude = fix?.longitude ?? null;
@@ -152,7 +143,7 @@ export async function prepareGalleryEvidence(options: {
 
   for (const asset of picked.assets.slice(0, limit)) {
     if (!asset.uri) continue;
-    const sourceUri = await flattenOrientation(asset.uri);
+    const sourceUri = asset.uri;
     const exif = readGalleryExifLocation(asset.exif as Record<string, unknown> | undefined);
     const hasOriginal = exif != null;
     const latitude = hasOriginal ? exif.latitude : nowFix?.latitude ?? null;

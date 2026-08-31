@@ -22,7 +22,7 @@ export type WatermarkCaptureTarget = {
 /** Suspicious near-empty JPEG after a failed/black view-shot (bytes, not content). */
 export const MIN_STAMPED_JPEG_BYTES = 8_192;
 
-const VIEW_SHOT_JPEG_QUALITY = 0.88;
+export const VIEW_SHOT_JPEG_QUALITY = 0.92;
 const UPLOAD_MAX_EDGE = 1920;
 
 export function getImageDimensions(uri: string): Promise<{ width: number; height: number }> {
@@ -77,11 +77,11 @@ export async function captureWatermarkedPhoto(target: WatermarkCaptureTarget): P
     target.captureSize ??
     fitWatermarkCaptureSize(target.imageWidth, target.imageHeight);
 
+  // View layout already matches target output pixels — capture at native resolution to avoid
+  // an extra resample pass that can wash out colors on Android.
   const uri = await captureRef(ref, {
     format: "jpg",
     quality: VIEW_SHOT_JPEG_QUALITY,
-    width: size.outputWidth,
-    height: size.outputHeight,
     result: "tmpfile"
   });
 

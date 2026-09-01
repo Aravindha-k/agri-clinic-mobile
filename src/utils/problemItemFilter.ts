@@ -1,4 +1,5 @@
 import type { ProblemItem } from "../api/problems";
+import { problemItemMatchesSearch } from "./problemSearch";
 
 /** Mirrors backend `models_Q_crop_filter`: generic (null crop) or matching crop. */
 export function problemItemMatchesCrop(item: ProblemItem, cropId?: string): boolean {
@@ -67,10 +68,6 @@ export function filterProblemItems(
       return false;
     }
     if (!q) return true;
-    return (
-      item.name.toLowerCase().includes(q) ||
-      (item.tamil_name || "").toLowerCase().includes(q) ||
-      (item.crop_name || "").toLowerCase().includes(q)
-    );
+    return problemItemMatchesSearch(item, options.search || "");
   });
 }

@@ -1,5 +1,9 @@
 import type { Visit } from "../../src/api/visits";
 import type { AppLanguage } from "../../src/i18n";
+import {
+  pendingVisitValuesMatchSearch,
+  visitMatchesSearch
+} from "../../src/utils/visitSearch";
 import { isSameLocalDay, visitDisplayIso } from "../../src/utils/format";
 import {
   formatIndiaWeekdayDateShort,
@@ -29,31 +33,10 @@ function dayKey(iso: string | null) {
 
 
 export function pendingMatchesSearch(pending: PendingVisitRecord, query: string) {
-  if (!query.trim()) return true;
-  const v = pending.values;
-  const hay = [v.farmer_name, v.farmer_phone, v.crop_name, v.problem_seen, v.village]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-  return hay.includes(query.trim().toLowerCase());
+  return pendingVisitValuesMatchSearch(pending.values, query);
 }
 
-export function visitMatchesSearch(visit: Visit, query: string) {
-  if (!query.trim()) return true;
-  const hay = [
-    visit.farmer_name,
-    visit.farmer_phone,
-    visit.village_name,
-    visit.crop_name,
-    visit.problem_seen,
-    visit.field_visit?.problem_category?.code,
-    visit.field_visit?.problem_category?.name
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-  return hay.includes(query.trim().toLowerCase());
-}
+export { visitMatchesSearch };
 
 export function buildVisitListRows(
   pending: PendingVisitRecord[],

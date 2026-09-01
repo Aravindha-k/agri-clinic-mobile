@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getProblemCategories, type ProblemCategory } from "../../src/api/problems";
+import { anyFieldStartsWithSearch } from "../../src/utils/prefixSearch";
 import { useRefreshControlProps } from "../../src/hooks/useRefreshControlProps";
 import { useSecureScreen } from "../../src/hooks/useSecureScreen";
 import { useI18n } from "../../src/i18n/I18nContext";
@@ -46,11 +47,7 @@ export default function ProblemsCatalogScreen() {
     await load();
   }
 
-  const filtered = categories.filter((row) => {
-    if (!query.trim()) return true;
-    const hay = `${row.code} ${row.name}`.toLowerCase();
-    return hay.includes(query.trim().toLowerCase());
-  });
+  const filtered = categories.filter((row) => anyFieldStartsWithSearch(query, row.code, row.name));
 
   return (
     <SafeAreaView style={styles.screen} edges={topEdges}>

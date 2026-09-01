@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsetsCompat } from "../../../src/hooks/useSafeAreaInsetsCompat";
 import { useI18n } from "../../../src/i18n/I18nContext";
+import { anyFieldStartsWithSearch } from "../../../src/utils/prefixSearch";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 
 export type MasterSelectItem = {
@@ -55,12 +56,9 @@ export const MasterSelectSheet = forwardRef<MasterSelectSheetRef, Props>(functio
   }));
 
   const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
+    const needle = query.trim();
     if (!needle) return items;
-    return items.filter((item) => {
-      const hay = [item.title, item.subtitle].filter(Boolean).join(" ").toLowerCase();
-      return hay.includes(needle);
-    });
+    return items.filter((item) => anyFieldStartsWithSearch(needle, item.title, item.subtitle));
   }, [items, query]);
 
   function handleClose() {

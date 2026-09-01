@@ -104,7 +104,12 @@ export default function VisitCreateStep1({ onClose }: Props) {
   }, { districts });
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedQuery(query.trim()), SEARCH_DEBOUNCE_MS);
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setDebouncedQuery("");
+      return;
+    }
+    const timer = setTimeout(() => setDebouncedQuery(trimmed), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [query]);
 

@@ -125,23 +125,21 @@ function problemItemFrequency(item: ProblemItem & { frequency?: number; visit_co
   return item.frequency ?? item.visit_count ?? 0;
 }
 
+import { problemItemMatchesSearch } from "../../src/utils/problemSearch";
+
 /** Instant local filter for Step 2 search + optional category chip. */
 export function filterStep2Problems(
   items: ProblemItem[],
   options: { categoryCode?: string | null; search?: string }
 ): ProblemItem[] {
   const category = options.categoryCode?.trim();
-  const q = (options.search || "").trim().toLowerCase();
+  const q = (options.search || "").trim();
   const active = filterActiveProblemItems(items);
 
   return active.filter((item) => {
     if (category && !categoryCodesMatch(item.category, category)) return false;
     if (!q) return true;
-    return (
-      item.name.toLowerCase().includes(q) ||
-      (item.tamil_name || "").toLowerCase().includes(q) ||
-      (item.crop_name || "").toLowerCase().includes(q)
-    );
+    return problemItemMatchesSearch(item, q);
   });
 }
 

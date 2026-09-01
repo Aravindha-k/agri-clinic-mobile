@@ -55,15 +55,7 @@ function mergeFarmerRows(current: MobileFarmer[], rows: MobileFarmer[]) {
   return Array.from(byId.values());
 }
 
-function matchesSearch(farmer: MobileFarmer, query: string) {
-  if (!query) return true;
-  const needle = query.toLowerCase();
-  const name = (farmer.name || "").toLowerCase();
-  const phone = (farmer.phone || "").toLowerCase();
-  const village = String(farmer.village_name || farmer.village || "").toLowerCase();
-  return name.includes(needle) || phone.includes(needle) || village.includes(needle);
-}
-
+import { farmerMatchesSearch } from "../../src/utils/farmerSearch";
 export function useFarmersDirectory(
   sectionTitle: (sectionId: FarmerWorkSectionId, count: number) => string,
   emptyMessage: (sectionId: FarmerWorkSectionId) => string | null
@@ -193,7 +185,7 @@ export function useFarmersDirectory(
         const cached = getCachedFarmers() as MobileFarmer[];
         if (cached.length > 0) {
           const filtered = cached.filter((farmer) => {
-            if (!matchesSearch(farmer, debouncedSearch)) return false;
+            if (!farmerMatchesSearch(farmer, debouncedSearch)) return false;
             if (!matchesVillage(farmer, selectedVillageId, villageLabel)) return false;
             return true;
           });
@@ -256,7 +248,7 @@ export function useFarmersDirectory(
       return farmers;
     }
     return cachedFarmers.filter((farmer) => {
-      if (!matchesSearch(farmer, debouncedSearch)) return false;
+      if (!farmerMatchesSearch(farmer, debouncedSearch)) return false;
       if (!matchesVillage(farmer, selectedVillageId, villageLabel)) return false;
       return true;
     });

@@ -1,4 +1,5 @@
 import type { MobileFarmer } from "./farmersApi";
+import { farmerMatchesSearch } from "../../src/utils/farmerSearch";
 
 export type FarmerListFilter = "all" | "not_visited" | "recently_visited";
 
@@ -137,11 +138,5 @@ export function filterCachedFarmers(
 }
 
 export function offlineFarmerMatchesSearch(farmer: MobileFarmer, query: string): boolean {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return true;
-  const hay = [farmer.name, farmer.phone, farmer.village_name, farmer.village]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-  return hay.includes(needle);
+  return farmerMatchesSearch(farmer, query);
 }

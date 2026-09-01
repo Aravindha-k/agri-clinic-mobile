@@ -36,13 +36,7 @@ type Props = {
   remoteSearch?: boolean;
 };
 
-function matchesLocal(item: SearchableSelectItem, query: string) {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  const hay = [item.title, item.subtitle, item.tamilTitle, item.meta].filter(Boolean).join(" ").toLowerCase();
-  return hay.includes(q);
-}
-
+import { selectItemMatchesPrefixSearch } from "../../utils/prefixSearch";
 export function SearchableSelectModal({
   visible,
   title,
@@ -74,7 +68,7 @@ export function SearchableSelectModal({
 
   const filtered = useMemo(() => {
     if (remoteSearch) return items;
-    return items.filter((item) => matchesLocal(item, query));
+    return items.filter((item) => selectItemMatchesPrefixSearch(query, item));
   }, [items, query, remoteSearch]);
 
   function handleClose() {

@@ -14,26 +14,24 @@ import { useTheme } from "../theme";
 import { listCardLayout } from "../theme/listCard";
 import { useRefreshControlProps } from "../hooks/useRefreshControlProps";
 import { visitDisplayIso } from "../utils/format";
+import { anyFieldStartsWithSearch } from "../utils/prefixSearch";
 import { resolveVisitFarmer } from "../utils/visitFarmer";
 import { formatVisitCropLine } from "../utils/visitStatus";
 
 type Props = NativeStackScreenProps<VisitsStackParamList, "VisitsList">;
 
 function visitMatchesQuery(visit: Visit, q: string) {
-  if (!q.trim()) return true;
   const farmer = resolveVisitFarmer(visit);
-  const needle = q.trim().toLowerCase();
-  const hay = [
+  const cropLine = farmer.cropName !== "—" ? farmer.cropName : formatVisitCropLine(visit, "");
+  return anyFieldStartsWithSearch(
+    q,
     visit.farmer_name,
     visit.farmer_phone,
     visit.village_name,
     visit.crop_name,
-    farmer.cropName !== "—" ? farmer.cropName : formatVisitCropLine(visit, "")
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-  return hay.includes(needle);
+    cropLine,
+    visit.problem_seen
+  );
 }
 
 function sortVisitsNewestFirst(items: Visit[]) {

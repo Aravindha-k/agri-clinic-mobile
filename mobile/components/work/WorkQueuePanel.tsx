@@ -15,7 +15,6 @@ import { LAN_OFFLINE_BANNER_MESSAGE } from "../../lib/api";
 import { useRefreshControlProps } from "../../../src/hooks/useRefreshControlProps";
 import { useTabBarBottomInset } from "../../../src/hooks/useTabBarBottomInset";
 import { navigateFarmerMap } from "../../../src/navigation/navigateFarmerMap";
-import { useMasterData } from "../../../src/storage/MasterDataContext";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { prefillFromFarmer } from "../../../src/utils/farmerPrefill";
 import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal";
@@ -49,7 +48,6 @@ export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
   const { t } = useI18n();
   const navigation = useNavigation<any>();
   const rootNav = navigation.getParent()?.getParent();
-  const { villages } = useMasterData();
   const tabInset = useTabBarBottomInset();
   const refreshControlProps = useRefreshControlProps();
   const villageSheetRef = useRef<VillageFilterSheetRef>(null);
@@ -393,7 +391,6 @@ export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
 
       <VillageFilterSheet
         ref={villageSheetRef}
-        villages={villages}
         onSelect={(id, name) => {
           directory.setSelectedVillageId(id);
           directory.setSelectedVillageName(name);

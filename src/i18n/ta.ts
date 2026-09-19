@@ -32,6 +32,13 @@ export const ta: TranslationTree = {
     expandSection: "பகுதியை விரிவாக்கு",
     collapseSection: "பகுதியை சுருக்கு"
   },
+  territory: {
+    noVillagesTitle: "கிராமங்கள் ஒதுக்கப்படவில்லை",
+    noVillagesBody:
+      "உங்கள் கணக்கிற்கு கிராமங்கள் ஒதுக்கப்படவில்லை. நிர்வாகியை தொடர்பு கொள்ளவும்.",
+    unassignedVillage: "உங்களுக்கு ஒதுக்கப்பட்ட கிராமத்தைத் தேர்ந்தெடுக்கவும்.",
+    reviewVillage: "கிராமத்தை மீண்டும் தேர்ந்தெடுக்கவும். முந்தைய இட விவரங்கள் காலாவதியானவை."
+  },
   startup: {
     takingLonger: "செயலி தொடங்க அதிக நேரமாகிறது",
     offlineSafeMessage:
@@ -414,9 +421,7 @@ export const ta: TranslationTree = {
     noFields: "இந்த விவசாரிக்கு வயல்கள் பதிவு இல்லை.",
     noVisits: "இன்னும் வருகைகள் பதிவு இல்லை.",
     noCropsOnField: "இந்த வயலுடன் பயிர்கள் இணைக்கப்படவில்லை.",
-    taluk: "தாலுகா",
     village: "கிராமம்",
-    district: "மாவட்டம்",
     notAssigned: "ஒதுக்கப்படவில்லை"
   },
   home: {
@@ -674,18 +679,10 @@ export const ta: TranslationTree = {
     farmerNamePlaceholder: "விவசாயி பெயர்",
     mobile: "மொபைல் *",
     mobilePlaceholder: "10 இலக்க தொலைபேசி",
-    district: "மாவட்டம் *",
-    taluk: "தாலுகா *",
     village: "கிராமம் *",
-    selectDistrict: "மாவட்டம் தேர்வு",
-    selectTaluk: "தாலுகா தேர்வு",
     selectVillage: "கிராமம் தேர்வு",
-    selectDistrictFirst: "முதலில் மாவட்டம் தேர்வு",
-    selectTalukFirst: "முதலில் தாலுகா தேர்வு",
-    loadingTaluks: "தாலுகாக்கள் ஏற்றுகிறது…",
     loadingVillages: "கிராமங்கள் ஏற்றுகிறது…",
     unableToLoadRetry: "ஏற்ற முடியவில்லை · மீண்டும்",
-    noTaluks: "தாலுகாக்கள் இல்லை",
     noVillages: "கிராமங்கள் இல்லை",
     continueNewFarmer: "புதிய விவசாயியுடன் தொடர்",
     discardVisit: "வருகை ரத்து?",
@@ -698,8 +695,6 @@ export const ta: TranslationTree = {
     continueEditing: "தொடர்ந்து திருத்து",
     errName: "விவசாயி பெயரை உள்ளிடவும்.",
     errPhone: "சரியான 10 இலக்க மொபைல் எண் உள்ளிடவும்.",
-    errDistrict: "மாவட்டம் தேர்வு செய்யவும்.",
-    errTaluk: "தாலுகா தேர்வு செய்யவும்.",
     errVillage: "கிராமம் தேர்வு செய்யவும்.",
     gpsLoading: "GPS…",
     cropAndProblem: "பயிர் & பிரச்சனை",

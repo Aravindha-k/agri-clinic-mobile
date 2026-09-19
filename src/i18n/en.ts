@@ -30,6 +30,13 @@ export const en = {
     expandSection: "Expand section",
     collapseSection: "Collapse section"
   },
+  territory: {
+    noVillagesTitle: "No villages assigned",
+    noVillagesBody:
+      "No villages are assigned to your account. Please contact the administrator.",
+    unassignedVillage: "Choose a village assigned to your account.",
+    reviewVillage: "Please re-select your village. Previous location details are outdated."
+  },
   startup: {
     takingLonger: "Startup is taking longer",
     offlineSafeMessage:
@@ -409,9 +416,7 @@ export const en = {
     noFields: "No fields registered for this farmer.",
     noVisits: "No visits logged yet.",
     noCropsOnField: "No crops linked to this field.",
-    taluk: "Taluk",
     village: "Village",
-    district: "District",
     notAssigned: "Not assigned"
   },
   home: {
@@ -668,18 +673,10 @@ export const en = {
     farmerNamePlaceholder: "Farmer name",
     mobile: "Mobile *",
     mobilePlaceholder: "10-digit mobile",
-    district: "District *",
-    taluk: "Taluk *",
     village: "Village *",
-    selectDistrict: "Select district",
-    selectTaluk: "Select taluk",
     selectVillage: "Select village",
-    selectDistrictFirst: "Select district first",
-    selectTalukFirst: "Select taluk first",
-    loadingTaluks: "Loading taluks…",
     loadingVillages: "Loading villages…",
     unableToLoadRetry: "Unable to load · Retry",
-    noTaluks: "No taluks available",
     noVillages: "No villages available",
     continueNewFarmer: "Continue with new farmer",
     discardVisit: "Discard visit?",
@@ -692,8 +689,6 @@ export const en = {
     continueEditing: "Continue editing",
     errName: "Please enter the farmer's name.",
     errPhone: "Enter a valid 10-digit mobile number.",
-    errDistrict: "Please select a district.",
-    errTaluk: "Please select a taluk.",
     errVillage: "Please select a village.",
     gpsLoading: "GPS…",
     cropAndProblem: "Crop & problem",

@@ -19,7 +19,7 @@ type Props = {
 export function FarmerCard({ farmer, onPress, onRevisit, onViewMap, lastVisitLabel }: Props) {
   const { theme } = useTheme();
   const c = theme.colors;
-  const place = [farmer.village_name || farmer.village, farmer.district_name || farmer.district].filter(Boolean).join(", ");
+  const place = String(farmer.village_name || farmer.village || "").trim();
   const crop = farmer.crop_name || farmer.list_crop_name || "Crop not set";
   const phone = farmer.phone?.trim() || "—";
   const lastVisit = lastVisitLabel ?? formatFarmerLastVisit(farmer);

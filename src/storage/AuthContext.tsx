@@ -5,6 +5,7 @@ import { loginRequest, logoutRequest } from "../api/auth";
 import { Employee, getCurrentEmployee, isFieldEmployee } from "../api/employees";
 import { clearInflightRequests } from "../api/requestDedupe";
 import { clearMasterDataCache } from "./masterDataCache";
+import { clearTerritoryCache } from "./territoryCache";
 import { logApiTelemetrySummary, resetApiTelemetry } from "../api/apiTelemetry";
 import { SESSION_EXPIRED_MESSAGE } from "../constants/authMessages";
 import { SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
@@ -102,18 +103,14 @@ function isRetriableAuthError(err: unknown): boolean {
   return false;
 }
 
-/** Saved tokens from another backend (e.g. local vs Render) — re-login, not "server down". */
+/**
+ * Background bootstrap may tear down only for confirmed security invalidation.
+ * Uncertain 401 / missing local DeviceSession / network / 5xx must keep the session.
+ */
 function shouldForceReLoginOnBootstrap(err: unknown): boolean {
   if (isAuthExpiredError(err)) return true;
   if (err instanceof ApiRequestError && (err.code === "EMPLOYEE_INACTIVE" || err.code === "ACCOUNT_DISABLED")) {
     return true;
-  }
-  if (err instanceof ApiRequestError && err.status === 401) {
-    return (
-      err.code === "AUTH_UNCERTAIN" ||
-      err.code === "INVALID_CREDENTIALS" ||
-      err.code === "SESSION_EXPIRED"
-    );
   }
   return false;
 }
@@ -181,6 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await clearTokens();
       await clearDeviceSessionId();
       await clearMasterDataCache().catch(() => undefined);
+      await clearTerritoryCache().catch(() => undefined);
       await clearDutyBootstrapState({ userId: employeeIdRef.current, preserveCache: false }).catch(() => undefined);
       clearInflightRequests();
       resetApiTelemetry();
@@ -328,10 +326,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (isStale()) return;
 
         if (!(await getDeviceSessionId())) {
-          await performLocalSignOut({
-            notice: "This device needs a fresh sign-in. Please log in again.",
-            reason: "missing device session"
-          });
+          // SecureStore can time out and cache a false miss. Do not wipe tokens.
+          await hydrateDutyFromBootstrap({
+            bootstrap: null,
+            userId: employeeIdRef.current,
+            error: new Error("device_session_unread")
+          }).catch(() => undefined);
+          setBootstrapIssue("network");
+          endedIssue = "network";
+          logStartup("session_restored", "missing_local_device_session");
           return;
         }
 
@@ -463,12 +466,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (isStale()) return;
 
         if (!(await getDeviceSessionId().catch(() => null))) {
-          await performLocalSignOut({
-            notice: "This device needs a fresh sign-in. Please log in again.",
-            reason: "missing device session"
-          }).catch(() => undefined);
-          endedPhase = "unauthenticated";
-          return;
+          // Token present but DeviceSession unread — keep session; biometric or background validate recovers.
+          logStartup("session_restored", "missing_local_device_session_cold_start");
         }
 
         let biometricLocked = false;

@@ -84,8 +84,8 @@ export type Visit = {
   } | null;
 };
 
+/** New visit write payload — Village-only operational location (no district/taluk/firka). */
 export type VisitFormValues = {
-  district: string;
   village: string;
   crop: string;
   land_name: string;
@@ -123,7 +123,6 @@ export type VisitFormValues = {
   problem_master_id?: string;
   problem_item_ids?: number[];
   problem_description?: string;
-  taluk?: string;
   action_taken?: string;
   follow_up_date?: string;
   crop_name?: string;

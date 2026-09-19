@@ -6,29 +6,12 @@ export type MasterOption = {
   name?: string;
   name_en?: string;
   name_ta?: string;
+  /** Historical master response fields — not used for operational territory. */
   district?: number;
   district_name?: string;
   taluk?: number | null;
   taluk_name?: string | null;
 };
-
-export type TalukOption = MasterOption & {
-  district: number;
-};
-
-export async function getDistricts() {
-  const data = await apiClient<MasterOption[] | { results: MasterOption[] }>("masters/districts/");
-  return asArray<MasterOption>(data);
-}
-
-export async function getTaluks(districtId: string | number): Promise<TalukOption[]> {
-  const id = String(districtId).trim();
-  if (!id) return [];
-  const data = await apiClient<TalukOption[] | { results: TalukOption[] }>(
-    `masters/taluks/?district=${encodeURIComponent(id)}`
-  );
-  return asArray<TalukOption>(data);
-}
 
 export type VillagesQuery = {
   taluk?: string | number;
@@ -36,7 +19,10 @@ export type VillagesQuery = {
   search?: string;
 };
 
-/** Villages for a taluk (preferred) or district. Do not call without a scope for the full catalog. */
+/**
+ * Scoped village master fetch only. Never call without a query — refuse full catalog dump.
+ * Employee operational territory must use GET mobile/territory/, not this endpoint.
+ */
 export async function getVillages(options?: VillagesQuery) {
   const params = new URLSearchParams();
   if (options?.taluk != null && String(options.taluk).trim()) {

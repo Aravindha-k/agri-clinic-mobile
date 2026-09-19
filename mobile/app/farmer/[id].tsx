@@ -25,7 +25,6 @@ import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
 import { getVisitDisplayDateTime } from "../../../src/utils/format";
 import { prefillFromFarmer } from "../../../src/utils/farmerPrefill";
-import { formatTalukLabel } from "../../../src/utils/locationCascade";
 import type { WorkStackParamList } from "../../../src/navigation/types";
 import { ScreenErrorBoundary } from "../../../src/components/ScreenErrorBoundary";
 import { qaLogNavParamsMissing, qaLogScreenOpen } from "../../../src/utils/qaLog";
@@ -446,13 +445,7 @@ function FarmerProfileScreenInner() {
                 ) : null}
               </View>
               <Text style={styles.placeText} numberOfLines={3}>
-                {[
-                  farmer.village_name || farmer.village,
-                  `${t("farmerDetail.taluk")}: ${formatTalukLabel(farmer, t("farmerDetail.notAssigned"))}`,
-                  farmer.district_name || farmer.district
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
+                {String(farmer.village_name || farmer.village || t("farmerDetail.notAssigned")).trim()}
               </Text>
             </View>
           </View>

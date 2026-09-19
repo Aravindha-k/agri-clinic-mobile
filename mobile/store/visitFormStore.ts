@@ -38,9 +38,12 @@ export type VisitGpsCoords = {
 export type NewFarmerDraft = {
   name: string;
   phone: string;
-  district_id: string;
-  taluk_id: string;
   village_id: string;
+  /** Cleared on migrate — kept optional so old MMKV drafts parse without crash. */
+  district_id?: string;
+  taluk_id?: string;
+  /** Set when legacy draft village cannot be mapped to assigned territory. */
+  needsVillageReview?: boolean;
 };
 
 export type VisitSeverity = "low" | "medium" | "high";
@@ -136,8 +139,6 @@ type VisitFormState = {
 const emptyNewFarmer = (): NewFarmerDraft => ({
   name: "",
   phone: "",
-  district_id: "",
-  taluk_id: "",
   village_id: ""
 });
 
@@ -468,7 +469,7 @@ export const useVisitFormStore = create<VisitFormState>()(
     if (state.farmer) return true;
     if (state.newFarmer) {
       const nf = state.newFarmer;
-      if (nf.name.trim() || nf.phone.trim() || nf.district_id || nf.taluk_id || nf.village_id) return true;
+      if (nf.name.trim() || nf.phone.trim() || nf.village_id) return true;
     }
     if (
       state.cropId ||

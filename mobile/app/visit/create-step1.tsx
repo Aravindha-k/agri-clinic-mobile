@@ -10,12 +10,15 @@ import {
   View
 } from "react-native";
 import type { Farmer } from "../../../src/api/farmers";
-import { getOptionLabel } from "../../../src/api/masters";
 import { useConnectivityOnline } from "../../../src/hooks/useConnectivityOnline";
 import { useI18n } from "../../../src/i18n/I18nContext";
-import { useMasterData } from "../../../src/storage/MasterDataContext";
+import { useTerritory } from "../../../src/storage/TerritoryContext";
 import { requestGpsForFieldWork } from "../../../src/utils/locationRequiredModal";
-import { useLocationCascade } from "../../../src/hooks/useLocationCascade";
+import {
+  normalizeLegacyNewFarmerDraft,
+  villageSelectSubtitle,
+  villageSelectTitle
+} from "../../../src/utils/villageTerritory";
 import { FlatCard } from "../../components/layout/FlatCard";
 import { PrimaryButton, SearchBar, StatusChip } from "../../components/ui";
 import { FarmerPickCard } from "../../components/visit/FarmerPickCard";
@@ -60,7 +63,14 @@ export default function VisitCreateStep1({ onClose }: Props) {
   const { t } = useI18n();
   const replayKey = useVisitEntranceKey();
   const online = useConnectivityOnline();
-  const { districts } = useMasterData();
+  const {
+    villages: territoryVillages,
+    isEmpty: territoryEmpty,
+    unavailable: territoryUnavailable,
+    loading: territoryLoading,
+    isAssignedVillage,
+    refreshTerritory
+  } = useTerritory();
   const setFarmer = useVisitFormStore((s) => s.setFarmer);
   const setNewFarmer = useVisitFormStore((s) => s.setNewFarmer);
   const clearNewFarmer = useVisitFormStore((s) => s.clearNewFarmer);
@@ -82,26 +92,29 @@ export default function VisitCreateStep1({ onClose }: Props) {
   const [selectingFarmer, setSelectingFarmer] = useState(false);
   const [newFarmerErrors, setNewFarmerErrors] = useState<Record<string, string>>({});
 
-  const districtSheetRef = useRef<MasterSelectSheetRef>(null);
-  const talukSheetRef = useRef<MasterSelectSheetRef>(null);
   const villageSheetRef = useRef<MasterSelectSheetRef>(null);
   const searchRequestId = useRef(0);
   const poolRequestId = useRef(0);
 
-  const draft = newFarmer ?? { name: "", phone: "", district_id: "", taluk_id: "", village_id: "" };
+  const draft = newFarmer ?? { name: "", phone: "", village_id: "" };
 
-  const locationSelection = {
-    districtId: draft.district_id,
-    talukId: draft.taluk_id,
-    villageId: draft.village_id
-  };
-  const cascade = useLocationCascade(locationSelection, (next) => {
-    setNewFarmer({
-      district_id: next.districtId,
-      taluk_id: next.talukId,
-      village_id: next.villageId
-    });
-  }, { districts });
+  useEffect(() => {
+    if (!newFarmer) return;
+    const normalized = normalizeLegacyNewFarmerDraft(newFarmer, territoryVillages);
+    if (
+      normalized.village_id !== (newFarmer.village_id || "") ||
+      Boolean(newFarmer.district_id) ||
+      Boolean(newFarmer.taluk_id) ||
+      Boolean(newFarmer.needsVillageReview) !== normalized.needsVillageReview
+    ) {
+      setNewFarmer({
+        village_id: normalized.village_id,
+        district_id: "",
+        taluk_id: "",
+        needsVillageReview: normalized.needsVillageReview
+      });
+    }
+  }, [newFarmer, setNewFarmer, territoryVillages]);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -223,48 +236,18 @@ export default function VisitCreateStep1({ onClose }: Props) {
     [farmerPool, recentFarmers]
   );
 
-  const districtItems = useMemo(
-    () =>
-      cascade.districts.map((d) => ({
-        id: String(d.id),
-        title: getOptionLabel(d),
-        subtitle: d.name_ta || undefined
-      })),
-    [cascade.districts]
-  );
-
-  const talukItems = useMemo(
-    () =>
-      cascade.taluks.map((row) => ({
-        id: String(row.id),
-        title: getOptionLabel(row),
-        subtitle: row.name_ta || undefined
-      })),
-    [cascade.taluks]
-  );
-
   const villageItems = useMemo(
     () =>
-      cascade.villages.map((v) => ({
+      territoryVillages.map((v) => ({
         id: String(v.id),
-        title: getOptionLabel(v),
-        subtitle: v.taluk_name || v.district_name || undefined
+        title: villageSelectTitle(v),
+        subtitle: villageSelectSubtitle(v)
       })),
-    [cascade.villages]
+    [territoryVillages]
   );
 
-  const selectedDistrictLabel =
-    districtItems.find((d) => d.id === draft.district_id)?.title || t("visitFlow.selectDistrict");
-  const selectedTalukLabel = !draft.district_id
-    ? t("visitFlow.selectDistrictFirst")
-    : cascade.taluksState === "loading"
-      ? t("visitFlow.loadingTaluks")
-      : talukItems.find((row) => row.id === draft.taluk_id)?.title || t("visitFlow.selectTaluk");
-  const selectedVillageLabel = !draft.taluk_id
-    ? t("visitFlow.selectTalukFirst")
-    : cascade.villagesState === "loading"
-      ? t("visitFlow.loadingVillages")
-      : villageItems.find((v) => v.id === draft.village_id)?.title || t("visitFlow.selectVillage");
+  const selectedVillageLabel =
+    villageItems.find((v) => v.id === draft.village_id)?.title || t("visitFlow.selectVillage");
 
   const showWorkQueue = debouncedQuery.length === 0;
   const showSearchResults = debouncedQuery.length > 0;
@@ -306,9 +289,13 @@ export default function VisitCreateStep1({ onClose }: Props) {
 
     if (!name) errors.name = t("visitFlow.errName");
     if (!/^\d{10}$/.test(phone)) errors.phone = t("visitFlow.errPhone");
-    if (!draft.district_id) errors.district_id = t("visitFlow.errDistrict");
-    if (!draft.taluk_id) errors.taluk_id = t("visitFlow.errTaluk");
-    if (!draft.village_id) errors.village_id = t("visitFlow.errVillage");
+    if (territoryEmpty || territoryUnavailable) {
+      errors.village_id = t("territory.noVillagesBody");
+    } else if (!draft.village_id) {
+      errors.village_id = t("visitFlow.errVillage");
+    } else if (!isAssignedVillage(draft.village_id)) {
+      errors.village_id = t("territory.unassignedVillage");
+    }
 
     if (Object.keys(errors).length > 0) {
       setNewFarmerErrors(errors);
@@ -324,9 +311,10 @@ export default function VisitCreateStep1({ onClose }: Props) {
     setNewFarmer({
       name,
       phone,
-      district_id: draft.district_id,
-      taluk_id: draft.taluk_id,
-      village_id: draft.village_id
+      village_id: draft.village_id,
+      district_id: "",
+      taluk_id: "",
+      needsVillageReview: false
     });
     setFarmer(null);
     setVisitKind("first");
@@ -491,70 +479,43 @@ export default function VisitCreateStep1({ onClose }: Props) {
             />
             {newFarmerErrors.phone ? <Text style={styles.fieldError}>{newFarmerErrors.phone}</Text> : null}
 
-            <Text style={styles.inputLabel}>{t("visitFlow.district")}</Text>
-            <Pressable
-              onPress={() => districtSheetRef.current?.open()}
-              style={[styles.selectBtn, draft.district_id && styles.selectBtnFilled]}
-            >
-              <Text style={[styles.selectBtnText, !draft.district_id && styles.selectBtnPlaceholder]}>
-                {selectedDistrictLabel}
-              </Text>
-              <Ionicons name="chevron-down" size={16} color={Colors.text3} />
-            </Pressable>
-            {newFarmerErrors.district_id ? (
-              <Text style={styles.fieldError}>{newFarmerErrors.district_id}</Text>
-            ) : null}
-
-            <Text style={styles.inputLabel}>{t("visitFlow.taluk")}</Text>
-            <Pressable
-              onPress={() => talukSheetRef.current?.open()}
-              style={[
-                styles.selectBtn,
-                !draft.district_id && styles.selectBtnDisabled,
-                draft.taluk_id && styles.selectBtnFilled
-              ]}
-              disabled={!draft.district_id || cascade.taluksState === "loading"}
-            >
-              <Text style={[styles.selectBtnText, !draft.taluk_id && styles.selectBtnPlaceholder]}>
-                {selectedTalukLabel}
-              </Text>
-              <Ionicons name="chevron-down" size={16} color={Colors.text3} />
-            </Pressable>
-            {cascade.taluksState === "error" ? (
-              <Pressable onPress={cascade.retryTaluks}>
-                <Text style={styles.fieldError}>{t("visitFlow.unableToLoadRetry")}</Text>
-              </Pressable>
-            ) : null}
-            {newFarmerErrors.taluk_id ? <Text style={styles.fieldError}>{newFarmerErrors.taluk_id}</Text> : null}
-
-            <Text style={styles.inputLabel}>{t("visitFlow.village")}</Text>
-            <Pressable
-              onPress={() => villageSheetRef.current?.open()}
-              style={[
-                styles.selectBtn,
-                !draft.taluk_id && styles.selectBtnDisabled,
-                draft.village_id && styles.selectBtnFilled
-              ]}
-              disabled={!draft.taluk_id || cascade.villagesState === "loading"}
-            >
-              <Text style={[styles.selectBtnText, !draft.village_id && styles.selectBtnPlaceholder]}>
-                {cascade.villagesState === "empty" ? t("visitFlow.noVillages") : selectedVillageLabel}
-              </Text>
-              <Ionicons name="chevron-down" size={16} color={Colors.text3} />
-            </Pressable>
-            {cascade.villagesState === "error" ? (
-              <Pressable onPress={cascade.retryVillages}>
-                <Text style={styles.fieldError}>{t("visitFlow.unableToLoadRetry")}</Text>
-              </Pressable>
-            ) : null}
-            {newFarmerErrors.village_id ? (
-              <Text style={styles.fieldError}>{newFarmerErrors.village_id}</Text>
-            ) : null}
+            {territoryEmpty || territoryUnavailable ? (
+              <View style={styles.territoryEmpty}>
+                <Text style={styles.territoryEmptyTitle}>{t("territory.noVillagesTitle")}</Text>
+                <Text style={styles.territoryEmptyBody}>{t("territory.noVillagesBody")}</Text>
+                <Pressable onPress={() => void refreshTerritory({ force: true })}>
+                  <Text style={styles.fieldError}>{t("common.retry")}</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.inputLabel}>{t("visitFlow.village")}</Text>
+                <Pressable
+                  onPress={() => villageSheetRef.current?.open()}
+                  style={[styles.selectBtn, draft.village_id && styles.selectBtnFilled]}
+                  disabled={territoryLoading && territoryVillages.length === 0}
+                >
+                  <Text style={[styles.selectBtnText, !draft.village_id && styles.selectBtnPlaceholder]}>
+                    {territoryLoading && !draft.village_id
+                      ? t("visitFlow.loadingVillages")
+                      : selectedVillageLabel}
+                  </Text>
+                  <Ionicons name="chevron-down" size={16} color={Colors.text3} />
+                </Pressable>
+                {draft.needsVillageReview ? (
+                  <Text style={styles.fieldError}>{t("territory.reviewVillage")}</Text>
+                ) : null}
+                {newFarmerErrors.village_id ? (
+                  <Text style={styles.fieldError}>{newFarmerErrors.village_id}</Text>
+                ) : null}
+              </>
+            )}
 
             <PrimaryButton
               label={t("visitFlow.continueNewFarmer")}
               onPress={continueNewFarmer}
               style={styles.continueBtn}
+              disabled={territoryEmpty || territoryUnavailable}
             />
           </FlatCard>
         )}
@@ -562,22 +523,20 @@ export default function VisitCreateStep1({ onClose }: Props) {
       </ScrollView>
 
       <MasterSelectSheet
-        ref={districtSheetRef}
-        title={t("visitFlow.selectDistrict")}
-        items={districtItems}
-        onSelect={(item) => cascade.setDistrict(item.id)}
-      />
-      <MasterSelectSheet
-        ref={talukSheetRef}
-        title={t("visitFlow.selectTaluk")}
-        items={talukItems}
-        onSelect={(item) => cascade.setTaluk(item.id)}
-      />
-      <MasterSelectSheet
         ref={villageSheetRef}
         title={t("visitFlow.selectVillage")}
         items={villageItems}
-        onSelect={(item) => cascade.setVillage(item.id)}
+        onSelect={(item) => {
+          setNewFarmer({
+            village_id: item.id,
+            district_id: "",
+            taluk_id: "",
+            needsVillageReview: false
+          });
+          if (newFarmerErrors.village_id) {
+            setNewFarmerErrors((e) => ({ ...e, village_id: "" }));
+          }
+        }}
       />
     </View>
   );
@@ -714,6 +673,25 @@ const styles = StyleSheet.create({
   },
   selectBtnDisabled: {
     opacity: 0.5
+  },
+  territoryEmpty: {
+    backgroundColor: Colors.amberBg,
+    borderColor: Colors.amber,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    gap: 6,
+    marginTop: 8,
+    padding: 12
+  },
+  territoryEmptyTitle: {
+    color: Colors.amberText,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold
+  },
+  territoryEmptyBody: {
+    color: Colors.text2,
+    fontSize: FontSize.sm,
+    lineHeight: 18
   },
   selectBtnText: {
     color: Colors.text1,

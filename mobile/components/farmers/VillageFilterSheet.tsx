@@ -9,14 +9,17 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View
 } from "react-native";
-import { getOptionLabel, type MasterOption } from "../../../src/api/masters";
-import { useLocationCascade } from "../../../src/hooks/useLocationCascade";
 import { useSafeAreaInsetsCompat } from "../../../src/hooks/useSafeAreaInsetsCompat";
 import { useI18n } from "../../../src/i18n/I18nContext";
-import { useMasterData } from "../../../src/storage/MasterDataContext";
-import { EMPTY_LOCATION_SELECTION } from "../../../src/utils/locationCascade";
+import { useTerritory } from "../../../src/storage/TerritoryContext";
+import {
+  filterTerritoryVillages,
+  villageSelectSubtitle,
+  villageSelectTitle
+} from "../../../src/utils/villageTerritory";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 
 export type VillageFilterSheetRef = {
@@ -25,21 +28,8 @@ export type VillageFilterSheetRef = {
 };
 
 type Props = {
-  villages?: MasterOption[];
   onSelect: (villageId: string, villageName: string) => void;
 };
-
-function cascadeHint(
-  state: "idle" | "loading" | "error" | "empty",
-  loading: string,
-  empty: string,
-  error: string
-) {
-  if (state === "loading") return loading;
-  if (state === "empty") return empty;
-  if (state === "error") return error;
-  return "";
-}
 
 export const VillageFilterSheet = forwardRef<VillageFilterSheetRef, Props>(function VillageFilterSheet(
   { onSelect },
@@ -47,31 +37,23 @@ export const VillageFilterSheet = forwardRef<VillageFilterSheetRef, Props>(funct
 ) {
   const insets = useSafeAreaInsetsCompat();
   const { t } = useI18n();
-  const { districts: masterDistricts } = useMasterData();
+  const { villages, loading, isEmpty, unavailable, refreshTerritory } = useTerritory();
   const [visible, setVisible] = useState(false);
-  const [selection, setSelection] = useState(EMPTY_LOCATION_SELECTION);
-
-  const cascade = useLocationCascade(selection, setSelection, { districts: masterDistricts });
+  const [query, setQuery] = useState("");
 
   useImperativeHandle(ref, () => ({
     open: () => {
-      setSelection(EMPTY_LOCATION_SELECTION);
+      setQuery("");
       setVisible(true);
     },
     close: () => setVisible(false)
   }));
 
-  const villageRows = useMemo(
-    () =>
-      cascade.villages.map((v) => ({
-        id: String(v.id),
-        title: getOptionLabel(v)
-      })),
-    [cascade.villages]
-  );
+  const filtered = useMemo(() => filterTerritoryVillages(villages, query), [query, villages]);
 
   function handleClose() {
     setVisible(false);
+    setQuery("");
   }
 
   return (
@@ -88,95 +70,62 @@ export const VillageFilterSheet = forwardRef<VillageFilterSheetRef, Props>(funct
           <View style={styles.closeBtn} />
         </View>
 
-        <View style={styles.body}>
-          <Text style={styles.label}>{t("visitFlow.district")}</Text>
-          <FlatList
-            data={cascade.districts}
-            keyExtractor={(item) => String(item.id)}
-            style={styles.pane}
-            renderItem={({ item }) => {
-              const selected = selection.districtId === String(item.id);
-              return (
-                <Pressable
-                  onPress={() => cascade.setDistrict(String(item.id))}
-                  style={[styles.row, selected && styles.rowSelected]}
-                >
-                  <Text style={styles.rowText}>{getOptionLabel(item)}</Text>
-                </Pressable>
-              );
-            }}
+        <View style={styles.searchWrap}>
+          <Ionicons name="search" size={18} color={Colors.text4} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder={t("visitFlow.search")}
+            placeholderTextColor={Colors.text4}
+            style={styles.searchInput}
+            autoCorrect={false}
+            autoCapitalize="none"
           />
-
-          <Text style={styles.label}>{t("visitFlow.taluk")}</Text>
-          {!selection.districtId ? (
-            <Text style={styles.hint}>{t("visitFlow.selectDistrictFirst")}</Text>
-          ) : cascade.taluksState === "loading" ? (
-            <View style={styles.hintRow}>
-              <ActivityIndicator size="small" color={Colors.brand700} />
-              <Text style={styles.hint}>{t("visitFlow.loadingTaluks")}</Text>
-            </View>
-          ) : cascade.taluksState === "error" ? (
-            <Pressable onPress={cascade.retryTaluks}>
-              <Text style={styles.retry}>{t("visitFlow.unableToLoadRetry")}</Text>
+          {query.length > 0 ? (
+            <Pressable onPress={() => setQuery("")} hitSlop={8}>
+              <Ionicons name="close-circle" size={20} color={Colors.text4} />
             </Pressable>
-          ) : (
-            <FlatList
-              data={cascade.taluks}
-              keyExtractor={(item) => String(item.id)}
-              style={styles.pane}
-              ListEmptyComponent={<Text style={styles.hint}>{t("visitFlow.noTaluks")}</Text>}
-              renderItem={({ item }) => {
-                const selected = selection.talukId === String(item.id);
-                return (
-                  <Pressable
-                    onPress={() => cascade.setTaluk(String(item.id))}
-                    style={[styles.row, selected && styles.rowSelected]}
-                  >
-                    <Text style={styles.rowText}>{getOptionLabel(item)}</Text>
-                  </Pressable>
-                );
-              }}
-            />
-          )}
-
-          <Text style={styles.label}>{t("visitFlow.village")}</Text>
-          {!selection.talukId ? (
-            <Text style={styles.hint}>{t("visitFlow.selectTalukFirst")}</Text>
-          ) : cascade.villagesState === "loading" ? (
-            <View style={styles.hintRow}>
-              <ActivityIndicator size="small" color={Colors.brand700} />
-              <Text style={styles.hint}>{t("visitFlow.loadingVillages")}</Text>
-            </View>
-          ) : cascade.villagesState === "error" ? (
-            <Pressable onPress={cascade.retryVillages}>
-              <Text style={styles.retry}>{t("visitFlow.unableToLoadRetry")}</Text>
-            </Pressable>
-          ) : (
-            <FlatList
-              data={villageRows}
-              keyExtractor={(item) => item.id}
-              style={styles.pane}
-              contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24) }}
-              ListEmptyComponent={
-                <Text style={styles.hint}>
-                  {cascadeHint(cascade.villagesState, "", t("visitFlow.noVillages"), "")}
-                </Text>
-              }
-              renderItem={({ item }) => (
-                <Pressable
-                  onPress={() => {
-                    onSelect(item.id, item.title);
-                    handleClose();
-                  }}
-                  style={styles.row}
-                >
-                  <Text style={styles.rowText}>{item.title}</Text>
-                  <Ionicons name="chevron-forward" size={18} color={Colors.text4} />
-                </Pressable>
-              )}
-            />
-          )}
+          ) : null}
         </View>
+
+        {loading && villages.length === 0 ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={Colors.brand700} />
+          </View>
+        ) : isEmpty || unavailable ? (
+          <View style={styles.center}>
+            <Text style={styles.emptyTitle}>{t("territory.noVillagesTitle")}</Text>
+            <Text style={styles.emptySub}>{t("territory.noVillagesBody")}</Text>
+            <Pressable onPress={() => void refreshTerritory({ force: true })} style={styles.retryBtn}>
+              <Text style={styles.retryText}>{t("common.retry")}</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <FlatList
+            data={filtered}
+            keyExtractor={(item) => String(item.id)}
+            style={styles.list}
+            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24), paddingHorizontal: Spacing.screen }}
+            ListEmptyComponent={<Text style={styles.hint}>{t("visitFlow.noMatches")}</Text>}
+            renderItem={({ item }) => (
+              <Pressable
+                onPress={() => {
+                  onSelect(String(item.id), villageSelectTitle(item));
+                  handleClose();
+                }}
+                style={styles.row}
+              >
+                <View style={styles.rowBody}>
+                  <Text style={styles.rowText}>{villageSelectTitle(item)}</Text>
+                  {villageSelectSubtitle(item) ? (
+                    <Text style={styles.rowSub}>{villageSelectSubtitle(item)}</Text>
+                  ) : null}
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.text4} />
+              </Pressable>
+            )}
+          />
+        )}
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -208,21 +157,28 @@ const styles = StyleSheet.create({
     fontWeight: FontWeight.bold,
     textAlign: "center"
   },
-  body: {
+  searchWrap: {
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 8,
+    height: 48,
+    marginHorizontal: Spacing.screen,
+    marginTop: 12,
+    paddingHorizontal: 12
+  },
+  searchInput: {
+    color: Colors.text1,
     flex: 1,
-    paddingHorizontal: Spacing.screen,
-    paddingTop: 12
+    fontSize: FontSize.md,
+    paddingVertical: 0
   },
-  label: {
-    color: Colors.text4,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold,
-    marginBottom: 6,
+  list: {
+    flex: 1,
     marginTop: 8
-  },
-  pane: {
-    flexGrow: 0,
-    maxHeight: 160
   },
   row: {
     alignItems: "center",
@@ -231,35 +187,57 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: 1,
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 6,
+    gap: 8,
+    marginBottom: 8,
     paddingHorizontal: 14,
-    paddingVertical: 10
+    paddingVertical: 12
   },
-  rowSelected: {
-    backgroundColor: Colors.brand50,
-    borderColor: Colors.brand700
+  rowBody: {
+    flex: 1,
+    gap: 2
   },
   rowText: {
     color: Colors.text1,
-    flex: 1,
     fontSize: FontSize.md,
-    fontWeight: FontWeight.medium
+    fontWeight: FontWeight.semibold
+  },
+  rowSub: {
+    color: Colors.text3,
+    fontSize: FontSize.sm
   },
   hint: {
     color: Colors.text3,
     fontSize: FontSize.sm,
-    paddingVertical: 8
+    paddingVertical: 24,
+    textAlign: "center"
   },
-  hintRow: {
+  center: {
     alignItems: "center",
-    flexDirection: "row",
-    gap: 8
+    flex: 1,
+    gap: 10,
+    justifyContent: "center",
+    paddingHorizontal: Spacing.screen
   },
-  retry: {
+  emptyTitle: {
+    color: Colors.text1,
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.bold,
+    textAlign: "center"
+  },
+  emptySub: {
+    color: Colors.text3,
+    fontSize: FontSize.sm,
+    lineHeight: 20,
+    textAlign: "center"
+  },
+  retryBtn: {
+    marginTop: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10
+  },
+  retryText: {
     color: Colors.brand700,
     fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold,
-    paddingVertical: 8
+    fontWeight: FontWeight.semibold
   }
 });

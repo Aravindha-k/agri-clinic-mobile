@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Farmer, fetchFarmersPage, getAllFarmers } from "../api/farmers";
-import { getCrops, getDistricts, MasterOption } from "../api/masters";
+import { getCrops, MasterOption } from "../api/masters";
 import { getProblemCategories, ProblemCategory } from "../api/problems";
 import { isNetworkError } from "../utils/apiError";
 import { formatIndiaDateTime } from "../utils/indiaDateTime";
@@ -55,7 +55,9 @@ export type MasterSyncResult =
   | { ok: true; snapshot: MasterDataSnapshot; fromCache?: boolean }
   | { ok: false; error: unknown; cached: MasterDataSnapshot | null };
 
-/** Pull core master lists (no full farmer/problem-item catalogs). Never throws. */
+/** Pull core master lists (no full farmer/problem-item catalogs). Never throws.
+ * Districts are no longer synced for operational use (village-only territory).
+ */
 export async function syncMasterDataFromApi(options?: { force?: boolean }): Promise<MasterSyncResult> {
   const cached = await readMasterDataCache();
   if (!options?.force && cached && isMasterCacheFresh(cached.syncedAt)) {
@@ -63,15 +65,14 @@ export async function syncMasterDataFromApi(options?: { force?: boolean }): Prom
   }
 
   try {
-    const [districts, crops, problemCategories, farmerPage] = await Promise.all([
-      getDistricts(),
+    const [crops, problemCategories, farmerPage] = await Promise.all([
       getCrops(),
       getProblemCategories(),
       fetchFarmersPage({ page: 1, pageSize: OFFLINE_FARMERS_PAGE_SIZE, source: "masterDataCache" })
     ]);
     const snapshot: MasterDataSnapshot = {
       syncedAt: new Date().toISOString(),
-      districts,
+      districts: [],
       villages: cached?.villages ?? [],
       crops,
       problemCategories,

@@ -84,8 +84,6 @@ export function buildVisitFormValuesFromStore(
     farmer_id: farmer?.id != null ? String(farmer.id) : undefined,
     farmer_name: farmer?.name || nf?.name || "",
     farmer_phone: farmer?.phone || nf?.phone || "",
-    district: nf?.district_id || (farmer?.district != null ? String(farmer.district) : ""),
-    taluk: nf?.taluk_id || (farmer?.taluk != null ? String(farmer.taluk) : ""),
     village: nf?.village_id || (farmer?.village != null ? String(farmer.village) : ""),
     crop: cropPk != null ? String(cropPk) : "",
     crop_name: state.cropName,

@@ -156,14 +156,12 @@ export function getFarmer(id: number) {
 export type CreateFarmerPayload = {
   name: string;
   phone: string;
-  district: number;
-  taluk?: number;
   village: number;
   address?: string;
   total_land_area?: number;
 };
 
-/** Register a new farmer (field employee). Returns the created farmer row. */
+/** Register a new farmer (field employee). Village-only operational location. */
 export function createFarmer(payload: CreateFarmerPayload) {
   return apiClient<Farmer>("farmers/", {
     method: "POST",

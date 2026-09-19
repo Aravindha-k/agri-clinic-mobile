@@ -16,11 +16,9 @@ export type VisitDraftMetaFromPrefill = {
   farmerDisplayName?: string;
   cropLabel?: string;
   villageLabel?: string;
-  districtLabel?: string;
 };
 
 export type RevisitMasters = {
-  districts: MasterOption[];
   villages: MasterOption[];
   crops?: MasterOption[];
 };
@@ -74,8 +72,6 @@ export function prefillFromFarmer(farmer: Farmer): VisitFormPrefill {
     farmer_id: farmer.id != null ? String(farmer.id) : "",
     farmer_name: farmer.name || "",
     farmer_phone: farmer.phone || "",
-    district: masterPkToString(farmer.district),
-    taluk: masterPkToString(farmer.taluk),
     village: masterPkToString(farmer.village),
     land_name: "",
     land_area: farmer.land_area?.toString() || farmer.total_land_area?.toString() || ""
@@ -100,7 +96,6 @@ function problemCategoryCodeFromVisit(visit: Visit): string {
 
 export function prefillFromVisit(visit: Visit): VisitFormPrefill {
   return {
-    district: masterPkToString(visit.district),
     village: masterPkToString(visit.village),
     crop: extractCropIdFromVisit(visit),
     land_name: visit.land_name || "",
@@ -143,29 +138,17 @@ function extractLandFromFields(fields: unknown[]): Pick<VisitFormPrefill, "land_
   };
 }
 
-export function resolveDistrictId(farmer: Farmer, visit: Visit | null, districts: MasterOption[]): string {
-  const fromFarmer = masterPkToString(farmer.district);
-  if (fromFarmer) return fromFarmer;
-  const fromVisit = visit ? masterPkToString(visit.district) : "";
-  if (fromVisit) return fromVisit;
-  return findOptionIdByLabel(districts, farmer.district_name || visit?.district_name);
-}
-
 export function resolveVillageId(
   farmer: Farmer,
   visit: Visit | null,
-  villages: MasterOption[],
-  districtId: string
+  villages: MasterOption[]
 ): string {
   const fromFarmer = masterPkToString(farmer.village);
   if (fromFarmer) return fromFarmer;
   const fromVisit = visit ? masterPkToString(visit.village) : "";
   if (fromVisit) return fromVisit;
   const name = farmer.village_name || visit?.village_name || visit?.farmer_village;
-  const scoped = districtId
-    ? villages.filter((v) => !v.district || String(v.district) === districtId)
-    : villages;
-  return findOptionIdByLabel(scoped, name);
+  return findOptionIdByLabel(villages, name);
 }
 
 export function resolveCropId(
@@ -197,7 +180,6 @@ export function buildRevisitPrefill(farmer: Farmer, lastVisit?: Visit | null): V
     crop: fromVisit.crop || fromFarmer.crop,
     land_name: fromVisit.land_name || fromFarmer.land_name,
     land_area: fromVisit.land_area || fromFarmer.land_area,
-    district: fromFarmer.district || fromVisit.district,
     village: fromFarmer.village || fromVisit.village,
     notes: fromVisit.notes,
     crop_health: fromVisit.crop_health,
@@ -225,13 +207,11 @@ export function normalizeRevisitPrefill(
   landFromFields?: Pick<VisitFormPrefill, "land_name" | "land_area">
 ): VisitFormPrefill {
   const base = buildRevisitPrefill(farmer, lastVisit);
-  const district = resolveDistrictId(farmer, lastVisit, masters.districts) || base.district || "";
-  const village = resolveVillageId(farmer, lastVisit, masters.villages, district) || base.village || "";
+  const village = resolveVillageId(farmer, lastVisit, masters.villages) || base.village || "";
   const crop = resolveCropId(farmer, lastVisit, masters.crops) || base.crop || "";
 
   return {
     ...base,
-    district,
     village,
     crop,
     land_name: base.land_name || landFromFields?.land_name || "",
@@ -245,10 +225,6 @@ export function metaFromRevisitPrefill(
   masters: RevisitMasters,
   values: VisitFormPrefill
 ): VisitDraftMetaFromPrefill {
-  const districtLabel =
-    farmer.district_name ||
-    masters.districts.find((d) => String(d.id) === values.district)?.name ||
-    masters.districts.find((d) => String(d.id) === values.district)?.name_en;
   const villageLabel =
     farmer.village_name ||
     masters.villages.find((v) => String(v.id) === values.village)?.name ||
@@ -262,7 +238,6 @@ export function metaFromRevisitPrefill(
 
   return {
     farmerDisplayName: farmer.name || farmer.phone || "Farmer",
-    districtLabel: districtLabel || undefined,
     villageLabel: villageLabel || undefined,
     cropLabel: cropLabel && cropLabel !== "#0" ? cropLabel : undefined
   };

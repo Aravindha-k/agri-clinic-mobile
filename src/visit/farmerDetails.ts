@@ -20,7 +20,7 @@ export function isNewFarmerDraft(values: VisitFormValues): boolean {
   return Boolean(coerceStr(values.farmer_name) || coerceStr(values.farmer_phone));
 }
 
-/** Enough to register a new farmer before visit submit. */
+/** Enough to register a new farmer before visit submit (village-only). */
 export function hasCompleteNewFarmerDetails(values: VisitFormValues): boolean {
   if (resolveFarmerPk(values as Record<string, unknown>) != null) {
     return false;
@@ -29,8 +29,6 @@ export function hasCompleteNewFarmerDetails(values: VisitFormValues): boolean {
   return (
     name.length >= 2 &&
     phoneDigitCount(values.farmer_phone) >= 10 &&
-    /^\d+$/.test(coerceStr(values.district)) &&
-    /^\d+$/.test(coerceStr(values.taluk)) &&
     /^\d+$/.test(coerceStr(values.village))
   );
 }

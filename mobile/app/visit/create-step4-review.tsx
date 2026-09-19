@@ -5,7 +5,7 @@ import { Alert, AppState, Pressable, ScrollView, StyleSheet, Text, View } from "
 import { useConnectivityOnline } from "../../../src/hooks/useConnectivityOnline";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
-import { useMasterData } from "../../../src/storage/MasterDataContext";
+import { useTerritory } from "../../../src/storage/TerritoryContext";
 import { useDuty } from "../../../src/features/duty/store/DutyContext";
 import { FlatCard } from "../../components/layout/FlatCard";
 import { LocationPreviewMap } from "../../../src/components/map/LocationPreviewMap";
@@ -69,7 +69,7 @@ function formatCapturedAt(iso: string | undefined): string {
 export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3 }: Props) {
   const { t } = useI18n();
   const navigation = useNavigation<any>();
-  const { districts, villages } = useMasterData();
+  const { villages: territoryVillages } = useTerritory();
   const replayKey = useVisitEntranceKey();
   const online = useConnectivityOnline();
   const { bumpAfterVisitChange } = useFieldDataRefresh();
@@ -112,7 +112,16 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
   ].filter(Boolean);
 
   const farmerName = farmerDisplayName(farmer, newFarmer);
-  const reviewFarmer = resolveVisitReviewFarmer(farmer, newFarmer, districts, villages, "—");
+  const reviewFarmer = resolveVisitReviewFarmer(
+    farmer,
+    newFarmer,
+    territoryVillages.map((v) => ({
+      id: v.id,
+      name: v.name,
+      name_ta: v.name_ta ?? undefined
+    })),
+    "—"
+  );
   const farmerPhone = reviewFarmer.phone;
   const farmerVillage = reviewFarmer.village;
   const visitTypeLabel = visitKind === "revisit" ? t("visitFlow.revisit") : t("visitFlow.firstVisit");
@@ -311,7 +320,7 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
           </View>
           <Text style={styles.reviewTitle}>{farmerName}</Text>
           <Text style={styles.reviewMeta}>
-            {farmerPhone} · {farmerVillage} · {reviewFarmer.district}
+            {farmerPhone} · {farmerVillage}
           </Text>
           <StatusChip label={visitTypeLabel} variant={visitKind === "revisit" ? "blue" : "gray"} />
         </FlatCard>

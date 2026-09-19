@@ -1,6 +1,5 @@
 import type { VisitFormValues } from "../api/visits";
 import { createFarmer, findFarmerByPhoneOrName } from "../api/farmers";
-import { getOptionLabel, getVillages } from "../api/masters";
 import { extractMasterPk, masterPkToString } from "../utils/masterId";
 import { hasCompleteNewFarmerDetails } from "./farmerDetails";
 import { resolveFarmerPk } from "./resolveFarmerPk";
@@ -10,11 +9,7 @@ function isNumericId(value: unknown) {
   return /^\d+$/.test(coerceStr(value));
 }
 
-async function resolveVillagePk(
-  districtRaw: unknown,
-  villageRaw: unknown,
-  talukRaw?: unknown
-): Promise<string> {
+async function resolveVillagePk(villageRaw: unknown): Promise<string> {
   const villagePk = extractMasterPk(villageRaw);
   if (villagePk != null) {
     return String(villagePk);
@@ -23,27 +18,8 @@ async function resolveVillagePk(
   if (!label || /^\d+$/.test(label)) {
     return "";
   }
-  const talukPk = extractMasterPk(talukRaw);
-  const districtPk = extractMasterPk(districtRaw);
-  if (talukPk == null && districtPk == null) {
-    return "";
-  }
-  try {
-    const villages = await getVillages({
-      ...(talukPk != null ? { taluk: talukPk } : {}),
-      ...(districtPk != null ? { district: districtPk } : {})
-    });
-    const match = villages.find((v) => {
-      if (districtPk != null && v.district != null && Number(v.district) !== districtPk) {
-        return false;
-      }
-      const name = getOptionLabel(v).toLowerCase();
-      return name === label.toLowerCase() || coerceStr(v.name).toLowerCase() === label.toLowerCase();
-    });
-    return match?.id != null ? String(match.id) : "";
-  } catch {
-    return "";
-  }
+  // Label-only resolution without territory scope is unsafe under village-only architecture.
+  return "";
 }
 
 /** Trim strings, normalize GPS, and ensure farmer_id links to directory farmer. */
@@ -52,7 +28,7 @@ export async function prepareVisitForSubmit(
   options?: { pendingFarmerPhoto?: import("../utils/profileImagePick").PickedProfileImage | null }
 ): Promise<VisitFormValues> {
   const linkedFarmerId = resolveFarmerPk(values as Record<string, unknown>);
-  const resolvedVillage = await resolveVillagePk(values.district, values.village, values.taluk);
+  const resolvedVillage = await resolveVillagePk(values.village);
 
   let next: VisitFormValues = normalizeVisitGpsFields({
     ...values,
@@ -60,9 +36,7 @@ export async function prepareVisitForSubmit(
     farmer_name: coerceStr(values.farmer_name),
     farmer_phone: coerceStr(values.farmer_phone),
     crop: coerceStr(values.crop),
-    district: masterPkToString(values.district),
     village: resolvedVillage || masterPkToString(values.village),
-    taluk: masterPkToString(values.taluk),
     land_name: coerceStr(values.land_name),
     crop_health: coerceStr(values.crop_health),
     weed_condition: coerceStr(values.weed_condition),
@@ -102,7 +76,6 @@ export async function prepareVisitForSubmit(
         farmer_id: String(match.id),
         farmer_name: coerceStr(match.name) || next.farmer_name,
         farmer_phone: coerceStr(match.phone) || next.farmer_phone,
-        district: masterPkToString(match.district) || next.district,
         village: masterPkToString(match.village) || next.village
       };
       return next;
@@ -115,9 +88,8 @@ export async function prepareVisitForSubmit(
     return next;
   }
 
-  const districtPk = extractMasterPk(next.district);
   const villagePk = extractMasterPk(next.village);
-  if (districtPk == null || villagePk == null) {
+  if (villagePk == null) {
     return next;
   }
   const farmerName = coerceStr(next.farmer_name);
@@ -127,9 +99,7 @@ export async function prepareVisitForSubmit(
     const created = await createFarmer({
       name: farmerName,
       phone: farmerPhone,
-      district: districtPk,
-      village: villagePk,
-      ...(extractMasterPk(next.taluk) != null ? { taluk: extractMasterPk(next.taluk)! } : {})
+      village: villagePk
     });
     if (created.id != null) {
       const farmerId = String(created.id);
@@ -144,7 +114,6 @@ export async function prepareVisitForSubmit(
         farmer_id: farmerId,
         farmer_name: coerceStr(created.name) || farmerName,
         farmer_phone: coerceStr(created.phone) || farmerPhone,
-        district: masterPkToString(created.district) || next.district,
         village: masterPkToString(created.village) || next.village
       };
     }
@@ -163,7 +132,8 @@ export async function prepareVisitForSubmit(
           ...next,
           farmer_id: farmerId,
           farmer_name: coerceStr(existing.name) || farmerName,
-          farmer_phone: coerceStr(existing.phone) || farmerPhone
+          farmer_phone: coerceStr(existing.phone) || farmerPhone,
+          village: masterPkToString(existing.village) || next.village
         };
       }
     } catch {

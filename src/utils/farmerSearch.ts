@@ -9,10 +9,6 @@ export function farmerMatchesSearch(farmer: Farmer, query: string): boolean {
     farmer.phone,
     farmer.village_name,
     farmer.village,
-    farmer.district_name,
-    farmer.district,
-    farmer.taluk_name,
-    farmer.taluk,
     farmer.crop_name,
     farmer.list_crop_name
   );

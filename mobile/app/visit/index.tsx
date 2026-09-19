@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { Farmer } from "../../../src/api/farmers";
 import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
 import { useI18n } from "../../../src/i18n/I18nContext";
-import { useMasterData } from "../../../src/storage/MasterDataContext";
+import { useTerritory } from "../../../src/storage/TerritoryContext";
 import { useTracking } from "../../../src/storage/TrackingContext";
 import { useDuty } from "../../../src/features/duty/store/DutyContext";
 import { loadRevisitPrefill } from "../../../src/utils/farmerPrefill";
@@ -28,7 +28,7 @@ export default function VisitFlowShell() {
   const { width: screenWidth } = useWindowDimensions();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { districts, villages } = useMasterData();
+  const { villages: territoryVillages } = useTerritory();
   const { busy: workdayBusy } = useTracking();
   const { currentDuty, startDuty } = useDuty();
   const workdaySheetRef = useRef<WorkdayRequiredSheetRef>(null);
@@ -109,7 +109,13 @@ export default function VisitFlowShell() {
         }
 
         try {
-          const loaded = await loadRevisitPrefill(stub, { districts, villages });
+          const loaded = await loadRevisitPrefill(stub, {
+            villages: territoryVillages.map((v) => ({
+              id: v.id,
+              name: v.name,
+              name_ta: v.name_ta ?? undefined
+            }))
+          });
           await startRevisitDraft(loaded);
           navigation.setParams({ fastRevisit: undefined });
         } catch {
@@ -131,12 +137,11 @@ export default function VisitFlowShell() {
       }
     })();
   }, [
-    districts,
+    territoryVillages,
     navigation,
     route.params?.fastRevisit,
     route.params?.prefill,
     t,
-    villages,
     currentDuty?.is_active,
     startDuty
   ]);

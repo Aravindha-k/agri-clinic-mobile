@@ -46,7 +46,6 @@ function applyFkIds(payload: Record<string, unknown>, keys: string[]) {
 
 export function normalizeVisitPayload(values: Record<string, unknown>) {
   const payload: Record<string, unknown> = {
-    district: normalizeId(values.district),
     village: normalizeId(values.village),
     crop: normalizeId(values.crop),
     land_name: values.land_name,
@@ -170,19 +169,31 @@ export function normalizeMobileVisitSubmitPayload(
       payload.visit_date =
         typeof values.visit_date === "string" && values.visit_date.trim()
           ? values.visit_date.trim().slice(0, 10)
-          : captured.toISOString().slice(0, 10);
-      payload.visit_time =
+          : indiaCalendarDate(captured) ?? captured.toISOString().slice(0, 10);
+      const istTime =
         typeof values.visit_time === "string" && values.visit_time.trim()
           ? values.visit_time.trim()
-          : captured.toISOString().slice(11, 19);
+          : new Intl.DateTimeFormat("en-GB", {
+              timeZone: "Asia/Kolkata",
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+              hour12: false
+            })
+              .format(captured)
+              .replace(/\./g, ":");
+      payload.visit_time = istTime;
     }
   }
 
   delete payload.status;
   delete payload.employee_id;
   delete payload.employee;
+  delete payload.district;
+  delete payload.taluk;
+  delete payload.firka;
 
-  applyFkIds(payload, ["district", "taluk", "village", "crop", "farmer", "farmer_id", "crop_id"]);
+  applyFkIds(payload, ["village", "crop", "farmer", "farmer_id", "crop_id"]);
 
   applyObservationPayload(payload, values);
 

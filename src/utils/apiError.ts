@@ -179,7 +179,7 @@ export function formatApiErrorMessage(data: unknown, fallback = "Request failed"
   if (typeof body.message === "string" && body.message.trim()) {
     const msg = body.message.trim();
     if (msg === GENERIC_SUBMIT_MESSAGE) {
-      return "Farmer could not be linked. For a new farmer, check name, mobile, district, and village.";
+      return "Farmer could not be linked. For a new farmer, check name, mobile, and village.";
     }
     return msg;
   }

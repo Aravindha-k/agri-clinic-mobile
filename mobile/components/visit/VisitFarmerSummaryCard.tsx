@@ -1,11 +1,12 @@
 import { StyleSheet, Text, View } from "react-native";
 import { useI18n } from "../../../src/i18n/I18nContext";
-import { useMasterData } from "../../../src/storage/MasterDataContext";
+import { useTerritory } from "../../../src/storage/TerritoryContext";
 import { farmerVisitCount } from "../../lib/farmerStatus";
 import { Colors, FontSize, FontWeight, Spacing } from "../../lib/theme";
 import type { Farmer } from "../../../src/api/farmers";
 import type { NewFarmerDraft } from "../../store/visitFormStore";
 import { farmerDisplayName, useVisitFormStore } from "../../store/visitFormStore";
+import { villageSelectTitle } from "../../../src/utils/villageTerritory";
 
 type Props = {
   farmer: Farmer | null;
@@ -14,7 +15,7 @@ type Props = {
 
 export function VisitFarmerSummaryCard({ farmer, newFarmer }: Props) {
   const { t } = useI18n();
-  const { villages } = useMasterData();
+  const { villages } = useTerritory();
   const visitKind = useVisitFormStore((s) => s.visitKind);
   const pendingProblemMasterId = useVisitFormStore((s) => s.pendingProblemMasterId);
 
@@ -23,7 +24,10 @@ export function VisitFarmerSummaryCard({ farmer, newFarmer }: Props) {
 
   const villageName = farmer
     ? String(farmer.village_name || farmer.village || "").trim()
-    : villages.find((v) => String(v.id) === newFarmer?.village_id)?.name?.trim() || "";
+    : (() => {
+        const match = villages.find((v) => String(v.id) === newFarmer?.village_id);
+        return match ? villageSelectTitle(match) : "";
+      })();
 
   const visitTypeLabel =
     visitKind === "revisit" ||

@@ -24,6 +24,7 @@ import { AuthProvider, useAuth } from "./src/storage/AuthContext";
 import { EmployeeProvider } from "./src/storage/EmployeeContext";
 import { FieldDataRefreshProvider } from "./src/storage/FieldDataRefreshContext";
 import { MasterDataProvider } from "./src/storage/MasterDataContext";
+import { TerritoryProvider } from "./src/storage/TerritoryContext";
 import { OfflineSyncProvider } from "./src/storage/OfflineSyncContext";
 import { AutomaticSyncProvider } from "./src/storage/AutomaticSyncProvider";
 import { AppPreferencesProvider } from "./src/storage/AppPreferencesContext";
@@ -211,6 +212,7 @@ export default function AppProviders({ onShellReady, onCriticalReady, onFatalErr
               <AuthProvider>
                 <FieldDataRefreshProvider>
                   <MasterDataProvider>
+                    <TerritoryProvider>
                     <EmployeeProvider>
                       <NotificationsProvider>
                         <AppPreferencesProvider>
@@ -245,6 +247,7 @@ export default function AppProviders({ onShellReady, onCriticalReady, onFatalErr
                         </AppPreferencesProvider>
                       </NotificationsProvider>
                     </EmployeeProvider>
+                    </TerritoryProvider>
                   </MasterDataProvider>
                 </FieldDataRefreshProvider>
               </AuthProvider>

@@ -66,6 +66,9 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # v3 default is "tools platform-tools"; SDK package "tools" is obsolete/unavailable.
+          packages: platform-tools
 
       - name: Cache Gradle
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.diagnostic_clean_build != 'true' }}

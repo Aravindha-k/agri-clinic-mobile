@@ -12,6 +12,7 @@ import { appendVisitMultipartFields, flattenVisitPayloadForMultipart } from "../
 import { isDuplicateVisitResponse } from "../visitDuplicate";
 import { prepareVisitForSubmit } from "../../../src/visit/prepareVisitSubmit";
 import { validateVisitSubmitValues } from "../../../src/visit/visitValidation";
+import { isStaleMasterPkError, STALE_PROBLEM_MASTER_MESSAGE } from "../../../src/utils/staleMasterFks";
 import { getJson, setJson, SYNC_STORAGE_KEYS } from "../storage";
 import { useSyncStore } from "../store/syncStore";
 import { GPS_QUEUE_MAX_POINTS } from "../../../src/tracking/trackingConfig";
@@ -403,6 +404,13 @@ export async function flushVisitQueue(
           if (validationError) {
             throw new Error(validationError);
           }
+          const { resolveAuthoritativeMasters, validateVisitAgainstAuthoritativeMasters } =
+            await import("../authoritativeMasters");
+          const masters = await resolveAuthoritativeMasters({ online: true });
+          const masterCheck = validateVisitAgainstAuthoritativeMasters(prepared, masters);
+          if (!masterCheck.ok) {
+            throw new Error(masterCheck.message || "Problem data has changed. Please select the problem again.");
+          }
           const formData = buildVisitFormData(prepared, visit.local_sync_id);
           const response = await api.post("mobile/visits/", formData, {
             headers: { "Content-Type": "multipart/form-data" }
@@ -444,6 +452,11 @@ export async function flushVisitQueue(
           if (idx < 0) return;
 
           const attempts = next[idx].attempts + 1;
+          const lastError = err instanceof Error ? err.message : "Sync failed";
+          const staleMaster =
+            lastError === STALE_PROBLEM_MASTER_MESSAGE ||
+            isStaleMasterPkError(err) ||
+            /no longer available|select the problem again/i.test(lastError);
           if (isNetworkError(err)) {
             next[idx] = {
               ...next[idx],
@@ -463,7 +476,7 @@ export async function flushVisitQueue(
             return;
           }
 
-          if (attempts >= MAX_VISIT_ATTEMPTS) {
+          if (staleMaster || attempts >= MAX_VISIT_ATTEMPTS) {
             next[idx] = {
               ...next[idx],
               attempts,

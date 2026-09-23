@@ -11,6 +11,7 @@ import {
   resolveCategoryMeta
 } from "../lib/problemCatalog";
 import { revalidateProblemSelection } from "../../src/utils/visitProblems";
+import { reconcileDraftProblemSelection } from "../../src/utils/staleMasterFks";
 import {
   buildAdviceSuggestionsFromPrefill,
   EMPTY_ADVICE_SUGGESTIONS,
@@ -70,6 +71,7 @@ type VisitFormState = {
   selectedProblem: ProblemItem | null;
   selectedProblems: ProblemItem[];
   problemsRemovedNotice: string;
+  needsProblemReview: boolean;
   otherProblemDescription: string;
   severity: VisitSeverity;
   pestIssue: boolean;
@@ -107,6 +109,8 @@ type VisitFormState = {
   selectManualOther: () => void;
   clearProblemSelection: () => void;
   clearProblemsRemovedNotice: () => void;
+  applyReconciledProblemSelection: (validProblemMasterIds: Iterable<string | number>) => boolean;
+  clearProblemReview: () => void;
   setVisitKind: (kind: VisitKind) => void;
   setOtherProblemDescription: (value: string) => void;
   setSeverity: (severity: VisitSeverity) => void;
@@ -152,6 +156,7 @@ const initialStep2 = {
   selectedProblem: null as ProblemItem | null,
   selectedProblems: [] as ProblemItem[],
   problemsRemovedNotice: "",
+  needsProblemReview: false,
   otherProblemDescription: "",
   severity: "medium" as VisitSeverity,
   pestIssue: false,
@@ -288,6 +293,7 @@ export const useVisitFormStore = create<VisitFormState>()(
         problemCategoryId: meta.id,
         problemCategoryCode: meta.code,
         otherProblemDescription: "",
+        needsProblemReview: false,
         ...flagsFromProblems(selectedProblems),
         ...(!exists ? flags : {})
       };
@@ -308,6 +314,7 @@ export const useVisitFormStore = create<VisitFormState>()(
         pendingProblemMasterId: primary ? String(primary.id) : "",
         problemCategoryId: primary ? meta.id : "",
         problemCategoryCode: primary ? meta.code : "",
+        needsProblemReview: false,
         ...flagsFromProblems(selectedProblems)
       };
     });
@@ -350,7 +357,8 @@ export const useVisitFormStore = create<VisitFormState>()(
       pendingProblemMasterId: "",
       selectedProblem: null,
       pestIssue: false,
-      diseaseIssue: false
+      diseaseIssue: false,
+      needsProblemReview: false
     }),
   clearProblemSelection: () =>
     set({
@@ -362,9 +370,28 @@ export const useVisitFormStore = create<VisitFormState>()(
       selectedProblems: [],
       otherProblemDescription: "",
       pestIssue: false,
-      diseaseIssue: false
+      diseaseIssue: false,
+      needsProblemReview: false
     }),
   clearProblemsRemovedNotice: () => set({ problemsRemovedNotice: "" }),
+  clearProblemReview: () => set({ needsProblemReview: false }),
+  applyReconciledProblemSelection: (validProblemMasterIds) => {
+    const state = get();
+    const next = reconcileDraftProblemSelection(state, validProblemMasterIds);
+    if (!next.needsProblemReview) {
+      return false;
+    }
+    set({
+      selectedProblems: next.selectedProblems ?? [],
+      selectedProblem: next.selectedProblem ?? null,
+      problemMasterId: next.problemMasterId ?? "",
+      pendingProblemMasterId: next.pendingProblemMasterId ?? "",
+      problemCategoryId: next.problemCategoryId ?? "",
+      problemCategoryCode: next.problemCategoryCode ?? "",
+      needsProblemReview: true
+    });
+    return true;
+  },
   setVisitKind: (visitKind) => set({ visitKind }),
   setOtherProblemDescription: (otherProblemDescription) => set({ otherProblemDescription }),
   setSeverity: (severity) => set({ severity }),
@@ -444,6 +471,7 @@ export const useVisitFormStore = create<VisitFormState>()(
       selectedProblem: null,
       selectedProblems: [],
       otherProblemDescription: "",
+      needsProblemReview: false,
       ...flags,
       followUpRequired: false,
       followUpDate: null,
@@ -518,6 +546,7 @@ export const useVisitFormStore = create<VisitFormState>()(
         selectedProblem: state.selectedProblem,
         selectedProblems: state.selectedProblems,
         problemsRemovedNotice: state.problemsRemovedNotice,
+        needsProblemReview: state.needsProblemReview,
         otherProblemDescription: state.otherProblemDescription,
         severity: state.severity,
         pestIssue: state.pestIssue,

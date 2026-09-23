@@ -1,6 +1,7 @@
 import { SESSION_EXPIRED_MESSAGE } from "../constants/authMessages";
 import { SESSION_REPLACED_CODES, SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
 import { API_BASE_URL } from "../api/config";
+import { friendlyStaleMasterMessage } from "./staleMasterFks";
 
 const GENERIC_SUBMIT_MESSAGE = "Farmer, crop, and GPS location are required to submit a visit.";
 
@@ -136,6 +137,8 @@ function formatFieldErrors(errors: unknown): string | null {
 
 /** Turn DRF / Agri API error bodies into a readable message. */
 export function formatApiErrorMessage(data: unknown, fallback = "Request failed", httpStatus?: number): string {
+  const staleMaster = friendlyStaleMasterMessage(data);
+  if (staleMaster) return staleMaster;
   const code = extractApiErrorCode(data);
   if ((code && SESSION_REPLACED_CODES.has(code)) || (httpStatus === 409 && code && SESSION_REPLACED_CODES.has(code))) {
     return SESSION_REPLACED_MESSAGE;

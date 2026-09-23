@@ -59,42 +59,54 @@ async function buildFallbackFormOptions(): Promise<VisitFormOptions> {
   return { crops, problem_categories, problem_items };
 }
 
-export async function loadVisitFormOptions(): Promise<VisitFormOptions> {
-  const cached = readCachedFormOptions<VisitFormOptions>();
-  const stale = readStaleFormOptions<VisitFormOptions>();
+async function ensureProblemItems(options: VisitFormOptions): Promise<VisitFormOptions> {
+  if (options.problem_items.length) return options;
+  try {
+    const { items } = await fetchAllProblemItemsForQuery({ pageSize: 200 });
+    return { ...options, problem_items: items };
+  } catch {
+    return options;
+  }
+}
 
-  void (async () => {
-    try {
-      const data = await apiClient<unknown>("mobile/visit-form-options/", { source: "VisitForm" });
-      const normalized = normalizeFormOptions(data);
-      if (normalized) {
-        writeFormOptionsCache(normalized);
-        return;
-      }
-    } catch {
-      // fall through
-    }
-    const fallback = await buildFallbackFormOptions();
-    writeFormOptionsCache(fallback);
-  })();
-
-  if (cached) return cached;
-  if (stale) return stale;
-
+async function fetchVisitFormOptionsFromNetwork(): Promise<VisitFormOptions | null> {
   try {
     const data = await apiClient<unknown>("mobile/visit-form-options/", { source: "VisitForm" });
     const normalized = normalizeFormOptions(data);
     if (normalized) {
-      writeFormOptionsCache(normalized);
-      return normalized;
+      const complete = await ensureProblemItems(normalized);
+      writeFormOptionsCache(complete);
+      return complete;
     }
   } catch {
-    // fall through
+    // fall through to dropdown fallback
   }
+  try {
+    const fallback = await buildFallbackFormOptions();
+    writeFormOptionsCache(fallback);
+    return fallback;
+  } catch {
+    return null;
+  }
+}
 
-  const fallback = await buildFallbackFormOptions();
-  writeFormOptionsCache(fallback);
-  return fallback;
+export async function loadVisitFormOptions(): Promise<VisitFormOptions> {
+  const cached = readCachedFormOptions<VisitFormOptions>();
+  const stale = readStaleFormOptions<VisitFormOptions>();
+
+  void fetchVisitFormOptionsFromNetwork();
+
+  if (cached) return cached;
+  if (stale) return stale;
+
+  const fresh = await fetchVisitFormOptionsFromNetwork();
+  if (fresh) return fresh;
+  return { crops: [], problem_categories: [], problem_items: [] };
+}
+
+/** Online submit/sync: current server catalogs replace local cache. */
+export async function refreshAuthoritativeVisitFormOptions(): Promise<VisitFormOptions | null> {
+  return fetchVisitFormOptionsFromNetwork();
 }
 
 function normalizeProblemItems(data: unknown): ProblemItem[] {
@@ -112,15 +124,18 @@ export async function loadCropProblemItems(cropId: string): Promise<ProblemItem[
     try {
       const data = await apiClient<unknown>(`crops/${cropId}/problem-items/`, { source: "VisitForm" });
       const items = normalizeProblemItems(data);
-      if (items.length) {
-        writeCropProblemItemsCache(cropId, items);
-        return;
-      }
+      // Successful response replaces cache even when empty — deleted IDs must not survive.
+      writeCropProblemItemsCache(cropId, items);
+      return;
     } catch {
       // fall through
     }
-    const { items } = await fetchAllProblemItemsForQuery({ cropId, pageSize: 200 });
-    writeCropProblemItemsCache(cropId, items);
+    try {
+      const { items } = await fetchAllProblemItemsForQuery({ cropId, pageSize: 200 });
+      writeCropProblemItemsCache(cropId, items);
+    } catch {
+      // keep last cache
+    }
   })();
 
   if (cached) return cached as ProblemItem[];

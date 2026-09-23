@@ -710,6 +710,10 @@ export const en = {
     searchAllOrManual: "Search all problems or describe manually.",
     searchAllProblems: "Search all problems",
     prefillWarning: "Previous problem is no longer available. Please select again.",
+    staleProblemMaster:
+      "One or more selected problems are no longer available. Please review and select the problem again.",
+    staleCropMaster: "The selected crop is no longer available. Please select the crop again.",
+    staleMasterData: "Problem data has changed. Please select the problem again.",
     searchTamilEnglish: "Search Tamil or English…",
     showCropMappedOnly: "Show crop-mapped problems only",
     suggestedForArea: "Suggested for your area",

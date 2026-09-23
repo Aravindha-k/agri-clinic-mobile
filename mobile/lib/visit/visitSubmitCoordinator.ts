@@ -20,6 +20,8 @@ import type { WorkdayStatus } from "../../../src/api/tracking";
 import { ensureLocationReadyForAction } from "../../../src/features/fieldTrackingSetup";
 import { peekFreshLocation, VISIT_LOCATION_REUSE_MS } from "../../../src/utils/locationFreshness";
 import { normalizeVisitSubmitUserMessage } from "../../../src/utils/visitSubmitErrors";
+import { resolveAuthoritativeMasters, validateVisitAgainstAuthoritativeMasters } from "../authoritativeMasters";
+import { STALE_PROBLEM_MASTER_MESSAGE } from "../../../src/utils/staleMasterFks";
 
 export type VisitSubmitProgress =
   | "idle"
@@ -159,6 +161,18 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
 
       if (!hasValidGps(values) || !visitGpsIsUsable({ latitude, longitude, accuracy })) {
         return { ok: false, message: t("visitFlow.gpsNotCaptured") };
+      }
+
+      const masters = await resolveAuthoritativeMasters({ online });
+      const masterCheck = validateVisitAgainstAuthoritativeMasters(values, masters);
+      if (!masterCheck.ok) {
+        const validIds = masters?.catalog.problemMasterIds ?? [];
+        useVisitFormStore.getState().applyReconciledProblemSelection(validIds);
+        useVisitFormStore.getState().setStep(2);
+        return {
+          ok: false,
+          message: t("visitFlow.staleProblemMaster") || masterCheck.message || STALE_PROBLEM_MASTER_MESSAGE
+        };
       }
 
       // eslint-disable-next-line no-console

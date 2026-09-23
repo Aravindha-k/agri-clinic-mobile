@@ -38,9 +38,11 @@ import {
   loadCropProblemItems,
   loadFarmerFieldCrops,
   loadVisitFormOptions,
+  refreshAuthoritativeVisitFormOptions,
   type FarmerFieldCropChip,
   type VisitFormOptions
 } from "../../lib/visitFormOptionsApi";
+import { idsFromRecords } from "../../../src/utils/staleMasterFks";
 import { useVisitFormStore } from "../../store/visitFormStore";
 import { EntranceBlocks } from "../../components/ui/EntranceBlocks";
 import { FadeInSection, entranceStagger } from "../../components/ui/FadeInSection";
@@ -64,6 +66,7 @@ export function VisitCreateStep2({ onBack }: Props) {
   const selectedProblem = useVisitFormStore((s) => s.selectedProblem);
   const selectedProblems = useVisitFormStore((s) => s.selectedProblems);
   const problemsRemovedNotice = useVisitFormStore((s) => s.problemsRemovedNotice);
+  const needsProblemReview = useVisitFormStore((s) => s.needsProblemReview);
   const pendingProblemMasterId = useVisitFormStore((s) => s.pendingProblemMasterId);
   const otherProblemDescription = useVisitFormStore((s) => s.otherProblemDescription);
   const revisitContext = useVisitFormStore((s) => s.revisitContext);
@@ -75,6 +78,7 @@ export function VisitCreateStep2({ onBack }: Props) {
   const selectManualOther = useVisitFormStore((s) => s.selectManualOther);
   const clearProblemSelection = useVisitFormStore((s) => s.clearProblemSelection);
   const clearProblemsRemovedNotice = useVisitFormStore((s) => s.clearProblemsRemovedNotice);
+  const applyReconciledProblemSelection = useVisitFormStore((s) => s.applyReconciledProblemSelection);
   const setOtherProblemDescription = useVisitFormStore((s) => s.setOtherProblemDescription);
 
   const [formOptions, setFormOptions] = useState<VisitFormOptions | null>(null);
@@ -112,6 +116,9 @@ export function VisitCreateStep2({ onBack }: Props) {
     mountedRef.current = true;
     void loadVisitFormOptions().then((opts) => {
       if (mountedRef.current) setFormOptions(opts);
+    });
+    void refreshAuthoritativeVisitFormOptions().then((fresh) => {
+      if (mountedRef.current && fresh) setFormOptions(fresh);
     });
     if (farmer?.id) {
       void loadFarmerFieldCrops(farmer.id).then((chips) => {
@@ -244,9 +251,11 @@ export function VisitCreateStep2({ onBack }: Props) {
       return;
     }
     if (prefillPool.length > 0 && !cropItemsLoading) {
-      setPrefillWarning(t("visitFlow.prefillWarning"));
+      applyReconciledProblemSelection(idsFromRecords(prefillPool));
+      setPrefillWarning(t("visitFlow.staleProblemMaster"));
     }
   }, [
+    applyReconciledProblemSelection,
     cropId,
     cropItemsLoading,
     formOptions?.problem_categories,
@@ -256,6 +265,12 @@ export function VisitCreateStep2({ onBack }: Props) {
     selectedProblem,
     t
   ]);
+
+  useEffect(() => {
+    const catalog = formOptions?.problem_items?.length ? formOptions.problem_items : prefillPool;
+    if (!catalog.length) return;
+    applyReconciledProblemSelection(idsFromRecords(catalog));
+  }, [applyReconciledProblemSelection, formOptions?.problem_items, prefillPool]);
 
   const canContinue = useMemo(() => {
     if (!cropId) return false;
@@ -408,6 +423,13 @@ export function VisitCreateStep2({ onBack }: Props) {
                       {item.tamil_name?.trim() || item.name}
                     </Text>
                   ))}
+                </View>
+              ) : null}
+
+              {needsProblemReview || prefillWarning ? (
+                <View style={styles.warningBanner}>
+                  <Ionicons name="alert-circle-outline" size={16} color={Colors.amberText} />
+                  <Text style={styles.warningText}>{t("visitFlow.staleProblemMaster")}</Text>
                 </View>
               ) : null}
 

@@ -1,6 +1,8 @@
 import { appStorage } from "./mmkv";
 
-export const FORM_OPTIONS_KEY = "form_options_v1";
+/** v3 invalidates pre-production-reset catalogs that could keep deleted Problem Master PKs. */
+export const FORM_OPTIONS_KEY = "form_options_v3";
+export const LEGACY_FORM_OPTIONS_KEYS = ["form_options_v1", "form_options_v2"] as const;
 const TTL_MS = 24 * 60 * 60 * 1000;
 
 type CacheEnvelope<T> = {
@@ -8,8 +10,15 @@ type CacheEnvelope<T> = {
   data: T;
 };
 
+function deleteLegacyFormOptionKeys() {
+  for (const key of LEGACY_FORM_OPTIONS_KEYS) {
+    appStorage.delete?.(key);
+  }
+}
+
 export function readCachedFormOptions<T>(): T | null {
   try {
+    deleteLegacyFormOptionKeys();
     const raw = appStorage.getString(FORM_OPTIONS_KEY);
     if (!raw) return null;
     const envelope = JSON.parse(raw) as CacheEnvelope<T>;
@@ -23,6 +32,7 @@ export function readCachedFormOptions<T>(): T | null {
 
 export function readStaleFormOptions<T>(): T | null {
   try {
+    deleteLegacyFormOptionKeys();
     const raw = appStorage.getString(FORM_OPTIONS_KEY);
     if (!raw) return null;
     const envelope = JSON.parse(raw) as CacheEnvelope<T>;
@@ -38,10 +48,11 @@ export function writeFormOptionsCache<T>(data: T): void {
     data
   };
   appStorage.set(FORM_OPTIONS_KEY, JSON.stringify(envelope));
+  deleteLegacyFormOptionKeys();
 }
 
 export function cropProblemItemsKey(cropId: string | number) {
-  return `problem_items_crop_${cropId}_v1`;
+  return `problem_items_crop_${cropId}_v3`;
 }
 
 export function readCropProblemItemsCache(cropId: string | number) {
@@ -77,7 +88,7 @@ export function writeCropProblemItemsCache(cropId: string | number, items: unkno
 
 export function catalogProblemItemsKey(categoryCode: string, searchAll: boolean) {
   const code = categoryCode.trim().toLowerCase() || "all";
-  return searchAll ? `problem_items_catalog_${code}_v1` : `problem_items_crop_cat_${code}_v1`;
+  return searchAll ? `problem_items_catalog_${code}_v3` : `problem_items_crop_cat_${code}_v3`;
 }
 
 export function readCatalogProblemItemsCache(categoryCode: string, searchAll: boolean) {

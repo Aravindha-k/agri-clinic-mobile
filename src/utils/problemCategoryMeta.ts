@@ -93,11 +93,11 @@ export function problemMasterPkFromSelection(
   items: ProblemItem[],
   fallbackMasterId?: string | null
 ): number | null {
-  const fromFallback = extractMasterPk(fallbackMasterId);
-  if (fromFallback != null) return fromFallback;
   for (const item of items) {
     const pk = extractMasterPk(item.id);
     if (pk != null) return pk;
   }
+  // Never send a leftover draft/revisit PK that is not in the current selection.
+  void fallbackMasterId;
   return null;
 }

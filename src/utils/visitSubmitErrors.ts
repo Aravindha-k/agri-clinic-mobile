@@ -8,6 +8,7 @@ import {
 } from "./apiError";
 import { SESSION_EXPIRED_MESSAGE } from "../constants/authMessages";
 import { SESSION_REPLACED_CODES, SESSION_REPLACED_MESSAGE } from "../constants/deviceSession";
+import { friendlyStaleMasterMessage } from "./staleMasterFks";
 
 export const VISIT_SUBMIT_FALLBACK = "Could not submit the visit. Please try again.";
 
@@ -47,6 +48,8 @@ export function normalizeVisitSubmitUserMessage(
 ): string {
   const fallback = options?.fallback ?? VISIT_SUBMIT_FALLBACK;
   const status = options?.httpStatus;
+  const staleMaster = friendlyStaleMasterMessage(input);
+  if (staleMaster) return staleMaster;
 
   if (input instanceof ApiRequestError) {
     if (input.code === "SESSION_REPLACED" || input.code === "DEVICE_SESSION_CONFLICT") {

@@ -29,3 +29,27 @@ export function masterPkToString(value: unknown): string {
   const pk = extractMasterPk(value);
   return pk != null ? String(pk) : "";
 }
+
+type FarmerVillageSource = {
+  village?: unknown;
+  village_id?: unknown;
+} | null | undefined;
+
+/** Numeric Village FK from a Farmer payload — never a name or String(object). */
+export function farmerVillagePk(farmer: FarmerVillageSource): number | null {
+  if (!farmer) return null;
+  const fromVillage = extractMasterPk(farmer.village);
+  if (fromVillage != null) return fromVillage;
+  const fromVillageId = extractMasterPk(farmer.village_id);
+  if (fromVillageId != null) return fromVillageId;
+  if (farmer.village && typeof farmer.village === "object") {
+    const row = farmer.village as Record<string, unknown>;
+    return extractMasterPk(row.village_id) ?? extractMasterPk(row.village);
+  }
+  return null;
+}
+
+export function farmerVillagePkToString(farmer: FarmerVillageSource): string {
+  const pk = farmerVillagePk(farmer);
+  return pk != null ? String(pk) : "";
+}

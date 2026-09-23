@@ -6,7 +6,7 @@ import { Colors, Enterprise, FontSize, FontWeight, Layout, Spacing } from "../..
 import type { FarmerWorkflowMeta, VisitPriorityLabel } from "../../lib/workQueue";
 import type { MobileFarmer } from "../../lib/farmersApi";
 import { farmerVisitCount } from "../../lib/farmerStatus";
-import { buildFarmerWorkflowMeta } from "../../lib/workQueue";
+import { buildFarmerWorkflowMeta, farmerVillageName } from "../../lib/workQueue";
 import { FlatCard } from "../layout/FlatCard";
 import { PressableCard } from "../ui/PressableCard";
 import { StatusChip } from "../ui/StatusChip";
@@ -56,7 +56,7 @@ export const FarmerDirectoryCard = memo(function FarmerDirectoryCard({
 }: Props) {
   const { t } = useI18n();
   const meta = workflow ?? buildFarmerWorkflowMeta(farmer);
-  const village = farmer.village_name || farmer.village;
+  const village = farmerVillageName(farmer);
   const crop = farmerCropLabel(farmer);
   const phone = farmer.phone?.trim() || "";
   const neverVisited = farmerVisitCount(farmer) === 0;

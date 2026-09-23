@@ -116,7 +116,7 @@ test("visit submit builds village-only operational location — no district/talu
   const submit = read("mobile/lib/visitSubmitApi.ts");
   assert.doesNotMatch(submit, /district:\s*[\"']/);
   assert.doesNotMatch(submit, /taluk:\s*[\"']/);
-  assert.match(submit, /village: nf\?\.village_id/);
+  assert.match(submit, /farmerVillagePkToString\(farmer\)/);
 
   const format = read("src/utils/format.ts");
   assert.match(format, /delete payload\.district/);

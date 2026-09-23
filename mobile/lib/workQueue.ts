@@ -24,7 +24,7 @@ export type FarmerPickRow = {
 
 export type VillageNameSource = {
   village_name?: string | null;
-  village?: string | number | null;
+  village?: string | number | { id?: string | number | null; name?: string | null; name_en?: string | null; name_ta?: string | null } | null;
 };
 
 export type FarmerWorkSectionId = "follow_ups_today" | "recently_visited" | "all_farmers";
@@ -146,7 +146,17 @@ function sortFarmersByPriority(a: MobileFarmer, b: MobileFarmer, ref = new Date(
 }
 
 export function farmerVillageName(farmer: VillageNameSource): string {
-  return String(farmer.village_name || farmer.village || "").trim();
+  const named = String(farmer.village_name || "").trim();
+  if (named) return named;
+  const village = farmer.village;
+  if (village && typeof village === "object") {
+    return String(village.name || village.name_en || village.name_ta || "").trim();
+  }
+  if (typeof village === "string") {
+    const trimmed = village.trim();
+    if (trimmed && !/^\d+$/.test(trimmed)) return trimmed;
+  }
+  return "";
 }
 
 export function farmerMatchesVillageName(farmer: MobileFarmer, villageName: string): boolean {

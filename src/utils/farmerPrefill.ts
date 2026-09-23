@@ -2,7 +2,7 @@ import { Farmer, getFarmer, getFarmerFields, getFarmerVisits } from "../api/farm
 import { getCrops, getOptionLabel, MasterOption } from "../api/masters";
 import { Visit, VisitFormValues } from "../api/visits";
 import { asArray } from "./format";
-import { extractMasterPk, masterPkToString } from "./masterId";
+import { extractMasterPk, farmerVillagePkToString, masterPkToString } from "./masterId";
 import { normalizeVisitFromApi } from "./visitFarmer";
 
 export type VisitFormPrefill = Partial<
@@ -72,7 +72,7 @@ export function prefillFromFarmer(farmer: Farmer): VisitFormPrefill {
     farmer_id: farmer.id != null ? String(farmer.id) : "",
     farmer_name: farmer.name || "",
     farmer_phone: farmer.phone || "",
-    village: masterPkToString(farmer.village),
+    village: farmerVillagePkToString(farmer),
     land_name: "",
     land_area: farmer.land_area?.toString() || farmer.total_land_area?.toString() || ""
   };
@@ -143,7 +143,7 @@ export function resolveVillageId(
   visit: Visit | null,
   villages: MasterOption[]
 ): string {
-  const fromFarmer = masterPkToString(farmer.village);
+  const fromFarmer = farmerVillagePkToString(farmer);
   if (fromFarmer) return fromFarmer;
   const fromVisit = visit ? masterPkToString(visit.village) : "";
   if (fromVisit) return fromVisit;

@@ -2,6 +2,7 @@ import { apiClient } from "./client";
 import { asArray } from "../utils/format";
 import { parsePaginatedList } from "../utils/apiUnwrap";
 import { apiPathFromNextUrl } from "../utils/apiPath";
+import { extractMasterPk } from "../utils/masterId";
 import { getAllVisits, getVisits, Visit } from "./visits";
 import { normalizeVisitFromApi } from "../utils/visitFarmer";
 
@@ -13,7 +14,8 @@ export type Farmer = {
   district_name?: string;
   taluk?: string | number | null;
   taluk_name?: string | null;
-  village?: string | number;
+  village?: string | number | { id?: number | string | null };
+  village_id?: string | number | null;
   village_name?: string;
   crop_name?: string;
   list_crop_name?: string;
@@ -132,25 +134,41 @@ export function getFarmers() {
   return getAllFarmers();
 }
 
-/** Lookup a farmer by phone or name without loading the full directory. */
+/** Farmer row from create/detail/list — unwrap `{ farmer }` wrappers, never invent an id. */
+export function coerceFarmerRecord(raw: unknown): Farmer | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  const nested = row.farmer;
+  const candidate =
+    nested && typeof nested === "object" && !Array.isArray(nested)
+      ? (nested as Record<string, unknown>)
+      : row;
+  const id = extractMasterPk(candidate.id);
+  if (id == null) return null;
+  return { ...(candidate as Farmer), id };
+}
+
+/** Lookup a farmer by phone (preferred) or exact name. Never returns an unrelated first-page hit. */
 export async function findFarmerByPhoneOrName(phone?: string, name?: string): Promise<Farmer | null> {
   const search = (phone || name || "").trim();
   if (!search) return null;
   const page = await fetchFarmersPage({ search, pageSize: 20, source: "findFarmerByPhoneOrName" });
+  const results = page.results
+    .map((row) => coerceFarmerRecord(row) ?? row)
+    .filter((row): row is Farmer => row != null && extractMasterPk(row.id) != null);
   const phoneNorm = (phone || "").trim();
   const nameNorm = (name || "").trim().toLowerCase();
-  const byPhone = phoneNorm
-    ? page.results.find((f) => (f.phone || "").trim() === phoneNorm)
-    : undefined;
-  if (byPhone) return byPhone;
-  if (nameNorm) {
-    return page.results.find((f) => (f.name || "").trim().toLowerCase() === nameNorm) ?? null;
+  if (phoneNorm) {
+    return results.find((f) => (f.phone || "").trim() === phoneNorm) ?? null;
   }
-  return page.results[0] ?? null;
+  if (nameNorm) {
+    return results.find((f) => (f.name || "").trim().toLowerCase() === nameNorm) ?? null;
+  }
+  return null;
 }
 
 export function getFarmer(id: number) {
-  return apiClient<Farmer>(`farmers/${id}/`);
+  return apiClient<Farmer>(`farmers/${id}/`).then((raw) => coerceFarmerRecord(raw) ?? raw);
 }
 
 export type CreateFarmerPayload = {
@@ -166,7 +184,7 @@ export function createFarmer(payload: CreateFarmerPayload) {
   return apiClient<Farmer>("farmers/", {
     method: "POST",
     body: JSON.stringify(payload)
-  });
+  }).then((raw) => coerceFarmerRecord(raw) ?? raw);
 }
 
 export function getFarmerFields(id: number) {

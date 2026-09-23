@@ -1,6 +1,7 @@
+import type { Farmer } from "../api/farmers";
+import { coerceFarmerRecord, createFarmer, findFarmerByPhoneOrName, getFarmer } from "../api/farmers";
 import type { VisitFormValues } from "../api/visits";
-import { createFarmer, findFarmerByPhoneOrName } from "../api/farmers";
-import { extractMasterPk, masterPkToString } from "../utils/masterId";
+import { extractMasterPk, farmerVillagePkToString, masterPkToString } from "../utils/masterId";
 import { hasCompleteNewFarmerDetails } from "./farmerDetails";
 import { resolveFarmerPk } from "./resolveFarmerPk";
 import { coerceStr, normalizeVisitGpsFields } from "./visitValidation";
@@ -9,17 +10,50 @@ function isNumericId(value: unknown) {
   return /^\d+$/.test(coerceStr(value));
 }
 
-async function resolveVillagePk(villageRaw: unknown): Promise<string> {
+function draftVillagePk(villageRaw: unknown): string {
   const villagePk = extractMasterPk(villageRaw);
-  if (villagePk != null) {
-    return String(villagePk);
-  }
-  const label = coerceStr(villageRaw);
-  if (!label || /^\d+$/.test(label)) {
+  return villagePk != null ? String(villagePk) : "";
+}
+
+function resolvedFarmer(raw: unknown): Farmer | null {
+  return coerceFarmerRecord(raw);
+}
+
+async function villageFromResolvedFarmer(farmer: Farmer): Promise<string> {
+  const direct = farmerVillagePkToString(farmer);
+  if (direct) return direct;
+  if (farmer.id == null) return "";
+  try {
+    const full = resolvedFarmer(await getFarmer(farmer.id));
+    return full ? farmerVillagePkToString(full) : "";
+  } catch {
     return "";
   }
-  // Label-only resolution without territory scope is unsafe under village-only architecture.
-  return "";
+}
+
+function applyResolvedFarmer(
+  next: VisitFormValues,
+  farmer: Farmer,
+  village: string
+): VisitFormValues {
+  return {
+    ...next,
+    farmer_id: farmer.id != null ? String(farmer.id) : next.farmer_id,
+    farmer_name: coerceStr(farmer.name) || next.farmer_name,
+    farmer_phone: coerceStr(farmer.phone) || next.farmer_phone,
+    village
+  };
+}
+
+async function bindResolvedFarmer(
+  next: VisitFormValues,
+  raw: unknown,
+  fallbackVillage = ""
+): Promise<VisitFormValues | null> {
+  const farmer = resolvedFarmer(raw);
+  if (!farmer?.id) return null;
+  const village = (await villageFromResolvedFarmer(farmer)) || fallbackVillage;
+  return applyResolvedFarmer(next, farmer, village);
 }
 
 /** Trim strings, normalize GPS, and ensure farmer_id links to directory farmer. */
@@ -28,7 +62,7 @@ export async function prepareVisitForSubmit(
   options?: { pendingFarmerPhoto?: import("../utils/profileImagePick").PickedProfileImage | null }
 ): Promise<VisitFormValues> {
   const linkedFarmerId = resolveFarmerPk(values as Record<string, unknown>);
-  const resolvedVillage = await resolveVillagePk(values.village);
+  const selectedVillage = draftVillagePk(values.village);
 
   let next: VisitFormValues = normalizeVisitGpsFields({
     ...values,
@@ -36,7 +70,7 @@ export async function prepareVisitForSubmit(
     farmer_name: coerceStr(values.farmer_name),
     farmer_phone: coerceStr(values.farmer_phone),
     crop: coerceStr(values.crop),
-    village: resolvedVillage || masterPkToString(values.village),
+    village: selectedVillage,
     land_name: coerceStr(values.land_name),
     crop_health: coerceStr(values.crop_health),
     weed_condition: coerceStr(values.weed_condition),
@@ -59,11 +93,20 @@ export async function prepareVisitForSubmit(
   });
 
   if (isNumericId(next.farmer_id)) {
+    try {
+      const full = await getFarmer(Number(next.farmer_id));
+      const bound = await bindResolvedFarmer(next, full);
+      if (bound && extractMasterPk(bound.village) != null) {
+        return bound;
+      }
+    } catch {
+      // keep selected village only when the linked farmer profile cannot be loaded
+    }
     return next;
   }
 
   const phone = coerceStr(next.farmer_phone);
-  const name = coerceStr(next.farmer_name).toLowerCase();
+  const name = coerceStr(next.farmer_name);
   if (!phone && !name) {
     return next;
   }
@@ -71,14 +114,8 @@ export async function prepareVisitForSubmit(
   try {
     const match = await findFarmerByPhoneOrName(phone, name);
     if (match?.id != null) {
-      next = {
-        ...next,
-        farmer_id: String(match.id),
-        farmer_name: coerceStr(match.name) || next.farmer_name,
-        farmer_phone: coerceStr(match.phone) || next.farmer_phone,
-        village: masterPkToString(match.village) || next.village
-      };
-      return next;
+      const bound = await bindResolvedFarmer(next, match);
+      if (bound) return bound;
     }
   } catch {
     // directory lookup failed — try create below
@@ -101,7 +138,7 @@ export async function prepareVisitForSubmit(
       phone: farmerPhone,
       village: villagePk
     });
-    if (created.id != null) {
+    if (created?.id != null) {
       const farmerId = String(created.id);
       if (options?.pendingFarmerPhoto) {
         const { uploadPendingFarmerPhotoIfNeeded } = await import("./uploadPendingFarmerPhoto");
@@ -109,13 +146,8 @@ export async function prepareVisitForSubmit(
           enqueueOnFailure: true
         });
       }
-      return {
-        ...next,
-        farmer_id: farmerId,
-        farmer_name: coerceStr(created.name) || farmerName,
-        farmer_phone: coerceStr(created.phone) || farmerPhone,
-        village: masterPkToString(created.village) || next.village
-      };
+      const bound = await bindResolvedFarmer(next, created, String(villagePk));
+      if (bound) return bound;
     }
   } catch (err) {
     try {
@@ -128,13 +160,8 @@ export async function prepareVisitForSubmit(
             enqueueOnFailure: true
           });
         }
-        return {
-          ...next,
-          farmer_id: farmerId,
-          farmer_name: coerceStr(existing.name) || farmerName,
-          farmer_phone: coerceStr(existing.phone) || farmerPhone,
-          village: masterPkToString(existing.village) || next.village
-        };
+        const bound = await bindResolvedFarmer(next, existing);
+        if (bound) return bound;
       }
     } catch {
       // fall through

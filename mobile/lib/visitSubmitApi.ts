@@ -13,7 +13,7 @@ import {
 import { getAccessToken } from "../../src/storage/tokenStorage";
 import { prepareVisitForSubmit } from "../../src/visit/prepareVisitSubmit";
 import { validateVisitSubmitValues } from "../../src/visit/visitValidation";
-import { extractMasterPk } from "../../src/utils/masterId";
+import { extractMasterPk, farmerVillagePkToString } from "../../src/utils/masterId";
 import { problemItemIdsFromSelection } from "../../src/utils/visitProblems";
 import {
   problemCategoryPkFromSelection,
@@ -84,7 +84,9 @@ export function buildVisitFormValuesFromStore(
     farmer_id: farmer?.id != null ? String(farmer.id) : undefined,
     farmer_name: farmer?.name || nf?.name || "",
     farmer_phone: farmer?.phone || nf?.phone || "",
-    village: nf?.village_id || (farmer?.village != null ? String(farmer.village) : ""),
+    village:
+      farmerVillagePkToString(farmer) ||
+      (extractMasterPk(nf?.village_id) != null ? String(extractMasterPk(nf?.village_id)) : ""),
     crop: cropPk != null ? String(cropPk) : "",
     crop_name: state.cropName,
     land_name: "",

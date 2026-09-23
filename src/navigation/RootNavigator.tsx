@@ -18,6 +18,7 @@ import { isBiometricLockPhase } from "../storage/authPhase";
 import HomeTabScreen from "../../mobile/app/(tabs)/index";
 import WorkTabScreen from "../../mobile/app/(tabs)/work";
 import FarmerProfileScreen from "../../mobile/app/farmer/[id]";
+import FarmerVisitHistoryScreen from "../../mobile/app/farmer/visit-history";
 import ProfileTabScreen from "../../mobile/app/(tabs)/profile";
 import ProblemsCatalogScreen from "../../mobile/app/problems";
 import { FarmerMapScreen } from "../screens/map/FarmerMapScreen";
@@ -64,6 +65,7 @@ const SafeDayScreen = withScreenErrorBoundary(TrackingWorkspaceScreen, "Day");
 const SafeVisitDetailScreen = withScreenErrorBoundary(VisitDetailScreen, "VisitDetail");
 const SafeVisitFlowNavigator = withScreenErrorBoundary(VisitFlowNavigator, "VisitFlow");
 const SafeFarmerDetailScreen = withScreenErrorBoundary(FarmerProfileScreen, "FarmerDetail");
+const SafeFarmerVisitHistoryScreen = withScreenErrorBoundary(FarmerVisitHistoryScreen, "FarmerVisitHistory");
 const SafeFarmerMapScreen = withScreenErrorBoundary(FarmerMapScreen, "FarmerMap");
 const SafeMyLocationScreen = withScreenErrorBoundary(MyLocationScreen, "MyLocation");
 const SafeNotificationsScreen = withScreenErrorBoundary(NotificationsScreen, "Notifications");
@@ -91,6 +93,7 @@ function WorkNavigator() {
     >
       <WorkStack.Screen name="WorkHome" component={SafeWorkHomeScreen} />
       <WorkStack.Screen name="FarmerDetail" component={SafeFarmerDetailScreen} />
+      <WorkStack.Screen name="FarmerVisitHistory" component={SafeFarmerVisitHistoryScreen} />
       <WorkStack.Screen name="FarmerMap" component={SafeFarmerMapScreen} />
       <WorkStack.Screen name="VisitDetail" component={SafeVisitDetailScreen} />
     </WorkStack.Navigator>

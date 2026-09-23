@@ -153,6 +153,14 @@ export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
               longitude: farmer.longitude
             })
           }
+          onHistory={() => {
+            const id = Number(farmer?.id);
+            if (!Number.isFinite(id) || id <= 0) return;
+            navigation.push("FarmerVisitHistory", {
+              farmerId: id,
+              farmerName: farmer.name
+            });
+          }}
           onVisit={() => {
             void (async () => {
               const allowed = await requestGpsForFieldWork();

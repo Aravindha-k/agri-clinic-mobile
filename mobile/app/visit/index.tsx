@@ -19,6 +19,7 @@ import { VisitEntranceProvider } from "../../context/VisitEntranceContext";
 import { useScreenEntrance } from "../../hooks/useScreenEntrance";
 import { beginNewVisit, startRevisitDraft } from "../../lib/beginNewVisit";
 import { isVisitSubmitInFlight } from "../../lib/visit/visitSubmitCoordinator";
+import { presentUnfinishedVisitLeaveDialog } from "../../lib/visitLeaveGuard";
 import { useVisitFormStore } from "../../store/visitFormStore";
 import VisitCreateStep, { VisitCreateStep2, VisitCreateStep3, VisitCreateStep4 } from "./create";
 
@@ -166,33 +167,18 @@ export default function VisitFlowShell() {
         event.preventDefault();
         if (guardDialogOpen.current) return;
         guardDialogOpen.current = true;
-        Alert.alert(t("visitFlow.leaveVisitTitle"), t("visitFlow.leaveVisitBody"), [
-          {
-            text: t("visitFlow.continueEditing"),
-            style: "cancel",
-            onPress: () => {
-              guardDialogOpen.current = false;
-            }
+        presentUnfinishedVisitLeaveDialog({
+          t,
+          onContinue: () => {
+            guardDialogOpen.current = false;
           },
-          {
-            text: t("visitFlow.saveDraft"),
-            onPress: () => {
-              guardDialogOpen.current = false;
-              allowRemoval.current = true;
-              navigation.dispatch(event.data.action);
-            }
-          },
-          {
-            text: t("visitFlow.discard"),
-            style: "destructive",
-            onPress: () => {
-              guardDialogOpen.current = false;
-              allowRemoval.current = true;
-              beginNewVisit({ discardMedia: true });
-              navigation.dispatch(event.data.action);
-            }
+          onCancelConfirmed: () => {
+            guardDialogOpen.current = false;
+            allowRemoval.current = true;
+            beginNewVisit({ discardMedia: true });
+            navigation.dispatch(event.data.action);
           }
-        ]);
+        });
       }),
     [hasDraft, navigation, t]
   );

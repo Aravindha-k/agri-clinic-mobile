@@ -27,7 +27,8 @@ test("navigation guard covers stack removal without duplicate dialogs", () => {
   const shell = read("mobile/app/visit/index.tsx");
   assert.match(shell, /guardDialogOpen/);
   assert.match(shell, /isVisitSubmitInFlight/);
-  assert.match(shell, /leaveVisitTitle/);
+  assert.match(shell, /presentUnfinishedVisitLeaveDialog/);
+  assert.match(shell, /leaveVisitTitle|continueVisit|cancelVisit|presentUnfinishedVisitLeaveDialog/);
   assert.match(shell, /discardMedia:\s*true/);
 });
 

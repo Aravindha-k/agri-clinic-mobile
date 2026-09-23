@@ -43,6 +43,7 @@ type Props = {
   onPress: () => void;
   onCall?: () => void;
   onMap: () => void;
+  onHistory?: () => void;
   onVisit: () => void;
 };
 
@@ -52,6 +53,7 @@ export const FarmerDirectoryCard = memo(function FarmerDirectoryCard({
   onPress,
   onCall,
   onMap,
+  onHistory,
   onVisit
 }: Props) {
   const { t } = useI18n();
@@ -101,9 +103,18 @@ export const FarmerDirectoryCard = memo(function FarmerDirectoryCard({
             </Text>
           ) : null}
 
-          <Text style={styles.lastVisit} numberOfLines={1}>
-            {t("work.lastVisitLabel", { date: lastVisitLabel })}
-          </Text>
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation?.();
+              onHistory?.();
+            }}
+            disabled={!onHistory}
+          >
+            <Text style={styles.lastVisit} numberOfLines={1}>
+              {t("work.lastVisitLabel", { date: lastVisitLabel })}
+              {onHistory ? ` · ${t("work.visitHistory")}` : ""}
+            </Text>
+          </Pressable>
         </View>
 
         <View style={styles.divider} />

@@ -48,10 +48,10 @@ import {
   type FarmerField,
   type MobileFarmerProfile
 } from "../../lib/farmerProfileApi";
+import { sortVisitsNewestFirst } from "../../lib/farmerVisitHistory";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 
 const VISITS_PREVIEW_COUNT = 5;
-const VISITS_EXPAND_CAP = 15;
 
 function initialProfileFromRoute(
   farmerId: number,
@@ -232,7 +232,6 @@ function FarmerProfileScreenInner() {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
   const [expandedFields, setExpandedFields] = useState<Set<string>>(new Set());
-  const [showAllVisits, setShowAllVisits] = useState(false);
 
   const rootNav = navigation.getParent()?.getParent() ?? navigation.getParent();
 
@@ -265,19 +264,26 @@ function FarmerProfileScreenInner() {
     setProfile(seeded);
     setLoading(!seeded);
     setError("");
-    setShowAllVisits(false);
     void load(false);
     // Prefill is only used for first paint seed; farmerId drives reloads.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid object-identity refetch loops
   }, [farmerId, load]);
 
-  const visitsPreview = useMemo(() => {
-    if (!profile) return [];
-    if (showAllVisits) return profile.visits.slice(0, VISITS_EXPAND_CAP);
-    return profile.visits.slice(0, VISITS_PREVIEW_COUNT);
-  }, [profile, showAllVisits]);
+  const orderedVisits = useMemo(
+    () => sortVisitsNewestFirst(profile?.visits ?? []),
+    [profile]
+  );
+  const visitsPreview = orderedVisits.slice(0, VISITS_PREVIEW_COUNT);
 
-  const lastVisit = profile?.visits[0] ?? null;
+  function openVisitHistory() {
+    if (!Number.isFinite(farmerId) || farmerId <= 0) return;
+    navigation.push("FarmerVisitHistory", {
+      farmerId,
+      farmerName: profile?.farmer.name
+    });
+  }
+
+  const lastVisit = orderedVisits[0] ?? null;
   const lastVisitCrop = lastVisit ? cropFromVisit(lastVisit) : "";
   const lastVisitProblem = lastVisit ? problemCategoryFromVisit(lastVisit) : "";
   const lastVisitRecommendation = lastVisit ? recommendationFromVisit(lastVisit) : "";
@@ -466,6 +472,13 @@ function FarmerProfileScreenInner() {
         {lastVisit ? (
           <View style={styles.section}>
             <SectionHeader title={t("farmerDetail.lastVisitSection").toUpperCase()} />
+            <Pressable
+              onPress={() => {
+                const visitId = Number(lastVisit.id);
+                if (!Number.isFinite(visitId) || visitId <= 0) return;
+                navigation.push("VisitDetail", { id: visitId });
+              }}
+            >
             <View style={styles.lastVisitCard}>
               {lastVisitCrop ? (
                 <Text style={styles.lastVisitLine}>
@@ -486,6 +499,7 @@ function FarmerProfileScreenInner() {
                 </Text>
               ) : null}
             </View>
+            </Pressable>
           </View>
         ) : null}
         </FadeInSection>
@@ -531,8 +545,8 @@ function FarmerProfileScreenInner() {
         <View style={styles.section}>
           <SectionHeader
             title={t("farmerDetail.visitHistory").toUpperCase()}
-            action={profile.visits.length > 5 ? (showAllVisits ? t("farmerDetail.showLess") : t("farmerDetail.viewAll")) : undefined}
-            onAction={() => setShowAllVisits((v) => !v)}
+            action={t("farmerDetail.viewAll")}
+            onAction={openVisitHistory}
           />
           {profile.visits.length === 0 ? (
             <Text style={styles.emptyLine}>{t("farmerDetail.noVisits")}</Text>

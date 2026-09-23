@@ -38,10 +38,14 @@ assert.match(beginNewVisit, /ensureLocalSyncId\(\)/, "new draft must mint local_
 assert.match(beginNewVisit, /discardMedia/, "discard must clean temporary media");
 
 assert.match(shell, /addListener\("beforeRemove"/, "all stack removal must share one draft guard");
-assert.match(shell, /saveDraft/);
-assert.match(shell, /continueEditing/);
+assert.match(shell, /presentUnfinishedVisitLeaveDialog/);
+assert.doesNotMatch(shell, /saveDraft/);
 assert.match(shell, /isVisitSubmitInFlight/, "guard must block while submit is in flight");
 assert.match(shell, /beginNewVisit\(\{\s*discardMedia:\s*true\s*\}\)/, "discard must reset before leaving");
+const leaveGuard = read("mobile/lib/visitLeaveGuard.ts");
+assert.match(leaveGuard, /continueVisit/);
+assert.match(leaveGuard, /cancelVisit/);
+assert.doesNotMatch(leaveGuard, /saveDraft/);
 
 assert.match(review, /submitVisitCoordinator/);
 assert.match(review, /resolveVisitReviewFarmer/);
@@ -110,6 +114,8 @@ assert.match(
 
 for (const key of [
   "leaveVisitTitle",
+  "continueVisit",
+  "cancelVisit",
   "saveDraft",
   "continueEditing",
   "optionalObservationHint",
@@ -125,7 +131,7 @@ for (const key of [
   assert.match(en, new RegExp(`${key}:`), `English key missing: ${key}`);
 }
 
-assert.match(en, /leaveVisitTitle:\s*"Unsaved visit"/);
+assert.match(en, /leaveVisitTitle:\s*"Unfinished visit"/);
 assert.match(ta, /leaveVisitTitle:/);
 assert.match(ta, /saveDraft:/);
 assert.match(ta, /continueEditing:/);

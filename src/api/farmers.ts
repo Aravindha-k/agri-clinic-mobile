@@ -191,6 +191,30 @@ export function getFarmerFields(id: number) {
   return apiClient(`farmers/${id}/fields/`);
 }
 
+export type FarmerVisitsPage = {
+  results: Visit[];
+  next: string | null;
+  count: number | null;
+};
+
+/** One page of GET /farmers/{id}/visits/ — reuse for profile and full history. */
+export async function fetchFarmerVisitsPage(
+  id: number,
+  options?: { nextUrl?: string | null }
+): Promise<FarmerVisitsPage> {
+  const path = options?.nextUrl ? apiPathFromNextUrl(options.nextUrl) : `farmers/${id}/visits/`;
+  if (!path) {
+    return { results: [], next: null, count: 0 };
+  }
+  const data = await apiClient<unknown>(path);
+  const batch = parsePaginatedList<Visit>(data);
+  return {
+    results: batch.results.map((row) => normalizeVisitFromApi(row)),
+    next: batch.next,
+    count: batch.count
+  };
+}
+
 export function getFarmerVisits(id: number, options?: { maxPages?: number }) {
   return getAllFarmerVisits(id, options?.maxPages ?? MAX_FARMER_VISIT_PAGES);
 }
@@ -201,19 +225,13 @@ export const FARMER_PROFILE_VISIT_MAX_PAGES = 2;
 const MAX_FARMER_VISIT_PAGES = 20;
 
 async function getAllFarmerVisits(id: number, maxPages = MAX_FARMER_VISIT_PAGES): Promise<Visit[]> {
-  const base = `farmers/${id}/visits/`;
   const all: Visit[] = [];
   let next: string | null = null;
   const pageLimit = Math.max(1, Math.min(maxPages, MAX_FARMER_VISIT_PAGES));
 
   for (let page = 0; page < pageLimit; page += 1) {
-    const path: string = next ? apiPathFromNextUrl(next) : base;
-    if (!path) {
-      break;
-    }
-    const data: unknown = await apiClient<unknown>(path);
-    const batch = parsePaginatedList<Visit>(data);
-    all.push(...batch.results.map((row: Visit) => normalizeVisitFromApi(row)));
+    const batch = await fetchFarmerVisitsPage(id, { nextUrl: next });
+    all.push(...batch.results);
     if (!batch.next || batch.results.length === 0) {
       break;
     }

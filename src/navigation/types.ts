@@ -33,6 +33,7 @@ export type FarmersStackParamList = {
 export type WorkStackParamList = {
   WorkHome: { segment?: "queue" | "visits" } | undefined;
   FarmerDetail: { id: number; prefill?: FarmerDetailPrefill };
+  FarmerVisitHistory: { farmerId: number; farmerName?: string };
   FarmerMap: FarmerMapParams;
   VisitDetail: { id: number; fromSubmit?: boolean };
 };

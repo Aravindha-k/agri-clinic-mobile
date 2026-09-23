@@ -39,6 +39,7 @@ import {
   cropFromVisit,
   problemCategoryFromVisit
 } from "../../lib/farmerProfileApi";
+import { visitAllowsNotesUpdate } from "../../lib/farmerVisitHistory";
 import { EvidenceStampBurner, type EvidenceStampJob } from "../../components/visit/EvidenceStampBurner";
 import {
   deleteTempUri,
@@ -343,7 +344,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
         </Text>
         <View style={styles.headerRight}>
           <StatusChip label={statusLabel} variant={statusVariant} />
-          {!editMode ? (
+          {!editMode && visitAllowsNotesUpdate(visit) ? (
             <Pressable
               onPress={() => setEditMode(true)}
               style={styles.iconBtn}
@@ -510,13 +511,16 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
                 <Pressable
                   key={attachment.id}
                   onPress={() => setViewerIndex(imageUrls.indexOf(uri))}
-                  onLongPress={() => confirmDeleteAttachment(attachment)}
+                  onLongPress={
+                    visitAllowsNotesUpdate(visit) ? () => confirmDeleteAttachment(attachment) : undefined
+                  }
                   style={[styles.photoCell, { width: photoWidth, height: photoWidth }]}
                 >
                   <Image source={{ uri }} style={styles.photoImage} resizeMode="cover" />
                 </Pressable>
               );
             })}
+            {visitAllowsNotesUpdate(visit) ? (
             <Pressable
               onPress={() => void handleAddPhoto()}
               disabled={uploadingPhoto}
@@ -531,6 +535,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
                 </>
               )}
             </Pressable>
+            ) : null}
           </View>
         </View>
 

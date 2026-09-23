@@ -11,6 +11,8 @@ export { validateVisitSubmitValues } from "../visit/visitValidation";
 
 export type Visit = {
   id: number;
+  status?: string | null;
+  can_edit?: boolean | null;
   district?: string | number | null;
   district_name?: string;
   village?: string | number | null;

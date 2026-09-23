@@ -32,7 +32,12 @@ export function CropSelectionCard({
           <Text style={styles.promptTitle}>{t("visitFlow.selectCrop")}</Text>
           <Text style={styles.promptSub}>{t("visitFlow.chooseCropSub")}</Text>
         </View>
-        <PrimaryButton label={t("visitFlow.chooseCrop")} onPress={onChooseCrop} style={styles.chooseBtn} />
+          <PrimaryButton
+            label={t("visitFlow.chooseCrop")}
+            onPress={onChooseCrop}
+            icon={<Ionicons name="leaf-outline" size={18} color={Colors.surface} />}
+            style={styles.chooseBtn}
+          />
         {fieldCrops.length > 0 ? (
           <>
             <Text style={styles.quickLabel}>{t("visitFlow.farmersCrops")}</Text>
@@ -68,7 +73,7 @@ export function CropSelectionCard({
         </Pressable>
       </View>
       <View style={styles.selectedBody}>
-        <Text style={styles.cropEmoji}>🌾</Text>
+        <Ionicons name="leaf-outline" size={22} color={Colors.brand700} />
         <View style={styles.selectedCopy}>
           <Text style={styles.cropName}>{cropName}</Text>
           {cropTamilName ? <Text style={styles.cropTamil}>{cropTamilName}</Text> : null}

@@ -1,4 +1,4 @@
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { Alert } from "react-native";
 import { captureVisitGps } from "./visit/visitGpsCapture";
@@ -29,6 +29,43 @@ export type PreparedEvidencePhoto = {
   name: string;
   mimeType: string;
 };
+
+/** Copy picker/camera URI into app cache so Android content:// assets stay readable. */
+export async function materializeLocalImage(uri: string): Promise<string> {
+  const source = String(uri || "").trim();
+  if (!source) return source;
+  if (source.startsWith("file://") && source.includes("visit-evidence-")) return source;
+  const cacheDir = FileSystem.cacheDirectory;
+  if (!cacheDir) return source;
+  const dest = `${cacheDir}visit-evidence-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  try {
+    await FileSystem.copyAsync({ from: source, to: dest });
+    return dest;
+  } catch {
+    return source;
+  }
+}
+
+async function launchImageLibrary(limit: number) {
+  const base = {
+    mediaTypes: ["images"] as ImagePicker.MediaType[],
+    quality: 1 as const,
+    allowsEditing: false,
+    exif: true
+  };
+  try {
+    return await ImagePicker.launchImageLibraryAsync({
+      ...base,
+      allowsMultipleSelection: true,
+      selectionLimit: Math.max(1, limit)
+    });
+  } catch {
+    return ImagePicker.launchImageLibraryAsync({
+      ...base,
+      allowsMultipleSelection: false
+    });
+  }
+}
 
 async function currentFix() {
   const result = await captureVisitGps({ requestPermission: false });
@@ -88,7 +125,7 @@ export async function prepareCameraEvidence(options: {
   if (picked.canceled || !picked.assets[0]?.uri) return null;
 
   const originalUri = picked.assets[0].uri;
-  const sourceUri = originalUri;
+  const sourceUri = await materializeLocalImage(originalUri);
   const fix = await currentFix();
   const latitude = fix?.latitude ?? null;
   const longitude = fix?.longitude ?? null;
@@ -123,18 +160,12 @@ export async function prepareGalleryEvidence(options: {
   farmerName?: string;
 }): Promise<PreparedEvidencePhoto[]> {
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!perm.granted) {
+  if (!perm.granted && perm.accessPrivileges !== "limited") {
     Alert.alert("Gallery permission", "Allow photo library access to attach visit photos.");
     return [];
   }
   const limit = Math.max(1, options.remaining);
-  const picked = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ["images"],
-    quality: 1,
-    allowsMultipleSelection: true,
-    selectionLimit: limit,
-    exif: true
-  });
+  const picked = await launchImageLibrary(limit);
   if (picked.canceled || !picked.assets.length) return [];
 
   const nowFix = await currentFix();
@@ -143,7 +174,7 @@ export async function prepareGalleryEvidence(options: {
 
   for (const asset of picked.assets.slice(0, limit)) {
     if (!asset.uri) continue;
-    const sourceUri = asset.uri;
+    const sourceUri = await materializeLocalImage(asset.uri);
     const exif = readGalleryExifLocation(asset.exif as Record<string, unknown> | undefined);
     const hasOriginal = exif != null;
     const latitude = hasOriginal ? exif.latitude : nowFix?.latitude ?? null;

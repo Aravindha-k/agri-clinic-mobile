@@ -506,7 +506,7 @@ export default function VisitCreateStep1({ onClose }: Props) {
                       ? t("visitFlow.loadingVillages")
                       : selectedVillageLabel}
                   </Text>
-                  <Ionicons name="chevron-down" size={16} color={Colors.text3} />
+                  <Ionicons name="location-outline" size={18} color={Colors.text3} />
                 </Pressable>
                 {draft.needsVillageReview ? (
                   <Text style={styles.fieldError}>{t("territory.reviewVillage")}</Text>

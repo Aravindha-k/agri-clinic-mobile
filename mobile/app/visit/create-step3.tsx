@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useMemo, useRef, useState } from "react";
+import { Image } from "expo-image";
 import {
   ActivityIndicator,
-  Image,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,7 +14,7 @@ import {
 import { EvidenceImageViewer } from "../../../src/components/visit/EvidenceImageViewer";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useEmployee } from "../../../src/storage/EmployeeContext";
-import { PrimaryButton } from "../../components/ui";
+import { ActionTile, PrimaryButton } from "../../components/ui";
 import { StepIndicator } from "../../components/visit/StepIndicator";
 import { VisitFlowHeader } from "../../components/visit/VisitFlowHeader";
 import {
@@ -35,7 +36,7 @@ import {
 import { useVisitFormStore } from "../../store/visitFormStore";
 import { EntranceBlocks } from "../../components/ui/EntranceBlocks";
 import { useVisitEntranceKey } from "../../context/VisitEntranceContext";
-import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
+import { Colors, FontSize, FontWeight, Layout, Radius, Spacing } from "../../lib/theme";
 
 type Props = {
   onBack: () => void;
@@ -195,20 +196,24 @@ export function VisitCreateStep3({ onBack }: Props) {
           <Text style={styles.sectionLabel}>{t("visitFlow.evidencePhotos")}</Text>
           <View style={styles.countChip}>
             <Text style={styles.countChipText}>
-              {t("visitFlow.photosSelected", { count: photos.length })}
+              {`${photos.length} / ${MAX_VISIT_PHOTOS}`}
             </Text>
           </View>
         </View>
 
         <View style={styles.mediaActions}>
-          <Pressable onPress={() => void handleAddCameraPhoto()} style={styles.mediaBtn} disabled={Boolean(busy)}>
-            <Ionicons name="camera-outline" size={22} color={Colors.brand700} />
-            <Text style={styles.mediaBtnText}>{t("visitFlow.takePhoto")}</Text>
-          </Pressable>
-          <Pressable onPress={() => void handleAddGalleryPhoto()} style={styles.mediaBtn} disabled={Boolean(busy)}>
-            <Ionicons name="images-outline" size={22} color={Colors.brand700} />
-            <Text style={styles.mediaBtnText}>{t("visitFlow.gallery")}</Text>
-          </Pressable>
+          <ActionTile
+            icon="camera-outline"
+            label={t("visitFlow.takePhoto")}
+            onPress={() => void handleAddCameraPhoto()}
+            state={busy ? "disabled" : "default"}
+          />
+          <ActionTile
+            icon="images-outline"
+            label={t("visitFlow.gallery")}
+            onPress={() => void handleAddGalleryPhoto()}
+            state={busy ? "disabled" : "default"}
+          />
         </View>
 
         {busy ? (
@@ -218,41 +223,63 @@ export function VisitCreateStep3({ onBack }: Props) {
           </View>
         ) : null}
 
-        <View style={styles.attachmentList}>
-          {photos.map((photo, photoIndex) => (
-            <View key={photo.id} style={styles.attachmentCard}>
-              <Pressable
-                accessibilityRole="imagebutton"
-                accessibilityLabel={t("visitFlow.photo")}
-                onPress={() => {
-                  setViewerIndex(photoIndex);
-                  setViewerOpen(true);
-                }}
-              >
-                <Image source={{ uri: photo.uri }} style={styles.attachmentThumb} />
-              </Pressable>
-              <View style={styles.attachmentCopy}>
-                <Text style={styles.attachmentName} numberOfLines={1}>
-                  {photo.locationKind === "uploaded"
-                    ? t("visitFlow.uploadedAtLabel")
-                    : t("visitFlow.capturedAtLabel")}
-                </Text>
-                <Text style={styles.attachmentType} numberOfLines={1}>
-                  {photo.address ||
-                    (photo.latitude != null && photo.longitude != null
-                      ? `${photo.latitude.toFixed(5)}, ${photo.longitude.toFixed(5)}`
-                      : t("visitFlow.photo"))}
-                </Text>
-                {photo.stampFailed ? (
-                  <Text style={styles.stampFailed}>{t("visitFlow.stampFailed")}</Text>
-                ) : null}
+        {photos.length === 0 ? (
+          <Text style={styles.emptyEvidence}>{t("visitFlow.noEvidence")}</Text>
+        ) : (
+          <View style={styles.attachmentGrid}>
+            {photos.map((photo, photoIndex) => (
+              <View key={photo.id} style={styles.attachmentCard}>
+                <Pressable
+                  accessibilityRole="imagebutton"
+                  accessibilityLabel={t("visitFlow.photo")}
+                  onPress={() => {
+                    setViewerIndex(photoIndex);
+                    setViewerOpen(true);
+                  }}
+                >
+                  <Image
+                    source={{ uri: photo.uri }}
+                    style={styles.attachmentThumb}
+                    contentFit="cover"
+                    recyclingKey={photo.id}
+                  />
+                </Pressable>
+                <View style={styles.attachmentCopy}>
+                  <Text style={styles.attachmentName} numberOfLines={1}>
+                    {photo.source === "gallery"
+                      ? t("visitFlow.photoFromGallery")
+                      : t("visitFlow.photoFromCamera")}
+                  </Text>
+                  <Text style={styles.attachmentType} numberOfLines={1}>
+                    {photo.locationKind === "uploaded"
+                      ? t("visitFlow.uploadedAtLabel")
+                      : t("visitFlow.capturedAtLabel")}
+                  </Text>
+                  {photo.stampFailed ? (
+                    <Text style={styles.stampFailed}>{t("visitFlow.stampFailed")}</Text>
+                  ) : null}
+                </View>
+                <Pressable
+                  onPress={() => {
+                    Alert.alert(t("visitFlow.removePhotoTitle"), t("visitFlow.removePhotoBody"), [
+                      { text: t("common.cancel"), style: "cancel" },
+                      {
+                        text: t("visitFlow.removePhoto"),
+                        style: "destructive",
+                        onPress: () => removePhoto(photo.id)
+                      }
+                    ]);
+                  }}
+                  style={styles.removeBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("visitFlow.removePhoto")}
+                >
+                  <Ionicons name="close-circle" size={22} color={Colors.red} />
+                </Pressable>
               </View>
-              <Pressable onPress={() => removePhoto(photo.id)} hitSlop={8}>
-                <Ionicons name="close-circle" size={22} color={Colors.red} />
-              </Pressable>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+        )}
         </View>
         </EntranceBlocks>
       </ScrollView>
@@ -347,12 +374,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flex: 1,
     gap: 6,
+    minHeight: Layout.touchTargetMin + 16,
     paddingVertical: 14
+  },
+  mediaBtnPressed: {
+    opacity: 0.88
+  },
+  mediaBtnDisabled: {
+    opacity: 0.45
   },
   mediaBtnText: {
     color: Colors.text1,
     fontSize: FontSize.sm,
     fontWeight: FontWeight.semibold
+  },
+  emptyEvidence: {
+    color: Colors.text3,
+    fontSize: FontSize.sm,
+    paddingVertical: 8
   },
   busyRow: {
     alignItems: "center",
@@ -364,7 +403,7 @@ const styles = StyleSheet.create({
     color: Colors.text2,
     fontSize: FontSize.sm
   },
-  attachmentList: {
+  attachmentGrid: {
     gap: 8
   },
   attachmentCard: {
@@ -379,8 +418,14 @@ const styles = StyleSheet.create({
   },
   attachmentThumb: {
     borderRadius: Radius.md,
-    height: 56,
-    width: 56
+    height: 72,
+    width: 72
+  },
+  removeBtn: {
+    alignItems: "center",
+    height: Layout.touchTargetMin,
+    justifyContent: "center",
+    width: Layout.touchTargetMin
   },
   attachmentCopy: {
     flex: 1,

@@ -21,6 +21,7 @@ export function FieldDataRefreshProvider({ children }: { children: React.ReactNo
   const bumpAfterVisitChange = useCallback(() => {
     invalidateHomeVisitsCache();
     setVisitsVersion((v) => v + 1);
+    setFarmersVersion((v) => v + 1);
   }, []);
 
   const bumpAfterFarmerPhotoChange = useCallback(() => {

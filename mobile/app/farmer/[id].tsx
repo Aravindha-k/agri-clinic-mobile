@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -222,7 +222,8 @@ function FarmerProfileScreenInner() {
   }, [farmerId]);
   const { bottom: safeBottom } = useSafeAreaInsetsCompat();
   const refreshControlProps = useRefreshControlProps();
-  const { bumpAfterFarmerPhotoChange } = useFieldDataRefresh();
+  const { visitsVersion, bumpAfterFarmerPhotoChange } = useFieldDataRefresh();
+  const skipFirstFocus = useRef(true);
 
   const [profile, setProfile] = useState<MobileFarmerProfile | null>(() =>
     initialProfileFromRoute(farmerId, routePrefill)
@@ -260,6 +261,7 @@ function FarmerProfileScreenInner() {
   );
 
   useEffect(() => {
+    skipFirstFocus.current = true;
     const seeded = initialProfileFromRoute(farmerId, route.params?.prefill);
     setProfile(seeded);
     setLoading(!seeded);
@@ -268,6 +270,20 @@ function FarmerProfileScreenInner() {
     // Prefill is only used for first paint seed; farmerId drives reloads.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid object-identity refetch loops
   }, [farmerId, load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (skipFirstFocus.current) {
+        skipFirstFocus.current = false;
+        return;
+      }
+      void load(true);
+    }, [load])
+  );
+
+  useEffect(() => {
+    if (visitsVersion > 0) void load(true);
+  }, [load, visitsVersion]);
 
   const orderedVisits = useMemo(
     () => sortVisitsNewestFirst(profile?.visits ?? []),

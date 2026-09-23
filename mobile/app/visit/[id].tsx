@@ -43,7 +43,9 @@ import { visitAllowsNotesUpdate } from "../../lib/farmerVisitHistory";
 import { EvidenceStampBurner, type EvidenceStampJob } from "../../components/visit/EvidenceStampBurner";
 import {
   deleteTempUri,
+  MAX_VISIT_PHOTOS,
   prepareCameraEvidence,
+  prepareGalleryEvidence,
   toVisitPhotoAsset,
   type PreparedEvidencePhoto
 } from "../../lib/visitEvidenceCapture";
@@ -117,7 +119,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
   const [lastEditedAt, setLastEditedAt] = useState<string | null>(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [stampJob, setStampJob] = useState<EvidenceStampJob | null>(null);
-  const pendingStampRef = useRef<PreparedEvidencePhoto | null>(null);
+  const pendingStampRef = useRef<PreparedEvidencePhoto[]>([]);
 
   const [draftFieldNotes, setDraftFieldNotes] = useState("");
 
@@ -194,6 +196,9 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
       setLastEditedAt(updated.updated_at || new Date().toISOString());
       setEditMode(false);
       bumpAfterVisitChange();
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      }
     } catch (err) {
       Alert.alert("Save failed", err instanceof Error ? err.message : "Please try again.");
     } finally {
@@ -201,16 +206,47 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
     }
   }
 
-  async function handleAddPhoto() {
+  function runNextStamp() {
+    const next = pendingStampRef.current[0];
+    if (!next) {
+      setStampJob(null);
+      return;
+    }
+    setStampJob({ id: next.tempId, sourceUri: next.sourceUri, meta: next.meta });
+  }
+
+  async function handleAddCameraPhoto() {
     if (!visit) return;
+    if (attachments.length >= MAX_VISIT_PHOTOS) {
+      Alert.alert(t("visitFlow.photoLimitReached", { count: MAX_VISIT_PHOTOS }));
+      return;
+    }
     const prepared = await prepareCameraEvidence({
       employee,
       visitId: String(visit.id),
       farmerName: farmer?.name
     });
     if (!prepared) return;
-    pendingStampRef.current = prepared;
-    setStampJob({ id: prepared.tempId, sourceUri: prepared.sourceUri, meta: prepared.meta });
+    pendingStampRef.current = [...pendingStampRef.current, prepared];
+    runNextStamp();
+  }
+
+  async function handleAddGalleryPhoto() {
+    if (!visit) return;
+    const remaining = MAX_VISIT_PHOTOS - attachments.length;
+    if (remaining <= 0) {
+      Alert.alert(t("visitFlow.photoLimitReached", { count: MAX_VISIT_PHOTOS }));
+      return;
+    }
+    const prepared = await prepareGalleryEvidence({
+      remaining,
+      employee,
+      visitId: String(visit.id),
+      farmerName: farmer?.name
+    });
+    if (!prepared.length) return;
+    pendingStampRef.current = [...pendingStampRef.current, ...prepared];
+    runNextStamp();
   }
 
   async function uploadStampedPhoto(prepared: PreparedEvidencePhoto, stampedUri: string) {
@@ -347,11 +383,12 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
           {!editMode && visitAllowsNotesUpdate(visit) ? (
             <Pressable
               onPress={() => setEditMode(true)}
-              style={styles.iconBtn}
+              style={styles.editBtn}
               accessibilityRole="button"
               accessibilityLabel={t("a11y.editVisit")}
             >
               <Ionicons name="create-outline" size={18} color={Colors.text1} />
+              <Text style={styles.editBtnText}>{t("visitFlow.editVisit")}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -521,20 +558,40 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
               );
             })}
             {visitAllowsNotesUpdate(visit) ? (
-            <Pressable
-              onPress={() => void handleAddPhoto()}
-              disabled={uploadingPhoto}
-              style={[styles.addPhotoCell, { width: photoWidth, height: photoWidth }]}
-            >
-              {uploadingPhoto ? (
-                <ActivityIndicator color={Colors.brand700} />
-              ) : (
-                <>
-                  <Ionicons name="camera-outline" size={22} color={Colors.brand700} />
-                  <Text style={styles.addPhotoText}>Add photo</Text>
-                </>
-              )}
-            </Pressable>
+              <View style={styles.detailMediaActions}>
+                <Pressable
+                  onPress={() => void handleAddCameraPhoto()}
+                  disabled={uploadingPhoto}
+                  style={({ pressed }) => [
+                    styles.detailMediaBtn,
+                    uploadingPhoto && styles.mediaBtnDisabled,
+                    pressed && !uploadingPhoto && { opacity: 0.88 }
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("visitFlow.takePhoto")}
+                >
+                  {uploadingPhoto ? (
+                    <ActivityIndicator color={Colors.brand700} />
+                  ) : (
+                    <Ionicons name="camera-outline" size={20} color={Colors.brand700} />
+                  )}
+                  <Text style={styles.addPhotoText}>{t("visitFlow.takePhoto")}</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void handleAddGalleryPhoto()}
+                  disabled={uploadingPhoto}
+                  style={({ pressed }) => [
+                    styles.detailMediaBtn,
+                    uploadingPhoto && styles.mediaBtnDisabled,
+                    pressed && !uploadingPhoto && { opacity: 0.88 }
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("visitFlow.gallery")}
+                >
+                  <Ionicons name="images-outline" size={20} color={Colors.brand700} />
+                  <Text style={styles.addPhotoText}>{t("visitFlow.gallery")}</Text>
+                </Pressable>
+              </View>
             ) : null}
           </View>
         </View>
@@ -582,17 +639,20 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
       <EvidenceStampBurner
         job={stampJob}
         onComplete={(id, stampedUri) => {
-          const prepared = pendingStampRef.current;
-          pendingStampRef.current = null;
+          const prepared = pendingStampRef.current.find((row) => row.tempId === id);
+          pendingStampRef.current = pendingStampRef.current.filter((row) => row.tempId !== id);
           setStampJob(null);
-          if (prepared && prepared.tempId === id) {
-            void uploadStampedPhoto(prepared, stampedUri);
+          if (prepared) {
+            void uploadStampedPhoto(prepared, stampedUri).finally(() => runNextStamp());
+          } else {
+            runNextStamp();
           }
         }}
         onError={(_id, message) => {
-          pendingStampRef.current = null;
+          pendingStampRef.current = pendingStampRef.current.filter((row) => row.tempId !== _id);
           setStampJob(null);
           Alert.alert("Could not stamp photo", message);
+          runNextStamp();
         }}
       />
         </KeyboardAvoidingView>
@@ -639,6 +699,22 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: 1,
     justifyContent: "center"
+  },
+  editBtn: {
+    ...minTouchStyle,
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 10
+  },
+  editBtnText: {
+    color: Colors.text1,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semibold
   },
   iconBtnActive: {
     backgroundColor: Colors.brand700,
@@ -861,6 +937,26 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     gap: 4,
     justifyContent: "center"
+  },
+  detailMediaActions: {
+    flexBasis: "100%",
+    flexDirection: "row",
+    gap: 10
+  },
+  detailMediaBtn: {
+    alignItems: "center",
+    borderColor: Colors.border2,
+    borderRadius: Radius.lg,
+    borderStyle: "dashed",
+    borderWidth: 1.5,
+    flex: 1,
+    gap: 4,
+    justifyContent: "center",
+    minHeight: 48,
+    paddingVertical: 10
+  },
+  mediaBtnDisabled: {
+    opacity: 0.45
   },
   addPhotoText: {
     color: Colors.brand700,

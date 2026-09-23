@@ -120,6 +120,7 @@ module.exports = () => ({
       "RECORD_AUDIO",
       "READ_EXTERNAL_STORAGE",
       "READ_MEDIA_IMAGES",
+      "READ_MEDIA_VISUAL_USER_SELECTED",
       "POST_NOTIFICATIONS"
     ],
     /**

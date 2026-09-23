@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -7,6 +9,7 @@ import type { Visit } from "../../../src/api/visits";
 import { fetchFarmerVisitsPage } from "../../../src/api/farmers";
 import { useRefreshControlProps } from "../../../src/hooks/useRefreshControlProps";
 import { useI18n } from "../../../src/i18n/I18nContext";
+import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
 import { useSecureScreen } from "../../../src/hooks/useSecureScreen";
 import type { WorkStackParamList } from "../../../src/navigation/types";
 import { ScreenErrorBoundary } from "../../../src/components/ScreenErrorBoundary";
@@ -35,6 +38,7 @@ function VisitHistoryCard({ visit, onPress }: { visit: Visit; onPress: () => voi
     >
       <FlatCard style={styles.card}>
         <View style={styles.cardHead}>
+          <Ionicons name="time-outline" size={16} color={Colors.brand700} />
           <Text style={styles.date} numberOfLines={1}>
             {[row.date, row.time].filter(Boolean).join(" · ") || t("work.unknownDate")}
           </Text>
@@ -65,9 +69,11 @@ function VisitHistoryCard({ visit, onPress }: { visit: Visit; onPress: () => voi
 function FarmerVisitHistoryInner({ route, navigation }: Props) {
   useSecureScreen();
   const { t } = useI18n();
+  const { visitsVersion } = useFieldDataRefresh();
   const refreshControlProps = useRefreshControlProps();
   const farmerId = Number(route.params.farmerId);
   const farmerName = route.params.farmerName?.trim();
+  const skipFirstFocus = useRef(true);
 
   const [visits, setVisits] = useState<Visit[]>([]);
   const [nextUrl, setNextUrl] = useState<string | null>(null);
@@ -75,6 +81,31 @@ function FarmerVisitHistoryInner({ route, navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
+
+  const reloadFirstPage = useCallback(async () => {
+    if (!Number.isFinite(farmerId) || farmerId <= 0) return;
+    try {
+      setError("");
+      const page = await fetchFarmerVisitsPage(farmerId, { nextUrl: null });
+      const seen = new Set<number>();
+      setVisits(
+        sortVisitsNewestFirst(
+          page.results.filter((visit) => {
+            const id = Number(visit.id);
+            if (!Number.isFinite(id) || id <= 0 || seen.has(id)) return false;
+            seen.add(id);
+            return true;
+          })
+        )
+      );
+      setNextUrl(page.next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("farmerDetail.visitHistoryError"));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [farmerId, t]);
 
   const loadPage = useCallback(
     async (mode: "initial" | "refresh" | "more") => {
@@ -115,6 +146,7 @@ function FarmerVisitHistoryInner({ route, navigation }: Props) {
   );
 
   useEffect(() => {
+    skipFirstFocus.current = true;
     setVisits([]);
     setNextUrl(null);
     setLoading(true);
@@ -122,6 +154,20 @@ function FarmerVisitHistoryInner({ route, navigation }: Props) {
     // farmerId drives a fresh first page; loadPage identity changes with nextUrl.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [farmerId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (skipFirstFocus.current) {
+        skipFirstFocus.current = false;
+        return;
+      }
+      void reloadFirstPage();
+    }, [reloadFirstPage])
+  );
+
+  useEffect(() => {
+    if (visitsVersion > 0) void reloadFirstPage();
+  }, [reloadFirstPage, visitsVersion]);
 
   const ordered = useMemo(() => sortVisitsNewestFirst(visits), [visits]);
 

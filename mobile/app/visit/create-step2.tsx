@@ -558,6 +558,8 @@ export function VisitCreateStep2({ onBack }: Props) {
         ref={cropSheetRef}
         title={t("visitFlow.selectCropSheet")}
         items={cropSheetItems}
+        selectedId={cropId}
+        loading={!formOptions}
         onSelect={(item) => handleCropSelect(item.id, item.title)}
       />
     </View>

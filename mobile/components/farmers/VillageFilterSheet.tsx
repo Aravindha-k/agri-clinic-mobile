@@ -20,7 +20,7 @@ import {
   villageSelectSubtitle,
   villageSelectTitle
 } from "../../../src/utils/villageTerritory";
-import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
+import { Colors, FontSize, FontWeight, Layout, Radius, Spacing, minTouchStyle } from "../../lib/theme";
 
 export type VillageFilterSheetRef = {
   open: () => void;
@@ -28,11 +28,12 @@ export type VillageFilterSheetRef = {
 };
 
 type Props = {
+  selectedVillageId?: string | null;
   onSelect: (villageId: string, villageName: string) => void;
 };
 
 export const VillageFilterSheet = forwardRef<VillageFilterSheetRef, Props>(function VillageFilterSheet(
-  { onSelect },
+  { selectedVillageId, onSelect },
   ref
 ) {
   const insets = useSafeAreaInsetsCompat();
@@ -50,6 +51,7 @@ export const VillageFilterSheet = forwardRef<VillageFilterSheetRef, Props>(funct
   }));
 
   const filtered = useMemo(() => filterTerritoryVillages(villages, query), [query, villages]);
+  const selectedKey = selectedVillageId != null ? String(selectedVillageId) : "";
 
   function handleClose() {
     setVisible(false);
@@ -63,8 +65,14 @@ export const VillageFilterSheet = forwardRef<VillageFilterSheetRef, Props>(funct
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View style={styles.header}>
-          <Pressable onPress={handleClose} hitSlop={12} style={styles.closeBtn}>
-            <Ionicons name="close" size={26} color={Colors.text1} />
+          <Pressable
+            onPress={handleClose}
+            hitSlop={8}
+            style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={t("a11y.close")}
+          >
+            <Ionicons name="close" size={22} color={Colors.text1} />
           </Pressable>
           <Text style={styles.title}>{t("farmers.filterByVillage")}</Text>
           <View style={styles.closeBtn} />
@@ -80,9 +88,17 @@ export const VillageFilterSheet = forwardRef<VillageFilterSheetRef, Props>(funct
             style={styles.searchInput}
             autoCorrect={false}
             autoCapitalize="none"
+            returnKeyType="search"
+            accessibilityLabel={t("visitFlow.search")}
           />
           {query.length > 0 ? (
-            <Pressable onPress={() => setQuery("")} hitSlop={8}>
+            <Pressable
+              onPress={() => setQuery("")}
+              hitSlop={8}
+              style={minTouchStyle}
+              accessibilityRole="button"
+              accessibilityLabel={t("a11y.clearSearch")}
+            >
               <Ionicons name="close-circle" size={20} color={Colors.text4} />
             </Pressable>
           ) : null}
@@ -91,12 +107,20 @@ export const VillageFilterSheet = forwardRef<VillageFilterSheetRef, Props>(funct
         {loading && villages.length === 0 ? (
           <View style={styles.center}>
             <ActivityIndicator color={Colors.brand700} />
+            <Text style={styles.hint}>{t("visitFlow.loadingVillages")}</Text>
           </View>
         ) : isEmpty || unavailable ? (
           <View style={styles.center}>
+            <Ionicons name="location-outline" size={28} color={Colors.text4} />
             <Text style={styles.emptyTitle}>{t("territory.noVillagesTitle")}</Text>
             <Text style={styles.emptySub}>{t("territory.noVillagesBody")}</Text>
-            <Pressable onPress={() => void refreshTerritory({ force: true })} style={styles.retryBtn}>
+            <Pressable
+              onPress={() => void refreshTerritory({ force: true })}
+              style={({ pressed }) => [styles.retryBtn, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel={t("common.retry")}
+            >
+              <Ionicons name="refresh" size={16} color={Colors.brand700} />
               <Text style={styles.retryText}>{t("common.retry")}</Text>
             </Pressable>
           </View>
@@ -104,26 +128,48 @@ export const VillageFilterSheet = forwardRef<VillageFilterSheetRef, Props>(funct
           <FlatList
             data={filtered}
             keyExtractor={(item) => String(item.id)}
+            keyboardShouldPersistTaps="handled"
             style={styles.list}
             contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24), paddingHorizontal: Spacing.screen }}
-            ListEmptyComponent={<Text style={styles.hint}>{t("visitFlow.noMatches")}</Text>}
-            renderItem={({ item }) => (
-              <Pressable
-                onPress={() => {
-                  onSelect(String(item.id), villageSelectTitle(item));
-                  handleClose();
-                }}
-                style={styles.row}
-              >
-                <View style={styles.rowBody}>
-                  <Text style={styles.rowText}>{villageSelectTitle(item)}</Text>
-                  {villageSelectSubtitle(item) ? (
-                    <Text style={styles.rowSub}>{villageSelectSubtitle(item)}</Text>
-                  ) : null}
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={Colors.text4} />
-              </Pressable>
-            )}
+            ListEmptyComponent={
+              <View style={styles.emptyWrap}>
+                <Ionicons name="search-outline" size={28} color={Colors.text4} />
+                <Text style={styles.hint}>{t("visitFlow.noMatches")}</Text>
+              </View>
+            }
+            renderItem={({ item }) => {
+              const selected = selectedKey !== "" && selectedKey === String(item.id);
+              return (
+                <Pressable
+                  onPress={() => {
+                    onSelect(String(item.id), villageSelectTitle(item));
+                    handleClose();
+                  }}
+                  style={({ pressed }) => [styles.row, selected && styles.rowSelected, pressed && styles.rowPressed]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={
+                    selected
+                      ? `${villageSelectTitle(item)}. ${t("a11y.selected")}`
+                      : villageSelectTitle(item)
+                  }
+                >
+                  <View style={styles.rowBody}>
+                    <Text style={[styles.rowText, selected && styles.rowTextSelected]}>
+                      {villageSelectTitle(item)}
+                    </Text>
+                    {villageSelectSubtitle(item) ? (
+                      <Text style={styles.rowSub}>{villageSelectSubtitle(item)}</Text>
+                    ) : null}
+                  </View>
+                  <Ionicons
+                    name={selected ? "checkmark-circle" : "chevron-forward"}
+                    size={20}
+                    color={selected ? Colors.brand700 : Colors.text4}
+                  />
+                </Pressable>
+              );
+            }}
           />
         )}
       </KeyboardAvoidingView>
@@ -142,13 +188,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
     paddingHorizontal: Spacing.screen,
-    paddingVertical: 10
+    paddingVertical: 6
   },
   closeBtn: {
-    alignItems: "center",
-    height: 36,
-    justifyContent: "center",
-    width: 36
+    ...minTouchStyle
+  },
+  pressed: {
+    opacity: 0.72
   },
   title: {
     color: Colors.text1,
@@ -165,7 +211,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     gap: 8,
-    height: 48,
+    height: Layout.touchTargetMin,
     marginHorizontal: Spacing.screen,
     marginTop: 12,
     paddingHorizontal: 12
@@ -189,8 +235,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     marginBottom: 8,
+    minHeight: Layout.touchTargetMin,
     paddingHorizontal: 14,
     paddingVertical: 12
+  },
+  rowSelected: {
+    backgroundColor: Colors.brand50,
+    borderColor: Colors.brand700
+  },
+  rowPressed: {
+    opacity: 0.92
   },
   rowBody: {
     flex: 1,
@@ -201,6 +255,9 @@ const styles = StyleSheet.create({
     fontSize: FontSize.md,
     fontWeight: FontWeight.semibold
   },
+  rowTextSelected: {
+    color: Colors.brand700
+  },
   rowSub: {
     color: Colors.text3,
     fontSize: FontSize.sm
@@ -208,8 +265,12 @@ const styles = StyleSheet.create({
   hint: {
     color: Colors.text3,
     fontSize: FontSize.sm,
-    paddingVertical: 24,
     textAlign: "center"
+  },
+  emptyWrap: {
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 32
   },
   center: {
     alignItems: "center",
@@ -231,9 +292,12 @@ const styles = StyleSheet.create({
     textAlign: "center"
   },
   retryBtn: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
     marginTop: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10
+    minHeight: Layout.touchTargetMin,
+    paddingHorizontal: 16
   },
   retryText: {
     color: Colors.brand700,

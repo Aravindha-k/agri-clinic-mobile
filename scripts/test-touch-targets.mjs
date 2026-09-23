@@ -15,7 +15,10 @@ const surfaces = [
   "src/components/ui/VisitFabTabButton.tsx",
   "mobile/app/visit/[id].tsx",
   "mobile/components/work/WorkQueuePanel.tsx",
-  "src/screens/SettingsScreen.tsx"
+  "src/screens/SettingsScreen.tsx",
+  "mobile/components/visit/MasterSelectSheet.tsx",
+  "mobile/components/farmers/VillageFilterSheet.tsx",
+  "mobile/components/farmers/FarmerDirectoryCard.tsx"
 ];
 
 for (const file of surfaces) {

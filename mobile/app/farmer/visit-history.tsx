@@ -27,7 +27,12 @@ function VisitHistoryCard({ visit, onPress }: { visit: Visit; onPress: () => voi
   const { t } = useI18n();
   const row = farmerVisitHistoryRow(visit);
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => pressed && { opacity: 0.92 }}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => pressed && { opacity: 0.92 }}
+      accessibilityRole="button"
+      accessibilityLabel={`${t("farmerDetail.visitHistory")} ${[row.date, row.time].filter(Boolean).join(" ")}`}
+    >
       <FlatCard style={styles.card}>
         <View style={styles.cardHead}>
           <Text style={styles.date} numberOfLines={1}>
@@ -213,6 +218,7 @@ const styles = StyleSheet.create({
   card: {
     gap: 6,
     marginBottom: 10,
+    minHeight: 48,
     padding: 14
   },
   cardHead: {

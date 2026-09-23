@@ -109,6 +109,9 @@ export const FarmerDirectoryCard = memo(function FarmerDirectoryCard({
               onHistory?.();
             }}
             disabled={!onHistory}
+            style={styles.lastVisitHit}
+            accessibilityRole={onHistory ? "button" : undefined}
+            accessibilityLabel={onHistory ? t("a11y.viewVisitHistory") : undefined}
           >
             <Text style={styles.lastVisit} numberOfLines={1}>
               {t("work.lastVisitLabel", { date: lastVisitLabel })}
@@ -131,8 +134,11 @@ export const FarmerDirectoryCard = memo(function FarmerDirectoryCard({
               !canCall && styles.btnDisabled,
               pressed && canCall && { opacity: 0.88 }
             ]}
+            accessibilityRole="button"
+            accessibilityLabel={t("a11y.callFarmer")}
+            accessibilityState={{ disabled: !canCall }}
           >
-            <Ionicons name="call-outline" size={12} color={Colors.text3} />
+            <Ionicons name="call-outline" size={16} color={Colors.text3} />
             <Text style={styles.outlineBtnText}>{t("farmers.call")}</Text>
           </Pressable>
 
@@ -142,8 +148,10 @@ export const FarmerDirectoryCard = memo(function FarmerDirectoryCard({
               onMap();
             }}
             style={({ pressed }) => [styles.outlineBtn, pressed && { opacity: 0.88 }]}
+            accessibilityRole="button"
+            accessibilityLabel={t("a11y.openMap")}
           >
-            <Ionicons name="map-outline" size={12} color={Colors.text3} />
+            <Ionicons name="map-outline" size={16} color={Colors.text3} />
             <Text style={styles.outlineBtnText}>{t("farmers.map")}</Text>
           </Pressable>
 
@@ -153,8 +161,10 @@ export const FarmerDirectoryCard = memo(function FarmerDirectoryCard({
               onVisit();
             }}
             style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.92 }]}
+            accessibilityRole="button"
+            accessibilityLabel={t("a11y.startVisit")}
           >
-            <Ionicons name="add-circle-outline" size={12} color={Colors.onPrimary} />
+            <Ionicons name="add-circle-outline" size={16} color={Colors.onPrimary} />
             <Text style={styles.primaryBtnText}>
               {neverVisited ? t("farmers.firstVisit") : t("work.startVisit")}
             </Text>
@@ -205,10 +215,14 @@ const styles = StyleSheet.create({
     color: Colors.text3,
     fontSize: FontSize.sm
   },
+  lastVisitHit: {
+    justifyContent: "center",
+    minHeight: Layout.touchTargetMin - 4,
+    paddingVertical: 4
+  },
   lastVisit: {
     color: Colors.text4,
-    fontSize: FontSize.xs,
-    marginTop: 4
+    fontSize: FontSize.xs
   },
   divider: {
     backgroundColor: Colors.border,

@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useI18n } from "../../../src/i18n/I18nContext";
 import { Colors, FontSize, FontWeight, Layout, Radius, Spacing, TextStyles, minTouchStyle } from "../../lib/theme";
 
 type Props = {
@@ -13,12 +14,13 @@ type Props = {
 };
 
 export function VisitFlowHeader({ title, subtitle, onClose, onBack, gpsAccuracy, gpsLabel, gpsDotColor }: Props) {
+  const { t } = useI18n();
   const leadingAction = onBack ? (
     <Pressable
       onPress={onBack}
-      style={styles.iconBtn}
+      style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
       accessibilityRole="button"
-      accessibilityLabel="Go back"
+      accessibilityLabel={t("a11y.goBack")}
       hitSlop={8}
     >
       <Ionicons name="chevron-back" size={22} color={Colors.brand700} />
@@ -26,9 +28,9 @@ export function VisitFlowHeader({ title, subtitle, onClose, onBack, gpsAccuracy,
   ) : onClose ? (
     <Pressable
       onPress={onClose}
-      style={styles.iconBtn}
+      style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
       accessibilityRole="button"
-      accessibilityLabel="Close"
+      accessibilityLabel={t("a11y.close")}
       hitSlop={8}
     >
       <Ionicons name="close" size={22} color={Colors.text2} />
@@ -80,6 +82,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.inner,
     borderWidth: StyleSheet.hairlineWidth,
     justifyContent: "center"
+  },
+  pressed: {
+    opacity: 0.72
   },
   iconBtnSpacer: {
     height: Layout.touchTargetMin,

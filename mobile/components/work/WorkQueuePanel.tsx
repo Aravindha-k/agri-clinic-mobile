@@ -399,6 +399,7 @@ export function WorkQueuePanel({ entranceTick, entranceStep = 2 }: Props) {
 
       <VillageFilterSheet
         ref={villageSheetRef}
+        selectedVillageId={directory.selectedVillageId}
         onSelect={(id, name) => {
           directory.setSelectedVillageId(id);
           directory.setSelectedVillageName(name);

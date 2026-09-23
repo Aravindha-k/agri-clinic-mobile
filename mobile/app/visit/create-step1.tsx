@@ -461,6 +461,8 @@ export default function VisitCreateStep1({ onClose }: Props) {
               }}
               placeholder={t("visitFlow.farmerNamePlaceholder")}
               placeholderTextColor={Colors.text4}
+              autoCapitalize="words"
+              returnKeyType="next"
               style={styles.input}
             />
             {newFarmerErrors.name ? <Text style={styles.fieldError}>{newFarmerErrors.name}</Text> : null}
@@ -474,7 +476,9 @@ export default function VisitCreateStep1({ onClose }: Props) {
               }}
               placeholder={t("visitFlow.mobilePlaceholder")}
               placeholderTextColor={Colors.text4}
-              keyboardType="number-pad"
+              keyboardType="phone-pad"
+              returnKeyType="done"
+              maxLength={10}
               style={styles.input}
             />
             {newFarmerErrors.phone ? <Text style={styles.fieldError}>{newFarmerErrors.phone}</Text> : null}
@@ -494,6 +498,8 @@ export default function VisitCreateStep1({ onClose }: Props) {
                   onPress={() => villageSheetRef.current?.open()}
                   style={[styles.selectBtn, draft.village_id && styles.selectBtnFilled]}
                   disabled={territoryLoading && territoryVillages.length === 0}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("visitFlow.selectVillage")}
                 >
                   <Text style={[styles.selectBtnText, !draft.village_id && styles.selectBtnPlaceholder]}>
                     {territoryLoading && !draft.village_id
@@ -526,6 +532,8 @@ export default function VisitCreateStep1({ onClose }: Props) {
         ref={villageSheetRef}
         title={t("visitFlow.selectVillage")}
         items={villageItems}
+        selectedId={draft.village_id}
+        loading={territoryLoading}
         onSelect={(item) => {
           setNewFarmer({
             village_id: item.id,
@@ -653,6 +661,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     color: Colors.text1,
     fontSize: FontSize.md,
+    minHeight: 48,
     paddingHorizontal: 12,
     paddingVertical: 10
   },
@@ -668,6 +677,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     justifyContent: "space-between",
+    minHeight: 48,
     paddingHorizontal: 12,
     paddingVertical: 12
   },

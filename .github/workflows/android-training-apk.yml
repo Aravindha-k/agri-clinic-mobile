@@ -1,0 +1,210 @@
+name: Android TRAINING APK
+
+# Manual-only training build. Allows screenshots/screen recording for employee
+# training videos. Does NOT replace or publish the normal production APK.
+on:
+  workflow_dispatch:
+    inputs:
+      diagnostic_clean_build:
+        description: Disable Gradle/npm caches for one clean diagnostic build
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+concurrency:
+  group: android-apk-training-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EXPO_PUBLIC_API_BASE_URL: ${{ secrets.EXPO_PUBLIC_API_BASE_URL || 'http://13.207.17.117/api/v1/' }}
+  EXPO_PUBLIC_ENV: production
+  EXPO_PUBLIC_ALLOW_INSECURE_HTTP: "1"
+  EXPO_PUBLIC_QA_MODE: "true"
+  # Training-only: allow screenshots and screen recording (FLAG_SECURE off).
+  # Must NEVER be set in the normal production Android APK workflow.
+  EXPO_PUBLIC_ALLOW_SCREEN_CAPTURE: "1"
+  GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
+
+jobs:
+  build-training-apk:
+    name: Build TRAINING APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve TRAINING APK artifact metadata
+        id: apkmeta
+        run: |
+          SHA="${GITHUB_SHA::7}"
+          RUN="${GITHUB_RUN_NUMBER}"
+          VERSION="1.0.1"
+          BASENAME="Kavya_Agri_Clinic_TRAINING_${VERSION}_${SHA}_${RUN}"
+          echo "basename=${BASENAME}" >> "$GITHUB_OUTPUT"
+          echo "filename=${BASENAME}.apk" >> "$GITHUB_OUTPUT"
+          echo "TRAINING APK artifact basename: ${BASENAME}"
+          echo "EXPO_PUBLIC_ALLOW_SCREEN_CAPTURE=${EXPO_PUBLIC_ALLOW_SCREEN_CAPTURE}"
+
+      - name: Validate production API environment
+        run: node scripts/validate-production-api-env.mjs
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Cache Gradle
+        if: ${{ inputs.diagnostic_clean_build != 'true' }}
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            android/.gradle
+          key: ${{ runner.os }}-gradle-training-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties', 'android/gradle.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-training-
+            ${{ runner.os }}-gradle-
+
+      - name: Write training env for Metro bundle
+        run: |
+          cat > .env.production <<EOF
+          EXPO_PUBLIC_API_BASE_URL=${EXPO_PUBLIC_API_BASE_URL}
+          EXPO_PUBLIC_ENV=production
+          EXPO_PUBLIC_ALLOW_INSECURE_HTTP=1
+          EXPO_PUBLIC_ALLOW_SCREEN_CAPTURE=1
+          EOF
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify production API health
+        run: node scripts/verify-production-api-health.mjs
+
+      - name: Verify resolved Expo public config
+        run: node scripts/verify-expo-public-config.mjs
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Run production hardening tests
+        run: npm run test:hardening
+
+      - name: Verify shared UI accessibility
+        run: npm run verify:shared-ui
+
+      - name: Audit Android asset filenames
+        run: node scripts/audit-android-asset-names.mjs
+
+      - name: Audit production API endpoints
+        run: node scripts/audit-api-endpoints.mjs
+
+      - name: Audit deploy config
+        run: node scripts/audit-deploy-config.mjs
+
+      - name: Audit APK release (API, cleartext, assets)
+        run: node scripts/audit-apk-release.mjs
+
+      - name: Verify production API config
+        run: node scripts/verify-production-api.mjs
+
+      - name: Confirm training screen-capture flag is set
+        run: |
+          if [ "${EXPO_PUBLIC_ALLOW_SCREEN_CAPTURE}" != "1" ]; then
+            echo "EXPO_PUBLIC_ALLOW_SCREEN_CAPTURE must be 1 for TRAINING builds."
+            exit 1
+          fi
+          echo "TRAINING build: EXPO_PUBLIC_ALLOW_SCREEN_CAPTURE=1 (screenshots/recording allowed)."
+
+      - name: Preflight Google Maps Android API key
+        run: |
+          if [ -z "${GOOGLE_MAPS_ANDROID_API_KEY}" ]; then
+            echo "GOOGLE_MAPS_ANDROID_API_KEY is missing."
+            echo "Add repository secret GOOGLE_MAPS_ANDROID_API_KEY (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          echo "GOOGLE_MAPS_ANDROID_API_KEY is set (value not logged)."
+
+      - name: Prebuild Android native project
+        run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Apply Android release config
+        run: node scripts/ensure-android-release-config.mjs
+
+      - name: Regenerate KAC launcher mipmaps
+        run: node scripts/generate-kac-app-icons.mjs
+
+      - name: Verify launcher icon composition
+        run: npm run verify:launcher-icons
+
+      - name: Print signing certificate fingerprints (safe)
+        run: node scripts/print-signing-cert-fingerprints.mjs
+
+      - name: Verify Google Maps Android manifest config
+        run: node scripts/verify-android-maps-config.mjs
+
+      - name: Verify Google Maps release configuration
+        run: node scripts/verify-google-maps-release.mjs
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x android/gradlew
+
+      - name: Build TRAINING release APK
+        working-directory: android
+        env:
+          EXPO_PUBLIC_API_BASE_URL: ${{ env.EXPO_PUBLIC_API_BASE_URL }}
+          EXPO_PUBLIC_ENV: production
+          EXPO_PUBLIC_ALLOW_INSECURE_HTTP: "1"
+          EXPO_PUBLIC_ALLOW_SCREEN_CAPTURE: "1"
+          GITHUB_SHA: ${{ github.sha }}
+          GRADLE_OPTS: -Dorg.gradle.daemon=false ${{ inputs.diagnostic_clean_build == 'true' && '-Dorg.gradle.caching=false' || '-Dorg.gradle.caching=true' }} -Dorg.gradle.parallel=true
+        run: |
+          if [ "${{ inputs.diagnostic_clean_build }}" = "true" ]; then
+            ./gradlew clean assembleRelease --no-build-cache --no-daemon --stacktrace
+          else
+            ./gradlew assembleRelease --build-cache --no-daemon --stacktrace
+          fi
+
+      - name: Print release API hostname (safe)
+        run: node scripts/validate-production-api-env.mjs
+
+      - name: Print TRAINING APK build metadata (safe)
+        run: |
+          echo "artifact=TRAINING"
+          echo "versionName=1.0.1"
+          echo "versionCode=10"
+          echo "package=com.kavya.agriclinic"
+          echo "gitCommit=${GITHUB_SHA::7}"
+          echo "workflowRun=${GITHUB_RUN_NUMBER}"
+          echo "apiHostname=$(node -e "const u=new URL(process.env.EXPO_PUBLIC_API_BASE_URL); console.log(u.hostname)")"
+          echo "buildEnv=production"
+          echo "allowScreenCapture=1"
+
+      - name: Rename TRAINING APK for delivery
+        run: cp android/app/build/outputs/apk/release/app-release.apk "${{ steps.apkmeta.outputs.filename }}"
+
+      - name: Upload TRAINING APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.apkmeta.outputs.basename }}
+          path: ${{ steps.apkmeta.outputs.filename }}
+          if-no-files-found: error
+          retention-days: 30

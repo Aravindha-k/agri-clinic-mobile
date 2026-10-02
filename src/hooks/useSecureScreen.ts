@@ -3,6 +3,7 @@ import { useCallback } from "react";
 import { InteractionManager, Platform } from "react-native";
 import * as ScreenCapture from "expo-screen-capture";
 import { isExpoGo } from "../utils/expoRuntime";
+import { shouldPreventScreenCapture } from "../utils/screenCapturePolicy";
 
 let secureDepth = 0;
 
@@ -20,11 +21,20 @@ async function disableSecureFlag() {
   }
 }
 
+function isProtectionActive(): boolean {
+  return shouldPreventScreenCapture({
+    platform: Platform.OS,
+    isExpoGo: isExpoGo(),
+    isDev: typeof __DEV__ !== "undefined" ? __DEV__ : false,
+    allowScreenCaptureEnv: process.env.EXPO_PUBLIC_ALLOW_SCREEN_CAPTURE
+  });
+}
+
 /** Blocks Android screenshots/recording (FLAG_SECURE) while the screen is focused. */
 export function useSecureScreen() {
   useFocusEffect(
     useCallback(() => {
-      if (Platform.OS !== "android" || isExpoGo()) {
+      if (!isProtectionActive()) {
         return undefined;
       }
 

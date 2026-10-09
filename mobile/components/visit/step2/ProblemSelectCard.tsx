@@ -8,55 +8,58 @@ import { Colors, FontSize, FontWeight, Radius } from "../../../lib/theme";
 
 type Props = {
   item: ProblemItem;
-  cropName: string;
   selected: boolean;
   onPress: () => void;
+  /** Show the category badge (useful when the list is not grouped by category). */
+  showCategory?: boolean;
 };
 
-export function ProblemSelectCard({ item, cropName, selected, onPress }: Props) {
-  const { t, language } = useI18n();
-  const categoryLabel = formatCategoryBadgeLocalized(
-    categoryCodeFromValue(item.category) || item.category_code,
-    item.category_name,
-    language
-  );
-  const displayCrop = item.crop_name || cropName;
+function badgeTone(code: string) {
+  if (code === "pest") return { bg: Colors.amberBg, fg: Colors.amberText };
+  if (code === "disease") return { bg: Colors.redBg, fg: Colors.redText };
+  return { bg: Colors.blueBg, fg: Colors.blueText };
+}
+
+export function ProblemSelectCard({ item, selected, onPress, showCategory = false }: Props) {
+  const { language } = useI18n();
+  const english = item.name?.trim() || "";
+  const tamil = item.tamil_name?.trim() || "";
+  const primary = language === "ta" ? tamil || english : english || tamil;
+  const secondary = language === "ta" ? (tamil ? english : "") : english ? tamil : "";
+  const code = categoryCodeFromValue(item.category) || (item.category_code ?? "").toLowerCase();
+  const categoryLabel = showCategory
+    ? formatCategoryBadgeLocalized(code, item.category_name, language)
+    : "";
+  const tone = badgeTone(code);
 
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.card, selected && styles.cardSelected]}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: selected }}
+      accessibilityLabel={[primary, secondary, categoryLabel].filter(Boolean).join(", ")}
+      style={({ pressed }) => [styles.card, selected && styles.cardSelected, pressed && styles.cardPressed]}
     >
       <View style={styles.body}>
-        <Text style={styles.tamil} numberOfLines={2}>
-          {item.tamil_name?.trim() || item.name}
+        <Text style={styles.primary} numberOfLines={3}>
+          {primary}
         </Text>
-        {item.tamil_name?.trim() ? (
-          <Text style={styles.english} numberOfLines={1}>
-            {item.name}
+        {secondary && secondary !== primary ? (
+          <Text style={styles.secondary} numberOfLines={2}>
+            {secondary}
           </Text>
         ) : null}
-        <View style={styles.metaRow}>
-          {displayCrop ? (
-            <Text style={styles.meta}>
-              {t("visitFlow.cropMeta")}: {displayCrop}
-            </Text>
-          ) : null}
-          {categoryLabel ? (
-            <>
-              {displayCrop ? <Text style={styles.metaDot}>•</Text> : null}
-              <Text style={styles.meta}>
-                {t("visitFlow.category")}: {categoryLabel}
-              </Text>
-            </>
-          ) : null}
-        </View>
+        {categoryLabel ? (
+          <View style={[styles.badge, { backgroundColor: tone.bg }]}>
+            <Text style={[styles.badgeText, { color: tone.fg }]}>{categoryLabel}</Text>
+          </View>
+        ) : null}
       </View>
-      {selected ? (
-        <Ionicons name="checkbox" size={22} color={Colors.green} />
-      ) : (
-        <Ionicons name="square-outline" size={22} color={Colors.text4} />
-      )}
+      <Ionicons
+        name={selected ? "checkbox" : "square-outline"}
+        size={24}
+        color={selected ? Colors.green : Colors.text4}
+      />
     </Pressable>
   );
 }
@@ -69,42 +72,42 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     borderWidth: 1,
     flexDirection: "row",
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10
+    gap: 12,
+    minHeight: 56,
+    paddingHorizontal: 14,
+    paddingVertical: 12
   },
   cardSelected: {
     backgroundColor: Colors.greenBg,
     borderColor: Colors.green,
     borderWidth: 1.5
   },
+  cardPressed: {
+    opacity: 0.92
+  },
   body: {
     flex: 1,
     gap: 2,
     minWidth: 0
   },
-  tamil: {
+  primary: {
     color: Colors.text1,
     fontSize: FontSize.md,
-    fontWeight: FontWeight.bold
+    fontWeight: FontWeight.semibold
   },
-  english: {
+  secondary: {
     color: Colors.text3,
     fontSize: FontSize.sm
   },
-  metaRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 4,
-    marginTop: 2
+  badge: {
+    alignSelf: "flex-start",
+    borderRadius: Radius.pill,
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2
   },
-  meta: {
-    color: Colors.text4,
-    fontSize: 11
-  },
-  metaDot: {
-    color: Colors.text4,
-    fontSize: 11
+  badgeText: {
+    fontSize: 11,
+    fontWeight: FontWeight.semibold
   }
 });

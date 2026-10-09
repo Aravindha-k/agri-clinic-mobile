@@ -1,5 +1,5 @@
 import { apiClient } from "../../src/api/client";
-import { getCrops, getOptionLabel, type MasterOption } from "../../src/api/masters";
+import { getCrops, type MasterOption } from "../../src/api/masters";
 import {
   fetchAllProblemItemsForQuery,
   getProblemCategories,
@@ -20,13 +20,6 @@ import {
   writeFormOptionsCache
 } from "./formOptionsCache";
 import { filterActiveProblemItems } from "./problemCatalog";
-
-export type FarmerFieldCropChip = {
-  id: string;
-  crop_id: string;
-  crop_name: string;
-  field_name?: string;
-};
 
 export type VisitFormOptions = {
   crops: MasterOption[];
@@ -188,55 +181,13 @@ export async function loadCatalogProblemItems(categoryCode: string): Promise<Pro
   return filterActiveProblemItems(items);
 }
 
-/** Catalog-wide search across all categories (crop unmapped fallback). */
-export async function loadCatalogSearchItems(search: string): Promise<ProblemItem[]> {
-  const needle = search.trim();
-  const cacheKey = needle.toLowerCase() || "__all__";
-  const cached = readCatalogProblemItemsCache(cacheKey, true);
-  const stale = readStaleCatalogProblemItems(cacheKey, true);
-
-  if (cached) return filterActiveProblemItems(cached as ProblemItem[]);
-  if (stale) return filterActiveProblemItems(stale as ProblemItem[]);
-
-  const { items } = await fetchAllProblemItemsForQuery({
-    searchAll: true,
-    search: needle || undefined,
-    pageSize: 200
-  });
-  writeCatalogProblemItemsCache(cacheKey, true, items);
-  return filterActiveProblemItems(items);
-}
-
-export async function loadFarmerFieldCrops(farmerId: number): Promise<FarmerFieldCropChip[]> {
+/**
+ * Raw farmer field rows (with nested `crops`). Resolve chips against active crop
+ * masters with `resolveFarmerCropChips`. Empty on failure — chips are optional.
+ */
+export async function loadFarmerFieldRows(farmerId: number): Promise<unknown[]> {
   try {
-    const fields = await getFarmerFields(farmerId);
-    const chips: FarmerFieldCropChip[] = [];
-    const seen = new Set<string>();
-
-    for (const field of asArray(fields)) {
-      if (!field || typeof field !== "object") continue;
-      const row = field as Record<string, unknown>;
-      const fieldName = String(row.land_name || row.field_name || row.name || "").trim();
-      const cropList = asArray(row.crops ?? row.field_crops ?? row.current_crops);
-      for (const cropRaw of cropList) {
-        if (!cropRaw || typeof cropRaw !== "object") continue;
-        const crop = cropRaw as Record<string, unknown>;
-        const cropName = String(crop.crop_name || crop.name || "").trim();
-        const cropId = crop.crop_id ?? crop.crop ?? crop.id;
-        if (!cropName && cropId == null) continue;
-        const id = String(cropId ?? cropName);
-        if (seen.has(id)) continue;
-        seen.add(id);
-        chips.push({
-          id,
-          crop_id: String(cropId ?? ""),
-          crop_name: cropName || getOptionLabel({ id: Number(cropId), name: "" }),
-          field_name: fieldName || undefined
-        });
-      }
-    }
-
-    return chips;
+    return asArray(await getFarmerFields(farmerId));
   } catch {
     return [];
   }

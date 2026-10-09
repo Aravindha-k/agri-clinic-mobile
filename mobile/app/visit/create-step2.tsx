@@ -1,13 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { getOptionLabel } from "../../../src/api/masters";
 import type { ProblemItem } from "../../../src/api/problems";
 import { extractMasterPk } from "../../../src/utils/masterId";
 import { useI18n } from "../../../src/i18n/I18nContext";
+import {
+  resolveCropChipByName,
+  resolveFarmerCropChips,
+  type CropMasterRow
+} from "../../../src/utils/cropSelection";
+import { displayProblemLabel } from "../../../src/utils/visitProblems";
 import { VisitFarmerSummaryCard } from "../../components/visit/VisitFarmerSummaryCard";
 import { VisitRevisitContextCard } from "../../components/visit/VisitRevisitContextCard";
-import { CropSelectionCard } from "../../components/visit/step2/CropSelectionCard";
+import {
+  CropSelectionCard,
+  type CropOptionsStatus
+} from "../../components/visit/step2/CropSelectionCard";
 import { MasterSelectSheet, type MasterSelectSheetRef } from "../../components/visit/MasterSelectSheet";
 import {
   OtherProblemSection,
@@ -23,10 +32,11 @@ import {
   VISIT_FOOTER_SCROLL_SPACE
 } from "../../components/visit/VisitBottomFooter";
 import {
+  countItemsForCategory,
   cropHasMappedProblems,
+  filterActiveProblemItems,
   filterStep2Problems,
   findProblemItemById,
-  formatCategoryBadge,
   getVisibleCategoryCells,
   groupProblemsByCategory,
   isOtherCategory,
@@ -34,22 +44,19 @@ import {
 } from "../../lib/problemCatalog";
 import { scrollToRegisteredSection, sectionLayoutHandler } from "../../lib/smoothScroll";
 import {
-  loadCatalogSearchItems,
   loadCropProblemItems,
-  loadFarmerFieldCrops,
+  loadFarmerFieldRows,
   loadVisitFormOptions,
   refreshAuthoritativeVisitFormOptions,
-  type FarmerFieldCropChip,
   type VisitFormOptions
 } from "../../lib/visitFormOptionsApi";
 import { idsFromRecords } from "../../../src/utils/staleMasterFks";
 import { useVisitFormStore } from "../../store/visitFormStore";
-import { EntranceBlocks } from "../../components/ui/EntranceBlocks";
 import { FadeInSection, entranceStagger } from "../../components/ui/FadeInSection";
 import { useVisitEntranceKey } from "../../context/VisitEntranceContext";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 
-const CATALOG_DEBOUNCE_MS = 250;
+type CropItemsStatus = "idle" | "loading" | "ready" | "error";
 
 type Props = {
   onBack: () => void;
@@ -79,20 +86,19 @@ export function VisitCreateStep2({ onBack }: Props) {
   const clearProblemSelection = useVisitFormStore((s) => s.clearProblemSelection);
   const clearProblemsRemovedNotice = useVisitFormStore((s) => s.clearProblemsRemovedNotice);
   const applyReconciledProblemSelection = useVisitFormStore((s) => s.applyReconciledProblemSelection);
+  const restrictProblemsToCrop = useVisitFormStore((s) => s.restrictProblemsToCrop);
   const setOtherProblemDescription = useVisitFormStore((s) => s.setOtherProblemDescription);
 
   const [formOptions, setFormOptions] = useState<VisitFormOptions | null>(null);
-  const [fieldCrops, setFieldCrops] = useState<FarmerFieldCropChip[]>([]);
+  const [cropsReloading, setCropsReloading] = useState(false);
+  const [fieldRows, setFieldRows] = useState<unknown[]>([]);
   const [cropProblemItems, setCropProblemItems] = useState<ProblemItem[]>([]);
-  const [catalogItems, setCatalogItems] = useState<ProblemItem[]>([]);
-  const [cropItemsLoading, setCropItemsLoading] = useState(false);
-  const [catalogLoading, setCatalogLoading] = useState(false);
-  const [searchAllMode, setSearchAllMode] = useState(false);
+  const [cropItemsStatus, setCropItemsStatus] = useState<CropItemsStatus>("idle");
+  const [cropItemsCropId, setCropItemsCropId] = useState("");
+  const [cropItemsReload, setCropItemsReload] = useState(0);
   const [prefillWarning, setPrefillWarning] = useState("");
   const [problemQuery, setProblemQuery] = useState("");
-  const [debouncedCatalogQuery, setDebouncedCatalogQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
-  const [showProblemPicker, setShowProblemPicker] = useState(true);
 
   const scrollRef = useRef<ScrollView>(null);
   const sectionOffsets = useRef<Record<string, number>>({});
@@ -101,16 +107,31 @@ export function VisitCreateStep2({ onBack }: Props) {
   const mountedRef = useRef(true);
   const didInitialScroll = useRef(false);
   const prevCropId = useRef(cropId);
+  const latestCropId = useRef(cropId);
+  latestCropId.current = cropId;
 
-  const hasMappedProblems = useMemo(() => cropHasMappedProblems(cropProblemItems), [cropProblemItems]);
-  const useCatalogPool = searchAllMode || !hasMappedProblems;
   const manualOtherActive = isOtherCategory(problemCategoryCode);
+  const activeCrops = useMemo(
+    () => (formOptions?.crops ?? []) as unknown as CropMasterRow[],
+    [formOptions?.crops]
+  );
+  const cropsStatus: CropOptionsStatus =
+    !formOptions || cropsReloading ? "loading" : activeCrops.length ? "ready" : "error";
+  const problemsVerified = cropItemsStatus === "ready" && cropItemsCropId === cropId && !!cropId;
+  const hasMappedProblems = useMemo(() => cropHasMappedProblems(cropProblemItems), [cropProblemItems]);
 
   const cropTamilName = useMemo(() => {
-    if (!cropId || !formOptions?.crops) return undefined;
-    const match = formOptions.crops.find((c) => String(c.id) === cropId);
+    if (!cropId) return undefined;
+    const match = activeCrops.find((c) => String(c.id) === cropId);
     return match?.name_ta?.trim() || undefined;
-  }, [cropId, formOptions?.crops]);
+  }, [activeCrops, cropId]);
+
+  const fieldCrops = useMemo(() => {
+    const chips = resolveFarmerCropChips(fieldRows, activeCrops);
+    if (chips.length) return chips;
+    const byName = resolveCropChipByName(farmer?.crop_name || farmer?.list_crop_name, activeCrops);
+    return byName ? [byName] : [];
+  }, [activeCrops, farmer?.crop_name, farmer?.list_crop_name, fieldRows]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -121,23 +142,8 @@ export function VisitCreateStep2({ onBack }: Props) {
       if (mountedRef.current && fresh) setFormOptions(fresh);
     });
     if (farmer?.id) {
-      void loadFarmerFieldCrops(farmer.id).then((chips) => {
-        if (!mountedRef.current) return;
-        if (chips.length) {
-          setFieldCrops(chips);
-          return;
-        }
-        const fallbackName = farmer.crop_name || farmer.list_crop_name;
-        if (fallbackName) {
-          setFieldCrops([
-            {
-              id: "farmer-crop",
-              crop_id: "",
-              crop_name: fallbackName,
-              field_name: farmer.village_name || undefined
-            }
-          ]);
-        }
+      void loadFarmerFieldRows(farmer.id).then((rows) => {
+        if (mountedRef.current) setFieldRows(rows);
       });
     }
     return () => {
@@ -153,36 +159,34 @@ export function VisitCreateStep2({ onBack }: Props) {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedCatalogQuery(problemQuery.trim()), CATALOG_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [problemQuery]);
-
-  useEffect(() => {
     if (!cropId) {
       setCropProblemItems([]);
-      setCropItemsLoading(false);
+      setCropItemsCropId("");
+      setCropItemsStatus("idle");
       return;
     }
-    setCropItemsLoading(true);
-    void loadCropProblemItems(cropId).then((items) => {
-      if (!mountedRef.current) return;
-      setCropProblemItems(items);
-      setCropItemsLoading(false);
-      if (!cropHasMappedProblems(items)) {
-        setSearchAllMode(true);
-      }
-    });
-  }, [cropId]);
+    const requested = cropId;
+    setCropItemsStatus("loading");
+    loadCropProblemItems(requested)
+      .then((items) => {
+        if (!mountedRef.current || latestCropId.current !== requested) return;
+        setCropProblemItems(filterActiveProblemItems(items));
+        setCropItemsCropId(requested);
+        setCropItemsStatus("ready");
+      })
+      .catch(() => {
+        if (!mountedRef.current || latestCropId.current !== requested) return;
+        setCropProblemItems([]);
+        setCropItemsCropId(requested);
+        setCropItemsStatus("error");
+      });
+  }, [cropId, cropItemsReload]);
 
+  // Selections (drafts, revisits, previous crop) must belong to this crop's allowed list.
   useEffect(() => {
-    if (!cropId || !useCatalogPool) return;
-    setCatalogLoading(true);
-    void loadCatalogSearchItems(debouncedCatalogQuery).then((items) => {
-      if (!mountedRef.current) return;
-      setCatalogItems(items);
-      setCatalogLoading(false);
-    });
-  }, [cropId, debouncedCatalogQuery, useCatalogPool]);
+    if (!problemsVerified) return;
+    restrictProblemsToCrop(cropProblemItems.map((item) => item.id));
+  }, [cropProblemItems, problemsVerified, restrictProblemsToCrop]);
 
   useEffect(() => {
     if (cropId && cropId !== prevCropId.current) {
@@ -192,29 +196,30 @@ export function VisitCreateStep2({ onBack }: Props) {
     if (!cropId) prevCropId.current = "";
   }, [cropId]);
 
-  const itemPool = useMemo(() => {
-    if (useCatalogPool) return catalogItems;
-    return cropProblemItems;
-  }, [catalogItems, cropProblemItems, useCatalogPool]);
+  const visibleCategoryCells = useMemo(() => getVisibleCategoryCells(cropProblemItems), [cropProblemItems]);
 
-  const visibleCategoryCells = useMemo(() => getVisibleCategoryCells(itemPool), [itemPool]);
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const cell of visibleCategoryCells) {
+      counts[cell.code] = countItemsForCategory(cell.code, cropProblemItems);
+    }
+    return counts;
+  }, [cropProblemItems, visibleCategoryCells]);
 
   const filteredItems = useMemo(
-    () => filterStep2Problems(itemPool, { categoryCode: categoryFilter, search: problemQuery }),
-    [categoryFilter, itemPool, problemQuery]
+    () => filterStep2Problems(cropProblemItems, { categoryCode: categoryFilter, search: problemQuery }),
+    [categoryFilter, cropProblemItems, problemQuery]
   );
 
   const suggestedItems = useMemo(() => {
-    if (useCatalogPool || problemQuery.trim() || categoryFilter || manualOtherActive) return [];
+    if (problemQuery.trim() || categoryFilter || manualOtherActive) return [];
     return pickSuggestedProblems(cropProblemItems, 3);
-  }, [categoryFilter, cropProblemItems, manualOtherActive, problemQuery, useCatalogPool]);
+  }, [categoryFilter, cropProblemItems, manualOtherActive, problemQuery]);
 
   const listItems = useMemo(() => {
     const suggestedIds = new Set(suggestedItems.map((item) => item.id));
     return filteredItems.filter((item) => !suggestedIds.has(item.id));
   }, [filteredItems, suggestedItems]);
-
-  const prefillPool = useMemo(() => [...cropProblemItems, ...catalogItems], [catalogItems, cropProblemItems]);
 
   const cropSheetItems = useMemo(
     () =>
@@ -242,87 +247,98 @@ export function VisitCreateStep2({ onBack }: Props) {
   );
 
   useEffect(() => {
-    if (!pendingProblemMasterId || selectedProblem || !cropId) return;
-    const item = findProblemItemById(prefillPool, pendingProblemMasterId);
+    if (!pendingProblemMasterId || selectedProblem || !problemsVerified) return;
+    const item = findProblemItemById(cropProblemItems, pendingProblemMasterId);
     if (item) {
       selectProblemItem(item, formOptions?.problem_categories ?? []);
       setPrefillWarning("");
-      setShowProblemPicker(true);
       return;
     }
-    if (prefillPool.length > 0 && !cropItemsLoading) {
-      applyReconciledProblemSelection(idsFromRecords(prefillPool));
-      setPrefillWarning(t("visitFlow.staleProblemMaster"));
-    }
+    applyReconciledProblemSelection(idsFromRecords(cropProblemItems));
+    setPrefillWarning(t("visitFlow.staleProblemMaster"));
   }, [
     applyReconciledProblemSelection,
-    cropId,
-    cropItemsLoading,
+    cropProblemItems,
     formOptions?.problem_categories,
     pendingProblemMasterId,
-    prefillPool,
+    problemsVerified,
     selectProblemItem,
     selectedProblem,
     t
   ]);
 
   useEffect(() => {
-    const catalog = formOptions?.problem_items?.length ? formOptions.problem_items : prefillPool;
+    const catalog = formOptions?.problem_items?.length ? formOptions.problem_items : cropProblemItems;
     if (!catalog.length) return;
     applyReconciledProblemSelection(idsFromRecords(catalog));
-  }, [applyReconciledProblemSelection, formOptions?.problem_items, prefillPool]);
+  }, [applyReconciledProblemSelection, cropProblemItems, formOptions?.problem_items]);
+
+  const selectedCount = (selectedProblems ?? []).length;
 
   const canContinue = useMemo(() => {
     if (!cropId) return false;
-    if ((selectedProblems ?? []).length > 0) return true;
+    if (selectedCount > 0) return problemsVerified;
     if (manualOtherActive) return otherProblemDescription.trim().length > 0;
     return false;
-  }, [cropId, manualOtherActive, otherProblemDescription, selectedProblems]);
+  }, [cropId, manualOtherActive, otherProblemDescription, problemsVerified, selectedCount]);
 
   const continueHint = useMemo(() => {
     if (!cropId) return t("visitFlow.hintSelectCrop");
-    if ((selectedProblems ?? []).length > 0) return "";
+    if (selectedCount > 0) {
+      if (problemsVerified) return "";
+      return cropItemsStatus === "error"
+        ? t("visitFlow.hintRetryProblems")
+        : t("visitFlow.hintCheckingProblems");
+    }
     if (manualOtherActive && !otherProblemDescription.trim()) return t("visitFlow.hintDescribeManual");
     return t("visitFlow.hintSelectOrDescribe");
-  }, [cropId, manualOtherActive, otherProblemDescription, selectedProblems, t]);
+  }, [cropId, cropItemsStatus, manualOtherActive, otherProblemDescription, problemsVerified, selectedCount, t]);
 
-  const cropInlineHint = !cropId ? t("visitFlow.errSelectCrop") : "";
+  const cropInlineHint = !cropId && cropsStatus === "ready" ? t("visitFlow.errSelectCrop") : "";
   const problemInlineHint =
-    cropId && !canContinue && !manualOtherActive && !(selectedProblems ?? []).length
+    problemsVerified && !canContinue && !manualOtherActive && !selectedCount
       ? t("visitFlow.errSelectProblem")
-      : manualOtherActive && !otherProblemDescription.trim() && !(selectedProblems ?? []).length
+      : manualOtherActive && !otherProblemDescription.trim() && !selectedCount
         ? t("visitFlow.errDescribeProblem")
         : "";
 
   function handleCropSelect(nextCropId: string, nextCropName: string) {
     const cropPk = extractMasterPk(nextCropId);
     if (cropPk == null) return;
-    setSearchAllMode(false);
     setPrefillWarning("");
     setProblemQuery("");
     setCategoryFilter(null);
-    setShowProblemPicker(true);
     setCrop(String(cropPk), nextCropName);
   }
 
   function handleSelectProblem(item: ProblemItem) {
     setPrefillWarning("");
     toggleProblemItem(item, formOptions?.problem_categories ?? []);
-    setShowProblemPicker(true);
   }
 
   function handleManualOther() {
     setPrefillWarning("");
-    setShowProblemPicker(true);
     selectManualOther();
     scrollToRegisteredSection(scrollRef, sectionOffsets, "other", 16, 180);
     setTimeout(() => otherSectionControlRef.current?.focusInput(), 320);
   }
 
-  function handleSearchAllProblems() {
-    setSearchAllMode(true);
-    setCategoryFilter(null);
-    setPrefillWarning("");
+  function retryCrops() {
+    setCropsReloading(true);
+    void refreshAuthoritativeVisitFormOptions().then((fresh) => {
+      if (!mountedRef.current) return;
+      if (fresh) setFormOptions(fresh);
+      setCropsReloading(false);
+    });
+    if (farmer?.id) {
+      void loadFarmerFieldRows(farmer.id).then((rows) => {
+        if (mountedRef.current) setFieldRows(rows);
+      });
+    }
+  }
+
+  function retryProblems() {
+    setCropItemsReload((n) => n + 1);
   }
 
   function continueToStep3() {
@@ -330,27 +346,116 @@ export function VisitCreateStep2({ onBack }: Props) {
     setStep(3);
   }
 
-  function renderProblemList(items: ProblemItem[]) {
+  function renderProblemList(items: ProblemItem[], showCategory: boolean) {
     if (!items.length) return null;
     return items.map((item) => (
       <ProblemSelectCard
         key={item.id}
         item={item}
-        cropName={cropName}
+        showCategory={showCategory}
         selected={selectedIds.has(item.id)}
         onPress={() => handleSelectProblem(item)}
       />
     ));
   }
 
-  const showEmptyPool =
-    cropId &&
-    !cropItemsLoading &&
-    !catalogLoading &&
-    filteredItems.length === 0 &&
-    suggestedItems.length === 0 &&
-    !manualOtherActive &&
-    showProblemPicker;
+  function renderProblemBody() {
+    if (!cropId) {
+      return (
+        <View style={styles.stateCard}>
+          <Ionicons name="leaf-outline" size={20} color={Colors.text4} />
+          <Text style={styles.stateText}>{t("visitFlow.selectCropFirst")}</Text>
+        </View>
+      );
+    }
+    if (cropItemsStatus === "error" && cropItemsCropId === cropId) {
+      return (
+        <View style={[styles.stateCard, styles.errorCard]} accessibilityRole="alert">
+          <Ionicons name="cloud-offline-outline" size={20} color={Colors.redText} />
+          <View style={styles.stateCopy}>
+            <Text style={styles.errorTitle}>{t("visitFlow.problemsLoadFailed", { crop: cropName })}</Text>
+            <Text style={styles.errorSub}>{t("visitFlow.problemsLoadFailedSub")}</Text>
+            <PrimaryButton
+              label={t("visitFlow.retry")}
+              onPress={retryProblems}
+              variant="outline"
+              icon={<Ionicons name="refresh" size={18} color={Colors.text1} />}
+              style={styles.stateBtn}
+            />
+          </View>
+        </View>
+      );
+    }
+    if (!problemsVerified) {
+      return (
+        <View style={styles.stateCard} accessibilityLiveRegion="polite">
+          <ActivityIndicator size="small" color={Colors.brand700} />
+          <Text style={styles.stateText}>{t("visitFlow.loadingProblemsFor", { crop: cropName })}</Text>
+        </View>
+      );
+    }
+    if (!hasMappedProblems) {
+      return (
+        <View style={[styles.stateCard, styles.emptyCard]}>
+          <Ionicons name="information-circle-outline" size={20} color={Colors.amberText} />
+          <View style={styles.stateCopy}>
+            <Text style={styles.emptyTitle}>{t("visitFlow.noMappedProblems")}</Text>
+            <Text style={styles.emptySub}>{t("visitFlow.noMappedProblemsSub")}</Text>
+            {!manualOtherActive ? (
+              <PrimaryButton
+                label={t("visitFlow.describeManually")}
+                onPress={handleManualOther}
+                variant="outline"
+                icon={<Ionicons name="create-outline" size={18} color={Colors.text1} />}
+                style={styles.stateBtn}
+              />
+            ) : null}
+          </View>
+        </View>
+      );
+    }
+    return (
+      <>
+        <SearchBar
+          value={problemQuery}
+          onChangeText={setProblemQuery}
+          placeholder={t("visitFlow.searchTamilEnglish")}
+        />
+
+        <ProblemCategoryChips
+          categories={visibleCategoryCells}
+          activeCode={categoryFilter}
+          onSelect={setCategoryFilter}
+          counts={categoryCounts}
+          totalCount={cropProblemItems.length}
+        />
+
+        {suggestedItems.length > 0 ? (
+          <View style={styles.suggestedBlock}>
+            <Text style={styles.groupLabel}>{t("visitFlow.suggestedForArea")}</Text>
+            <View style={styles.list}>{renderProblemList(suggestedItems, true)}</View>
+          </View>
+        ) : null}
+
+        {listItems.length > 0 ? (
+          <View style={styles.list}>
+            {categoryFilter
+              ? renderProblemList(listItems, false)
+              : groupedItems.map((group) => (
+                  <View key={group.code} style={styles.group}>
+                    <Text style={styles.groupLabel}>{group.label}</Text>
+                    {renderProblemList(group.items, false)}
+                  </View>
+                ))}
+          </View>
+        ) : suggestedItems.length === 0 ? (
+          <Text style={styles.hint}>
+            {problemQuery.trim() ? t("visitFlow.noProblemsMatch") : t("visitFlow.noProblemsInCategory")}
+          </Text>
+        ) : null}
+      </>
+    );
+  }
 
   return (
     <View style={styles.screen}>
@@ -387,6 +492,8 @@ export function VisitCreateStep2({ onBack }: Props) {
             cropName={cropName}
             cropTamilName={cropTamilName}
             fieldCrops={fieldCrops}
+            cropsStatus={cropsStatus}
+            onRetryCrops={retryCrops}
             onChooseCrop={() => cropSheetRef.current?.open()}
             onQuickCrop={handleCropSelect}
           />
@@ -394,137 +501,66 @@ export function VisitCreateStep2({ onBack }: Props) {
         </View>
 
         <View onLayout={sectionLayoutHandler(sectionOffsets, "problem")} style={styles.problemSection}>
-          {!cropId ? (
-            <View style={styles.waitCard}>
-              <Text style={styles.waitTitle}>{t("visitFlow.selectCropFirst")}</Text>
+          <View style={styles.problemHead}>
+            <View style={styles.countRow}>
+              <Text style={styles.sectionLabel}>{t("visitFlow.problemsObserved")}</Text>
+              {selectedCount > 0 ? (
+                <Pressable
+                  onPress={clearProblemSelection}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("visitFlow.clearSelected")}
+                >
+                  <Text style={styles.clearText}>{t("visitFlow.clearSelected")}</Text>
+                </Pressable>
+              ) : null}
             </View>
-          ) : cropItemsLoading ? (
-            <Text style={styles.hint}>{t("visitFlow.loadingProblemsFor", { crop: cropName })}</Text>
-          ) : (
-            <>
-              <View style={styles.problemHead}>
-                <Text style={styles.sectionLabel}>{t("visitFlow.problemsObserved")}</Text>
-                {(selectedProblems ?? []).length > 0 ? (
-                  <View style={styles.countRow}>
-                    <Text style={styles.countText}>
-                      {t("visitFlow.selectedCount", { count: selectedProblems.length })}
-                    </Text>
-                    <Pressable onPress={clearProblemSelection} hitSlop={8}>
-                      <Text style={styles.clearText}>{t("visitFlow.clearSelected")}</Text>
-                    </Pressable>
-                  </View>
-                ) : null}
-              </View>
+            {cropId && problemsVerified && hasMappedProblems ? (
+              <Text style={styles.helperText}>{t("visitFlow.problemsHelper", { crop: cropName })}</Text>
+            ) : null}
+          </View>
 
-              {(selectedProblems ?? []).length > 0 ? (
-                <View style={styles.selectedSummary}>
-                  {(selectedProblems ?? []).map((item) => (
-                    <Text key={item.id} style={styles.selectedSummaryLine} numberOfLines={1}>
-                      {item.tamil_name?.trim() || item.name}
-                    </Text>
-                  ))}
-                </View>
-              ) : null}
-
-              {needsProblemReview || prefillWarning ? (
-                <View style={styles.warningBanner}>
-                  <Ionicons name="alert-circle-outline" size={16} color={Colors.amberText} />
-                  <Text style={styles.warningText}>{t("visitFlow.staleProblemMaster")}</Text>
-                </View>
-              ) : null}
-
-              {problemsRemovedNotice ? (
-                <View style={styles.warningBanner}>
-                  <Ionicons name="alert-circle-outline" size={16} color={Colors.amberText} />
-                  <Text style={styles.warningText}>
-                    {t("visitFlow.problemsRemoved", { count: problemsRemovedNotice })}
+          {selectedCount > 0 ? (
+            <View style={styles.selectedSummary}>
+              <Text style={styles.countText}>{t("visitFlow.selectedCount", { count: selectedCount })}</Text>
+              {(selectedProblems ?? []).map((item) => (
+                <View key={item.id} style={styles.selectedSummaryRow}>
+                  <Ionicons name="checkmark-circle" size={16} color={Colors.green} />
+                  <Text style={styles.selectedSummaryLine} numberOfLines={2}>
+                    {displayProblemLabel(item, language)}
                   </Text>
-                  <Pressable onPress={clearProblemsRemovedNotice} hitSlop={8}>
-                    <Ionicons name="close" size={16} color={Colors.amberText} />
-                  </Pressable>
                 </View>
-              ) : null}
+              ))}
+            </View>
+          ) : null}
 
-              {showProblemPicker ? (
-                <>
-                  {!hasMappedProblems ? (
-                    <View style={styles.emptyBanner}>
-                      <Text style={styles.emptyBannerTitle}>{t("visitFlow.noMappedProblems")}</Text>
-                      <Text style={styles.emptyBannerSub}>{t("visitFlow.searchAllOrManual")}</Text>
-                      {!searchAllMode ? (
-                        <Pressable onPress={handleSearchAllProblems} style={styles.emptyBannerBtn}>
-                          <Text style={styles.emptyBannerBtnText}>{t("visitFlow.searchAllProblems")}</Text>
-                        </Pressable>
-                      ) : null}
-                    </View>
-                  ) : null}
+          {needsProblemReview || prefillWarning ? (
+            <View style={styles.warningBanner}>
+              <Ionicons name="alert-circle-outline" size={16} color={Colors.amberText} />
+              <Text style={styles.warningText}>{prefillWarning || t("visitFlow.staleProblemMaster")}</Text>
+            </View>
+          ) : null}
 
-                  {prefillWarning ? (
-                    <View style={styles.warningBanner}>
-                      <Ionicons name="alert-circle-outline" size={16} color={Colors.amberText} />
-                      <Text style={styles.warningText}>{prefillWarning}</Text>
-                    </View>
-                  ) : null}
+          {problemsRemovedNotice ? (
+            <View style={styles.warningBanner}>
+              <Ionicons name="alert-circle-outline" size={16} color={Colors.amberText} />
+              <Text style={styles.warningText}>
+                {t("visitFlow.problemsRemoved", { count: problemsRemovedNotice })}
+              </Text>
+              <Pressable
+                onPress={clearProblemsRemovedNotice}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss"
+              >
+                <Ionicons name="close" size={16} color={Colors.amberText} />
+              </Pressable>
+            </View>
+          ) : null}
 
-                  <SearchBar
-                    value={problemQuery}
-                    onChangeText={setProblemQuery}
-                    placeholder={t("visitFlow.searchTamilEnglish")}
-                  />
+          {renderProblemBody()}
 
-                  {useCatalogPool && hasMappedProblems ? (
-                    <Pressable onPress={() => setSearchAllMode(false)} style={styles.linkBtn}>
-                      <Text style={styles.linkBtnText}>{t("visitFlow.showCropMappedOnly")}</Text>
-                    </Pressable>
-                  ) : null}
-
-                  {!useCatalogPool && hasMappedProblems ? (
-                    <Pressable onPress={handleSearchAllProblems} style={styles.linkBtn}>
-                      <Text style={styles.linkBtnText}>{t("visitFlow.searchAllProblems")}</Text>
-                    </Pressable>
-                  ) : null}
-
-                  <ProblemCategoryChips
-                    categories={visibleCategoryCells}
-                    activeCode={categoryFilter}
-                    onSelect={setCategoryFilter}
-                  />
-
-                  {suggestedItems.length > 0 ? (
-                    <View style={styles.suggestedBlock}>
-                      <Text style={styles.suggestedLabel}>{t("visitFlow.suggestedForArea")}</Text>
-                      <View style={styles.list}>{renderProblemList(suggestedItems)}</View>
-                    </View>
-                  ) : null}
-
-                  {listItems.length > 0 ? (
-                    <View style={styles.list}>
-                      {categoryFilter
-                        ? renderProblemList(listItems)
-                        : groupedItems.map((group) => (
-                            <View key={group.code} style={styles.group}>
-                              <Text style={styles.groupLabel}>{group.label}</Text>
-                              {renderProblemList(group.items)}
-                            </View>
-                          ))}
-                    </View>
-                  ) : showEmptyPool ? (
-                    <Text style={styles.hint}>
-                      {problemQuery.trim()
-                        ? t("visitFlow.noProblemsMatch")
-                        : t("visitFlow.noProblemsInCategory")}
-                    </Text>
-                  ) : null}
-
-                  {catalogLoading && useCatalogPool ? (
-                    <Text style={styles.hint}>{t("visitFlow.searchingCatalog")}</Text>
-                  ) : null}
-                </>
-              ) : null}
-
-              {problemInlineHint ? <Text style={styles.inlineError}>{problemInlineHint}</Text> : null}
-            </>
-          )}
+          {problemInlineHint ? <Text style={styles.inlineError}>{problemInlineHint}</Text> : null}
         </View>
         </FadeInSection>
 
@@ -559,7 +595,7 @@ export function VisitCreateStep2({ onBack }: Props) {
         title={t("visitFlow.selectCropSheet")}
         items={cropSheetItems}
         selectedId={cropId}
-        loading={!formOptions}
+        loading={cropsStatus === "loading"}
         onSelect={(item) => handleCropSelect(item.id, item.title)}
       />
     </View>
@@ -583,20 +619,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.screen
   },
   scroll: {
-    gap: 14,
+    gap: 16,
     paddingBottom: VISIT_FOOTER_SCROLL_SPACE,
     paddingHorizontal: Spacing.screen
   },
   problemSection: {
-    gap: 10
+    gap: 12,
+    marginTop: 16
+  },
+  problemHead: {
+    gap: 4
   },
   sectionLabel: {
     color: Colors.text1,
     fontSize: FontSize.md,
     fontWeight: FontWeight.bold
   },
-  problemHead: {
-    gap: 6
+  helperText: {
+    color: Colors.text3,
+    fontSize: FontSize.sm
   },
   countRow: {
     alignItems: "center",
@@ -604,9 +645,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between"
   },
   countText: {
-    color: Colors.text2,
+    color: Colors.greenText,
     fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold
+    fontWeight: FontWeight.bold
   },
   clearText: {
     color: Colors.brand700,
@@ -618,12 +659,18 @@ const styles = StyleSheet.create({
     borderColor: Colors.green,
     borderRadius: Radius.md,
     borderWidth: 1,
-    gap: 4,
+    gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 8
+    paddingVertical: 10
+  },
+  selectedSummaryRow: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 6
   },
   selectedSummaryLine: {
     color: Colors.text1,
+    flex: 1,
     fontSize: FontSize.sm,
     fontWeight: FontWeight.semibold
   },
@@ -635,17 +682,56 @@ const styles = StyleSheet.create({
     color: Colors.text3,
     fontSize: FontSize.sm,
     fontWeight: FontWeight.bold,
+    letterSpacing: 0.4,
     textTransform: "uppercase"
   },
-  waitCard: {
+  stateCard: {
+    alignItems: "flex-start",
     backgroundColor: Colors.surface,
     borderColor: Colors.border,
     borderRadius: Radius.lg,
     borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
     padding: 14
   },
-  waitTitle: {
+  stateCopy: {
+    flex: 1,
+    gap: 4
+  },
+  stateText: {
     color: Colors.text3,
+    flex: 1,
+    fontSize: FontSize.sm
+  },
+  stateBtn: {
+    alignSelf: "flex-start",
+    marginTop: 6
+  },
+  errorCard: {
+    backgroundColor: Colors.redBg,
+    borderColor: Colors.redBg
+  },
+  errorTitle: {
+    color: Colors.redText,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold
+  },
+  errorSub: {
+    color: Colors.redText,
+    fontSize: FontSize.sm
+  },
+  emptyCard: {
+    backgroundColor: Colors.amberBg,
+    borderColor: Colors.amberBg
+  },
+  emptyTitle: {
+    color: Colors.amberText,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold
+  },
+  emptySub: {
+    color: Colors.amberText,
     fontSize: FontSize.sm
   },
   hint: {
@@ -655,37 +741,7 @@ const styles = StyleSheet.create({
   inlineError: {
     color: Colors.redText,
     fontSize: FontSize.sm,
-    marginTop: -4
-  },
-  emptyBanner: {
-    backgroundColor: Colors.amberBg,
-    borderRadius: Radius.lg,
-    gap: 6,
-    padding: 12
-  },
-  emptyBannerTitle: {
-    color: Colors.amberText,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold
-  },
-  emptyBannerSub: {
-    color: Colors.amberText,
-    fontSize: FontSize.sm
-  },
-  emptyBannerBtn: {
-    alignSelf: "flex-start",
-    backgroundColor: Colors.surface,
-    borderColor: Colors.amber,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    marginTop: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8
-  },
-  emptyBannerBtnText: {
-    color: Colors.amberText,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold
+    marginTop: 4
   },
   warningBanner: {
     alignItems: "center",
@@ -702,21 +758,8 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     fontWeight: FontWeight.medium
   },
-  linkBtn: {
-    alignSelf: "flex-start"
-  },
-  linkBtnText: {
-    color: Colors.brand700,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.medium
-  },
   suggestedBlock: {
     gap: 8
-  },
-  suggestedLabel: {
-    color: Colors.text3,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold
   },
   list: {
     gap: 8

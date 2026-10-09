@@ -12,6 +12,7 @@ import {
 } from "../lib/problemCatalog";
 import { revalidateProblemSelection } from "../../src/utils/visitProblems";
 import { reconcileDraftProblemSelection } from "../../src/utils/staleMasterFks";
+import { restrictProblemsToAllowed } from "../../src/utils/cropSelection";
 import {
   buildAdviceSuggestionsFromPrefill,
   EMPTY_ADVICE_SUGGESTIONS,
@@ -109,6 +110,8 @@ type VisitFormState = {
   selectManualOther: () => void;
   clearProblemSelection: () => void;
   clearProblemsRemovedNotice: () => void;
+  /** Drop selected problems that are not in the selected crop's allowed problem list. */
+  restrictProblemsToCrop: (allowedProblemIds: Iterable<string | number>) => void;
   applyReconciledProblemSelection: (validProblemMasterIds: Iterable<string | number>) => boolean;
   clearProblemReview: () => void;
   setVisitKind: (kind: VisitKind) => void;
@@ -374,6 +377,23 @@ export const useVisitFormStore = create<VisitFormState>()(
       needsProblemReview: false
     }),
   clearProblemsRemovedNotice: () => set({ problemsRemovedNotice: "" }),
+  restrictProblemsToCrop: (allowedProblemIds) => {
+    const state = get();
+    const { kept, removed } = restrictProblemsToAllowed(state.selectedProblems ?? [], allowedProblemIds);
+    if (!removed.length) return;
+    const primary = primaryProblem(kept);
+    const alreadyRemoved = Number(state.problemsRemovedNotice) || 0;
+    set({
+      selectedProblems: kept,
+      selectedProblem: primary,
+      problemMasterId: primary ? String(primary.id) : "",
+      pendingProblemMasterId: primary ? String(primary.id) : "",
+      problemCategoryId: primary ? state.problemCategoryId : "",
+      problemCategoryCode: primary ? state.problemCategoryCode : "",
+      problemsRemovedNotice: String(alreadyRemoved + removed.length),
+      ...flagsFromProblems(kept)
+    });
+  },
   clearProblemReview: () => set({ needsProblemReview: false }),
   applyReconciledProblemSelection: (validProblemMasterIds) => {
     const state = get();

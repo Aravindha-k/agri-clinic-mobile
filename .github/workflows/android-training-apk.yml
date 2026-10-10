@@ -33,6 +33,9 @@ jobs:
     name: Build TRAINING APK
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    permissions:
+      # Required to create/update the training-apk-latest draft release.
+      contents: write
 
     steps:
       - name: Checkout
@@ -238,3 +241,21 @@ jobs:
           path: ${{ steps.apkmeta.outputs.filename }}
           if-no-files-found: error
           retention-days: 30
+
+      # Persistent delivery: keep the latest TRAINING APK on a draft release.
+      # Draft releases are never public (collaborators only) and do not expire,
+      # unlike 30-day Actions artifacts. Never publish this release.
+      - name: Publish TRAINING APK to draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view training-apk-latest >/dev/null 2>&1; then
+            gh release upload training-apk-latest "${{ steps.apkmeta.outputs.filename }}" --clobber
+          else
+            gh release create training-apk-latest \
+              --draft \
+              --title "Training APK (latest)" \
+              --notes "Auto-updated draft release holding the latest screenshot-enabled TRAINING APK. Never publish this release." \
+              "${{ steps.apkmeta.outputs.filename }}"
+          fi
+          gh release view training-apk-latest --json assets --jq '.assets[].name'

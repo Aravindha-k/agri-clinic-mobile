@@ -71,6 +71,36 @@ jobs:
         with:
           packages: platform-tools
 
+      # Install the pinned NDK via sdkmanager with retry. AGP's inline
+      # DefaultSdkLoader auto-download produced a corrupt archive
+      # ("Archive is not a ZIP archive") — an explicit install lets us
+      # retry, clear partial files, and verify before Gradle runs.
+      - name: Install NDK (Side by side) 27.1.12297006
+        run: |
+          set -e
+          NDK_VERSION="27.1.12297006"
+          for attempt in 1 2 3; do
+            echo "NDK install attempt ${attempt}/3"
+            yes | sdkmanager --licenses > /dev/null 2>&1 || true
+            rm -rf "${ANDROID_HOME}/ndk/${NDK_VERSION}" "${ANDROID_HOME}/.temp" || true
+            if sdkmanager "ndk;${NDK_VERSION}"; then
+              break
+            fi
+            echo "sdkmanager failed on attempt ${attempt}; cleaning partial install"
+            rm -rf "${ANDROID_HOME}/ndk/${NDK_VERSION}" "${ANDROID_HOME}/.temp" || true
+            if [ "${attempt}" = "3" ]; then
+              echo "NDK ${NDK_VERSION} install failed after 3 attempts"
+              exit 1
+            fi
+            sleep 15
+          done
+          # Verify the installation is complete before Gradle runs.
+          test -f "${ANDROID_HOME}/ndk/${NDK_VERSION}/ndk-build" || {
+            echo "ndk-build missing after install"; exit 1; }
+          test -f "${ANDROID_HOME}/ndk/${NDK_VERSION}/source.properties" || {
+            echo "source.properties missing after install"; exit 1; }
+          echo "NDK ${NDK_VERSION} installed and verified at ${ANDROID_HOME}/ndk/${NDK_VERSION}"
+
       - name: Cache Gradle
         if: ${{ inputs.diagnostic_clean_build != 'true' }}
         uses: actions/cache@v4

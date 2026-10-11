@@ -168,6 +168,7 @@ export function VisitCreateStep2({ onBack }: Props) {
       <VisitFlowHeader
         title={t("visitFlow.selectCrop")}
         subtitle={t("visitFlow.step2of6")}
+        icon="leaf-outline"
         onBack={onBack}
       />
 

@@ -305,7 +305,7 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
 
   return (
     <View style={styles.screen}>
-      <VisitFlowHeader title={t("visitFlow.reviewAndSubmit")} subtitle={t("visitFlow.step6of6")} onBack={onBack} />
+      <VisitFlowHeader title={t("visitFlow.reviewAndSubmit")} subtitle={t("visitFlow.step6of6")} onBack={onBack} icon="clipboard-outline" />
 
       <View style={styles.stepWrap}>
         <StepIndicator step={6} allComplete />

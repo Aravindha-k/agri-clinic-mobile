@@ -374,6 +374,7 @@ export default function VisitCreateStep1({ onClose }: Props) {
       <VisitFlowHeader
         title={t("visitFlow.newVisit")}
         subtitle={t("visitFlow.step1of4")}
+        icon="person-outline"
         onClose={confirmClose}
         gpsAccuracy={gpsAccuracy}
         gpsLabel={gpsLabel(gpsAccuracy, t)}

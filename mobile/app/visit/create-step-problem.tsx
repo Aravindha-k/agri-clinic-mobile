@@ -311,6 +311,7 @@ export function ProblemStepScreen({ kind, onBack, onContinue }: Props) {
         title={t(kind === "pest" ? "visitFlow.pestTitle" : "visitFlow.diseaseTitle")}
         subtitle={t(kind === "pest" ? "visitFlow.step3of6" : "visitFlow.step4of6")}
         onBack={onBack}
+        icon={kind === "pest" ? "bug-outline" : "medkit-outline"}
       />
 
       <View style={styles.stepWrap}>

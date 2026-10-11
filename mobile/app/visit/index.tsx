@@ -39,8 +39,9 @@ export default function VisitFlowShell() {
   const fastRevisitStarted = useRef(false);
   const guardDialogOpen = useRef(false);
   const allowRemoval = useRef(false);
-  const draftState = useVisitFormStore();
-  const hasDraft = draftState.hasFormData();
+  // Narrow subscription: re-render the shell only when the draft-empty flag
+  // flips, not on every keystroke inside the step panes.
+  const hasDraft = useVisitFormStore((s) => s.hasFormData());
 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const [displayedStep, setDisplayedStep] = useState(step);

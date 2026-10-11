@@ -62,6 +62,73 @@ async function ensureProblemItems(options: VisitFormOptions): Promise<VisitFormO
   }
 }
 
+/** Skip duplicate revalidation when screens mount back-to-back in one visit. */
+const FRESH_WINDOW_MS = 30_000;
+
+let formOptionsInflight: Promise<VisitFormOptions | null> | null = null;
+let formOptionsLastFetch = 0;
+
+/**
+ * In-flight dedupe + freshness gate for visit-form-options.
+ * force=true always revalidates (forced refresh, cache misses); otherwise a
+ * fetch younger than FRESH_WINDOW_MS is treated as fresh and skipped.
+ */
+function refreshFormOptionsDeduped(force = false): Promise<VisitFormOptions | null> {
+  if (formOptionsInflight) return formOptionsInflight;
+  if (!force && Date.now() - formOptionsLastFetch < FRESH_WINDOW_MS) {
+    return Promise.resolve(null);
+  }
+  formOptionsInflight = (async () => {
+    try {
+      return await fetchVisitFormOptionsFromNetwork();
+    } finally {
+      formOptionsLastFetch = Date.now();
+      formOptionsInflight = null;
+    }
+  })();
+  return formOptionsInflight;
+}
+
+const cropItemsInflight = new Map<string, Promise<void>>();
+const cropItemsFetchedAt = new Map<string, number>();
+
+async function revalidateCropProblemItems(cropId: string): Promise<void> {
+  try {
+    const data = await apiClient<unknown>(`crops/${cropId}/problem-items/`, { source: "VisitForm" });
+    const items = normalizeProblemItems(data);
+    // Successful response replaces cache even when empty — deleted IDs must not survive.
+    writeCropProblemItemsCache(cropId, items);
+    return;
+  } catch {
+    // fall through
+  }
+  try {
+    const { items } = await fetchAllProblemItemsForQuery({ cropId, pageSize: 200 });
+    writeCropProblemItemsCache(cropId, items);
+  } catch {
+    // keep last cache
+  }
+}
+
+/** Per-crop in-flight dedupe + freshness gate (see refreshFormOptionsDeduped). */
+function revalidateCropProblemItemsDeduped(cropId: string, force = false): Promise<void> {
+  const existing = cropItemsInflight.get(cropId);
+  if (existing) return existing;
+  if (!force && Date.now() - (cropItemsFetchedAt.get(cropId) ?? 0) < FRESH_WINDOW_MS) {
+    return Promise.resolve();
+  }
+  const inflight = (async () => {
+    try {
+      await revalidateCropProblemItems(cropId);
+    } finally {
+      cropItemsFetchedAt.set(cropId, Date.now());
+      cropItemsInflight.delete(cropId);
+    }
+  })();
+  cropItemsInflight.set(cropId, inflight);
+  return inflight;
+}
+
 async function fetchVisitFormOptionsFromNetwork(): Promise<VisitFormOptions | null> {
   try {
     const data = await apiClient<unknown>("mobile/visit-form-options/", { source: "VisitForm" });
@@ -87,19 +154,19 @@ export async function loadVisitFormOptions(): Promise<VisitFormOptions> {
   const cached = readCachedFormOptions<VisitFormOptions>();
   const stale = readStaleFormOptions<VisitFormOptions>();
 
-  void fetchVisitFormOptionsFromNetwork();
+  void refreshFormOptionsDeduped();
 
   if (cached) return cached;
   if (stale) return stale;
 
-  const fresh = await fetchVisitFormOptionsFromNetwork();
+  const fresh = await refreshFormOptionsDeduped(true);
   if (fresh) return fresh;
   return { crops: [], problem_categories: [], problem_items: [] };
 }
 
-/** Online submit/sync: current server catalogs replace local cache. */
+/** Online submit/sync: current server catalogs replace local cache. Always revalidates. */
 export async function refreshAuthoritativeVisitFormOptions(): Promise<VisitFormOptions | null> {
-  return fetchVisitFormOptionsFromNetwork();
+  return refreshFormOptionsDeduped(true);
 }
 
 function normalizeProblemItems(data: unknown): ProblemItem[] {
@@ -113,41 +180,15 @@ export async function loadCropProblemItems(cropId: string): Promise<ProblemItem[
   const cached = readCropProblemItemsCache(cropId);
   const stale = readStaleCropProblemItems(cropId);
 
-  void (async () => {
-    try {
-      const data = await apiClient<unknown>(`crops/${cropId}/problem-items/`, { source: "VisitForm" });
-      const items = normalizeProblemItems(data);
-      // Successful response replaces cache even when empty — deleted IDs must not survive.
-      writeCropProblemItemsCache(cropId, items);
-      return;
-    } catch {
-      // fall through
-    }
-    try {
-      const { items } = await fetchAllProblemItemsForQuery({ cropId, pageSize: 200 });
-      writeCropProblemItemsCache(cropId, items);
-    } catch {
-      // keep last cache
-    }
-  })();
+  void revalidateCropProblemItemsDeduped(cropId);
 
   if (cached) return cached as ProblemItem[];
   if (stale) return stale as ProblemItem[];
 
-  try {
-    const data = await apiClient<unknown>(`crops/${cropId}/problem-items/`, { source: "VisitForm" });
-    const items = normalizeProblemItems(data);
-    if (items.length) {
-      writeCropProblemItemsCache(cropId, items);
-      return items;
-    }
-  } catch {
-    // fall through
-  }
-
-  const { items } = await fetchAllProblemItemsForQuery({ cropId, pageSize: 200 });
-  writeCropProblemItemsCache(cropId, items);
-  return items;
+  await revalidateCropProblemItemsDeduped(cropId, true);
+  const refreshed = readCropProblemItemsCache(cropId);
+  if (Array.isArray(refreshed)) return refreshed as ProblemItem[];
+  return (readStaleCropProblemItems(cropId) ?? []) as ProblemItem[];
 }
 
 /** Catalog-wide active items for a category (no crop filter). Cached by category code. */

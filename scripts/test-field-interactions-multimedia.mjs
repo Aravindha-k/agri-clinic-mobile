@@ -19,12 +19,15 @@ test("ActionTile exposes tactile states without a second icon library", () => {
   assert.doesNotMatch(tile, /lottie|three|webgl/i);
 });
 
-test("visit step indicator keeps 4 steps with Farmer/Problem/Evidence/Review", () => {
+test("visit step indicator shows 6 steps Farmer/Crop/Pest/Disease/Evidence/Review", () => {
   const step = read("mobile/components/visit/StepIndicator.tsx");
   assert.match(step, /stepLabelFarmer/);
-  assert.match(step, /stepLabelProblem/);
+  assert.match(step, /stepLabelCrop/);
+  assert.match(step, /stepLabelPest/);
+  assert.match(step, /stepLabelDisease/);
   assert.match(step, /stepLabelEvidence/);
   assert.match(step, /stepLabelReview/);
+  assert.match(step, /\[1, 2, 3, 4, 5, 6\]\.map/);
   assert.match(step, /checkmark/);
   assert.match(step, /usePremiumMotion/);
 });

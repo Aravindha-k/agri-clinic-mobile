@@ -7,13 +7,15 @@ import { usePremiumMotion } from "../../../src/hooks/usePremiumMotion";
 import { Colors, Enterprise, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 
 type Props = {
-  step: 1 | 2 | 3 | 4;
+  step: 1 | 2 | 3 | 4 | 5 | 6;
   allComplete?: boolean;
 };
 
 const STEP_KEYS = [
   "visitFlow.stepLabelFarmer",
-  "visitFlow.stepLabelProblem",
+  "visitFlow.stepLabelCrop",
+  "visitFlow.stepLabelPest",
+  "visitFlow.stepLabelDisease",
   "visitFlow.stepLabelEvidence",
   "visitFlow.stepLabelReview"
 ] as const;
@@ -22,7 +24,7 @@ export function StepIndicator({ step, allComplete }: Props) {
   const { t } = useI18n();
   return (
     <View style={styles.row}>
-      {[1, 2, 3, 4].map((index) => (
+      {[1, 2, 3, 4, 5, 6].map((index) => (
         <StepSegment
           key={index}
           index={index}

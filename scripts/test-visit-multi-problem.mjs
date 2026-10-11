@@ -9,6 +9,7 @@ const read = (path) => readFileSync(resolve(ROOT, path), "utf8");
 
 const store = read("mobile/store/visitFormStore.ts");
 const step2 = read("mobile/app/visit/create-step2.tsx");
+const problemScreen = read("mobile/app/visit/create-step-problem.tsx");
 const review = read("mobile/app/visit/create-step4-review.tsx");
 const detail = read("mobile/app/visit/[id].tsx");
 const submitApi = read("mobile/lib/visitSubmitApi.ts");
@@ -78,12 +79,10 @@ function appendVisitMultipartFields(fields) {
 }
 
 test("crop-aware multi-select problems are grouped from backend items", () => {
-  assert.match(step2, /toggleProblemItem/);
-  assert.match(step2, /groupProblemsByCategory/);
-  assert.match(step2, /selectedCount/);
-  assert.match(step2, /clearSelected/);
-  assert.match(step2, /selectedSummary/);
-  assert.match(step2, /syncProblemCategoryFromMasters/);
+  assert.match(problemScreen, /toggleProblemItem/);
+  assert.match(catalog, /groupProblemsByCategory/);
+  assert.match(problemScreen, /screenSelectedCount/);
+  assert.match(store, /syncProblemCategoryFromMasters/);
   assert.match(catalog, /groupProblemsByCategory/);
   assert.match(filter, /problemItemMatchesCrop/);
   assert.match(filter, /nutrient_issue/);
@@ -94,7 +93,7 @@ test("crop-aware multi-select problems are grouped from backend items", () => {
 test("selected problems persist across steps and crop change drops incompatible ids", () => {
   assert.match(store, /selectedProblems: state\.selectedProblems/);
   assert.match(store, /revalidateProblemSelection/);
-  assert.match(step2, /problemsRemoved/);
+  assert.match(problemScreen, /problemsRemoved/);
   const { kept, removed } = revalidateProblemSelection(
     [
       { id: 3, crop: 10 },

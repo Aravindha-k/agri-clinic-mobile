@@ -161,10 +161,10 @@ export function VisitCreateStep3({ onBack }: Props) {
 
   return (
     <View style={styles.screen}>
-      <VisitFlowHeader title={t("visitFlow.fieldNotesEvidence")} subtitle={t("visitFlow.step3of4")} onBack={onBack} />
+      <VisitFlowHeader title={t("visitFlow.fieldNotesEvidence")} subtitle={t("visitFlow.step5of6")} onBack={onBack} />
 
       <View style={styles.stepWrap}>
-        <StepIndicator step={3} />
+        <StepIndicator step={5} />
       </View>
 
       <ScrollView

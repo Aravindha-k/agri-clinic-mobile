@@ -13,6 +13,7 @@ import {
 import { revalidateProblemSelection } from "../../src/utils/visitProblems";
 import { reconcileDraftProblemSelection } from "../../src/utils/staleMasterFks";
 import { restrictProblemsToAllowed } from "../../src/utils/cropSelection";
+import { categoryCodesAreEquivalent } from "../../src/utils/problemItemFilter";
 import {
   buildAdviceSuggestionsFromPrefill,
   EMPTY_ADVICE_SUGGESTIONS,
@@ -57,8 +58,10 @@ export type RevisitContext = {
   recommendationLabel?: string;
 };
 
+export type VisitStep = 1 | 2 | 3 | 4 | 5 | 6;
+
 type VisitFormState = {
-  step: 1 | 2 | 3 | 4;
+  step: VisitStep;
   farmer: Farmer | null;
   newFarmer: NewFarmerDraft | null;
   visitKind: VisitKind;
@@ -96,7 +99,7 @@ type VisitFormState = {
   submissionLocalSyncId: string | null;
   visitedAt: string | null;
   draftUpdatedAt: string | null;
-  setStep: (step: 1 | 2 | 3 | 4) => void;
+  setStep: (step: VisitStep) => void;
   setFarmer: (farmer: Farmer | null) => void;
   setNewFarmer: (patch: Partial<NewFarmerDraft>) => void;
   clearNewFarmer: () => void;
@@ -109,6 +112,11 @@ type VisitFormState = {
   syncProblemCategoryFromMasters: (categories: ProblemCategory[]) => void;
   selectManualOther: () => void;
   clearProblemSelection: () => void;
+  clearProblemsInCategories: (categories: string[]) => void;
+  noPestIssue: boolean;
+  noDiseaseIssue: boolean;
+  setNoPestIssue: (value: boolean) => void;
+  setNoDiseaseIssue: (value: boolean) => void;
   clearProblemsRemovedNotice: () => void;
   /** Drop selected problems that are not in the selected crop's allowed problem list. */
   restrictProblemsToCrop: (allowedProblemIds: Iterable<string | number>) => void;
@@ -164,6 +172,8 @@ const initialStep2 = {
   severity: "medium" as VisitSeverity,
   pestIssue: false,
   diseaseIssue: false,
+  noPestIssue: false,
+  noDiseaseIssue: false,
   followUpRequired: false,
   followUpDate: null as string | null,
   observation: "",
@@ -376,6 +386,30 @@ export const useVisitFormStore = create<VisitFormState>()(
       diseaseIssue: false,
       needsProblemReview: false
     }),
+  clearProblemsInCategories: (categories) =>
+    set((state) => {
+      if (!categories.length) return {};
+      const selectedProblems = (state.selectedProblems ?? []).filter(
+        (item) =>
+          !categories.some(
+            (code) =>
+              categoryCodesAreEquivalent(item.category, code) ||
+              categoryCodesAreEquivalent(item.category_code, code)
+          )
+      );
+      if (selectedProblems.length === (state.selectedProblems ?? []).length) return {};
+      const primary = primaryProblem(selectedProblems);
+      return {
+        selectedProblems,
+        selectedProblem: primary,
+        problemMasterId: primary ? String(primary.id) : state.problemMasterId,
+        pendingProblemMasterId: primary ? String(primary.id) : state.pendingProblemMasterId,
+        ...flagsFromProblems(selectedProblems)
+      };
+    }),
+  setNoPestIssue: (noPestIssue) => set({ noPestIssue, draftUpdatedAt: new Date().toISOString() }),
+  setNoDiseaseIssue: (noDiseaseIssue) =>
+    set({ noDiseaseIssue, draftUpdatedAt: new Date().toISOString() }),
   clearProblemsRemovedNotice: () => set({ problemsRemovedNotice: "" }),
   restrictProblemsToCrop: (allowedProblemIds) => {
     const state = get();
@@ -549,6 +583,17 @@ export const useVisitFormStore = create<VisitFormState>()(
     }),
     {
       name: VISIT_DRAFT_KEY,
+      version: 1,
+      migrate: (persisted, version) => {
+        const state = persisted as Record<string, unknown>;
+        if (version < 1) {
+          // Legacy 4-step numbering → six-step flow: 3 (Evidence) → 5, 4 (Review) → 6.
+          const step = Number(state?.step);
+          if (step === 3) state.step = 5;
+          else if (step === 4) state.step = 6;
+        }
+        return state;
+      },
       storage: createJSONStorage(() => userScopedDraftStorage),
       skipHydration: true,
       partialize: (state) => ({
@@ -571,6 +616,8 @@ export const useVisitFormStore = create<VisitFormState>()(
         severity: state.severity,
         pestIssue: state.pestIssue,
         diseaseIssue: state.diseaseIssue,
+        noPestIssue: state.noPestIssue,
+        noDiseaseIssue: state.noDiseaseIssue,
         followUpRequired: state.followUpRequired,
         followUpDate: state.followUpDate,
         observation: state.observation,

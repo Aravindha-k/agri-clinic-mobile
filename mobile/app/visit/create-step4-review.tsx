@@ -297,14 +297,16 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
   }
 
   const gpsReady = gpsUi === "ready" && visitGpsIsUsable(gpsCoords);
-  const submitDisabled = submitting || isVisitSubmitInFlight() || gpsUi === "capturing" || !gpsReady;
+  const noProblemSelected = problemEntries.length === 0;
+  const submitDisabled =
+    submitting || isVisitSubmitInFlight() || gpsUi === "capturing" || !gpsReady || noProblemSelected;
 
   return (
     <View style={styles.screen}>
-      <VisitFlowHeader title={t("visitFlow.reviewAndSubmit")} subtitle={t("visitFlow.step4of4")} onBack={onBack} />
+      <VisitFlowHeader title={t("visitFlow.reviewAndSubmit")} subtitle={t("visitFlow.step6of6")} onBack={onBack} />
 
       <View style={styles.stepWrap}>
-        <StepIndicator step={4} allComplete />
+        <StepIndicator step={6} allComplete />
       </View>
 
       <ScrollView
@@ -355,6 +357,9 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
           <View style={styles.chipRow}>
             {cropName ? <StatusChip label={cropName} variant="gray" /> : null}
           </View>
+          {noProblemSelected ? (
+            <Text style={styles.inlineError}>{t("visitFlow.errSelectProblem")}</Text>
+          ) : null}
           {problemEntries.map((entry, index) => (
             <View key={`${index}-${entry.primary}`}>
               <Text style={styles.problemLine}>{entry.primary}</Text>
@@ -581,6 +586,11 @@ const styles = StyleSheet.create({
   reviewMeta: {
     color: Colors.text3,
     fontSize: FontSize.sm
+  },
+  inlineError: {
+    color: Colors.redText,
+    fontSize: FontSize.sm,
+    marginTop: Spacing.sm
   },
   linkNotice: {
     marginTop: Spacing.sm,

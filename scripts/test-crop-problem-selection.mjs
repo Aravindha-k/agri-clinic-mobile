@@ -27,6 +27,7 @@ const {
 } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
 
 const step2 = read("mobile/app/visit/create-step2.tsx");
+const problemScreen = read("mobile/app/visit/create-step-problem.tsx");
 const optionsApi = read("mobile/lib/visitFormOptionsApi.ts");
 const store = read("mobile/store/visitFormStore.ts");
 const cropCard = read("mobile/components/visit/step2/CropSelectionCard.tsx");
@@ -103,11 +104,11 @@ test("Step 2 never offers cross-crop catalog problems", () => {
 });
 
 test("Step 2 handles load failures with retry and blocks unverified selections", () => {
-  assert.match(step2, /\.catch\(\(\) => \{[\s\S]*setCropItemsStatus\("error"\)/);
+  assert.match(problemScreen, /\.catch\(\(\) => \{[\s\S]*setItemsStatus\("error"\)/);
   assert.match(step2, /latestCropId\.current !== requested/);
-  assert.match(step2, /if \(selectedCount > 0\) return problemsVerified;/);
-  assert.match(step2, /problemsLoadFailed/);
-  assert.match(step2, /retryProblems/);
+  assert.match(problemScreen, /problemsVerified &&/);
+  assert.match(problemScreen, /problemsLoadFailed/);
+  assert.match(problemScreen, /setItemsReload\(\(n\) => n \+ 1\)/);
   assert.match(cropCard, /cropsLoadFailed/);
   assert.match(cropCard, /onRetryCrops/);
   assert.match(cropCard, /minHeight: 44/);

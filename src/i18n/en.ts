@@ -522,6 +522,8 @@ export const en = {
     pendingSync: "Pending sync",
     couldNotStart: "Could not start workday",
     couldNotEnd: "Could not end workday",
+    startWorkdayAgain: "Start workday again",
+    completedShiftHint: "Your completed shift stays on record. You can start a new shift today.",
     locationSignalTitle: "Location signal",
     syncIssueTitle: "Sync issue",
     locationTimeout: "We could not get your location. Move to an open area and try again.",

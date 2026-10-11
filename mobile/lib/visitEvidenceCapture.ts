@@ -1,6 +1,6 @@
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
-import { Alert } from "react-native";
+import { alertMediaPermissionDenied } from "../../src/utils/mediaPermissionAlert";
 import { captureVisitGps } from "./visit/visitGpsCapture";
 import { readGalleryExifLocation } from "../../src/utils/galleryPhotoExif";
 import { reverseGeocodeAddress } from "../../src/utils/reverseGeocode";
@@ -114,7 +114,11 @@ export async function prepareCameraEvidence(options: {
 }): Promise<PreparedEvidencePhoto | null> {
   const perm = await ImagePicker.requestCameraPermissionsAsync();
   if (!perm.granted) {
-    Alert.alert("Camera permission", "Allow camera access to attach visit photos.");
+    alertMediaPermissionDenied({
+      title: "Camera permission",
+      message: "Allow camera access to attach visit photos.",
+      canAskAgain: perm.canAskAgain
+    });
     return null;
   }
   const picked = await ImagePicker.launchCameraAsync({
@@ -161,7 +165,11 @@ export async function prepareGalleryEvidence(options: {
 }): Promise<PreparedEvidencePhoto[]> {
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!perm.granted && perm.accessPrivileges !== "limited") {
-    Alert.alert("Gallery permission", "Allow photo library access to attach visit photos.");
+    alertMediaPermissionDenied({
+      title: "Gallery permission",
+      message: "Allow photo library access to attach visit photos.",
+      canAskAgain: perm.canAskAgain
+    });
     return [];
   }
   const limit = Math.max(1, options.remaining);

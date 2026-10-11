@@ -31,7 +31,7 @@ export default function VisitFlowShell() {
   const route = useRoute<any>();
   const { villages: territoryVillages } = useTerritory();
   const { busy: workdayBusy } = useTracking();
-  const { currentDuty, startDuty } = useDuty();
+  const { currentDuty, startDuty, bootstrapError: dutyStartError } = useDuty();
   const workdaySheetRef = useRef<WorkdayRequiredSheetRef>(null);
   const dutyGateShown = useRef(false);
   const step = useVisitFormStore((s) => s.step);
@@ -218,6 +218,7 @@ export default function VisitFlowShell() {
       <WorkdayRequiredSheet
         ref={workdaySheetRef}
         busy={workdayBusy}
+        error={dutyStartError}
         onStart={async () => {
           try {
             const started = await startDuty();

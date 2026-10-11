@@ -1,6 +1,6 @@
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
-import { Alert } from "react-native";
+import { alertMediaPermissionDenied } from "../../src/utils/mediaPermissionAlert";
 
 export type VisitPhotoAsset = {
   id: string;
@@ -37,7 +37,11 @@ export async function compressVisitPhoto(uri: string): Promise<VisitPhotoAsset> 
 export async function pickVisitPhotoFromGallery(): Promise<VisitPhotoAsset | null> {
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!perm.granted) {
-    Alert.alert("Gallery permission", "Allow photo library access to attach visit photos.");
+    alertMediaPermissionDenied({
+      title: "Gallery permission",
+      message: "Allow photo library access to attach visit photos.",
+      canAskAgain: perm.canAskAgain
+    });
     return null;
   }
   const result = await ImagePicker.launchImageLibraryAsync({
@@ -52,7 +56,11 @@ export async function pickVisitPhotoFromGallery(): Promise<VisitPhotoAsset | nul
 export async function pickVisitPhotoFromCamera(): Promise<VisitPhotoAsset | null> {
   const perm = await ImagePicker.requestCameraPermissionsAsync();
   if (!perm.granted) {
-    Alert.alert("Camera permission", "Allow camera access to attach visit photos.");
+    alertMediaPermissionDenied({
+      title: "Camera permission",
+      message: "Allow camera access to attach visit photos.",
+      canAskAgain: perm.canAskAgain
+    });
     return null;
   }
   const result = await ImagePicker.launchCameraAsync({

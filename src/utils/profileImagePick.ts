@@ -1,5 +1,6 @@
 import * as ImagePicker from "expo-image-picker";
 import { Alert } from "react-native";
+import { alertMediaPermissionDenied } from "./mediaPermissionAlert";
 import { friendlyPickerCancel } from "./visitAttachmentFiles";
 import { prepareProfileImageForUpload } from "./profileImageFiles";
 
@@ -19,7 +20,11 @@ export async function pickProfileImage(source: "camera" | "library"): Promise<Pi
   if (source === "camera") {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert("Camera permission", "Allow camera access to take a profile photo.");
+      alertMediaPermissionDenied({
+        title: "Camera permission",
+        message: "Allow camera access to take a profile photo.",
+        canAskAgain: perm.canAskAgain
+      });
       return null;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -34,7 +39,11 @@ export async function pickProfileImage(source: "camera" | "library"): Promise<Pi
 
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!perm.granted) {
-    Alert.alert("Gallery permission", "Allow photo library access to choose a profile photo.");
+    alertMediaPermissionDenied({
+      title: "Gallery permission",
+      message: "Allow photo library access to choose a profile photo.",
+      canAskAgain: perm.canAskAgain
+    });
     return null;
   }
   const result = await ImagePicker.launchImageLibraryAsync({

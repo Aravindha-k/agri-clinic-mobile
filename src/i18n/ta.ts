@@ -527,6 +527,8 @@ export const ta: TranslationTree = {
     pendingSync: "நிலுவை ஒத்திசைவு",
     couldNotStart: "பணி நாள் தொடங்க முடியவில்லை",
     couldNotEnd: "பணி நாள் முடிக்க முடியவில்லை",
+    startWorkdayAgain: "மீண்டும் பணி நாள் தொடங்கு",
+    completedShiftHint: "முடிந்த பணி பதிவில் உள்ளது. இன்று புதிய பணியைத் தொடங்கலாம்.",
     locationSignalTitle: "இருப்பிட சிக்னல்",
     syncIssueTitle: "ஒத்திசைவு சிக்கல்",
     locationTimeout: "இருப்பிடம் கிடைக்கவில்லை. திறந்த இடத்திற்குச் சென்று மீண்டும் முயற்சிக்கவும்.",

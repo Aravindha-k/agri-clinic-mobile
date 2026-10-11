@@ -199,6 +199,30 @@ export function ProblemStepScreen({ kind, onBack, onContinue }: Props) {
     setTimeout(() => otherSectionRef.current?.focusInput(), 250);
   }
 
+  function SectionHeader({
+    icon,
+    label,
+    count
+  }: {
+    icon: keyof typeof Ionicons.glyphMap;
+    label: string;
+    count?: number;
+  }) {
+    return (
+      <View style={styles.sectionHeader}>
+        <View style={styles.sectionIconWrap}>
+          <Ionicons name={icon} size={15} color={Colors.brand700} />
+        </View>
+        <Text style={styles.sectionLabel}>{label}</Text>
+        {count ? (
+          <View style={styles.countPill}>
+            <Text style={styles.countPillText}>{t("visitFlow.selectedCount", { count })}</Text>
+          </View>
+        ) : null}
+      </View>
+    );
+  }
+
   function renderList(items: ProblemItem[]) {
     const selectedIds = new Set((selectedProblems ?? []).map((row) => row.id));
     return items.map((item) => (
@@ -264,7 +288,7 @@ export function ProblemStepScreen({ kind, onBack, onContinue }: Props) {
         )}
         {kind === "disease" ? (
           <>
-            <Text style={styles.groupLabel}>{t("visitFlow.nutrientOtherGroup")}</Text>
+            <SectionHeader icon="nutrition-outline" label={t("visitFlow.nutrientOtherGroup")} />
             {nutrientItems.length > 0 ? (
               <View style={styles.list}>{renderList(nutrientItems)}</View>
             ) : null}
@@ -311,33 +335,39 @@ export function ProblemStepScreen({ kind, onBack, onContinue }: Props) {
         <FadeInSection replayKey={replayKey} delay={entranceStagger(1)} variant="card">
           <Pressable
             onPress={handleToggleNoIssue}
-            style={[styles.noIssueRow, noIssue && styles.noIssueRowActive]}
+            style={({ pressed }) => [
+              styles.noIssueRow,
+              noIssue && styles.noIssueRowActive,
+              pressed && styles.cardPressed
+            ]}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: noIssue }}
             accessibilityLabel={t(
               kind === "pest" ? "visitFlow.noPestIssue" : "visitFlow.noDiseaseIssue"
             )}
           >
+            <View style={styles.noIssueIconWrap}>
+              <Ionicons
+                name={kind === "pest" ? "bug-outline" : "leaf-outline"}
+                size={18}
+                color={noIssue ? Colors.brand700 : Colors.text3}
+              />
+            </View>
+            <Text style={[styles.noIssueText, noIssue && styles.noIssueTextActive]}>
+              {t(kind === "pest" ? "visitFlow.noPestIssue" : "visitFlow.noDiseaseIssue")}
+            </Text>
             <Ionicons
               name={noIssue ? "checkmark-circle" : "ellipse-outline"}
               size={22}
               color={noIssue ? Colors.brand700 : Colors.text4}
             />
-            <Text style={[styles.noIssueText, noIssue && styles.noIssueTextActive]}>
-              {t(kind === "pest" ? "visitFlow.noPestIssue" : "visitFlow.noDiseaseIssue")}
-            </Text>
           </Pressable>
 
-          <View style={styles.countRow}>
-            <Text style={styles.sectionLabel}>
-              {t(kind === "pest" ? "visitFlow.pestSection" : "visitFlow.diseaseSection")}
-            </Text>
-            {screenSelectedCount > 0 ? (
-              <Text style={styles.countText}>
-                {t("visitFlow.selectedCount", { count: screenSelectedCount })}
-              </Text>
-            ) : null}
-          </View>
+          <SectionHeader
+            icon={kind === "pest" ? "bug-outline" : "medkit-outline"}
+            label={t(kind === "pest" ? "visitFlow.pestSection" : "visitFlow.diseaseSection")}
+            count={screenSelectedCount}
+          />
 
           {needsProblemReview || prefillWarning ? (
             <View style={styles.warningBanner}>
@@ -407,35 +437,60 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: Spacing.sm,
     marginBottom: Spacing.md,
-    minHeight: 52,
+    minHeight: 56,
     paddingHorizontal: Spacing.md
   },
-  noIssueRowActive: { backgroundColor: Colors.greenBg, borderColor: Colors.brand700 },
-  noIssueText: { color: Colors.text2, fontSize: FontSize.md, fontWeight: FontWeight.medium },
-  noIssueTextActive: { color: Colors.brand700 },
-  countRow: {
+  noIssueRowActive: {
+    backgroundColor: Colors.greenBg,
+    borderColor: Colors.brand700,
+    borderWidth: 1.5
+  },
+  cardPressed: { opacity: 0.92 },
+  noIssueIconWrap: {
+    alignItems: "center",
+    backgroundColor: Colors.surfaceMuted,
+    borderRadius: Radius.pill,
+    height: 34,
+    justifyContent: "center",
+    width: 34
+  },
+  noIssueText: {
+    color: Colors.text2,
+    flex: 1,
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.medium
+  },
+  noIssueTextActive: { color: Colors.brand700, fontWeight: FontWeight.semibold },
+  sectionHeader: {
     alignItems: "center",
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: Spacing.xs
+    gap: Spacing.sm,
+    marginBottom: Spacing.xs,
+    marginTop: Spacing.sm
+  },
+  sectionIconWrap: {
+    alignItems: "center",
+    backgroundColor: Colors.brand50,
+    borderRadius: Radius.pill,
+    height: 26,
+    justifyContent: "center",
+    width: 26
   },
   sectionLabel: {
     color: Colors.text3,
+    flex: 1,
     fontSize: FontSize.xs,
     fontWeight: FontWeight.bold,
     letterSpacing: 0.6,
     textTransform: "uppercase"
   },
-  countText: { color: Colors.brand700, fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
-  groupLabel: {
-    color: Colors.text3,
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.bold,
-    letterSpacing: 0.6,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.xs,
-    textTransform: "uppercase"
+  countPill: {
+    backgroundColor: Colors.greenBg,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2
   },
+  countPillText: { color: Colors.brand700, fontSize: FontSize.xs, fontWeight: FontWeight.bold },
   list: { gap: Spacing.xs, marginTop: Spacing.xs },
   hint: { color: Colors.text3, fontSize: FontSize.sm, marginTop: Spacing.sm },
   stateCard: {

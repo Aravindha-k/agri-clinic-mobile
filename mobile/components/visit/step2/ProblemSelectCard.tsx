@@ -56,9 +56,9 @@ export function ProblemSelectCard({ item, selected, onPress, showCategory = fals
         ) : null}
       </View>
       <Ionicons
-        name={selected ? "checkbox" : "square-outline"}
+        name={selected ? "checkmark-circle" : "ellipse-outline"}
         size={24}
-        color={selected ? Colors.green : Colors.text4}
+        color={selected ? Colors.brand700 : Colors.text4}
       />
     </Pressable>
   );
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
   },
   cardSelected: {
     backgroundColor: Colors.greenBg,
-    borderColor: Colors.green,
+    borderColor: Colors.brand700,
     borderWidth: 1.5
   },
   cardPressed: {
@@ -93,7 +93,8 @@ const styles = StyleSheet.create({
   primary: {
     color: Colors.text1,
     fontSize: FontSize.md,
-    fontWeight: FontWeight.semibold
+    fontWeight: FontWeight.semibold,
+    letterSpacing: 0.1
   },
   secondary: {
     color: Colors.text3,

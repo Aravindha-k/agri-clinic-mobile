@@ -91,20 +91,21 @@ function StepSegment({
 const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
-    gap: Spacing.sm
+    gap: 4
   },
   segment: {
     alignItems: "center",
     flex: 1,
-    gap: 4
+    gap: 3,
+    minWidth: 0
   },
   dot: {
     alignItems: "center",
     backgroundColor: Colors.border2,
-    borderRadius: 10,
-    height: 20,
+    borderRadius: 9,
+    height: 18,
     justifyContent: "center",
-    width: 20
+    width: 18
   },
   dotActive: {
     backgroundColor: Colors.brand700
@@ -122,7 +123,7 @@ const styles = StyleSheet.create({
   },
   label: {
     color: Colors.text4,
-    fontSize: FontSize.xs,
+    fontSize: 9.5,
     fontWeight: FontWeight.semibold
   },
   labelActive: {

@@ -102,6 +102,18 @@ test("new screens are exported through create.tsx", () => {
   assert.ok(createBarrel.includes("VisitCreateStep4Disease"));
 });
 
+test("Batch B styling: section headers, icon toggles, compact indicator", () => {
+  assert.ok(problem.includes("function SectionHeader"), "section headers with icons");
+  assert.ok(problem.includes("sectionIconWrap"));
+  assert.ok(problem.includes("countPill"), "selected-count pill");
+  assert.ok(problem.includes('icon="nutrition-outline"'), "nutrient section icon");
+  assert.ok(problem.includes("noIssueIconWrap"), "no-issue toggle card icon");
+  const card = readFileSync("mobile/components/visit/step2/ProblemSelectCard.tsx", "utf8");
+  assert.ok(card.includes('"checkmark-circle"'), "selected card check state");
+  assert.ok(card.includes("Colors.brand700"), "selected card brand border");
+  assert.ok(indicator.includes("fontSize: 9.5"), "compact step labels for small screens");
+});
+
 test("bilingual i18n keys for six-step flow", () => {
   for (const key of [
     "stepLabelCrop", "stepLabelPest", "stepLabelDisease",

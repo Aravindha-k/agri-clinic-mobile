@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,7 +10,7 @@ import {
   TextInput,
   View
 } from "react-native";
-import type { Farmer } from "../../../src/api/farmers";
+import { findFarmerByPhoneOrName, type Farmer } from "../../../src/api/farmers";
 import { useConnectivityOnline } from "../../../src/hooks/useConnectivityOnline";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useTerritory } from "../../../src/storage/TerritoryContext";
@@ -90,6 +91,7 @@ export default function VisitCreateStep1({ onClose }: Props) {
   const [searching, setSearching] = useState(false);
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(gpsCoords?.accuracy ?? null);
   const [selectingFarmer, setSelectingFarmer] = useState(false);
+  const [checkingPhone, setCheckingPhone] = useState(false);
   const [newFarmerErrors, setNewFarmerErrors] = useState<Record<string, string>>({});
 
   const villageSheetRef = useRef<MasterSelectSheetRef>(null);
@@ -299,6 +301,41 @@ export default function VisitCreateStep1({ onClose }: Props) {
 
     if (Object.keys(errors).length > 0) {
       setNewFarmerErrors(errors);
+      return;
+    }
+
+    // Never silently link a visit to an existing farmer on a phone match — ask first.
+    setCheckingPhone(true);
+    let existing: Farmer | null = null;
+    if (online) {
+      try {
+        existing = await findFarmerByPhoneOrName(phone);
+      } catch {
+        existing = null;
+      }
+    }
+    if (existing?.id == null) {
+      existing =
+        (getCachedFarmers() as MobileFarmer[]).find((farmer) => (farmer.phone || "").trim() === phone) ??
+        null;
+    }
+    setCheckingPhone(false);
+    if (existing?.id != null) {
+      Alert.alert(
+        t("visitFlow.phoneMatchTitle"),
+        t("visitFlow.phoneMatchBody", {
+          phone,
+          name: existing.name?.trim() || phone,
+          village: existing.village_name?.trim() || ""
+        }),
+        [
+          { text: t("visitFlow.changeMobileNumber"), style: "cancel" },
+          {
+            text: t("visitFlow.useThisFarmer"),
+            onPress: () => void selectFarmer(existing as MobileFarmer)
+          }
+        ]
+      );
       return;
     }
 
@@ -521,7 +558,8 @@ export default function VisitCreateStep1({ onClose }: Props) {
               label={t("visitFlow.continueNewFarmer")}
               onPress={continueNewFarmer}
               style={styles.continueBtn}
-              disabled={territoryEmpty || territoryUnavailable}
+              loading={checkingPhone}
+              disabled={checkingPhone || territoryEmpty || territoryUnavailable}
             />
           </FlatCard>
         )}

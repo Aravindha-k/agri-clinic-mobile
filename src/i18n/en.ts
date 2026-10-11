@@ -708,6 +708,13 @@ export const en = {
     errName: "Please enter the farmer's name.",
     errPhone: "Enter a valid 10-digit mobile number.",
     errVillage: "Please select a village.",
+    phoneMatchTitle: "Mobile number already registered",
+    phoneMatchBody:
+      "{{phone}} is already registered to {{name}} ({{village}}). To link this visit to {{name}}, confirm below.",
+    useThisFarmer: "Use this farmer",
+    changeMobileNumber: "Change mobile number",
+    newFarmerLinkNotice:
+      "If this mobile number is already registered to another farmer, the visit will be linked to that farmer.",
     gpsLoading: "Acquiring…",
     cropAndProblem: "Crop & problem",
     selectCrop: "Select crop",

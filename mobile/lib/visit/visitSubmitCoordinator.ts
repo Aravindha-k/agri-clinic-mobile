@@ -262,7 +262,7 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
         const summary = buildSubmittedVisitSummary({
           visitId: visit.id,
           queued: false,
-          farmerName: values.farmer_name,
+          farmerName: visit.farmer_name?.trim() || values.farmer_name,
           cropName: snapshot.cropName,
           problemText: values.problem_seen,
           fieldNotesText: values.observation || values.field_notes,

@@ -323,6 +323,9 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
             {farmerPhone} · {farmerVillage}
           </Text>
           <StatusChip label={visitTypeLabel} variant={visitKind === "revisit" ? "blue" : "gray"} />
+          {newFarmer ? (
+            <Text style={styles.linkNotice}>{t("visitFlow.newFarmerLinkNotice")}</Text>
+          ) : null}
         </FlatCard>
 
         <FlatCard style={styles.reviewCard}>
@@ -563,6 +566,12 @@ const styles = StyleSheet.create({
   reviewMeta: {
     color: Colors.text3,
     fontSize: FontSize.sm
+  },
+  linkNotice: {
+    marginTop: Spacing.sm,
+    color: Colors.text3,
+    fontSize: FontSize.xs,
+    fontStyle: "italic"
   },
   chipRow: {
     flexDirection: "row",

@@ -101,15 +101,24 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
   const captureInFlight = useRef(false);
 
   const isOtherProblem = problemCategoryCode === "other";
-  const problemNames = [
+  const problemItems: { tamil_name?: string | null; name?: string | null }[] = [
     ...(selectedProblems?.length
       ? selectedProblems
       : selectedProblem
         ? [selectedProblem]
-        : []
-    ).map((item) => item.tamil_name || item.name || ""),
-    ...(isOtherProblem && otherProblemDescription.trim() ? [otherProblemDescription.trim()] : [])
-  ].filter(Boolean);
+        : []),
+    ...(isOtherProblem && otherProblemDescription.trim()
+      ? [{ name: otherProblemDescription.trim() }]
+      : [])
+  ];
+  const problemEntries = problemItems
+    .map((item) => {
+      const primary = item.tamil_name || item.name || "";
+      const secondary =
+        item.tamil_name && item.name && item.tamil_name !== item.name ? item.name : "";
+      return { primary, secondary };
+    })
+    .filter((entry) => entry.primary);
 
   const farmerName = farmerDisplayName(farmer, newFarmer);
   const reviewFarmer = resolveVisitReviewFarmer(
@@ -331,7 +340,7 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
         <FlatCard style={styles.reviewCard}>
           <View style={styles.reviewHead}>
             <Text style={styles.reviewLabel}>
-              {t("visitFlow.problemsObservedCount", { count: problemNames.length })}
+              {t("visitFlow.problemsObservedCount", { count: problemEntries.length })}
             </Text>
             <Pressable
               onPress={onEditStep2}
@@ -346,10 +355,11 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
           <View style={styles.chipRow}>
             {cropName ? <StatusChip label={cropName} variant="gray" /> : null}
           </View>
-          {problemNames.map((name, index) => (
-            <Text key={`${index}-${name}`} style={styles.problemLine}>
-              {name}
-            </Text>
+          {problemEntries.map((entry, index) => (
+            <View key={`${index}-${entry.primary}`}>
+              <Text style={styles.problemLine}>{entry.primary}</Text>
+              {entry.secondary ? <Text style={styles.problemLineAlt}>{entry.secondary}</Text> : null}
+            </View>
           ))}
         </FlatCard>
 
@@ -540,6 +550,11 @@ const styles = StyleSheet.create({
     fontWeight: FontWeight.semibold,
     marginTop: 6
   },
+  problemLineAlt: {
+    color: Colors.text3,
+    fontSize: FontSize.sm,
+    marginTop: 1
+  },
   editChip: {
     ...minTouchStyle,
     alignItems: "center",
@@ -591,22 +606,22 @@ const styles = StyleSheet.create({
     lineHeight: 20
   },
   gpsRow: {
-    alignItems: "center",
+    alignItems: "flex-start",
     flexDirection: "row",
     justifyContent: "space-between",
     paddingVertical: 4
   },
   gpsStatus: {
-    alignItems: "center",
+    alignItems: "flex-start",
     flexDirection: "row",
     flexShrink: 1,
     gap: 6,
-    justifyContent: "flex-end",
-    maxWidth: "70%"
+    maxWidth: "75%"
   },
   gpsDot: {
     borderRadius: 4,
     height: 8,
+    marginTop: 5,
     width: 8
   },
   gpsText: {

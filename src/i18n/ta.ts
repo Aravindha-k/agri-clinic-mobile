@@ -611,7 +611,7 @@ export const ta: TranslationTree = {
     reminderSounds: "நினைவூட்டல் ஒலி",
     reminderSoundsHint: "மணிக்கு ஒருமுறை தண்ணீர் நினைவூட்டல் ஒலி (அணைத்தாலும் அறிவிப்புகள் வரும்)",
     reminderTestHint:
-      "தண்ணீர் நினைவூட்டல் ஒலியை சோதிக்கவும். Expo Go-ல் ஆப்பிலிருந்து; native build-ல் notification channel.",
+      "மணி நேர தண்ணீர் நினைவூட்டல் ஒலியை ஒருமுறை இயக்கி அமைதியாக கேட்கவும்.",
     reminderTestTitle: "ஒலி சோதனை",
     reminderTestScheduled: "தண்ணீர் நினைவூட்டல் ஒலி இயக்கப்பட்டது.",
     reminderTestDenied: "அமைப்புகளில் அறிவிப்பு அனுமதி கொடுத்து மீண்டும் முயற்சிக்கவும்.",
@@ -782,7 +782,7 @@ export const ta: TranslationTree = {
     observationsEvidence: "கண்காணிப்பு & சான்று",
     optionalObservationHint: "கண்காணிப்பும் சான்றும் விருப்பமானவை. தேவையெனில் சேர்க்கவும் அல்லது மதிப்பாய்வுக்கு தொடரவும்.",
     reviewAndSubmit: "மதிப்பாய்வு & சமர்ப்பு",
-    continueToReview: "மதிப்பாய்வுக்கு தொடர →",
+    continueToReview: "மதிப்பாய்வுக்கு தொடர",
     evidenceCount: "{{count}} கோப்பு(கள்) இணைக்கப்பட்டது",
     photoLimitReached: "புகைப்பட வரம்பு எட்டப்பட்டது ({{count}}).",
     noEvidence: "புகைப்படம் அல்லது கோப்பு இல்லை",

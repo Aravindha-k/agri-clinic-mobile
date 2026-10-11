@@ -465,6 +465,10 @@ export function VisitCreateStep2({ onBack }: Props) {
         onBack={onBack}
       />
 
+      <View style={styles.stepWrap}>
+        <StepIndicator step={2} />
+      </View>
+
       <FadeInSection replayKey={replayKey} delay={entranceStagger(0)} variant="card">
       <VisitFarmerSummaryCard farmer={farmer} newFarmer={newFarmer} />
       {revisitContext ? (
@@ -473,10 +477,6 @@ export function VisitCreateStep2({ onBack }: Props) {
         </View>
       ) : null}
       </FadeInSection>
-
-      <View style={styles.stepWrap}>
-        <StepIndicator step={2} />
-      </View>
 
       <ScrollView
         ref={scrollRef}

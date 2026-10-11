@@ -447,11 +447,6 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
             <View style={styles.heroChip}>
               <Text style={styles.heroChipText}>{cropFromVisit(visit)}</Text>
             </View>
-            {visit.crop_name && visit.crop_name !== cropFromVisit(visit) ? (
-              <View style={styles.heroChip}>
-                <Text style={styles.heroChipText}>{visit.crop_name}</Text>
-              </View>
-            ) : null}
           </View>
         </View>
         </FadeInSection>
@@ -560,7 +555,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
                 </Pressable>
               );
             })}
-            {visitAllowsNotesUpdate(visit) ? (
+            {editMode && visitAllowsNotesUpdate(visit) ? (
               <View style={styles.detailMediaActions}>
                 <Pressable
                   onPress={() => void handleAddCameraPhoto()}
@@ -731,12 +726,18 @@ const styles = StyleSheet.create({
   editFooter: {
     alignItems: "center",
     backgroundColor: Colors.surface,
-    borderTopColor: Colors.border,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.xl,
+    elevation: 4,
     flexDirection: "row",
     gap: Spacing.sm,
-    paddingHorizontal: Spacing.screen,
-    paddingVertical: Spacing.md
+    marginBottom: Spacing.md,
+    marginHorizontal: Spacing.screen,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    shadowColor: Colors.text1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8
   },
   editFooterBtn: {
     flex: 1,

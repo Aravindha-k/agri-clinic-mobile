@@ -605,7 +605,7 @@ export const en = {
     reminderSounds: "Reminder sounds",
     reminderSoundsHint: "Play a soft chime for hourly hydration reminders (notifications still appear when off)",
     reminderTestHint:
-      "Test the hydration chime. In Expo Go it plays from the app; on a native Android build it uses the notification channel.",
+      "Play the hourly hydration chime once to check volume and notification delivery.",
     reminderTestTitle: "Sound test",
     reminderTestScheduled: "Hydration chime played.",
     reminderTestDenied: "Allow notifications for this app in system Settings, then try again.",
@@ -776,7 +776,7 @@ export const en = {
     observationsEvidence: "Observations & evidence",
     optionalObservationHint: "Observations and evidence are optional. Add them when useful, or continue to review.",
     reviewAndSubmit: "Review & submit",
-    continueToReview: "Continue to review →",
+    continueToReview: "Continue to review",
     evidenceCount: "{{count}} file(s) attached",
     photoLimitReached: "Photo limit reached ({{count}}).",
     noEvidence: "No photos or files attached",

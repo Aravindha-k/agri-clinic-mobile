@@ -144,3 +144,19 @@ test("bilingual i18n keys for six-step flow", () => {
   }
   assert.ok(!ta.includes("�"), "corrupted character in ta.ts");
 });
+
+test("forward continue chain advances every step (never returns to step 4)", () => {
+  // Step 5 Continue-to-review must target step 6 — the old four-step
+  // constant setStep(4) sent the user back to Disease & Other Issues.
+  assert.match(evidence, /function continueToReview\(\)[\s\S]*?setStep\(6\)/);
+  assert.doesNotMatch(evidence, /continueToReview[\s\S]*?setStep\(4\)/, "stale four-step constant");
+  // Full forward chain: 1→2, 2→3, pest 3→4, disease 4→5, evidence 5→6.
+  assert.match(cropScreen, /setStep\(3\)/);
+  assert.match(problem, /onContinue=\{\(\) => setStep\(4\)\}/, "pest continues to disease");
+  assert.match(problem, /onContinue=\{\(\) => setStep\(5\)\}/, "disease continues to evidence");
+});
+
+test("index maps step 6 to the review pane and step 4 to disease", () => {
+  assert.match(index, /displayedStep === 4 \? \(\s*<VisitCreateStep4Disease/);
+  assert.match(index, /displayedStep === 6 \? \(\s*<VisitCreateStep4/);
+});

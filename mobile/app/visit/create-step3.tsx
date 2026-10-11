@@ -116,7 +116,8 @@ export function VisitCreateStep3({ onBack }: Props) {
 
   function continueToReview() {
     setHint("");
-    setStep(4);
+    // Six-step flow: Review is step 6 (step 4 is Disease & Other).
+    setStep(6);
   }
 
   async function handleAddCameraPhoto() {

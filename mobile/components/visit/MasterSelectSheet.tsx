@@ -15,12 +15,15 @@ import {
 import { useSafeAreaInsetsCompat } from "../../../src/hooks/useSafeAreaInsetsCompat";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { anyFieldStartsWithSearch } from "../../../src/utils/prefixSearch";
+import { bilingualLabel } from "../../../src/utils/bilingualName";
 import { Colors, FontSize, FontWeight, Layout, Radius, Spacing, minTouchStyle } from "../../lib/theme";
 
 export type MasterSelectItem = {
   id: string;
   title: string;
   subtitle?: string;
+  /** Render title+subtitle as one combined "Tamil / English" label line. */
+  bilingual?: boolean;
 };
 
 export type MasterSelectSheetRef = {
@@ -66,6 +69,10 @@ export const MasterSelectSheet = forwardRef<MasterSelectSheetRef, Props>(functio
   function handleClose() {
     setVisible(false);
     setQuery("");
+  }
+
+  function rowLabel(item: MasterSelectItem) {
+    return item.bilingual ? bilingualLabel(item.title, item.subtitle) : item.title;
   }
 
   function handleSelect(item: MasterSelectItem) {
@@ -157,11 +164,19 @@ export const MasterSelectSheet = forwardRef<MasterSelectSheetRef, Props>(functio
                   style={({ pressed }) => [styles.row, selected && styles.rowSelected, pressed && styles.rowPressed]}
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
-                  accessibilityLabel={selected ? `${item.title}. ${t("a11y.selected")}` : item.title}
+                  accessibilityLabel={selected ? `${rowLabel(item)}. ${t("a11y.selected")}` : rowLabel(item)}
                 >
                   <View style={styles.rowBody}>
-                    <Text style={[styles.rowTitle, selected && styles.rowTitleSelected]}>{item.title}</Text>
-                    {item.subtitle ? <Text style={styles.rowSub}>{item.subtitle}</Text> : null}
+                    {item.bilingual ? (
+                      <Text style={[styles.rowTitle, selected && styles.rowTitleSelected]}>
+                        {bilingualLabel(item.title, item.subtitle)}
+                      </Text>
+                    ) : (
+                      <>
+                        <Text style={[styles.rowTitle, selected && styles.rowTitleSelected]}>{item.title}</Text>
+                        {item.subtitle ? <Text style={styles.rowSub}>{item.subtitle}</Text> : null}
+                      </>
+                    )}
                   </View>
                   <Ionicons
                     name={selected ? "checkmark-circle" : "chevron-forward"}

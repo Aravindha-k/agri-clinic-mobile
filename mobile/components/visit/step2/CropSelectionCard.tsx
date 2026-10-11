@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useI18n } from "../../../../src/i18n/I18nContext";
 import type { FarmerCropChip } from "../../../../src/utils/cropSelection";
+import { bilingualLabel } from "../../../../src/utils/bilingualName";
 import { Colors, FontSize, FontWeight, Radius } from "../../../lib/theme";
 import { PrimaryButton } from "../../ui";
 
@@ -15,7 +16,7 @@ type Props = {
   cropsStatus: CropOptionsStatus;
   onRetryCrops: () => void;
   onChooseCrop: () => void;
-  onQuickCrop: (cropId: string, cropName: string) => void;
+  onQuickCrop: (cropId: string, cropName: string, cropTamilName?: string) => void;
 };
 
 export function CropSelectionCard({
@@ -75,14 +76,14 @@ export function CropSelectionCard({
               {fieldCrops.map((chip) => (
                 <Pressable
                   key={chip.crop_id}
-                  onPress={() => onQuickCrop(chip.crop_id, chip.crop_name)}
+                  onPress={() => onQuickCrop(chip.crop_id, chip.crop_name, chip.crop_name_ta)}
                   accessibilityRole="button"
-                  accessibilityLabel={[chip.crop_name, chip.crop_name_ta].filter(Boolean).join(", ")}
+                  accessibilityLabel={bilingualLabel(chip.crop_name, chip.crop_name_ta)}
                   style={({ pressed }) => [styles.quickChip, pressed && styles.pressed]}
                 >
                   <Ionicons name="leaf" size={14} color={Colors.brand700} />
-                  <Text style={styles.quickChipText} numberOfLines={1}>
-                    {chip.crop_name}
+                  <Text style={styles.quickChipText} numberOfLines={2}>
+                    {bilingualLabel(chip.crop_name, chip.crop_name_ta)}
                   </Text>
                 </Pressable>
               ))}
@@ -113,14 +114,9 @@ export function CropSelectionCard({
           <Ionicons name="leaf-outline" size={20} color={Colors.brand700} />
         </View>
         <View style={styles.selectedCopy}>
-          <Text style={styles.cropName} numberOfLines={2}>
-            {cropName}
+          <Text style={styles.cropName} numberOfLines={3}>
+            {bilingualLabel(cropName, cropTamilName)}
           </Text>
-          {cropTamilName && cropTamilName !== cropName ? (
-            <Text style={styles.cropTamil} numberOfLines={2}>
-              {cropTamilName}
-            </Text>
-          ) : null}
         </View>
         <Ionicons name="checkmark-circle" size={22} color={Colors.green} />
       </View>

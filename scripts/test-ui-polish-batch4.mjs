@@ -39,9 +39,9 @@ test("step indicator sits directly under the header on step 2", () => {
 });
 
 test("step4 review shows bilingual problem labels", () => {
-  assert.ok(step4.includes("item.tamil_name || item.name"));
-  assert.ok(step4.includes("entry.secondary"));
-  assert.ok(step4.includes("styles.problemLineAlt"), "english secondary line rendered");
+  assert.ok(step4.includes("bilingualLabel(item.name, item.tamil_name)"), "combined Tamil / English label");
+  assert.ok(step4.includes("styles.problemLine"), "single combined label line rendered");
+  assert.ok(!step4.includes("entry.secondary"), "no stacked secondary line");
 });
 
 test("step4 GPS status row is top-aligned with the label", () => {

@@ -891,7 +891,7 @@ export const en = {
     pendingStatus_failed: "Retry required",
     pendingStatus_quarantined: "Failed permanently",
     pendingStatus_media_pending: "Visit synced — media pending",
-    search: "Search…",
+    search: "Search / தேடுக…",
     loading: "Loading…",
     noMatches: "No matches found.",
     revisitGpsTitle: "Location required",

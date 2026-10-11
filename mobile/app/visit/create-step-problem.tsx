@@ -5,7 +5,6 @@ import type { ProblemItem } from "../../../src/api/problems";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { categoryCodesAreEquivalent } from "../../../src/utils/problemItemFilter";
 import { VisitFarmerSummaryCard } from "../../components/visit/VisitFarmerSummaryCard";
-import { VisitRevisitContextCard } from "../../components/visit/VisitRevisitContextCard";
 import {
   OtherProblemSection,
   type OtherProblemSectionRef
@@ -62,7 +61,6 @@ export function ProblemStepScreen({ kind, onBack, onContinue }: Props) {
   const replayKey = useVisitEntranceKey();
   const farmer = useVisitFormStore((s) => s.farmer);
   const newFarmer = useVisitFormStore((s) => s.newFarmer);
-  const revisitContext = useVisitFormStore((s) => s.revisitContext);
   const cropId = useVisitFormStore((s) => s.cropId);
   const cropName = useVisitFormStore((s) => s.cropName);  // used in load-state copy
   const selectedProblems = useVisitFormStore((s) => s.selectedProblems);
@@ -320,11 +318,6 @@ export function ProblemStepScreen({ kind, onBack, onContinue }: Props) {
 
       <FadeInSection replayKey={replayKey} delay={entranceStagger(0)} variant="card">
         <VisitFarmerSummaryCard farmer={farmer} newFarmer={newFarmer} />
-        {revisitContext ? (
-          <View style={styles.revisitContextWrap}>
-            <VisitRevisitContextCard context={revisitContext} />
-          </View>
-        ) : null}
       </FadeInSection>
 
       <ScrollView
@@ -426,7 +419,6 @@ export function VisitCreateStep4Disease({ onBack }: { onBack: () => void }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
   stepWrap: { paddingHorizontal: Spacing.screen, paddingBottom: Spacing.xs },
-  revisitContextWrap: { marginHorizontal: Spacing.screen, marginBottom: Spacing.sm },
   scrollView: { flex: 1 },
   scroll: { paddingHorizontal: Spacing.screen, paddingBottom: Spacing.xxl },
   noIssueRow: {

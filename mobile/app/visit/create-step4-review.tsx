@@ -3,6 +3,7 @@ import { StackActions, useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, AppState, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useConnectivityOnline } from "../../../src/hooks/useConnectivityOnline";
+import { bilingualLabel } from "../../../src/utils/bilingualName";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
 import { useTerritory } from "../../../src/storage/TerritoryContext";
@@ -79,6 +80,7 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
   const newFarmer = useVisitFormStore((s) => s.newFarmer);
   const visitKind = useVisitFormStore((s) => s.visitKind);
   const cropName = useVisitFormStore((s) => s.cropName);
+  const cropTamilName = useVisitFormStore((s) => s.cropTamilName);
   const problemCategoryCode = useVisitFormStore((s) => s.problemCategoryCode);
   const selectedProblem = useVisitFormStore((s) => s.selectedProblem);
   const selectedProblems = useVisitFormStore((s) => s.selectedProblems);
@@ -112,13 +114,8 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
       : [])
   ];
   const problemEntries = problemItems
-    .map((item) => {
-      const primary = item.tamil_name || item.name || "";
-      const secondary =
-        item.tamil_name && item.name && item.tamil_name !== item.name ? item.name : "";
-      return { primary, secondary };
-    })
-    .filter((entry) => entry.primary);
+    .map((item) => bilingualLabel(item.name, item.tamil_name))
+    .filter(Boolean);
 
   const farmerName = farmerDisplayName(farmer, newFarmer);
   const reviewFarmer = resolveVisitReviewFarmer(
@@ -357,15 +354,14 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
             </Pressable>
           </View>
           <View style={styles.chipRow}>
-            {cropName ? <StatusChip label={cropName} variant="gray" /> : null}
+            {cropName ? <StatusChip label={bilingualLabel(cropName, cropTamilName)} variant="gray" /> : null}
           </View>
           {noProblemSelected ? (
             <Text style={styles.inlineError}>{t("visitFlow.errSelectProblem")}</Text>
           ) : null}
           {problemEntries.map((entry, index) => (
-            <View key={`${index}-${entry.primary}`}>
-              <Text style={styles.problemLine}>{entry.primary}</Text>
-              {entry.secondary ? <Text style={styles.problemLineAlt}>{entry.secondary}</Text> : null}
+            <View key={`${index}-${entry}`}>
+              <Text style={styles.problemLine}>{entry}</Text>
             </View>
           ))}
         </FlatCard>
@@ -556,11 +552,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.md,
     fontWeight: FontWeight.semibold,
     marginTop: 6
-  },
-  problemLineAlt: {
-    color: Colors.text3,
-    fontSize: FontSize.sm,
-    marginTop: 1
   },
   editChip: {
     ...minTouchStyle,

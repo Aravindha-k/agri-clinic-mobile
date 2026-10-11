@@ -68,6 +68,7 @@ type VisitFormState = {
   gpsCoords: VisitGpsCoords | null;
   cropId: string;
   cropName: string;
+  cropTamilName: string;
   problemCategoryId: string;
   problemCategoryCode: string;
   problemMasterId: string;
@@ -104,7 +105,7 @@ type VisitFormState = {
   setNewFarmer: (patch: Partial<NewFarmerDraft>) => void;
   clearNewFarmer: () => void;
   setGpsCoords: (coords: VisitGpsCoords) => void;
-  setCrop: (cropId: string, cropName: string) => void;
+  setCrop: (cropId: string, cropName: string, cropTamilName?: string) => void;
   setProblemCategory: (id: string, code: string) => void;
   setProblemMaster: (item: ProblemItem | null) => void;
   selectProblemItem: (item: ProblemItem, categories: ProblemCategory[]) => void;
@@ -160,6 +161,7 @@ const emptyNewFarmer = (): NewFarmerDraft => ({
 const initialStep2 = {
   cropId: "",
   cropName: "",
+  cropTamilName: "",
   problemCategoryId: "",
   problemCategoryCode: "",
   problemMasterId: "",
@@ -248,16 +250,17 @@ export const useVisitFormStore = create<VisitFormState>()(
     })),
   clearNewFarmer: () => set({ newFarmer: null }),
   setGpsCoords: (coords) => set({ gpsCoords: coords }),
-  setCrop: (cropId, cropName) =>
+  setCrop: (cropId, cropName, cropTamilName) =>
     set((state) => {
       if (state.cropId === cropId) {
-        return { cropName };
+        return { cropName, cropTamilName: cropTamilName ?? state.cropTamilName };
       }
       const { kept, removed } = revalidateProblemSelection(state.selectedProblems, cropId);
       const primary = primaryProblem(kept);
       return {
         cropId,
         cropName,
+        cropTamilName: cropTamilName ?? "",
         selectedProblems: kept,
         selectedProblem: primary,
         problemMasterId: primary ? String(primary.id) : "",
@@ -518,6 +521,7 @@ export const useVisitFormStore = create<VisitFormState>()(
       pendingFarmerPhoto: null,
       cropId: values.crop?.trim() || "",
       cropName: meta.cropLabel || values.crop_name?.trim() || "",
+      cropTamilName: meta.cropTamilLabel || "",
       problemCategoryId: values.problem_category_id?.trim() || "",
       problemCategoryCode: categoryCode,
       problemMasterId,
@@ -604,6 +608,7 @@ export const useVisitFormStore = create<VisitFormState>()(
         gpsCoords: state.gpsCoords,
         cropId: state.cropId,
         cropName: state.cropName,
+        cropTamilName: state.cropTamilName,
         problemCategoryId: state.problemCategoryId,
         problemCategoryCode: state.problemCategoryCode,
         problemMasterId: state.problemMasterId,

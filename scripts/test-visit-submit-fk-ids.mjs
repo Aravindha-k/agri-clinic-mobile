@@ -164,7 +164,7 @@ test("source never falls back to using a category code as problem_category_id", 
   assert.match(filter, /nutrient_issue/);
   assert.match(filter, /nutrient_deficiency/);
   assert.match(catalog, /categoryCodesAreEquivalent/);
-  assert.match(review, /tamil_name \|\| item\.name/);
+  assert.match(review, /bilingualLabel\(item\.name, item\.tamil_name\)/);
   assert.match(queue, /\.\.\.record\.values/);
   assert.match(masterId, /\/\^\\d\+\$\//);
 });

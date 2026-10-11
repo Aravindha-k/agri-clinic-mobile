@@ -9,7 +9,6 @@ import {
   type CropMasterRow
 } from "../../../src/utils/cropSelection";
 import { VisitFarmerSummaryCard } from "../../components/visit/VisitFarmerSummaryCard";
-import { VisitRevisitContextCard } from "../../components/visit/VisitRevisitContextCard";
 import {
   CropSelectionCard,
   type CropOptionsStatus
@@ -42,7 +41,6 @@ export function VisitCreateStep2({ onBack }: Props) {
   const setStep = useVisitFormStore((s) => s.setStep);
   const farmer = useVisitFormStore((s) => s.farmer);
   const newFarmer = useVisitFormStore((s) => s.newFarmer);
-  const revisitContext = useVisitFormStore((s) => s.revisitContext);
   const cropId = useVisitFormStore((s) => s.cropId);
   const cropName = useVisitFormStore((s) => s.cropName);
   const setCrop = useVisitFormStore((s) => s.setCrop);
@@ -135,7 +133,8 @@ export function VisitCreateStep2({ onBack }: Props) {
       (formOptions?.crops ?? []).map((c) => ({
         id: String(c.id),
         title: getOptionLabel(c),
-        subtitle: c.name_ta || undefined
+        subtitle: c.name_ta || undefined,
+        bilingual: true
       })),
     [formOptions?.crops]
   );
@@ -143,10 +142,13 @@ export function VisitCreateStep2({ onBack }: Props) {
   const canContinue = Boolean(cropId);
   const cropInlineHint = !cropId && cropsStatus === "ready" ? t("visitFlow.errSelectCrop") : "";
 
-  function handleCropSelect(nextCropId: string, nextCropName: string) {
+  function handleCropSelect(nextCropId: string, nextCropName: string, nextCropTamil?: string) {
     const cropPk = extractMasterPk(nextCropId);
     if (cropPk == null) return;
-    setCrop(String(cropPk), nextCropName);
+    const tamil =
+      nextCropTamil ??
+      activeCrops.find((c) => String(c.id) === String(cropPk))?.name_ta?.trim();
+    setCrop(String(cropPk), nextCropName, tamil || undefined);
   }
 
   function retryCrops() {
@@ -178,11 +180,6 @@ export function VisitCreateStep2({ onBack }: Props) {
 
       <FadeInSection replayKey={replayKey} delay={entranceStagger(0)} variant="card">
         <VisitFarmerSummaryCard farmer={farmer} newFarmer={newFarmer} />
-        {revisitContext ? (
-          <View style={styles.revisitContextWrap}>
-            <VisitRevisitContextCard context={revisitContext} />
-          </View>
-        ) : null}
       </FadeInSection>
 
       <ScrollView
@@ -224,7 +221,7 @@ export function VisitCreateStep2({ onBack }: Props) {
         items={cropSheetItems}
         selectedId={cropId}
         loading={cropsStatus === "loading"}
-        onSelect={(item) => handleCropSelect(item.id, item.title)}
+        onSelect={(item) => handleCropSelect(item.id, item.title, item.subtitle)}
       />
     </View>
   );
@@ -233,7 +230,6 @@ export function VisitCreateStep2({ onBack }: Props) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
   stepWrap: { paddingHorizontal: Spacing.screen, paddingBottom: Spacing.xs },
-  revisitContextWrap: { marginHorizontal: Spacing.screen, marginBottom: Spacing.sm },
   scrollView: { flex: 1 },
   scroll: { paddingHorizontal: Spacing.screen, paddingBottom: Spacing.xxl },
   inlineError: { color: Colors.redText, fontSize: FontSize.sm, marginTop: Spacing.xs },

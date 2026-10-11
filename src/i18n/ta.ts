@@ -897,7 +897,7 @@ export const ta: TranslationTree = {
     pendingStatus_failed: "கவனம் தேவை",
     pendingStatus_quarantined: "தானாக ஒத்திசைக்க முடியாது",
     pendingStatus_media_pending: "வருகை ஒத்திசைக்கப்பட்டது — ஊடகம் நிலுவையில்",
-    search: "தேடு…",
+    search: "தேடுக / Search…",
     loading: "ஏற்றுகிறது…",
     noMatches: "பொருத்தம் இல்லை.",
     revisitGpsTitle: "இருப்பிடம் தேவை",

@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ProblemItem } from "../../../../src/api/problems";
 import { useI18n } from "../../../../src/i18n/I18nContext";
+import { bilingualLabel } from "../../../../src/utils/bilingualName";
 import { categoryCodeFromValue } from "../../../../src/utils/problemItemFilter";
 import { formatCategoryBadgeLocalized } from "../../../lib/problemCatalog";
 import { Colors, FontSize, FontWeight, Radius } from "../../../lib/theme";
@@ -22,10 +23,7 @@ function badgeTone(code: string) {
 
 export function ProblemSelectCard({ item, selected, onPress, showCategory = false }: Props) {
   const { language } = useI18n();
-  const english = item.name?.trim() || "";
-  const tamil = item.tamil_name?.trim() || "";
-  const primary = language === "ta" ? tamil || english : english || tamil;
-  const secondary = language === "ta" ? (tamil ? english : "") : english ? tamil : "";
+  const label = bilingualLabel(item.name, item.tamil_name);
   const code = categoryCodeFromValue(item.category) || (item.category_code ?? "").toLowerCase();
   const categoryLabel = showCategory
     ? formatCategoryBadgeLocalized(code, item.category_name, language)
@@ -37,18 +35,13 @@ export function ProblemSelectCard({ item, selected, onPress, showCategory = fals
       onPress={onPress}
       accessibilityRole="checkbox"
       accessibilityState={{ checked: selected }}
-      accessibilityLabel={[primary, secondary, categoryLabel].filter(Boolean).join(", ")}
+      accessibilityLabel={[label, categoryLabel].filter(Boolean).join(", ")}
       style={({ pressed }) => [styles.card, selected && styles.cardSelected, pressed && styles.cardPressed]}
     >
       <View style={styles.body}>
         <Text style={styles.primary} numberOfLines={3}>
-          {primary}
+          {label}
         </Text>
-        {secondary && secondary !== primary ? (
-          <Text style={styles.secondary} numberOfLines={2}>
-            {secondary}
-          </Text>
-        ) : null}
         {categoryLabel ? (
           <View style={[styles.badge, { backgroundColor: tone.bg }]}>
             <Text style={[styles.badgeText, { color: tone.fg }]}>{categoryLabel}</Text>
@@ -73,9 +66,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     gap: 12,
-    minHeight: 56,
+    minHeight: 52,
     paddingHorizontal: 14,
-    paddingVertical: 12
+    paddingVertical: 10
   },
   cardSelected: {
     backgroundColor: Colors.greenBg,

@@ -13,6 +13,7 @@ import {
 import { getMobileVisit, type Visit } from "../../src/api/visits";
 import { getAccessToken } from "../../src/storage/tokenStorage";
 import { normalizeVisitFromApi } from "../../src/utils/visitFarmer";
+import { NOT_ADDED_BY_EMPLOYEE } from "../../src/utils/visitFieldNotes";
 import type { VisitPhotoAsset } from "./visitPhotos";
 
 export type VisitSeverity = "low" | "medium" | "high";
@@ -32,15 +33,25 @@ export type VisitPatchBody = {
   follow_up_date?: string | null;
 };
 
+function isEmptyFieldPlaceholder(text: string): boolean {
+  // Backend returns this display string for empty notes/advice — never treat it as content.
+  return text.trim() === NOT_ADDED_BY_EMPLOYEE;
+}
+
+function realText(value?: string | null): string {
+  const text = value?.trim() || "";
+  return isEmptyFieldPlaceholder(text) ? "" : text;
+}
+
 export function visitObservationText(visit: Visit): string {
-  return visit.observation?.trim() || "";
+  return realText(visit.observation);
 }
 
 export function visitRecommendationText(visit: Visit): string {
   const combined =
-    visit.recommendation?.trim() ||
-    visit.action_taken?.trim() ||
-    visit.general_advice?.trim() ||
+    realText(visit.recommendation) ||
+    realText(visit.action_taken) ||
+    realText(visit.general_advice) ||
     "";
   if (combined) return combined;
   const parts = [
@@ -48,7 +59,7 @@ export function visitRecommendationText(visit: Visit): string {
     visit.pesticide_advice,
     visit.irrigation_advice
   ]
-    .map((row) => row?.trim())
+    .map((row) => realText(row))
     .filter(Boolean);
   return parts.join("\n");
 }
@@ -63,16 +74,22 @@ export function parseFieldNotes(raw?: string | null): ParsedFieldNotes {
       severity = match[1].toLowerCase() as VisitSeverity;
       continue;
     }
-    if (line.trim()) notes.push(line);
+    if (line.trim() && !isEmptyFieldPlaceholder(line)) notes.push(line);
   }
   return { severity, fieldNotes: notes.join("\n").trim() };
+}
+
+/** Editable employee Field Notes only — never merges recommendation or placeholders. */
+export function employeeFieldNotesText(visit: Visit): string {
+  const parsed = parseFieldNotes(visit.field_notes);
+  return parsed.fieldNotes || visitObservationText(visit);
 }
 
 /** Employee-facing Field Notes — merges legacy observation + recommendation for display. */
 export function visitFieldNotesText(visit: Visit): string {
   const parsed = parseFieldNotes(visit.field_notes);
   const fromNotes = parsed.fieldNotes.trim();
-  const observation = visit.observation?.trim() || "";
+  const observation = visitObservationText(visit);
   const recommendation = visitRecommendationText(visit).trim();
   const parts = [fromNotes || observation, recommendation].filter(Boolean);
   // Deduplicate if observation was mirrored into field_notes historically.

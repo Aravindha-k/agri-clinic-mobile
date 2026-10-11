@@ -51,6 +51,7 @@ import {
 } from "../../lib/visitEvidenceCapture";
 import {
   categoryTone,
+  employeeFieldNotesText,
   fetchVisitDetail,
   fetchVisitGallery,
   inferSeverity,
@@ -139,9 +140,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
         const row = await fetchVisitDetail(visitId);
         const atts = await fetchVisitGallery(visitId, row);
         setVisit(row);
-        const parsed = parseFieldNotes(row.field_notes);
-        const combined = visitFieldNotesText(row) || parsed.fieldNotes;
-        setDraftFieldNotes(combined);
+        setDraftFieldNotes(employeeFieldNotesText(row));
         setAttachments(atts);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load visit.");
@@ -176,13 +175,17 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
 
   function cancelEdit() {
     if (!visit) return;
-    setDraftFieldNotes(visitFieldNotesText(visit));
+    setDraftFieldNotes(employeeFieldNotesText(visit));
     setEditMode(false);
   }
 
   async function handleSave() {
     if (!visit) return;
     const notes = draftFieldNotes.trim();
+    if (notes === employeeFieldNotesText(visit)) {
+      setEditMode(false);
+      return;
+    }
     setSaving(true);
     try {
       const severityLine = `Severity: ${severityLabel(severity)}`;

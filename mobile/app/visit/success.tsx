@@ -86,6 +86,13 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
 
   const { pendingCount, refreshQueue } = useOfflineSync();
 
+  // The visit draft is consumed only once this screen is mounted — resetting it
+  // earlier (inside the submit coordinator) rewound the six-step shell back to
+  // step 1 before the success push landed, which looked like a back navigation.
+  useEffect(() => {
+    beginNewVisit();
+  }, []);
+
   useEffect(() => {
     if (!queued) return;
     void refreshQueue();
@@ -105,7 +112,6 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
   }
 
   function addAnotherVisit() {
-    beginNewVisit();
     navigation.reset({
       index: 0,
       routes: [{ name: "NewVisitFarmer", params: { fresh: true } }]

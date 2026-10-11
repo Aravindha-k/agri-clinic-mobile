@@ -1,6 +1,5 @@
 import { generateLocalSyncId } from "../sync/queueIds";
 import { useVisitFormStore } from "../../store/visitFormStore";
-import { beginNewVisit } from "../beginNewVisit";
 import { enqueuePendingVisit } from "../pendingVisitsQueue";
 import {
   buildVisitFormValuesFromStore,
@@ -207,7 +206,8 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
           gpsConfirmed: hasValidGps(values),
           submittedAt: values.captured_at ?? new Date().toISOString()
         });
-        beginNewVisit();
+        // Draft is consumed by VisitSuccessScreen on mount — resetting here
+        // would rewind the step animation to 1 before the push lands.
         const { emitVisitDataRefresh } = await import("./visitDataRefresh");
         emitVisitDataRefresh();
         onProgress?.("done");
@@ -270,7 +270,8 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
           submittedAt: capturedAt.toISOString(),
           evidenceWarning
         });
-        beginNewVisit();
+        // Draft is consumed by VisitSuccessScreen on mount — resetting here
+        // would rewind the step animation to 1 before the push lands.
         const { emitVisitDataRefresh } = await import("./visitDataRefresh");
         emitVisitDataRefresh();
         onProgress?.("done");
@@ -319,7 +320,8 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
           gpsConfirmed: hasValidGps(offlineValues),
           submittedAt: offlineValues.captured_at ?? new Date().toISOString()
         });
-        beginNewVisit();
+        // Draft is consumed by VisitSuccessScreen on mount — resetting here
+        // would rewind the step animation to 1 before the push lands.
         const { emitVisitDataRefresh } = await import("./visitDataRefresh");
         emitVisitDataRefresh();
         onProgress?.("done");

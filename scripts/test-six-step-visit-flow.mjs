@@ -114,6 +114,23 @@ test("Batch B styling: section headers, icon toggles, compact indicator", () => 
   assert.ok(indicator.includes("fontSize: 9.5"), "compact step labels for small screens");
 });
 
+test("confirm visit pushes success screen and never rewinds the shell", () => {
+  const coordinator = readFileSync("mobile/lib/visit/visitSubmitCoordinator.ts", "utf8");
+  const success = readFileSync("mobile/app/visit/success.tsx", "utf8");
+  assert.ok(
+    !coordinator.includes("beginNewVisit("),
+    "coordinator must not reset the draft before the success push"
+  );
+  assert.ok(
+    success.includes("beginNewVisit()"),
+    "success screen must consume the draft on mount"
+  );
+  assert.ok(
+    review.includes('StackActions.push("VisitSuccess"'),
+    "success navigation must push, never pop back"
+  );
+});
+
 test("bilingual i18n keys for six-step flow", () => {
   for (const key of [
     "stepLabelCrop", "stepLabelPest", "stepLabelDisease",

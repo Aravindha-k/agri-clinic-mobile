@@ -60,7 +60,10 @@ assert.doesNotMatch(review, /submitInFlightRef/, "screen must not own submit sin
 assert.match(submitCoordinator, /if \(submitInFlight\) return submitInFlight/);
 assert.match(submitCoordinator, /enqueueFailedVisitEvidence/);
 assert.match(submitCoordinator, /emitVisitDataRefresh/);
-assert.match(submitCoordinator, /beginNewVisit\(\)/);
+// Draft reset lives in VisitSuccessScreen's mount effect: resetting inside the
+// coordinator rewound the six-step shell to step 1 before the success push.
+assert.doesNotMatch(submitCoordinator, /beginNewVisit\(\)/);
+assert.match(read("mobile/app/visit/success.tsx"), /beginNewVisit\(\)/);
 
 assert.doesNotMatch(
   validation.slice(validation.indexOf("export function getSubmitIssues")),

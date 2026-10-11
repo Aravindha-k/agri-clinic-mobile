@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { StackActions, useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, AppState, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useConnectivityOnline } from "../../../src/hooks/useConnectivityOnline";
@@ -290,7 +290,9 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
         return;
       }
 
-      navigation.navigate("VisitSuccess", { summary: result.summary });
+      navigation.dispatch(
+        StackActions.push("VisitSuccess", { summary: result.summary })
+      );
     } finally {
       setSubmitting(false);
     }

@@ -1,5 +1,5 @@
 import { apiClient } from "../../src/api/client";
-import { getCrops, getOptionLabel, type MasterOption } from "../../src/api/masters";
+import { getCrops, type MasterOption } from "../../src/api/masters";
 import {
   fetchAllProblemItemsForQuery,
   getProblemCategories,
@@ -20,13 +20,6 @@ import {
   writeFormOptionsCache
 } from "./formOptionsCache";
 import { filterActiveProblemItems } from "./problemCatalog";
-
-export type FarmerFieldCropChip = {
-  id: string;
-  crop_id: string;
-  crop_name: string;
-  field_name?: string;
-};
 
 export type VisitFormOptions = {
   crops: MasterOption[];
@@ -69,6 +62,73 @@ async function ensureProblemItems(options: VisitFormOptions): Promise<VisitFormO
   }
 }
 
+/** Skip duplicate revalidation when screens mount back-to-back in one visit. */
+const FRESH_WINDOW_MS = 30_000;
+
+let formOptionsInflight: Promise<VisitFormOptions | null> | null = null;
+let formOptionsLastFetch = 0;
+
+/**
+ * In-flight dedupe + freshness gate for visit-form-options.
+ * force=true always revalidates (forced refresh, cache misses); otherwise a
+ * fetch younger than FRESH_WINDOW_MS is treated as fresh and skipped.
+ */
+function refreshFormOptionsDeduped(force = false): Promise<VisitFormOptions | null> {
+  if (formOptionsInflight) return formOptionsInflight;
+  if (!force && Date.now() - formOptionsLastFetch < FRESH_WINDOW_MS) {
+    return Promise.resolve(null);
+  }
+  formOptionsInflight = (async () => {
+    try {
+      return await fetchVisitFormOptionsFromNetwork();
+    } finally {
+      formOptionsLastFetch = Date.now();
+      formOptionsInflight = null;
+    }
+  })();
+  return formOptionsInflight;
+}
+
+const cropItemsInflight = new Map<string, Promise<void>>();
+const cropItemsFetchedAt = new Map<string, number>();
+
+async function revalidateCropProblemItems(cropId: string): Promise<void> {
+  try {
+    const data = await apiClient<unknown>(`crops/${cropId}/problem-items/`, { source: "VisitForm" });
+    const items = normalizeProblemItems(data);
+    // Successful response replaces cache even when empty — deleted IDs must not survive.
+    writeCropProblemItemsCache(cropId, items);
+    return;
+  } catch {
+    // fall through
+  }
+  try {
+    const { items } = await fetchAllProblemItemsForQuery({ cropId, pageSize: 200 });
+    writeCropProblemItemsCache(cropId, items);
+  } catch {
+    // keep last cache
+  }
+}
+
+/** Per-crop in-flight dedupe + freshness gate (see refreshFormOptionsDeduped). */
+function revalidateCropProblemItemsDeduped(cropId: string, force = false): Promise<void> {
+  const existing = cropItemsInflight.get(cropId);
+  if (existing) return existing;
+  if (!force && Date.now() - (cropItemsFetchedAt.get(cropId) ?? 0) < FRESH_WINDOW_MS) {
+    return Promise.resolve();
+  }
+  const inflight = (async () => {
+    try {
+      await revalidateCropProblemItems(cropId);
+    } finally {
+      cropItemsFetchedAt.set(cropId, Date.now());
+      cropItemsInflight.delete(cropId);
+    }
+  })();
+  cropItemsInflight.set(cropId, inflight);
+  return inflight;
+}
+
 async function fetchVisitFormOptionsFromNetwork(): Promise<VisitFormOptions | null> {
   try {
     const data = await apiClient<unknown>("mobile/visit-form-options/", { source: "VisitForm" });
@@ -94,19 +154,19 @@ export async function loadVisitFormOptions(): Promise<VisitFormOptions> {
   const cached = readCachedFormOptions<VisitFormOptions>();
   const stale = readStaleFormOptions<VisitFormOptions>();
 
-  void fetchVisitFormOptionsFromNetwork();
+  void refreshFormOptionsDeduped();
 
   if (cached) return cached;
   if (stale) return stale;
 
-  const fresh = await fetchVisitFormOptionsFromNetwork();
+  const fresh = await refreshFormOptionsDeduped(true);
   if (fresh) return fresh;
   return { crops: [], problem_categories: [], problem_items: [] };
 }
 
-/** Online submit/sync: current server catalogs replace local cache. */
+/** Online submit/sync: current server catalogs replace local cache. Always revalidates. */
 export async function refreshAuthoritativeVisitFormOptions(): Promise<VisitFormOptions | null> {
-  return fetchVisitFormOptionsFromNetwork();
+  return refreshFormOptionsDeduped(true);
 }
 
 function normalizeProblemItems(data: unknown): ProblemItem[] {
@@ -120,41 +180,15 @@ export async function loadCropProblemItems(cropId: string): Promise<ProblemItem[
   const cached = readCropProblemItemsCache(cropId);
   const stale = readStaleCropProblemItems(cropId);
 
-  void (async () => {
-    try {
-      const data = await apiClient<unknown>(`crops/${cropId}/problem-items/`, { source: "VisitForm" });
-      const items = normalizeProblemItems(data);
-      // Successful response replaces cache even when empty — deleted IDs must not survive.
-      writeCropProblemItemsCache(cropId, items);
-      return;
-    } catch {
-      // fall through
-    }
-    try {
-      const { items } = await fetchAllProblemItemsForQuery({ cropId, pageSize: 200 });
-      writeCropProblemItemsCache(cropId, items);
-    } catch {
-      // keep last cache
-    }
-  })();
+  void revalidateCropProblemItemsDeduped(cropId);
 
   if (cached) return cached as ProblemItem[];
   if (stale) return stale as ProblemItem[];
 
-  try {
-    const data = await apiClient<unknown>(`crops/${cropId}/problem-items/`, { source: "VisitForm" });
-    const items = normalizeProblemItems(data);
-    if (items.length) {
-      writeCropProblemItemsCache(cropId, items);
-      return items;
-    }
-  } catch {
-    // fall through
-  }
-
-  const { items } = await fetchAllProblemItemsForQuery({ cropId, pageSize: 200 });
-  writeCropProblemItemsCache(cropId, items);
-  return items;
+  await revalidateCropProblemItemsDeduped(cropId, true);
+  const refreshed = readCropProblemItemsCache(cropId);
+  if (Array.isArray(refreshed)) return refreshed as ProblemItem[];
+  return (readStaleCropProblemItems(cropId) ?? []) as ProblemItem[];
 }
 
 /** Catalog-wide active items for a category (no crop filter). Cached by category code. */
@@ -188,55 +222,13 @@ export async function loadCatalogProblemItems(categoryCode: string): Promise<Pro
   return filterActiveProblemItems(items);
 }
 
-/** Catalog-wide search across all categories (crop unmapped fallback). */
-export async function loadCatalogSearchItems(search: string): Promise<ProblemItem[]> {
-  const needle = search.trim();
-  const cacheKey = needle.toLowerCase() || "__all__";
-  const cached = readCatalogProblemItemsCache(cacheKey, true);
-  const stale = readStaleCatalogProblemItems(cacheKey, true);
-
-  if (cached) return filterActiveProblemItems(cached as ProblemItem[]);
-  if (stale) return filterActiveProblemItems(stale as ProblemItem[]);
-
-  const { items } = await fetchAllProblemItemsForQuery({
-    searchAll: true,
-    search: needle || undefined,
-    pageSize: 200
-  });
-  writeCatalogProblemItemsCache(cacheKey, true, items);
-  return filterActiveProblemItems(items);
-}
-
-export async function loadFarmerFieldCrops(farmerId: number): Promise<FarmerFieldCropChip[]> {
+/**
+ * Raw farmer field rows (with nested `crops`). Resolve chips against active crop
+ * masters with `resolveFarmerCropChips`. Empty on failure — chips are optional.
+ */
+export async function loadFarmerFieldRows(farmerId: number): Promise<unknown[]> {
   try {
-    const fields = await getFarmerFields(farmerId);
-    const chips: FarmerFieldCropChip[] = [];
-    const seen = new Set<string>();
-
-    for (const field of asArray(fields)) {
-      if (!field || typeof field !== "object") continue;
-      const row = field as Record<string, unknown>;
-      const fieldName = String(row.land_name || row.field_name || row.name || "").trim();
-      const cropList = asArray(row.crops ?? row.field_crops ?? row.current_crops);
-      for (const cropRaw of cropList) {
-        if (!cropRaw || typeof cropRaw !== "object") continue;
-        const crop = cropRaw as Record<string, unknown>;
-        const cropName = String(crop.crop_name || crop.name || "").trim();
-        const cropId = crop.crop_id ?? crop.crop ?? crop.id;
-        if (!cropName && cropId == null) continue;
-        const id = String(cropId ?? cropName);
-        if (seen.has(id)) continue;
-        seen.add(id);
-        chips.push({
-          id,
-          crop_id: String(cropId ?? ""),
-          crop_name: cropName || getOptionLabel({ id: Number(cropId), name: "" }),
-          field_name: fieldName || undefined
-        });
-      }
-    }
-
-    return chips;
+    return asArray(await getFarmerFields(farmerId));
   } catch {
     return [];
   }

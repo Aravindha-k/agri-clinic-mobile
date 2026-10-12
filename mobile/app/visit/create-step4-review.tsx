@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { StackActions, useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, AppState, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useConnectivityOnline } from "../../../src/hooks/useConnectivityOnline";
+import { bilingualLabel } from "../../../src/utils/bilingualName";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { useFieldDataRefresh } from "../../../src/storage/FieldDataRefreshContext";
 import { useTerritory } from "../../../src/storage/TerritoryContext";
@@ -79,6 +80,7 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
   const newFarmer = useVisitFormStore((s) => s.newFarmer);
   const visitKind = useVisitFormStore((s) => s.visitKind);
   const cropName = useVisitFormStore((s) => s.cropName);
+  const cropTamilName = useVisitFormStore((s) => s.cropTamilName);
   const problemCategoryCode = useVisitFormStore((s) => s.problemCategoryCode);
   const selectedProblem = useVisitFormStore((s) => s.selectedProblem);
   const selectedProblems = useVisitFormStore((s) => s.selectedProblems);
@@ -101,15 +103,19 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
   const captureInFlight = useRef(false);
 
   const isOtherProblem = problemCategoryCode === "other";
-  const problemNames = [
+  const problemItems: { tamil_name?: string | null; name?: string | null }[] = [
     ...(selectedProblems?.length
       ? selectedProblems
       : selectedProblem
         ? [selectedProblem]
-        : []
-    ).map((item) => item.tamil_name || item.name || ""),
-    ...(isOtherProblem && otherProblemDescription.trim() ? [otherProblemDescription.trim()] : [])
-  ].filter(Boolean);
+        : []),
+    ...(isOtherProblem && otherProblemDescription.trim()
+      ? [{ name: otherProblemDescription.trim() }]
+      : [])
+  ];
+  const problemEntries = problemItems
+    .map((item) => bilingualLabel(item.name, item.tamil_name))
+    .filter(Boolean);
 
   const farmerName = farmerDisplayName(farmer, newFarmer);
   const reviewFarmer = resolveVisitReviewFarmer(
@@ -281,21 +287,31 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
         return;
       }
 
-      navigation.navigate("VisitSuccess", { summary: result.summary });
+      navigation.dispatch(
+        StackActions.push("VisitSuccess", { summary: result.summary })
+      );
     } finally {
       setSubmitting(false);
     }
   }
 
   const gpsReady = gpsUi === "ready" && visitGpsIsUsable(gpsCoords);
-  const submitDisabled = submitting || isVisitSubmitInFlight() || gpsUi === "capturing" || !gpsReady;
+  const noProblemSelected = problemEntries.length === 0;
+  const noCameraPhoto = !photos.some((photo) => photo.source === "camera");
+  const submitDisabled =
+    submitting ||
+    isVisitSubmitInFlight() ||
+    gpsUi === "capturing" ||
+    !gpsReady ||
+    noProblemSelected ||
+    noCameraPhoto;
 
   return (
     <View style={styles.screen}>
-      <VisitFlowHeader title={t("visitFlow.reviewAndSubmit")} subtitle={t("visitFlow.step4of4")} onBack={onBack} />
+      <VisitFlowHeader title={t("visitFlow.reviewAndSubmit")} subtitle={t("visitFlow.step6of6")} onBack={onBack} icon="clipboard-outline" />
 
       <View style={styles.stepWrap}>
-        <StepIndicator step={4} allComplete />
+        <StepIndicator step={6} allComplete />
       </View>
 
       <ScrollView
@@ -323,12 +339,15 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
             {farmerPhone} · {farmerVillage}
           </Text>
           <StatusChip label={visitTypeLabel} variant={visitKind === "revisit" ? "blue" : "gray"} />
+          {newFarmer ? (
+            <Text style={styles.linkNotice}>{t("visitFlow.newFarmerLinkNotice")}</Text>
+          ) : null}
         </FlatCard>
 
         <FlatCard style={styles.reviewCard}>
           <View style={styles.reviewHead}>
             <Text style={styles.reviewLabel}>
-              {t("visitFlow.problemsObservedCount", { count: problemNames.length })}
+              {t("visitFlow.problemsObservedCount", { count: problemEntries.length })}
             </Text>
             <Pressable
               onPress={onEditStep2}
@@ -341,12 +360,18 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
             </Pressable>
           </View>
           <View style={styles.chipRow}>
-            {cropName ? <StatusChip label={cropName} variant="gray" /> : null}
+            {cropName ? <StatusChip label={bilingualLabel(cropName, cropTamilName)} variant="gray" /> : null}
           </View>
-          {problemNames.map((name, index) => (
-            <Text key={`${index}-${name}`} style={styles.problemLine}>
-              {name}
-            </Text>
+          {noProblemSelected ? (
+            <Text style={styles.inlineError}>{t("visitFlow.errSelectProblem")}</Text>
+          ) : null}
+          {noCameraPhoto ? (
+            <Text style={styles.inlineError}>{t("visitFlow.livePhotoRequired")}</Text>
+          ) : null}
+          {problemEntries.map((entry, index) => (
+            <View key={`${index}-${entry}`}>
+              <Text style={styles.problemLine}>{entry}</Text>
+            </View>
           ))}
         </FlatCard>
 
@@ -564,6 +589,17 @@ const styles = StyleSheet.create({
     color: Colors.text3,
     fontSize: FontSize.sm
   },
+  inlineError: {
+    color: Colors.redText,
+    fontSize: FontSize.sm,
+    marginTop: Spacing.sm
+  },
+  linkNotice: {
+    marginTop: Spacing.sm,
+    color: Colors.text3,
+    fontSize: FontSize.xs,
+    fontStyle: "italic"
+  },
   chipRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -582,22 +618,22 @@ const styles = StyleSheet.create({
     lineHeight: 20
   },
   gpsRow: {
-    alignItems: "center",
+    alignItems: "flex-start",
     flexDirection: "row",
     justifyContent: "space-between",
     paddingVertical: 4
   },
   gpsStatus: {
-    alignItems: "center",
+    alignItems: "flex-start",
     flexDirection: "row",
     flexShrink: 1,
     gap: 6,
-    justifyContent: "flex-end",
-    maxWidth: "70%"
+    maxWidth: "75%"
   },
   gpsDot: {
     borderRadius: 4,
     height: 8,
+    marginTop: 5,
     width: 8
   },
   gpsText: {

@@ -1,7 +1,7 @@
 import { Audio } from "expo-av";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
-import { Alert } from "react-native";
+import { alertMediaPermissionDenied } from "../utils/mediaPermissionAlert";
 import {
   assertFileUnderLimit,
   assertSupportedVisitAttachment,
@@ -16,7 +16,11 @@ export async function pickPendingImageUri(source: "camera" | "library"): Promise
   if (source === "camera") {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert("Camera permission", "Allow camera access to take visit photos.");
+      alertMediaPermissionDenied({
+        title: "Camera permission",
+        message: "Allow camera access to take visit photos.",
+        canAskAgain: perm.canAskAgain
+      });
       return null;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -28,18 +32,8 @@ export async function pickPendingImageUri(source: "camera" | "library"): Promise
     return result.assets[0].uri;
   }
 
-  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!perm.granted) {
-    Alert.alert("Gallery permission", "Allow photo library access to attach images.");
-    return null;
-  }
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ["images"],
-    quality: 0.85,
-    allowsMultipleSelection: false
-  });
-  if (result.canceled || !result.assets[0]) return null;
-  return result.assets[0].uri;
+  // Gallery/library evidence is not accepted for visits — camera only.
+  return null;
 }
 
 /** @deprecated Use pickPendingImageUri + watermark preview flow */
@@ -91,7 +85,11 @@ export function createPendingTextNote(text: string): PendingVisitAttachment {
 export async function startVoiceRecording(): Promise<Audio.Recording | null> {
   const perm = await Audio.requestPermissionsAsync();
   if (!perm.granted) {
-    Alert.alert("Microphone permission", "Allow microphone access to record voice notes.");
+    alertMediaPermissionDenied({
+      title: "Microphone permission",
+      message: "Allow microphone access to record voice notes.",
+      canAskAgain: perm.canAskAgain
+    });
     return null;
   }
   await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });

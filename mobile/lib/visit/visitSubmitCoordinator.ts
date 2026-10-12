@@ -1,6 +1,5 @@
 import { generateLocalSyncId } from "../sync/queueIds";
 import { useVisitFormStore } from "../../store/visitFormStore";
-import { beginNewVisit } from "../beginNewVisit";
 import { enqueuePendingVisit } from "../pendingVisitsQueue";
 import {
   buildVisitFormValuesFromStore,
@@ -202,12 +201,14 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
           queueId: localSyncId,
           farmerName: values.farmer_name,
           cropName: snapshot.cropName,
+          cropTamilName: snapshot.cropTamilName,
           problemText: values.problem_seen,
           fieldNotesText: values.observation || values.field_notes,
           gpsConfirmed: hasValidGps(values),
           submittedAt: values.captured_at ?? new Date().toISOString()
         });
-        beginNewVisit();
+        // Draft is consumed by VisitSuccessScreen on mount — resetting here
+        // would rewind the step animation to 1 before the push lands.
         const { emitVisitDataRefresh } = await import("./visitDataRefresh");
         emitVisitDataRefresh();
         onProgress?.("done");
@@ -262,15 +263,17 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
         const summary = buildSubmittedVisitSummary({
           visitId: visit.id,
           queued: false,
-          farmerName: values.farmer_name,
+          farmerName: visit.farmer_name?.trim() || values.farmer_name,
           cropName: snapshot.cropName,
+          cropTamilName: snapshot.cropTamilName,
           problemText: values.problem_seen,
           fieldNotesText: values.observation || values.field_notes,
           gpsConfirmed,
           submittedAt: capturedAt.toISOString(),
           evidenceWarning
         });
-        beginNewVisit();
+        // Draft is consumed by VisitSuccessScreen on mount — resetting here
+        // would rewind the step animation to 1 before the push lands.
         const { emitVisitDataRefresh } = await import("./visitDataRefresh");
         emitVisitDataRefresh();
         onProgress?.("done");
@@ -314,12 +317,14 @@ export async function submitVisitCoordinator(deps: SubmitDeps): Promise<VisitSub
           queueId: localSyncId,
           farmerName: offlineValues.farmer_name,
           cropName: latest.cropName,
+          cropTamilName: latest.cropTamilName,
           problemText: offlineValues.problem_seen,
           fieldNotesText: offlineValues.observation || offlineValues.field_notes,
           gpsConfirmed: hasValidGps(offlineValues),
           submittedAt: offlineValues.captured_at ?? new Date().toISOString()
         });
-        beginNewVisit();
+        // Draft is consumed by VisitSuccessScreen on mount — resetting here
+        // would rewind the step animation to 1 before the push lands.
         const { emitVisitDataRefresh } = await import("./visitDataRefresh");
         emitVisitDataRefresh();
         onProgress?.("done");

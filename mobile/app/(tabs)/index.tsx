@@ -403,6 +403,9 @@ export default function TodayTabScreen() {
               startedAt={dutyPresentation.startedAt}
               endedAt={dutyPresentation.endedAt}
               autoCompleted={dutyPresentation.sessionStatus === "auto_completed"}
+              onStartAgain={() => void handleStartWorkday()}
+              starting={starting}
+              error={visibleTrackingError}
             />
           ) : (
             <StartWorkDayCard

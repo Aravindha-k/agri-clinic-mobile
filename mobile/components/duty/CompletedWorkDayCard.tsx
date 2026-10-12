@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { useI18n } from "../../../src/i18n/I18nContext";
+import { PrimaryButton } from "../ui/PrimaryButton";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../lib/theme";
 import { formatShortTime } from "../../lib/format";
 
@@ -7,10 +8,21 @@ type Props = {
   startedAt?: string | null;
   endedAt?: string | null;
   autoCompleted?: boolean;
+  /** Backend allows a new duty session the same day — show restart action. */
+  onStartAgain?: () => void;
+  starting?: boolean;
+  error?: string | null;
 };
 
-/** Completed workday — times only, no running timer. */
-export function CompletedWorkDayCard({ startedAt, endedAt, autoCompleted }: Props) {
+/** Completed workday — times + same-day restart, no running timer. */
+export function CompletedWorkDayCard({
+  startedAt,
+  endedAt,
+  autoCompleted,
+  onStartAgain,
+  starting,
+  error
+}: Props) {
   const { t } = useI18n();
 
   return (
@@ -24,6 +36,17 @@ export function CompletedWorkDayCard({ startedAt, endedAt, autoCompleted }: Prop
         <Text style={styles.meta}>Started {formatShortTime(startedAt)}</Text>
         <Text style={styles.meta}>Ended {formatShortTime(endedAt)}</Text>
       </View>
+      {onStartAgain ? (
+        <View style={styles.restart}>
+          <Text style={styles.hint}>{t("workdayUx.completedShiftHint")}</Text>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <PrimaryButton
+            label={t("workdayUx.startWorkdayAgain")}
+            onPress={onStartAgain}
+            loading={starting}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -55,6 +78,20 @@ const styles = StyleSheet.create({
   },
   meta: {
     color: Colors.text3,
+    fontSize: FontSize.sm
+  },
+  restart: {
+    borderTopColor: Colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: Spacing.sm,
+    paddingTop: Spacing.md
+  },
+  hint: {
+    color: Colors.text3,
+    fontSize: FontSize.sm
+  },
+  error: {
+    color: Colors.redText,
     fontSize: FontSize.sm
   }
 });

@@ -136,7 +136,9 @@ export function SettingsScreen() {
               <Switch
                 value={autoSyncOnReconnect}
                 onValueChange={(v) => void setPreference("autoSyncOnReconnect", v)}
-                trackColor={{ true: Colors.brand700 }}
+                trackColor={{ false: Colors.border2, true: Colors.brand700 }}
+                thumbColor={Colors.surface}
+                ios_backgroundColor={Colors.border2}
                 accessibilityLabel={t("settings.autoSync")}
               />
             }
@@ -150,7 +152,9 @@ export function SettingsScreen() {
               <Switch
                 value={wifiOnlySync}
                 onValueChange={(v) => void setPreference("wifiOnlySync", v)}
-                trackColor={{ true: Colors.brand700 }}
+                trackColor={{ false: Colors.border2, true: Colors.brand700 }}
+                thumbColor={Colors.surface}
+                ios_backgroundColor={Colors.border2}
                 accessibilityLabel={t("settings.wifiOnly")}
               />
             }
@@ -198,7 +202,9 @@ export function SettingsScreen() {
                   value={biometricStatus.enabled}
                   disabled={false}
                   onValueChange={() => void toggleFingerprintLogin()}
-                  trackColor={{ true: Colors.brand700 }}
+                  trackColor={{ false: Colors.border2, true: Colors.brand700 }}
+                thumbColor={Colors.surface}
+                ios_backgroundColor={Colors.border2}
                   accessibilityLabel={t("settings.fingerprintLogin")}
                   accessibilityState={{ checked: biometricStatus.enabled, disabled: false }}
                 />
@@ -267,7 +273,9 @@ export function SettingsScreen() {
               <Switch
                 value={trackingBatterySaver}
                 onValueChange={(v) => void setPreference("trackingBatterySaver", v)}
-                trackColor={{ true: Colors.brand700 }}
+                trackColor={{ false: Colors.border2, true: Colors.brand700 }}
+                thumbColor={Colors.surface}
+                ios_backgroundColor={Colors.border2}
                 accessibilityLabel={t("settings.batterySaver")}
               />
             }
@@ -284,7 +292,9 @@ export function SettingsScreen() {
               <Switch
                 value={reminderSoundsEnabled}
                 onValueChange={(v) => void setPreference("reminderSoundsEnabled", v)}
-                trackColor={{ true: Colors.brand700 }}
+                trackColor={{ false: Colors.border2, true: Colors.brand700 }}
+                thumbColor={Colors.surface}
+                ios_backgroundColor={Colors.border2}
                 accessibilityLabel={t("settings.reminderSounds")}
               />
             }

@@ -32,6 +32,10 @@ export async function hideNativeSplashSafe(reason?: string): Promise<void> {
   hideRequested = true;
   logStartup("native_splash_hide_attempt", reason);
   try {
+    // Kill the OS splash's default ~400ms exit fade. The cinematic splash is
+    // already painted when we release (handoff delay upstream), so the fade
+    // only produced a visible blue-screen flicker.
+    SplashScreen.setOptions({ duration: 0 });
     await SplashScreen.hideAsync();
     logStartup("native_splash_hidden", reason);
   } catch (err) {

@@ -8,12 +8,14 @@ type Props = {
   subtitle: string;
   onClose?: () => void;
   onBack?: () => void;
+  /** Optional contextual Ionicons glyph shown beside the title. */
+  icon?: keyof typeof Ionicons.glyphMap;
   gpsAccuracy?: number | null;
   gpsLabel?: string;
   gpsDotColor?: string;
 };
 
-export function VisitFlowHeader({ title, subtitle, onClose, onBack, gpsAccuracy, gpsLabel, gpsDotColor }: Props) {
+export function VisitFlowHeader({ title, subtitle, onClose, onBack, icon, gpsAccuracy, gpsLabel, gpsDotColor }: Props) {
   const { t } = useI18n();
   const leadingAction = onBack ? (
     <Pressable
@@ -42,6 +44,11 @@ export function VisitFlowHeader({ title, subtitle, onClose, onBack, gpsAccuracy,
   return (
     <View style={styles.header}>
       {leadingAction}
+      {icon ? (
+        <View style={styles.titleIconWrap}>
+          <Ionicons name={icon} size={20} color={Colors.brand700} />
+        </View>
+      ) : null}
       <View style={styles.copy}>
         <Text style={styles.title} numberOfLines={1}>
           {title}
@@ -89,6 +96,14 @@ const styles = StyleSheet.create({
   iconBtnSpacer: {
     height: Layout.touchTargetMin,
     width: Layout.touchTargetMin
+  },
+  titleIconWrap: {
+    alignItems: "center",
+    backgroundColor: Colors.brand50,
+    borderRadius: Radius.pill,
+    height: 32,
+    justifyContent: "center",
+    width: 32
   },
   copy: {
     flex: 1,

@@ -15,6 +15,7 @@ import { useOfflineSync } from "../../../src/storage/OfflineSyncContext";
 import { useI18n } from "../../../src/i18n/I18nContext";
 import { usePremiumMotion } from "../../../src/hooks/usePremiumMotion";
 import type { SubmittedVisitSummary } from "../../../src/types/submittedVisitSummary";
+import { bilingualLabel } from "../../../src/utils/bilingualName";
 import { beginNewVisit } from "../../lib/beginNewVisit";
 import { GhostButton, PrimaryButton } from "../../components/ui";
 import { EntranceBlocks } from "../../components/ui/EntranceBlocks";
@@ -86,6 +87,13 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
 
   const { pendingCount, refreshQueue } = useOfflineSync();
 
+  // The visit draft is consumed only once this screen is mounted — resetting it
+  // earlier (inside the submit coordinator) rewound the six-step shell back to
+  // step 1 before the success push landed, which looked like a back navigation.
+  useEffect(() => {
+    beginNewVisit();
+  }, []);
+
   useEffect(() => {
     if (!queued) return;
     void refreshQueue();
@@ -105,7 +113,6 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
   }
 
   function addAnotherVisit() {
-    beginNewVisit();
     navigation.reset({
       index: 0,
       routes: [{ name: "NewVisitFarmer", params: { fresh: true } }]
@@ -113,7 +120,7 @@ export default function VisitSuccessScreen({ navigation, route }: Props) {
   }
 
   const farmerLabel = summary.farmerName?.trim() || "—";
-  const cropLabel = summary.cropName?.trim() || "—";
+  const cropLabel = bilingualLabel(summary.cropName, summary.cropTamilName) || "—";
   const problemLabel = summary.problemText?.trim() || "—";
   const fieldNotesLabel =
     summary.fieldNotesText?.trim() ||

@@ -13,11 +13,13 @@ export type WorkdayRequiredSheetRef = {
 
 type Props = {
   busy?: boolean;
+  /** Last start-attempt failure — shown inside the sheet instead of failing silently. */
+  error?: string | null;
   onStart: () => void | Promise<void>;
 };
 
 export const WorkdayRequiredSheet = forwardRef<WorkdayRequiredSheetRef, Props>(function WorkdayRequiredSheet(
-  { busy, onStart },
+  { busy, error, onStart },
   ref
 ) {
   const modalRef = useRef<BottomSheetModal>(null);
@@ -49,6 +51,7 @@ export const WorkdayRequiredSheet = forwardRef<WorkdayRequiredSheetRef, Props>(f
       <BottomSheetView style={[styles.content, { paddingBottom: Math.max(bottom, Spacing.lg) }]}>
         <Text style={styles.title}>{t("visitFlow.workdayFirstTitle")}</Text>
         <Text style={styles.body}>{t("visitFlow.workdayFirstBody")}</Text>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
         <View style={styles.actions}>
           <PrimaryButton
             label={t("visitFlow.startWorkdayNow")}
@@ -86,6 +89,10 @@ const styles = StyleSheet.create({
     color: Colors.text2,
     fontSize: FontSize.base,
     lineHeight: 22
+  },
+  error: {
+    color: Colors.redText,
+    fontSize: FontSize.sm
   },
   actions: {
     gap: Spacing.sm,

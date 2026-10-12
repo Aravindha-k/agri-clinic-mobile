@@ -29,7 +29,6 @@ import {
   deleteTempUri,
   MAX_VISIT_PHOTOS,
   prepareCameraEvidence,
-  prepareGalleryEvidence,
   toVisitPhotoAsset,
   type PreparedEvidencePhoto
 } from "../../lib/visitEvidenceCapture";
@@ -116,7 +115,8 @@ export function VisitCreateStep3({ onBack }: Props) {
 
   function continueToReview() {
     setHint("");
-    setStep(4);
+    // Six-step flow: Review is step 6 (step 4 is Disease & Other).
+    setStep(6);
   }
 
   async function handleAddCameraPhoto() {
@@ -138,33 +138,12 @@ export function VisitCreateStep3({ onBack }: Props) {
     runNextStamp();
   }
 
-  async function handleAddGalleryPhoto() {
-    const remaining = MAX_VISIT_PHOTOS - photos.length;
-    if (remaining <= 0) {
-      setHint(t("visitFlow.photoLimitReached", { count: MAX_VISIT_PHOTOS }));
-      return;
-    }
-    setBusy(t("visitFlow.gpsGettingLocation"));
-    const prepared = await prepareGalleryEvidence({
-      remaining,
-      employee,
-      farmerName
-    });
-    if (!prepared.length) {
-      setBusy("");
-      return;
-    }
-    pendingRef.current = [...pendingRef.current, ...prepared];
-    setBusy(t("visitFlow.stampingPhoto"));
-    runNextStamp();
-  }
-
   return (
     <View style={styles.screen}>
-      <VisitFlowHeader title={t("visitFlow.fieldNotesEvidence")} subtitle={t("visitFlow.step3of4")} onBack={onBack} />
+      <VisitFlowHeader title={t("visitFlow.fieldNotesEvidence")} subtitle={t("visitFlow.step5of6")} onBack={onBack} icon="camera-outline" />
 
       <View style={styles.stepWrap}>
-        <StepIndicator step={3} />
+        <StepIndicator step={5} />
       </View>
 
       <ScrollView
@@ -206,12 +185,6 @@ export function VisitCreateStep3({ onBack }: Props) {
             icon="camera-outline"
             label={t("visitFlow.takePhoto")}
             onPress={() => void handleAddCameraPhoto()}
-            state={busy ? "disabled" : "default"}
-          />
-          <ActionTile
-            icon="images-outline"
-            label={t("visitFlow.gallery")}
-            onPress={() => void handleAddGalleryPhoto()}
             state={busy ? "disabled" : "default"}
           />
         </View>

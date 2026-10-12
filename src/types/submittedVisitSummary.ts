@@ -5,6 +5,7 @@ export type SubmittedVisitSummary = {
   queueId?: string;
   farmerName?: string;
   cropName?: string;
+  cropTamilName?: string;
   problemText?: string;
   /** Canonical Field Notes shown on success (legacy observation/recommendation folded in). */
   fieldNotesText?: string;
@@ -24,6 +25,7 @@ export function buildSubmittedVisitSummary(input: {
   queueId?: string;
   farmerName?: string;
   cropName?: string;
+  cropTamilName?: string;
   problemText?: string;
   fieldNotesText?: string;
   observationText?: string;
@@ -42,6 +44,7 @@ export function buildSubmittedVisitSummary(input: {
     queueId: input.queueId,
     farmerName: input.farmerName,
     cropName: input.cropName,
+    cropTamilName: input.cropTamilName,
     problemText: input.problemText,
     fieldNotesText,
     observationText: input.observationText,

@@ -33,6 +33,9 @@ jobs:
     name: Build TRAINING APK
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    permissions:
+      # Required to create/update the training-apk-latest draft release.
+      contents: write
 
     steps:
       - name: Checkout
@@ -70,6 +73,36 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
+
+      # Install the pinned NDK via sdkmanager with retry. AGP's inline
+      # DefaultSdkLoader auto-download produced a corrupt archive
+      # ("Archive is not a ZIP archive") — an explicit install lets us
+      # retry, clear partial files, and verify before Gradle runs.
+      - name: Install NDK (Side by side) 27.1.12297006
+        run: |
+          set -e
+          NDK_VERSION="27.1.12297006"
+          for attempt in 1 2 3; do
+            echo "NDK install attempt ${attempt}/3"
+            yes | sdkmanager --licenses > /dev/null 2>&1 || true
+            rm -rf "${ANDROID_HOME}/ndk/${NDK_VERSION}" "${ANDROID_HOME}/.temp" || true
+            if sdkmanager "ndk;${NDK_VERSION}"; then
+              break
+            fi
+            echo "sdkmanager failed on attempt ${attempt}; cleaning partial install"
+            rm -rf "${ANDROID_HOME}/ndk/${NDK_VERSION}" "${ANDROID_HOME}/.temp" || true
+            if [ "${attempt}" = "3" ]; then
+              echo "NDK ${NDK_VERSION} install failed after 3 attempts"
+              exit 1
+            fi
+            sleep 15
+          done
+          # Verify the installation is complete before Gradle runs.
+          test -f "${ANDROID_HOME}/ndk/${NDK_VERSION}/ndk-build" || {
+            echo "ndk-build missing after install"; exit 1; }
+          test -f "${ANDROID_HOME}/ndk/${NDK_VERSION}/source.properties" || {
+            echo "source.properties missing after install"; exit 1; }
+          echo "NDK ${NDK_VERSION} installed and verified at ${ANDROID_HOME}/ndk/${NDK_VERSION}"
 
       - name: Cache Gradle
         if: ${{ inputs.diagnostic_clean_build != 'true' }}
@@ -208,3 +241,21 @@ jobs:
           path: ${{ steps.apkmeta.outputs.filename }}
           if-no-files-found: error
           retention-days: 30
+
+      # Persistent delivery: keep the latest TRAINING APK on a draft release.
+      # Draft releases are never public (collaborators only) and do not expire,
+      # unlike 30-day Actions artifacts. Never publish this release.
+      - name: Publish TRAINING APK to draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view training-apk-latest >/dev/null 2>&1; then
+            gh release upload training-apk-latest "${{ steps.apkmeta.outputs.filename }}" --clobber
+          else
+            gh release create training-apk-latest \
+              --draft \
+              --title "Training APK (latest)" \
+              --notes "Auto-updated draft release holding the latest screenshot-enabled TRAINING APK. Never publish this release." \
+              "${{ steps.apkmeta.outputs.filename }}"
+          fi
+          gh release view training-apk-latest --json assets --jq '.assets[].name'

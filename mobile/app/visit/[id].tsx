@@ -45,12 +45,12 @@ import {
   deleteTempUri,
   MAX_VISIT_PHOTOS,
   prepareCameraEvidence,
-  prepareGalleryEvidence,
   toVisitPhotoAsset,
   type PreparedEvidencePhoto
 } from "../../lib/visitEvidenceCapture";
 import {
   categoryTone,
+  employeeFieldNotesText,
   fetchVisitDetail,
   fetchVisitGallery,
   inferSeverity,
@@ -139,9 +139,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
         const row = await fetchVisitDetail(visitId);
         const atts = await fetchVisitGallery(visitId, row);
         setVisit(row);
-        const parsed = parseFieldNotes(row.field_notes);
-        const combined = visitFieldNotesText(row) || parsed.fieldNotes;
-        setDraftFieldNotes(combined);
+        setDraftFieldNotes(employeeFieldNotesText(row));
         setAttachments(atts);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load visit.");
@@ -176,13 +174,17 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
 
   function cancelEdit() {
     if (!visit) return;
-    setDraftFieldNotes(visitFieldNotesText(visit));
+    setDraftFieldNotes(employeeFieldNotesText(visit));
     setEditMode(false);
   }
 
   async function handleSave() {
     if (!visit) return;
     const notes = draftFieldNotes.trim();
+    if (notes === employeeFieldNotesText(visit)) {
+      setEditMode(false);
+      return;
+    }
     setSaving(true);
     try {
       const severityLine = `Severity: ${severityLabel(severity)}`;
@@ -228,24 +230,6 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
     });
     if (!prepared) return;
     pendingStampRef.current = [...pendingStampRef.current, prepared];
-    runNextStamp();
-  }
-
-  async function handleAddGalleryPhoto() {
-    if (!visit) return;
-    const remaining = MAX_VISIT_PHOTOS - attachments.length;
-    if (remaining <= 0) {
-      Alert.alert(t("visitFlow.photoLimitReached", { count: MAX_VISIT_PHOTOS }));
-      return;
-    }
-    const prepared = await prepareGalleryEvidence({
-      remaining,
-      employee,
-      visitId: String(visit.id),
-      farmerName: farmer?.name
-    });
-    if (!prepared.length) return;
-    pendingStampRef.current = [...pendingStampRef.current, ...prepared];
     runNextStamp();
   }
 
@@ -444,11 +428,6 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
             <View style={styles.heroChip}>
               <Text style={styles.heroChipText}>{cropFromVisit(visit)}</Text>
             </View>
-            {visit.crop_name && visit.crop_name !== cropFromVisit(visit) ? (
-              <View style={styles.heroChip}>
-                <Text style={styles.heroChipText}>{visit.crop_name}</Text>
-              </View>
-            ) : null}
           </View>
         </View>
         </FadeInSection>
@@ -557,7 +536,7 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
                 </Pressable>
               );
             })}
-            {visitAllowsNotesUpdate(visit) ? (
+            {editMode && visitAllowsNotesUpdate(visit) ? (
               <View style={styles.detailMediaActions}>
                 <Pressable
                   onPress={() => void handleAddCameraPhoto()}
@@ -576,20 +555,6 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
                     <Ionicons name="camera-outline" size={20} color={Colors.brand700} />
                   )}
                   <Text style={styles.addPhotoText}>{t("visitFlow.takePhoto")}</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => void handleAddGalleryPhoto()}
-                  disabled={uploadingPhoto}
-                  style={({ pressed }) => [
-                    styles.detailMediaBtn,
-                    uploadingPhoto && styles.mediaBtnDisabled,
-                    pressed && !uploadingPhoto && { opacity: 0.88 }
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("visitFlow.gallery")}
-                >
-                  <Ionicons name="images-outline" size={20} color={Colors.brand700} />
-                  <Text style={styles.addPhotoText}>{t("visitFlow.gallery")}</Text>
                 </Pressable>
               </View>
             ) : null}
@@ -728,12 +693,18 @@ const styles = StyleSheet.create({
   editFooter: {
     alignItems: "center",
     backgroundColor: Colors.surface,
-    borderTopColor: Colors.border,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.xl,
+    elevation: 4,
     flexDirection: "row",
     gap: Spacing.sm,
-    paddingHorizontal: Spacing.screen,
-    paddingVertical: Spacing.md
+    marginBottom: Spacing.md,
+    marginHorizontal: Spacing.screen,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    shadowColor: Colors.text1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8
   },
   editFooterBtn: {
     flex: 1,

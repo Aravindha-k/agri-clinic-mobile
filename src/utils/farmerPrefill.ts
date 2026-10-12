@@ -15,6 +15,7 @@ export type VisitFormPrefill = Partial<
 export type VisitDraftMetaFromPrefill = {
   farmerDisplayName?: string;
   cropLabel?: string;
+  cropTamilLabel?: string;
   villageLabel?: string;
 };
 
@@ -239,7 +240,8 @@ export function metaFromRevisitPrefill(
   return {
     farmerDisplayName: farmer.name || farmer.phone || "Farmer",
     villageLabel: villageLabel || undefined,
-    cropLabel: cropLabel && cropLabel !== "#0" ? cropLabel : undefined
+    cropLabel: cropLabel && cropLabel !== "#0" ? cropLabel : undefined,
+    cropTamilLabel: cropMatch?.name_ta?.trim() || undefined
   };
 }
 

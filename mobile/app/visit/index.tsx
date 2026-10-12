@@ -21,7 +21,7 @@ import { beginNewVisit, startRevisitDraft } from "../../lib/beginNewVisit";
 import { isVisitSubmitInFlight } from "../../lib/visit/visitSubmitCoordinator";
 import { presentUnfinishedVisitLeaveDialog } from "../../lib/visitLeaveGuard";
 import { useVisitFormStore } from "../../store/visitFormStore";
-import VisitCreateStep, { VisitCreateStep2, VisitCreateStep3, VisitCreateStep4 } from "./create";
+import VisitCreateStep, { VisitCreateStep2, VisitCreateStep3, VisitCreateStep4, VisitCreateStep3Pest, VisitCreateStep4Disease } from "./create";
 
 export default function VisitFlowShell() {
   useSecureScreen();
@@ -31,7 +31,7 @@ export default function VisitFlowShell() {
   const route = useRoute<any>();
   const { villages: territoryVillages } = useTerritory();
   const { busy: workdayBusy } = useTracking();
-  const { currentDuty, startDuty } = useDuty();
+  const { currentDuty, startDuty, bootstrapError: dutyStartError } = useDuty();
   const workdaySheetRef = useRef<WorkdayRequiredSheetRef>(null);
   const dutyGateShown = useRef(false);
   const step = useVisitFormStore((s) => s.step);
@@ -39,8 +39,9 @@ export default function VisitFlowShell() {
   const fastRevisitStarted = useRef(false);
   const guardDialogOpen = useRef(false);
   const allowRemoval = useRef(false);
-  const draftState = useVisitFormStore();
-  const hasDraft = draftState.hasFormData();
+  // Narrow subscription: re-render the shell only when the draft-empty flag
+  // flips, not on every keystroke inside the step panes.
+  const hasDraft = useVisitFormStore((s) => s.hasFormData());
 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const [displayedStep, setDisplayedStep] = useState(step);
@@ -196,14 +197,20 @@ export default function VisitFlowShell() {
           {displayedStep === 1 ? <VisitCreateStep onClose={closeFlow} /> : null}
           {displayedStep === 2 ? <VisitCreateStep2 onBack={() => setStep(1)} /> : null}
           {displayedStep === 3 ? (
-            <VisitCreateStep3 onBack={() => setStep(2)} />
+            <VisitCreateStep3Pest onBack={() => setStep(2)} />
           ) : null}
           {displayedStep === 4 ? (
+            <VisitCreateStep4Disease onBack={() => setStep(3)} />
+          ) : null}
+          {displayedStep === 5 ? (
+            <VisitCreateStep3 onBack={() => setStep(4)} />
+          ) : null}
+          {displayedStep === 6 ? (
             <VisitCreateStep4
-              onBack={() => setStep(3)}
+              onBack={() => setStep(5)}
               onEditStep1={() => setStep(1)}
-              onEditStep2={() => setStep(2)}
-              onEditStep3={() => setStep(3)}
+              onEditStep2={() => setStep(3)}
+              onEditStep3={() => setStep(5)}
             />
           ) : null}
         </Animated.View>
@@ -211,6 +218,7 @@ export default function VisitFlowShell() {
       <WorkdayRequiredSheet
         ref={workdaySheetRef}
         busy={workdayBusy}
+        error={dutyStartError}
         onStart={async () => {
           try {
             const started = await startDuty();

@@ -1,8 +1,8 @@
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
+import { Alert } from "react-native";
 import { alertMediaPermissionDenied } from "../../src/utils/mediaPermissionAlert";
 import { captureVisitGps } from "./visit/visitGpsCapture";
-import { readGalleryExifLocation } from "../../src/utils/galleryPhotoExif";
 import { reverseGeocodeAddress } from "../../src/utils/reverseGeocode";
 import {
   employeeWatermarkId,
@@ -43,27 +43,6 @@ export async function materializeLocalImage(uri: string): Promise<string> {
     return dest;
   } catch {
     return source;
-  }
-}
-
-async function launchImageLibrary(limit: number) {
-  const base = {
-    mediaTypes: ["images"] as ImagePicker.MediaType[],
-    quality: 1 as const,
-    allowsEditing: false,
-    exif: true
-  };
-  try {
-    return await ImagePicker.launchImageLibraryAsync({
-      ...base,
-      allowsMultipleSelection: true,
-      selectionLimit: Math.max(1, limit)
-    });
-  } catch {
-    return ImagePicker.launchImageLibraryAsync({
-      ...base,
-      allowsMultipleSelection: false
-    });
   }
 }
 
@@ -130,11 +109,21 @@ export async function prepareCameraEvidence(options: {
 
   const originalUri = picked.assets[0].uri;
   const sourceUri = await materializeLocalImage(originalUri);
+  // Live evidence requires a fresh GPS fix at capture time — never reuse a
+  // cached/old reading and never accept a photo without one.
   const fix = await currentFix();
-  const latitude = fix?.latitude ?? null;
-  const longitude = fix?.longitude ?? null;
+  if (!fix || fix.latitude == null || fix.longitude == null) {
+    if (sourceUri !== originalUri) void deleteTempUri(sourceUri);
+    Alert.alert(
+      "GPS required",
+      "GPS is unavailable or inaccurate. Please move to an open area and retry."
+    );
+    return null;
+  }
+  const latitude = fix.latitude;
+  const longitude = fix.longitude;
   const address = await addressFor(latitude, longitude);
-  const when = fix?.capturedAt ? new Date(fix.capturedAt) : new Date();
+  const when = fix.capturedAt ? new Date(fix.capturedAt) : new Date();
 
   return {
     tempId: createPhotoId(),
@@ -147,7 +136,7 @@ export async function prepareCameraEvidence(options: {
       locationKind: "captured",
       latitude,
       longitude,
-      accuracy: fix?.accuracy ?? null,
+      accuracy: fix.accuracy ?? null,
       address,
       when,
       employee: options.employee,
@@ -155,62 +144,6 @@ export async function prepareCameraEvidence(options: {
       farmerName: options.farmerName
     })
   };
-}
-
-export async function prepareGalleryEvidence(options: {
-  remaining: number;
-  employee: EvidenceEmployee | null;
-  visitId?: string;
-  farmerName?: string;
-}): Promise<PreparedEvidencePhoto[]> {
-  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!perm.granted && perm.accessPrivileges !== "limited") {
-    alertMediaPermissionDenied({
-      title: "Gallery permission",
-      message: "Allow photo library access to attach visit photos.",
-      canAskAgain: perm.canAskAgain
-    });
-    return [];
-  }
-  const limit = Math.max(1, options.remaining);
-  const picked = await launchImageLibrary(limit);
-  if (picked.canceled || !picked.assets.length) return [];
-
-  const nowFix = await currentFix();
-  const uploadAddress = await addressFor(nowFix?.latitude ?? null, nowFix?.longitude ?? null);
-  const prepared: PreparedEvidencePhoto[] = [];
-
-  for (const asset of picked.assets.slice(0, limit)) {
-    if (!asset.uri) continue;
-    const sourceUri = await materializeLocalImage(asset.uri);
-    const exif = readGalleryExifLocation(asset.exif as Record<string, unknown> | undefined);
-    const hasOriginal = exif != null;
-    const latitude = hasOriginal ? exif.latitude : nowFix?.latitude ?? null;
-    const longitude = hasOriginal ? exif.longitude : nowFix?.longitude ?? null;
-    const address = hasOriginal ? await addressFor(latitude, longitude) : uploadAddress;
-    const when = hasOriginal && exif.timestamp ? exif.timestamp : new Date();
-
-    prepared.push({
-      tempId: createPhotoId(),
-      sourceUri,
-      originalUri: asset.uri,
-      name: `visit-${Date.now()}-${prepared.length}-${Math.random().toString(36).slice(2, 7)}.jpg`,
-      mimeType: "image/jpeg",
-      meta: buildMeta({
-        source: "gallery",
-        locationKind: hasOriginal ? "captured" : "uploaded",
-        latitude,
-        longitude,
-        accuracy: hasOriginal ? null : nowFix?.accuracy ?? null,
-        address,
-        when,
-        employee: options.employee,
-        visitId: options.visitId,
-        farmerName: options.farmerName
-      })
-    });
-  }
-  return prepared;
 }
 
 export function toVisitPhotoAsset(
@@ -226,6 +159,7 @@ export function toVisitPhotoAsset(
     locationKind: prepared.meta.locationKind,
     latitude: prepared.meta.latitude,
     longitude: prepared.meta.longitude,
+    accuracy: prepared.meta.accuracy,
     capturedAt: prepared.meta.evidenceTime.toISOString(),
     address: prepared.meta.address
   };

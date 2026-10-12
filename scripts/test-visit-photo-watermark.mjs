@@ -56,16 +56,14 @@ test("camera watermark uses a fresh visit GPS fix and burns a stamped file", () 
   assert.match(capture, /employeeCode:/);
 });
 
-test("gallery without EXIF is labelled uploaded location kind, never captured-at current location", () => {
-  assert.match(capture, /locationKind: hasOriginal \? "captured" : "uploaded"/);
-  assert.match(step3, /uploadedAtLabel/);
-  assert.match(exif, /readGalleryExifLocation/);
-  assert.match(capture, /locationKind: hasOriginal \? "captured" : "uploaded"/);
+test("visit evidence is camera-only — gallery and EXIF-trusted paths are removed", () => {
+  assert.doesNotMatch(capture, /prepareGalleryEvidence/);
+  assert.doesNotMatch(capture, /readGalleryExifLocation/);
+  assert.doesNotMatch(capture, /launchImageLibrary/);
 });
 
 test("multiple photos, remove, unique client_upload_id, and retry do not invent a second media API", () => {
   assert.match(capture, /MAX_VISIT_PHOTOS = 5/);
-  assert.match(capture, /allowsMultipleSelection: true/);
   assert.match(step3, /addPhoto/);
   assert.match(step3, /removePhoto/);
   assert.match(submitApi, /mobile\/visits\/\$\{visitId\}\/media\//);

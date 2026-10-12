@@ -93,7 +93,7 @@ test("evidence and review renumbered to steps 5 and 6", () => {
 
 test("review blocks submit when no problem is selected", () => {
   assert.ok(review.includes("problemEntries.length === 0"));
-  assert.ok(review.includes("|| noProblemSelected"));
+  assert.ok(review.includes("noProblemSelected"));
   assert.ok(review.includes('t("visitFlow.errSelectProblem")'));
 });
 

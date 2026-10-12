@@ -32,18 +32,17 @@ test("visit step indicator shows 6 steps Farmer/Crop/Pest/Disease/Evidence/Revie
   assert.match(step, /usePremiumMotion/);
 });
 
-test("camera and gallery append photos — they do not replace", () => {
+test("camera photos append — they do not replace; gallery evidence is not offered", () => {
   const store = read("mobile/store/visitFormStore.ts");
   const capture = read("mobile/lib/visitEvidenceCapture.ts");
   const step3 = read("mobile/app/visit/create-step3.tsx");
   assert.match(store, /\[\.\.\.state\.photos, photo\]/);
-  assert.match(capture, /allowsMultipleSelection/);
   assert.match(capture, /materializeLocalImage/);
-  assert.match(capture, /prepareGalleryEvidence/);
+  assert.doesNotMatch(capture, /prepareGalleryEvidence/, "gallery evidence path removed");
   assert.match(step3, /addPhoto\(/);
   assert.match(step3, /ActionTile/);
   assert.match(step3, /camera-outline/);
-  assert.match(step3, /images-outline/);
+  assert.doesNotMatch(step3, /images-outline/, "no gallery tile in visit evidence");
   assert.doesNotMatch(step3, /setPhotos\(\[prepared\]\)/);
   assert.doesNotMatch(step3, /videocam/);
 });

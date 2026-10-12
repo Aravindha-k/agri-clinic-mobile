@@ -297,8 +297,14 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
 
   const gpsReady = gpsUi === "ready" && visitGpsIsUsable(gpsCoords);
   const noProblemSelected = problemEntries.length === 0;
+  const noCameraPhoto = !photos.some((photo) => photo.source === "camera");
   const submitDisabled =
-    submitting || isVisitSubmitInFlight() || gpsUi === "capturing" || !gpsReady || noProblemSelected;
+    submitting ||
+    isVisitSubmitInFlight() ||
+    gpsUi === "capturing" ||
+    !gpsReady ||
+    noProblemSelected ||
+    noCameraPhoto;
 
   return (
     <View style={styles.screen}>
@@ -358,6 +364,9 @@ export function VisitCreateStep4({ onBack, onEditStep1, onEditStep2, onEditStep3
           </View>
           {noProblemSelected ? (
             <Text style={styles.inlineError}>{t("visitFlow.errSelectProblem")}</Text>
+          ) : null}
+          {noCameraPhoto ? (
+            <Text style={styles.inlineError}>{t("visitFlow.livePhotoRequired")}</Text>
           ) : null}
           {problemEntries.map((entry, index) => (
             <View key={`${index}-${entry}`}>

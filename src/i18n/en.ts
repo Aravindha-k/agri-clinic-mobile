@@ -798,6 +798,7 @@ export const en = {
     continueToReview: "Continue to review",
     evidenceCount: "{{count}} file(s) attached",
     photoLimitReached: "Photo limit reached ({{count}}).",
+    livePhotoRequired: "Please capture a live field photo before completing this visit.",
     noEvidence: "No photos or files attached",
     noObservationOptional: "No observation added (optional)",
     cropProblem: "CROP & PROBLEM",

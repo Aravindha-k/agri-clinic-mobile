@@ -101,6 +101,7 @@ export function visitFieldNotesText(visit: Visit): string {
 }
 
 import { resolveMediaUrl } from "../../src/utils/resolveMediaUrl";
+import { appendCaptureMetaToForm } from "../../src/utils/visitEvidenceCaptureMeta";
 import {
   extractVisitGalleryMedia,
   visitHasCanonicalGallery
@@ -199,6 +200,7 @@ async function postVisitMedia(
         type: photo.mimeType
       } as unknown as Blob);
       formData.append("attachment_type", "image");
+      appendCaptureMetaToForm(formData, photo);
 
       const created = await new Promise<VisitAttachment | null>((resolve, reject) => {
         const xhr = new XMLHttpRequest();

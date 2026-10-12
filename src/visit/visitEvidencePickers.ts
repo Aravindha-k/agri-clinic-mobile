@@ -32,22 +32,8 @@ export async function pickPendingImageUri(source: "camera" | "library"): Promise
     return result.assets[0].uri;
   }
 
-  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!perm.granted) {
-    alertMediaPermissionDenied({
-      title: "Gallery permission",
-      message: "Allow photo library access to attach images.",
-      canAskAgain: perm.canAskAgain
-    });
-    return null;
-  }
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ["images"],
-    quality: 0.85,
-    allowsMultipleSelection: false
-  });
-  if (result.canceled || !result.assets[0]) return null;
-  return result.assets[0].uri;
+  // Gallery/library evidence is not accepted for visits — camera only.
+  return null;
 }
 
 /** @deprecated Use pickPendingImageUri + watermark preview flow */

@@ -804,6 +804,7 @@ export const ta: TranslationTree = {
     continueToReview: "மதிப்பாய்வுக்கு தொடர",
     evidenceCount: "{{count}} கோப்பு(கள்) இணைக்கப்பட்டது",
     photoLimitReached: "புகைப்பட வரம்பு எட்டப்பட்டது ({{count}}).",
+    livePhotoRequired: "வருகையை முடிப்பதற்கு முன் நேரடி நிலப்புகைப்படம் எடுக்கவும்.",
     noEvidence: "புகைப்படம் அல்லது கோப்பு இல்லை",
     noObservationOptional: "கண்காணிப்பு சேர்க்கப்படவில்லை (விருப்பம்)",
     cropProblem: "பயிர் & பிரச்சனை",

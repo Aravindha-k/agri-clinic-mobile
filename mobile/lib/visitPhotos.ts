@@ -11,6 +11,7 @@ export type VisitPhotoAsset = {
   locationKind?: "captured" | "uploaded";
   latitude?: number | null;
   longitude?: number | null;
+  accuracy?: number | null;
   capturedAt?: string;
   address?: string;
   stampFailed?: boolean;
@@ -34,23 +35,9 @@ export async function compressVisitPhoto(uri: string): Promise<VisitPhotoAsset> 
   };
 }
 
+/** Gallery evidence is not accepted for visits — kept only to satisfy existing type contracts. */
 export async function pickVisitPhotoFromGallery(): Promise<VisitPhotoAsset | null> {
-  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!perm.granted) {
-    alertMediaPermissionDenied({
-      title: "Gallery permission",
-      message: "Allow photo library access to attach visit photos.",
-      canAskAgain: perm.canAskAgain
-    });
-    return null;
-  }
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ["images"],
-    quality: 1,
-    allowsMultipleSelection: false
-  });
-  if (result.canceled || !result.assets[0]?.uri) return null;
-  return compressVisitPhoto(result.assets[0].uri);
+  return null;
 }
 
 export async function pickVisitPhotoFromCamera(): Promise<VisitPhotoAsset | null> {

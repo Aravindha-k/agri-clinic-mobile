@@ -45,7 +45,6 @@ import {
   deleteTempUri,
   MAX_VISIT_PHOTOS,
   prepareCameraEvidence,
-  prepareGalleryEvidence,
   toVisitPhotoAsset,
   type PreparedEvidencePhoto
 } from "../../lib/visitEvidenceCapture";
@@ -231,24 +230,6 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
     });
     if (!prepared) return;
     pendingStampRef.current = [...pendingStampRef.current, prepared];
-    runNextStamp();
-  }
-
-  async function handleAddGalleryPhoto() {
-    if (!visit) return;
-    const remaining = MAX_VISIT_PHOTOS - attachments.length;
-    if (remaining <= 0) {
-      Alert.alert(t("visitFlow.photoLimitReached", { count: MAX_VISIT_PHOTOS }));
-      return;
-    }
-    const prepared = await prepareGalleryEvidence({
-      remaining,
-      employee,
-      visitId: String(visit.id),
-      farmerName: farmer?.name
-    });
-    if (!prepared.length) return;
-    pendingStampRef.current = [...pendingStampRef.current, ...prepared];
     runNextStamp();
   }
 
@@ -574,20 +555,6 @@ export default function VisitDetailScreen({ route, navigation }: Props) {
                     <Ionicons name="camera-outline" size={20} color={Colors.brand700} />
                   )}
                   <Text style={styles.addPhotoText}>{t("visitFlow.takePhoto")}</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => void handleAddGalleryPhoto()}
-                  disabled={uploadingPhoto}
-                  style={({ pressed }) => [
-                    styles.detailMediaBtn,
-                    uploadingPhoto && styles.mediaBtnDisabled,
-                    pressed && !uploadingPhoto && { opacity: 0.88 }
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("visitFlow.gallery")}
-                >
-                  <Ionicons name="images-outline" size={20} color={Colors.brand700} />
-                  <Text style={styles.addPhotoText}>{t("visitFlow.gallery")}</Text>
                 </Pressable>
               </View>
             ) : null}

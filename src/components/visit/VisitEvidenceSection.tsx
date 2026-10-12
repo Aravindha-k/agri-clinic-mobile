@@ -143,7 +143,6 @@ export function VisitEvidenceSection({ visitId, watermarkContext, autoLoad = tru
   function showPhotoOptions() {
     Alert.alert("Add photo", "GPS watermark preview before upload.", [
       { text: "Camera", onPress: () => void runUpload(() => pickImage("camera")) },
-      { text: "Gallery", onPress: () => void runUpload(() => pickImage("library")) },
       { text: "Cancel", style: "cancel" }
     ]);
   }

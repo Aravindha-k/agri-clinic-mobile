@@ -15,6 +15,7 @@ import { prepareVisitForSubmit } from "../../src/visit/prepareVisitSubmit";
 import { validateVisitSubmitValues } from "../../src/visit/visitValidation";
 import { extractMasterPk, farmerVillagePkToString } from "../../src/utils/masterId";
 import { problemItemIdsFromSelection } from "../../src/utils/visitProblems";
+import { appendCaptureMetaToForm } from "../../src/utils/visitEvidenceCaptureMeta";
 import {
   problemCategoryPkFromSelection,
   problemMasterPkFromSelection
@@ -248,6 +249,7 @@ async function uploadVisitMedia(visitId: number, photo: VisitPhotoAsset) {
       if (photo.id) {
         formData.append("client_upload_id", photo.id);
       }
+      appendCaptureMetaToForm(formData, photo);
 
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
